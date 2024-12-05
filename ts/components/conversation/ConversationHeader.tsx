@@ -18,6 +18,7 @@ import {
 } from '../../hooks/useKeyboardShortcuts';
 import { SizeObserver } from '../../hooks/useSizeObserver';
 import type { ConversationTypeType } from '../../state/ducks/conversations';
+import { showConversation } from '../../state/ducks/conversations';
 import type { HasStories } from '../../types/Stories';
 import type { LocalizerType, ThemeType } from '../../types/Util';
 import { DurationInSeconds } from '../../util/durations';
@@ -40,6 +41,7 @@ import {
 import type { MinimalConversation } from '../../hooks/useMinimalConversation';
 import { LocalDeleteWarningModal } from '../LocalDeleteWarningModal';
 import { InAnotherCallTooltip } from './InAnotherCallTooltip';
+import { useDispatch } from 'react-redux';
 
 function HeaderInfoTitle({
   name,
@@ -58,6 +60,7 @@ function HeaderInfoTitle({
   isSignalConversation: boolean;
   headerRef: React.RefObject<HTMLDivElement>;
 }) {
+  const backButtonLabel = i18n('icu:setGroupMetadata__back-button');
   if (isSignalConversation) {
     return (
       <div className="module-ConversationHeader__header__info__title">
@@ -119,7 +122,6 @@ export type PropsDataType = {
 
 export type PropsActionsType = {
   setLocalDeleteWarningShown: () => void;
-
   onConversationAccept: () => void;
   onConversationArchive: () => void;
   onConversationBlock: () => void;
@@ -442,6 +444,11 @@ function HeaderContent({
   onViewUserStories: () => void;
   onViewConversationDetails: () => void;
 }) {
+  const dispatch = useDispatch();
+  const onBackButton = () => {
+    dispatch(showConversation({ conversationId: undefined }));
+  };
+
   let onClick: undefined | (() => void);
   const { type } = conversation;
   switch (type) {
@@ -516,6 +523,13 @@ function HeaderContent({
 
   if (onClick) {
     return (
+      <>
+      <button
+          aria-label={i18n('icu:goBack')}
+          className="ConversationPanel__header__back-button"
+          onClick={onBackButton}
+          type="button"
+      />
       <div className="module-ConversationHeader__header">
         {avatar}
         <div>
@@ -528,6 +542,7 @@ function HeaderContent({
           </button>
         </div>
       </div>
+      </>
     );
   }
 
