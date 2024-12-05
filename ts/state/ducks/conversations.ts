@@ -4707,7 +4707,7 @@ type ShowConversationArgsType = ReadonlyDeep<{
 export type ShowConversationType = ReadonlyDeep<
   (options: ShowConversationArgsType) => unknown
 >;
-
+export { showConversation };
 function showConversation({
   conversationId,
   messageId,
