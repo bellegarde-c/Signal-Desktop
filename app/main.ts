@@ -891,6 +891,7 @@ async function createWindow() {
 
     // Disable media playback
     mainWindow.webContents.send('set-media-playback-disabled', true);
+    mainWindow.webContents.setBackgroundThrottling(false);
 
     // In certain cases such as during an active call, we ask the user to confirm close
     // which includes shutdown, clicking X on MacOS or closing to tray.
@@ -1003,6 +1004,7 @@ async function createWindow() {
     if (mainWindow) {
       mainWindow.webContents.send('activate');
       mainWindow.webContents.send('set-media-playback-disabled', false);
+      mainWindow.webContents.setBackgroundThrottling(true);
     }
   });
 
@@ -1122,17 +1124,6 @@ ipc.on('set-is-call-active', (_event, isCallActive) => {
   if (!mainWindow) {
     return;
   }
-
-  let backgroundThrottling: boolean;
-  if (isCallActive) {
-    getLogger().info('Background throttling disabled because a call is active');
-    backgroundThrottling = false;
-  } else {
-    getLogger().info('Background throttling enabled because no call is active');
-    backgroundThrottling = true;
-  }
-
-  mainWindow.webContents.setBackgroundThrottling(backgroundThrottling);
 });
 
 ipc.on('convert-image', async (event, uuid, data) => {
