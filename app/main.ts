@@ -737,7 +737,7 @@ async function createWindow() {
           : '../ts/windows/main/preload.js'
       ),
       spellcheck,
-      backgroundThrottling: true,
+      backgroundThrottling: false,
     },
     icon: windowIcon,
     ...pick(windowConfig, ['autoHideMenuBar', 'x', 'y']),
@@ -1141,17 +1141,6 @@ ipc.on('set-is-call-active', (_event, isCallActive) => {
   if (!mainWindow) {
     return;
   }
-
-  let backgroundThrottling: boolean;
-  if (isCallActive) {
-    getLogger().info('Background throttling disabled because a call is active');
-    backgroundThrottling = false;
-  } else {
-    getLogger().info('Background throttling enabled because no call is active');
-    backgroundThrottling = true;
-  }
-
-  mainWindow.webContents.setBackgroundThrottling(backgroundThrottling);
 });
 
 ipc.on('convert-image', async (event, uuid, data) => {
