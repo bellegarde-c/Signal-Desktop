@@ -381,7 +381,8 @@
       "backbone@1.6.0": "patches/backbone+1.6.0.patch",
       "node-fetch@2.6.7": "patches/node-fetch+2.6.7.patch",
       "zod@3.23.8": "patches/zod+3.23.8.patch",
-      "mac-screen-capture-permissions": "patches/mac-screen-capture-permissions.patch"
+      "mac-screen-capture-permissions": "patches/mac-screen-capture-permissions.patch",
+      "fs-extra@11.2.0": "patches/fs-extra+11.2.0.patch"
     },
     "onlyBuiltDependencies": [
       "@indutny/mac-screen-share",
