@@ -379,7 +379,8 @@
       "node-fetch@2.6.7": "patches/node-fetch+2.6.7.patch",
       "zod@3.23.8": "patches/zod+3.23.8.patch",
       "app-builder-lib": "patches/app-builder-lib.patch",
-      "dmg-builder": "patches/dmg-builder.patch"
+      "dmg-builder": "patches/dmg-builder.patch",
+      "fs-extra@11.2.0": "patches/fs-extra+11.2.0.patch"
     },
     "onlyBuiltDependencies": [
       "@indutny/mac-screen-share",
