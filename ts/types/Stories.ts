@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { AttachmentType } from './Attachment';
-import type { BodyRangesType, LocalizerType } from './Util';
+import type { HydratedBodyRangesType } from './BodyRange';
+import type { LocalizerType } from './Util';
 import type { ContactNameColorType } from './Colors';
 import type { ConversationType } from '../state/ducks/conversations';
 import type { ReadStatus } from '../messages/MessageReadStatus';
 import type { SendStatus } from '../messages/MessageSendState';
 import type { StoryDistributionListDataType } from '../state/ducks/storyDistributionLists';
-import type { UUIDStringType } from './UUID';
+import type { ServiceIdString } from './ServiceId';
+import type { StoryDistributionIdString } from './StoryDistributionId';
 
 export type ReplyType = {
   author: Pick<
     ConversationType,
     | 'acceptedMessageRequest'
-    | 'avatarPath'
+    | 'avatarUrl'
     | 'badges'
     | 'color'
     | 'id'
@@ -25,7 +27,7 @@ export type ReplyType = {
     | 'title'
   >;
   body?: string;
-  bodyRanges?: BodyRangesType;
+  bodyRanges?: HydratedBodyRangesType;
   contactNameColor?: ContactNameColorType;
   conversationId: string;
   deletedForEveryone?: boolean;
@@ -47,7 +49,7 @@ export type ConversationStoryType = {
   group?: Pick<
     ConversationType,
     | 'acceptedMessageRequest'
-    | 'avatarPath'
+    | 'avatarUrl'
     | 'color'
     | 'id'
     | 'name'
@@ -71,6 +73,7 @@ export type StorySendStateType = {
 
 export type StoryViewType = {
   attachment?: AttachmentType;
+  bodyRanges?: HydratedBodyRangesType;
   canReply?: boolean;
   isHidden?: boolean;
   isUnread?: boolean;
@@ -79,11 +82,13 @@ export type StoryViewType = {
   readAt?: number;
   sender: Pick<
     ConversationType,
+    | 'avatarPlaceholderGradient'
     | 'acceptedMessageRequest'
-    | 'avatarPath'
+    | 'avatarUrl'
     | 'badges'
     | 'color'
     | 'firstName'
+    | 'hasAvatar'
     | 'hideStory'
     | 'id'
     | 'isMe'
@@ -91,6 +96,7 @@ export type StoryViewType = {
     | 'profileName'
     | 'sharedGroupNames'
     | 'title'
+    | 'serviceId'
   >;
   sendState?: Array<StorySendStateType>;
   timestamp: number;
@@ -99,13 +105,15 @@ export type StoryViewType = {
 };
 
 export type MyStoryType = {
-  id: string;
+  // Either a distribution list id or a conversation (group) id
+  id: StoryDistributionIdString | string;
   name: string;
+  reducedSendStatus: ResolvedSendStatus;
   stories: Array<StoryViewType>;
 };
 
-export const MY_STORIES_ID: UUIDStringType =
-  '00000000-0000-0000-0000-000000000000';
+export const MY_STORY_ID: StoryDistributionIdString =
+  '00000000-0000-0000-0000-000000000000' as StoryDistributionIdString;
 
 export enum StoryViewDirectionType {
   Next = 'Next',
@@ -120,7 +128,7 @@ export enum StoryViewTargetType {
 
 // Type of stories to view before closing the viewer
 // All = All the stories in order
-// Single = A single story. Like when clicking on a qouted story
+// Single = A single story. Like when clicking on a quoted story
 // Unread = View only unread stories
 // User = All of a user's stories
 export enum StoryViewModeType {
@@ -134,17 +142,18 @@ export enum StoryViewModeType {
 
 export type StoryDistributionListWithMembersDataType = Omit<
   StoryDistributionListDataType,
-  'memberUuids'
+  'memberServiceIds'
 > & {
   members: Array<ConversationType>;
 };
 
 export function getStoryDistributionListName(
   i18n: LocalizerType,
-  id: string,
+  // Distribution id or conversation (group) id
+  id: StoryDistributionIdString | string | undefined,
   name: string
 ): string {
-  return id === MY_STORIES_ID ? i18n('Stories__mine') : name;
+  return id === MY_STORY_ID ? i18n('icu:Stories__mine') : name;
 }
 
 export enum HasStories {
@@ -157,3 +166,16 @@ export enum StorySendMode {
   Always = 'Always',
   Never = 'Never',
 }
+
+export enum ResolvedSendStatus {
+  Failed = 'Failed',
+  PartiallySent = 'PartiallySent',
+  Sending = 'Sending',
+  Sent = 'Sent',
+}
+
+export type StoryMessageRecipientsType = Array<{
+  destinationServiceId?: ServiceIdString;
+  distributionListIds: Array<StoryDistributionIdString>;
+  isAllowedToReply: boolean;
+}>;

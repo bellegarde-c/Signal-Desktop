@@ -1,36 +1,94 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React from 'react';
-import Measure from 'react-measure';
 import classNames from 'classnames';
+import type { ReactNode, RefObject } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuTrigger,
   MenuItem,
   SubMenu,
 } from 'react-contextmenu';
-
-import { Emojify } from './Emojify';
-import { DisappearingTimeDialog } from '../DisappearingTimeDialog';
-import { Avatar, AvatarSize } from '../Avatar';
-import { InContactsIcon } from '../InContactsIcon';
-
-import type { LocalizerType, ThemeType } from '../../types/Util';
-import type { ConversationType } from '../../state/ducks/conversations';
+import { createPortal } from 'react-dom';
 import type { BadgeType } from '../../badges/types';
-import type { HasStories } from '../../types/Stories';
-import type { ViewUserStoriesActionCreatorType } from '../../state/ducks/stories';
-import { StoryViewModeType } from '../../types/Stories';
-import { getMuteOptions } from '../../util/getMuteOptions';
-import * as expirationTimer from '../../util/expirationTimer';
-import { missingCaseError } from '../../util/missingCaseError';
-import { isInSystemContacts } from '../../util/isInSystemContacts';
 import {
-  useStartCallShortcuts,
   useKeyboardShortcuts,
+  useStartCallShortcuts,
 } from '../../hooks/useKeyboardShortcuts';
+import { SizeObserver } from '../../hooks/useSizeObserver';
+import type { ConversationTypeType } from '../../state/ducks/conversations';
+import type { HasStories } from '../../types/Stories';
+import type { LocalizerType, ThemeType } from '../../types/Util';
+import { DurationInSeconds } from '../../util/durations';
+import * as expirationTimer from '../../util/expirationTimer';
+import { getMuteOptions } from '../../util/getMuteOptions';
+import { isConversationMuted } from '../../util/isConversationMuted';
+import { isInSystemContacts } from '../../util/isInSystemContacts';
+import { missingCaseError } from '../../util/missingCaseError';
+import { Alert } from '../Alert';
+import { Avatar, AvatarSize } from '../Avatar';
+import { ConfirmationDialog } from '../ConfirmationDialog';
+import { DisappearingTimeDialog } from '../DisappearingTimeDialog';
+import { InContactsIcon } from '../InContactsIcon';
+import { UserText } from '../UserText';
+import type { ContactNameData } from './ContactName';
+import {
+  MessageRequestActionsConfirmation,
+  MessageRequestState,
+} from './MessageRequestActionsConfirmation';
+import type { MinimalConversation } from '../../hooks/useMinimalConversation';
+import { LocalDeleteWarningModal } from '../LocalDeleteWarningModal';
+import { InAnotherCallTooltip } from './InAnotherCallTooltip';
+
+function HeaderInfoTitle({
+  name,
+  title,
+  type,
+  i18n,
+  isMe,
+  isSignalConversation,
+  headerRef,
+}: {
+  name: string | null;
+  title: string;
+  type: ConversationTypeType;
+  i18n: LocalizerType;
+  isMe: boolean;
+  isSignalConversation: boolean;
+  headerRef: React.RefObject<HTMLDivElement>;
+}) {
+  if (isSignalConversation) {
+    return (
+      <div className="module-ConversationHeader__header__info__title">
+        <UserText text={title} />
+        <span className="ContactModal__official-badge" />
+      </div>
+    );
+  }
+
+  if (isMe) {
+    return (
+      <div className="module-ConversationHeader__header__info__title">
+        {i18n('icu:noteToSelf')}
+        <span className="ContactModal__official-badge" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="module-ConversationHeader__header__info__title">
+      <UserText text={title} />
+      {isInSystemContacts({ name: name ?? undefined, type }) ? (
+        <InContactsIcon
+          className="module-ConversationHeader__header__info__title__in-contacts-icon"
+          i18n={i18n}
+          tooltipContainerRef={headerRef}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 export enum OutgoingCallButtonStyle {
   None,
@@ -40,59 +98,52 @@ export enum OutgoingCallButtonStyle {
 }
 
 export type PropsDataType = {
+  addedByName: ContactNameData | null;
   badge?: BadgeType;
-  conversationTitle?: string;
+  cannotLeaveBecauseYouAreLastAdmin: boolean;
+  conversation: MinimalConversation;
+  conversationName: ContactNameData;
+  hasPanelShowing?: boolean;
   hasStories?: HasStories;
+  hasActiveCall?: boolean;
+  localDeleteWarningShown: boolean;
+  isDeleteSyncSendEnabled: boolean;
   isMissingMandatoryProfileSharing?: boolean;
+  isSelectMode: boolean;
+  isSignalConversation?: boolean;
+  isSmsOnlyOrUnregistered?: boolean;
   outgoingCallButtonStyle: OutgoingCallButtonStyle;
-  showBackButton?: boolean;
-  isSMSOnly?: boolean;
+  sharedGroupNames: ReadonlyArray<string>;
   theme: ThemeType;
-} & Pick<
-  ConversationType,
-  | 'acceptedMessageRequest'
-  | 'announcementsOnly'
-  | 'areWeAdmin'
-  | 'avatarPath'
-  | 'canChangeTimer'
-  | 'color'
-  | 'expireTimer'
-  | 'groupVersion'
-  | 'id'
-  | 'isArchived'
-  | 'isMe'
-  | 'isPinned'
-  | 'isVerified'
-  | 'left'
-  | 'markedUnread'
-  | 'muteExpiresAt'
-  | 'name'
-  | 'phoneNumber'
-  | 'profileName'
-  | 'sharedGroupNames'
-  | 'title'
-  | 'type'
-  | 'unblurredAvatarPath'
->;
+};
 
 export type PropsActionsType = {
-  onSetMuteNotifications: (seconds: number) => void;
-  onSetDisappearingMessages: (seconds: number) => void;
-  onDeleteMessages: () => void;
+  setLocalDeleteWarningShown: () => void;
+
+  onConversationAccept: () => void;
+  onConversationArchive: () => void;
+  onConversationBlock: () => void;
+  onConversationBlockAndReportSpam: () => void;
+  onConversationDelete: () => void;
+  onConversationDeleteMessages: () => void;
+  onConversationDisappearingMessagesChange: (
+    seconds: DurationInSeconds
+  ) => void;
+  onConversationLeaveGroup: () => void;
+  onConversationMarkUnread: () => void;
+  onConversationMuteExpirationChange: (seconds: number) => void;
+  onConversationPin: () => void;
+  onConversationUnpin: () => void;
+  onConversationReportSpam: () => void;
+  onConversationUnarchive: () => void;
+  onOutgoingAudioCall: () => void;
+  onOutgoingVideoCall: () => void;
   onSearchInConversation: () => void;
-  onOutgoingAudioCallInConversation: () => void;
-  onOutgoingVideoCallInConversation: () => void;
-  onSetPin: (value: boolean) => void;
-
-  onShowConversationDetails: () => void;
-  onShowAllMedia: () => void;
-  onShowGroupMembers: () => void;
-  onGoBack: () => void;
-
-  onArchive: () => void;
-  onMarkUnread: () => void;
-  onMoveToInbox: () => void;
-  viewUserStories: ViewUserStoriesActionCreatorType;
+  onSelectModeEnter: () => void;
+  onShowMembers: () => void;
+  onViewAllMedia: () => void;
+  onViewConversationDetails: () => void;
+  onViewUserStories: () => void;
 };
 
 export type PropsHousekeepingType = {
@@ -103,421 +154,371 @@ export type PropsType = PropsDataType &
   PropsActionsType &
   PropsHousekeepingType;
 
-enum ModalState {
-  NothingOpen,
-  CustomDisappearingTimeout,
-}
-
-type StateType = {
-  isNarrow: boolean;
-  modalState: ModalState;
-};
-
 const TIMER_ITEM_CLASS = 'module-ConversationHeader__disappearing-timer__item';
 
-export class ConversationHeader extends React.Component<PropsType, StateType> {
-  private showMenuBound: (event: React.MouseEvent<HTMLButtonElement>) => void;
-
+export const ConversationHeader = memo(function ConversationHeader({
+  addedByName,
+  badge,
+  cannotLeaveBecauseYouAreLastAdmin,
+  conversation,
+  conversationName,
+  hasActiveCall,
+  hasPanelShowing,
+  hasStories,
+  i18n,
+  isDeleteSyncSendEnabled,
+  isMissingMandatoryProfileSharing,
+  isSelectMode,
+  isSignalConversation,
+  isSmsOnlyOrUnregistered,
+  localDeleteWarningShown,
+  onConversationAccept,
+  onConversationArchive,
+  onConversationBlock,
+  onConversationBlockAndReportSpam,
+  onConversationDelete,
+  onConversationDeleteMessages,
+  onConversationDisappearingMessagesChange,
+  onConversationLeaveGroup,
+  onConversationMarkUnread,
+  onConversationMuteExpirationChange,
+  onConversationPin,
+  onConversationReportSpam,
+  onConversationUnarchive,
+  onConversationUnpin,
+  onOutgoingAudioCall,
+  onOutgoingVideoCall,
+  onSearchInConversation,
+  onSelectModeEnter,
+  onShowMembers,
+  onViewAllMedia,
+  onViewConversationDetails,
+  onViewUserStories,
+  outgoingCallButtonStyle,
+  setLocalDeleteWarningShown,
+  sharedGroupNames,
+  theme,
+}: PropsType): JSX.Element | null {
   // Comes from a third-party dependency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private menuTriggerRef: React.RefObject<any>;
+  const menuTriggerRef = useRef<any>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
-  public headerRef: React.RefObject<HTMLDivElement>;
+  const [
+    hasCustomDisappearingTimeoutModal,
+    setHasCustomDisappearingTimeoutModal,
+  ] = useState(false);
+  const [hasDeleteMessagesConfirmation, setHasDeleteMessagesConfirmation] =
+    useState(false);
+  const [hasLeaveGroupConfirmation, setHasLeaveGroupConfirmation] =
+    useState(false);
+  const [
+    hasCannotLeaveGroupBecauseYouAreLastAdminAlert,
+    setHasCannotLeaveGroupBecauseYouAreLastAdminAlert,
+  ] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [messageRequestState, setMessageRequestState] = useState(
+    MessageRequestState.default
+  );
 
-  public constructor(props: PropsType) {
-    super(props);
+  const triggerId = `conversation-${conversation.id}`;
 
-    this.state = { isNarrow: false, modalState: ModalState.NothingOpen };
-
-    this.menuTriggerRef = React.createRef();
-    this.headerRef = React.createRef();
-    this.showMenuBound = this.showMenu.bind(this);
-  }
-
-  private showMenu(event: React.MouseEvent<HTMLButtonElement>): void {
-    if (this.menuTriggerRef.current) {
-      this.menuTriggerRef.current.handleContextClick(event);
-    }
-  }
-
-  private renderBackButton(): ReactNode {
-    const { i18n, onGoBack, showBackButton } = this.props;
-
-    return (
-      <button
-        type="button"
-        onClick={onGoBack}
-        className={classNames(
-          'module-ConversationHeader__back-icon',
-          showBackButton ? 'module-ConversationHeader__back-icon--show' : null
-        )}
-        disabled={!showBackButton}
-        aria-label={i18n('goBack')}
-      />
-    );
-  }
-
-  private renderHeaderInfoTitle(): ReactNode {
-    const { name, title, type, i18n, isMe } = this.props;
-
-    if (isMe) {
-      return (
-        <div className="module-ConversationHeader__header__info__title">
-          {i18n('noteToSelf')}
-        </div>
-      );
-    }
-
-    return (
-      <div className="module-ConversationHeader__header__info__title">
-        <Emojify text={title} />
-        {isInSystemContacts({ name, type }) ? (
-          <InContactsIcon
-            className="module-ConversationHeader__header__info__title__in-contacts-icon"
-            i18n={i18n}
-            tooltipContainerRef={this.headerRef}
-          />
-        ) : null}
-      </div>
-    );
-  }
-
-  private renderHeaderInfoSubtitle(): ReactNode {
-    const expirationNode = this.renderExpirationLength();
-    const verifiedNode = this.renderVerifiedIcon();
-
-    if (expirationNode || verifiedNode) {
-      return (
-        <div className="module-ConversationHeader__header__info__subtitle">
-          {expirationNode}
-          {verifiedNode}
-        </div>
-      );
-    }
-
+  if (hasPanelShowing) {
     return null;
   }
 
-  private renderAvatar(): ReactNode {
-    const {
-      acceptedMessageRequest,
-      avatarPath,
-      badge,
-      color,
-      hasStories,
-      id,
-      i18n,
-      type,
-      isMe,
-      phoneNumber,
-      profileName,
-      sharedGroupNames,
-      theme,
-      title,
-      unblurredAvatarPath,
-      viewUserStories,
-    } = this.props;
-
-    return (
-      <span className="module-ConversationHeader__header__avatar">
-        <Avatar
-          acceptedMessageRequest={acceptedMessageRequest}
-          avatarPath={avatarPath}
-          badge={badge}
-          color={color}
-          conversationType={type}
+  return (
+    <>
+      {hasCustomDisappearingTimeoutModal && (
+        <DisappearingTimeDialog
           i18n={i18n}
-          isMe={isMe}
-          noteToSelf={isMe}
-          onClick={
-            hasStories
-              ? () => {
-                  viewUserStories({
-                    conversationId: id,
-                    storyViewMode: StoryViewModeType.User,
-                  });
-                }
-              : undefined
-          }
-          phoneNumber={phoneNumber}
-          profileName={profileName}
-          sharedGroupNames={sharedGroupNames}
-          size={AvatarSize.THIRTY_TWO}
-          // user may have stories, but we don't show that on Note to Self conversation
-          storyRing={isMe ? undefined : hasStories}
-          theme={theme}
-          title={title}
-          unblurredAvatarPath={unblurredAvatarPath}
+          initialValue={conversation.expireTimer}
+          onSubmit={value => {
+            setHasCustomDisappearingTimeoutModal(false);
+            onConversationDisappearingMessagesChange(value);
+          }}
+          onClose={() => {
+            setHasCustomDisappearingTimeoutModal(false);
+          }}
         />
-      </span>
-    );
-  }
-
-  private renderExpirationLength(): ReactNode {
-    const { i18n, expireTimer } = this.props;
-
-    if (!expireTimer) {
-      return null;
-    }
-
-    return (
-      <div className="module-ConversationHeader__header__info__subtitle__expiration">
-        {expirationTimer.format(i18n, expireTimer)}
-      </div>
-    );
-  }
-
-  private renderVerifiedIcon(): ReactNode {
-    const { i18n, isVerified } = this.props;
-
-    if (!isVerified) {
-      return null;
-    }
-
-    return (
-      <div className="module-ConversationHeader__header__info__subtitle__verified">
-        {i18n('verified')}
-      </div>
-    );
-  }
-
-  private renderMoreButton(triggerId: string): ReactNode {
-    const { i18n, showBackButton } = this.props;
-
-    return (
-      <ContextMenuTrigger id={triggerId} ref={this.menuTriggerRef}>
-        <button
-          type="button"
-          onClick={this.showMenuBound}
-          className={classNames(
-            'module-ConversationHeader__button',
-            'module-ConversationHeader__button--more',
-            showBackButton ? null : 'module-ConversationHeader__button--show'
-          )}
-          disabled={showBackButton}
-          aria-label={i18n('moreInfo')}
+      )}
+      {hasDeleteMessagesConfirmation && (
+        <DeleteMessagesConfirmationDialog
+          i18n={i18n}
+          isDeleteSyncSendEnabled={isDeleteSyncSendEnabled}
+          localDeleteWarningShown={localDeleteWarningShown}
+          onDestroyMessages={() => {
+            setHasDeleteMessagesConfirmation(false);
+            onConversationDeleteMessages();
+          }}
+          onClose={() => {
+            setHasDeleteMessagesConfirmation(false);
+          }}
+          setLocalDeleteWarningShown={setLocalDeleteWarningShown}
         />
-      </ContextMenuTrigger>
-    );
-  }
-
-  private renderSearchButton(): ReactNode {
-    const { i18n, onSearchInConversation, showBackButton } = this.props;
-
-    return (
-      <button
-        type="button"
-        onClick={onSearchInConversation}
-        className={classNames(
-          'module-ConversationHeader__button',
-          'module-ConversationHeader__button--search',
-          showBackButton ? null : 'module-ConversationHeader__button--show'
-        )}
-        disabled={showBackButton}
-        aria-label={i18n('search')}
-      />
-    );
-  }
-
-  private renderMenu(triggerId: string): ReactNode {
-    const {
-      acceptedMessageRequest,
-      canChangeTimer,
-      expireTimer,
-      groupVersion,
-      i18n,
-      isArchived,
-      isMissingMandatoryProfileSharing,
-      isPinned,
-      left,
-      markedUnread,
-      muteExpiresAt,
-      onArchive,
-      onDeleteMessages,
-      onMarkUnread,
-      onMoveToInbox,
-      onSetDisappearingMessages,
-      onSetMuteNotifications,
-      onSetPin,
-      onShowAllMedia,
-      onShowConversationDetails,
-      onShowGroupMembers,
-      type,
-    } = this.props;
-
-    const muteOptions = getMuteOptions(muteExpiresAt, i18n);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const disappearingTitle = i18n('icu:disappearingMessages') as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const muteTitle = i18n('muteNotificationsTitle') as any;
-    const isGroup = type === 'group';
-
-    const disableTimerChanges = Boolean(
-      !canChangeTimer ||
-        !acceptedMessageRequest ||
-        left ||
-        isMissingMandatoryProfileSharing
-    );
-
-    const hasGV2AdminEnabled = isGroup && groupVersion === 2;
-
-    const isActiveExpireTimer = (value: number): boolean => {
-      if (!expireTimer) {
-        return value === 0;
-      }
-
-      // Custom time...
-      if (value === -1) {
-        return !expirationTimer.DEFAULT_DURATIONS_SET.has(expireTimer);
-      }
-      return value === expireTimer;
-    };
-
-    const expireDurations: ReadonlyArray<ReactNode> = [
-      ...expirationTimer.DEFAULT_DURATIONS_IN_SECONDS,
-      -1,
-    ].map((seconds: number) => {
-      let text: string;
-
-      if (seconds === -1) {
-        text = i18n('customDisappearingTimeOption');
-      } else {
-        text = expirationTimer.format(i18n, seconds, {
-          capitalizeOff: true,
-        });
-      }
-
-      const onDurationClick = () => {
-        if (seconds === -1) {
-          this.setState({
-            modalState: ModalState.CustomDisappearingTimeout,
-          });
-        } else {
-          onSetDisappearingMessages(seconds);
-        }
-      };
-
-      return (
-        <MenuItem key={seconds} onClick={onDurationClick}>
-          <div
-            className={classNames(
-              TIMER_ITEM_CLASS,
-              isActiveExpireTimer(seconds) && `${TIMER_ITEM_CLASS}--active`
-            )}
-          >
-            {text}
-          </div>
-        </MenuItem>
-      );
-    });
-
-    return (
-      <ContextMenu id={triggerId}>
-        {disableTimerChanges ? null : (
-          <SubMenu hoverDelay={1} title={disappearingTitle} rtl>
-            {expireDurations}
-          </SubMenu>
-        )}
-        <SubMenu hoverDelay={1} title={muteTitle} rtl>
-          {muteOptions.map(item => (
-            <MenuItem
-              key={item.name}
-              disabled={item.disabled}
-              onClick={() => {
-                onSetMuteNotifications(item.value);
-              }}
-            >
-              {item.name}
-            </MenuItem>
-          ))}
-        </SubMenu>
-        {!isGroup || hasGV2AdminEnabled ? (
-          <MenuItem onClick={onShowConversationDetails}>
-            {isGroup
-              ? i18n('showConversationDetails')
-              : i18n('showConversationDetails--direct')}
-          </MenuItem>
-        ) : null}
-        {isGroup && !hasGV2AdminEnabled ? (
-          <MenuItem onClick={onShowGroupMembers}>
-            {i18n('showMembers')}
-          </MenuItem>
-        ) : null}
-        <MenuItem onClick={onShowAllMedia}>{i18n('viewRecentMedia')}</MenuItem>
-        <MenuItem divider />
-        {!markedUnread ? (
-          <MenuItem onClick={onMarkUnread}>{i18n('markUnread')}</MenuItem>
-        ) : null}
-        {isArchived ? (
-          <MenuItem onClick={onMoveToInbox}>
-            {i18n('moveConversationToInbox')}
-          </MenuItem>
-        ) : (
-          <MenuItem onClick={onArchive}>{i18n('archiveConversation')}</MenuItem>
-        )}
-        <MenuItem onClick={onDeleteMessages}>{i18n('deleteMessages')}</MenuItem>
-        {isPinned ? (
-          <MenuItem onClick={() => onSetPin(false)}>
-            {i18n('unpinConversation')}
-          </MenuItem>
-        ) : (
-          <MenuItem onClick={() => onSetPin(true)}>
-            {i18n('pinConversation')}
-          </MenuItem>
-        )}
-      </ContextMenu>
-    );
-  }
-
-  private renderHeader(): ReactNode {
-    const { conversationTitle, groupVersion, onShowConversationDetails, type } =
-      this.props;
-
-    if (conversationTitle !== undefined) {
-      return (
-        <div className="module-ConversationHeader__header">
-          <div className="module-ConversationHeader__header__info">
-            <div className="module-ConversationHeader__header__info__title">
-              {conversationTitle}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    let onClick: undefined | (() => void);
-    switch (type) {
-      case 'direct':
-        onClick = () => {
-          onShowConversationDetails();
-        };
-        break;
-      case 'group': {
-        const hasGV2AdminEnabled = groupVersion === 2;
-        onClick = hasGV2AdminEnabled
-          ? () => {
-              onShowConversationDetails();
+      )}
+      {hasLeaveGroupConfirmation && (
+        <LeaveGroupConfirmationDialog
+          i18n={i18n}
+          cannotLeaveBecauseYouAreLastAdmin={cannotLeaveBecauseYouAreLastAdmin}
+          onClose={() => {
+            setHasLeaveGroupConfirmation(false);
+          }}
+          onLeaveGroup={() => {
+            setHasLeaveGroupConfirmation(false);
+            if (!cannotLeaveBecauseYouAreLastAdmin) {
+              onConversationLeaveGroup();
+            } else {
+              setHasLeaveGroupConfirmation(false);
+              setHasCannotLeaveGroupBecauseYouAreLastAdminAlert(true);
             }
-          : undefined;
-        break;
-      }
-      default:
-        throw missingCaseError(type);
+          }}
+        />
+      )}
+      {hasCannotLeaveGroupBecauseYouAreLastAdminAlert && (
+        <CannotLeaveGroupBecauseYouAreLastAdminAlert
+          i18n={i18n}
+          onClose={() => {
+            setHasCannotLeaveGroupBecauseYouAreLastAdminAlert(false);
+          }}
+        />
+      )}
+      <SizeObserver
+        onSizeChange={size => {
+          setIsNarrow(size.width < 500);
+        }}
+      >
+        {measureRef => (
+          <div
+            className={classNames('module-ConversationHeader', {
+              'module-ConversationHeader--narrow': isNarrow,
+            })}
+            ref={measureRef}
+          >
+            <HeaderContent
+              conversation={conversation}
+              badge={badge ?? null}
+              hasStories={hasStories ?? null}
+              headerRef={headerRef}
+              i18n={i18n}
+              sharedGroupNames={sharedGroupNames}
+              theme={theme}
+              onViewUserStories={onViewUserStories}
+              onViewConversationDetails={onViewConversationDetails}
+              isSignalConversation={isSignalConversation ?? false}
+            />
+            {!isSmsOnlyOrUnregistered && !isSignalConversation && (
+              <OutgoingCallButtons
+                conversation={conversation}
+                hasActiveCall={hasActiveCall}
+                i18n={i18n}
+                isNarrow={isNarrow}
+                onOutgoingAudioCall={onOutgoingAudioCall}
+                onOutgoingVideoCall={onOutgoingVideoCall}
+                outgoingCallButtonStyle={outgoingCallButtonStyle}
+              />
+            )}
+            <button
+              type="button"
+              onClick={onSearchInConversation}
+              className={classNames(
+                'module-ConversationHeader__button',
+                'module-ConversationHeader__button--search'
+              )}
+              aria-label={i18n('icu:search')}
+            />
+            <ContextMenuTrigger
+              id={triggerId}
+              ref={menuTriggerRef}
+              disable={isSelectMode}
+            >
+              <button
+                type="button"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  menuTriggerRef.current?.handleContextClick(event);
+                }}
+                className={classNames(
+                  'module-ConversationHeader__button',
+                  'module-ConversationHeader__button--more'
+                )}
+                aria-label={i18n('icu:moreInfo')}
+                disabled={isSelectMode}
+              />
+            </ContextMenuTrigger>
+            <HeaderMenu
+              i18n={i18n}
+              conversation={conversation}
+              isMissingMandatoryProfileSharing={
+                isMissingMandatoryProfileSharing ?? false
+              }
+              isSelectMode={isSelectMode}
+              isSignalConversation={isSignalConversation ?? false}
+              onChangeDisappearingMessages={
+                onConversationDisappearingMessagesChange
+              }
+              onChangeMuteExpiration={onConversationMuteExpirationChange}
+              onConversationAccept={onConversationAccept}
+              onConversationArchive={onConversationArchive}
+              onConversationBlock={() => {
+                setMessageRequestState(MessageRequestState.blocking);
+              }}
+              onConversationDelete={() => {
+                setMessageRequestState(MessageRequestState.deleting);
+              }}
+              onConversationDeleteMessages={() => {
+                setHasDeleteMessagesConfirmation(true);
+              }}
+              onConversationLeaveGroup={() => {
+                if (cannotLeaveBecauseYouAreLastAdmin) {
+                  setHasCannotLeaveGroupBecauseYouAreLastAdminAlert(true);
+                } else {
+                  setHasLeaveGroupConfirmation(true);
+                }
+              }}
+              onConversationMarkUnread={onConversationMarkUnread}
+              onConversationPin={onConversationPin}
+              onConversationReportAndMaybeBlock={() => {
+                setMessageRequestState(
+                  MessageRequestState.reportingAndMaybeBlocking
+                );
+              }}
+              onConversationUnarchive={onConversationUnarchive}
+              onConversationUnblock={() => {
+                setMessageRequestState(MessageRequestState.unblocking);
+              }}
+              onConversationUnpin={onConversationUnpin}
+              onSelectModeEnter={onSelectModeEnter}
+              onSetupCustomDisappearingTimeout={() => {
+                setHasCustomDisappearingTimeoutModal(true);
+              }}
+              onShowMembers={onShowMembers}
+              onViewAllMedia={onViewAllMedia}
+              onViewConversationDetails={onViewConversationDetails}
+              triggerId={triggerId}
+            />
+            <MessageRequestActionsConfirmation
+              i18n={i18n}
+              conversationId={conversation.id}
+              conversationType={conversation.type}
+              addedByName={addedByName}
+              conversationName={conversationName}
+              isBlocked={conversation.isBlocked ?? false}
+              isReported={conversation.isReported ?? false}
+              state={messageRequestState}
+              acceptConversation={onConversationAccept}
+              blockAndReportSpam={onConversationBlockAndReportSpam}
+              blockConversation={onConversationBlock}
+              reportSpam={onConversationReportSpam}
+              deleteConversation={onConversationDelete}
+              onChangeState={setMessageRequestState}
+            />
+          </div>
+        )}
+      </SizeObserver>
+    </>
+  );
+});
+
+function HeaderContent({
+  conversation,
+  badge,
+  hasStories,
+  headerRef,
+  i18n,
+  sharedGroupNames,
+  theme,
+  isSignalConversation,
+  onViewUserStories,
+  onViewConversationDetails,
+}: {
+  conversation: MinimalConversation;
+  badge: BadgeType | null;
+  hasStories: HasStories | null;
+  headerRef: RefObject<HTMLDivElement>;
+  i18n: LocalizerType;
+  sharedGroupNames: ReadonlyArray<string>;
+  theme: ThemeType;
+  isSignalConversation: boolean;
+  onViewUserStories: () => void;
+  onViewConversationDetails: () => void;
+}) {
+  let onClick: undefined | (() => void);
+  const { type } = conversation;
+  switch (type) {
+    case 'direct':
+      onClick = onViewConversationDetails;
+      break;
+    case 'group': {
+      const hasGV2AdminEnabled = conversation.groupVersion === 2;
+      onClick = hasGV2AdminEnabled ? onViewConversationDetails : undefined;
+      break;
     }
+    default:
+      throw missingCaseError(type);
+  }
 
-    const avatar = this.renderAvatar();
-    const contents = (
-      <div className="module-ConversationHeader__header__info">
-        {this.renderHeaderInfoTitle()}
-        {this.renderHeaderInfoSubtitle()}
-      </div>
-    );
+  const avatar = (
+    <span className="module-ConversationHeader__header__avatar">
+      <Avatar
+        avatarPlaceholderGradient={
+          conversation.gradientStart && conversation.gradientEnd
+            ? [conversation.gradientStart, conversation.gradientEnd]
+            : undefined
+        }
+        avatarUrl={conversation.avatarUrl ?? undefined}
+        badge={badge ?? undefined}
+        color={conversation.color ?? undefined}
+        conversationType={conversation.type}
+        hasAvatar={conversation.hasAvatar}
+        i18n={i18n}
+        noteToSelf={conversation.isMe}
+        onClick={hasStories ? onViewUserStories : onClick}
+        phoneNumber={conversation.phoneNumber ?? undefined}
+        profileName={conversation.profileName ?? undefined}
+        sharedGroupNames={sharedGroupNames}
+        size={AvatarSize.THIRTY_TWO}
+        // user may have stories, but we don't show that on Note to Self conversation
+        storyRing={conversation.isMe ? undefined : (hasStories ?? undefined)}
+        theme={theme}
+        title={conversation.title}
+      />
+    </span>
+  );
 
-    if (onClick) {
-      return (
-        <div className="module-ConversationHeader__header">
-          {avatar}
+  const contents = (
+    <div className="module-ConversationHeader__header__info">
+      <HeaderInfoTitle
+        name={conversation.name ?? null}
+        title={conversation.title}
+        type={conversation.type}
+        i18n={i18n}
+        isMe={conversation.isMe}
+        isSignalConversation={isSignalConversation}
+        headerRef={headerRef}
+      />
+      {(conversation.expireTimer != null || conversation.isVerified) && (
+        <div className="module-ConversationHeader__header__info__subtitle">
+          {conversation.expireTimer != null &&
+            conversation.expireTimer !== 0 && (
+              <div className="module-ConversationHeader__header__info__subtitle__expiration">
+                {expirationTimer.format(i18n, conversation.expireTimer)}
+              </div>
+            )}
+          {conversation.isVerified && (
+            <div className="module-ConversationHeader__header__info__subtitle__verified">
+              {i18n('icu:verified')}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (onClick) {
+    return (
+      <div className="module-ConversationHeader__header">
+        {avatar}
+        <div>
           <button
             type="button"
             className="module-ConversationHeader__header--clickable"
@@ -526,140 +527,367 @@ export class ConversationHeader extends React.Component<PropsType, StateType> {
             {contents}
           </button>
         </div>
-      );
-    }
-
-    return (
-      <div className="module-ConversationHeader__header" ref={this.headerRef}>
-        {avatar}
-        {contents}
       </div>
     );
   }
 
-  public override render(): ReactNode {
-    const {
-      announcementsOnly,
-      areWeAdmin,
-      expireTimer,
-      i18n,
-      id,
-      isSMSOnly,
-      onOutgoingAudioCallInConversation,
-      onOutgoingVideoCallInConversation,
-      onSetDisappearingMessages,
-      outgoingCallButtonStyle,
-      showBackButton,
-    } = this.props;
-    const { isNarrow, modalState } = this.state;
-    const triggerId = `conversation-${id}`;
+  return (
+    <div className="module-ConversationHeader__header" ref={headerRef}>
+      {avatar}
+      {contents}
+    </div>
+  );
+}
 
-    let modalNode: ReactNode;
-    if (modalState === ModalState.NothingOpen) {
-      modalNode = undefined;
-    } else if (modalState === ModalState.CustomDisappearingTimeout) {
-      modalNode = (
-        <DisappearingTimeDialog
-          i18n={i18n}
-          initialValue={expireTimer}
-          onSubmit={value => {
-            this.setState({ modalState: ModalState.NothingOpen });
-            onSetDisappearingMessages(value);
-          }}
-          onClose={() => this.setState({ modalState: ModalState.NothingOpen })}
-        />
-      );
-    } else {
-      throw missingCaseError(modalState);
+function HeaderMenu({
+  conversation,
+  i18n,
+  isMissingMandatoryProfileSharing,
+  isSelectMode,
+  isSignalConversation,
+  onChangeDisappearingMessages,
+  onChangeMuteExpiration,
+  onConversationAccept,
+  onConversationArchive,
+  onConversationBlock,
+  onConversationDelete,
+  onConversationDeleteMessages,
+  onConversationLeaveGroup,
+  onConversationMarkUnread,
+  onConversationPin,
+  onConversationReportAndMaybeBlock,
+  onConversationUnarchive,
+  onConversationUnblock,
+  onConversationUnpin,
+  onSelectModeEnter,
+  onSetupCustomDisappearingTimeout,
+  onShowMembers,
+  onViewAllMedia,
+  onViewConversationDetails,
+  triggerId,
+}: {
+  conversation: MinimalConversation;
+  i18n: LocalizerType;
+  isMissingMandatoryProfileSharing: boolean;
+  isSelectMode: boolean;
+  isSignalConversation: boolean;
+  onChangeDisappearingMessages: (seconds: DurationInSeconds) => void;
+  onChangeMuteExpiration: (seconds: number) => void;
+  onConversationAccept: () => void;
+  onConversationArchive: () => void;
+  onConversationBlock: () => void;
+  onConversationDelete: () => void;
+  onConversationDeleteMessages: () => void;
+  onConversationLeaveGroup: () => void;
+  onConversationMarkUnread: () => void;
+  onConversationPin: () => void;
+  onConversationReportAndMaybeBlock: () => void;
+  onConversationUnarchive: () => void;
+  onConversationUnblock: () => void;
+  onConversationUnpin: () => void;
+  onSelectModeEnter: () => void;
+  onSetupCustomDisappearingTimeout: () => void;
+  onShowMembers: () => void;
+  onViewAllMedia: () => void;
+  onViewConversationDetails: () => void;
+  triggerId: string;
+}) {
+  const isRTL = i18n.getLocaleDirection() === 'rtl';
+  const muteOptions = getMuteOptions(conversation.muteExpiresAt, i18n);
+  const isGroup = conversation.type === 'group';
+  const disableTimerChanges = Boolean(
+    !conversation.canChangeTimer ||
+      !conversation.acceptedMessageRequest ||
+      conversation.left ||
+      isMissingMandatoryProfileSharing
+  );
+  const hasGV2AdminEnabled = isGroup && conversation.groupVersion === 2;
+
+  const isActiveExpireTimer = (value: number): boolean => {
+    if (!conversation.expireTimer) {
+      return value === 0;
     }
 
+    // Custom time...
+    if (value === -1) {
+      return !expirationTimer.DEFAULT_DURATIONS_SET.has(
+        conversation.expireTimer
+      );
+    }
+    return value === conversation.expireTimer;
+  };
+
+  if (isSelectMode) {
+    return null;
+  }
+
+  const muteTitle = <span>{i18n('icu:muteNotificationsTitle')}</span>;
+  const disappearingTitle = <span>{i18n('icu:disappearingMessages')}</span>;
+
+  if (isSignalConversation) {
+    const isMuted =
+      conversation.muteExpiresAt && isConversationMuted(conversation);
+
     return (
-      <>
-        {modalNode}
-        <Measure
-          bounds
-          onResize={({ bounds }) => {
-            if (!bounds || !bounds.width) {
-              return;
-            }
-            this.setState({ isNarrow: bounds.width < 500 });
-          }}
-        >
-          {({ measureRef }) => (
-            <div
-              className={classNames('module-ConversationHeader', {
-                'module-ConversationHeader--narrow': isNarrow,
-              })}
-              ref={measureRef}
+      <ContextMenu id={triggerId} rtl={isRTL}>
+        <SubMenu hoverDelay={1} title={muteTitle} rtl={!isRTL}>
+          {isMuted ? (
+            <MenuItem
+              onClick={() => {
+                onChangeMuteExpiration(0);
+              }}
             >
-              {this.renderBackButton()}
-              {this.renderHeader()}
-              {!isSMSOnly && (
-                <OutgoingCallButtons
-                  announcementsOnly={announcementsOnly}
-                  areWeAdmin={areWeAdmin}
-                  i18n={i18n}
-                  isNarrow={isNarrow}
-                  onOutgoingAudioCallInConversation={
-                    onOutgoingAudioCallInConversation
-                  }
-                  onOutgoingVideoCallInConversation={
-                    onOutgoingVideoCallInConversation
-                  }
-                  outgoingCallButtonStyle={outgoingCallButtonStyle}
-                  showBackButton={showBackButton}
-                />
-              )}
-              {this.renderSearchButton()}
-              {this.renderMoreButton(triggerId)}
-              {this.renderMenu(triggerId)}
-            </div>
+              {i18n('icu:unmute')}
+            </MenuItem>
+          ) : (
+            <MenuItem
+              onClick={() => {
+                onChangeMuteExpiration(Number.MAX_SAFE_INTEGER);
+              }}
+            >
+              {i18n('icu:muteAlways')}
+            </MenuItem>
           )}
-        </Measure>
-      </>
+        </SubMenu>
+        {conversation.isArchived ? (
+          <MenuItem onClick={onConversationUnarchive}>
+            {i18n('icu:moveConversationToInbox')}
+          </MenuItem>
+        ) : (
+          <MenuItem onClick={onConversationArchive}>
+            {i18n('icu:archiveConversation')}
+          </MenuItem>
+        )}
+
+        <MenuItem onClick={onConversationDeleteMessages}>
+          {i18n('icu:deleteConversation')}
+        </MenuItem>
+      </ContextMenu>
     );
   }
+
+  if (isGroup && conversation.groupVersion !== 2) {
+    return (
+      <ContextMenu id={triggerId}>
+        <MenuItem onClick={onShowMembers}>{i18n('icu:showMembers')}</MenuItem>
+        <MenuItem onClick={onViewAllMedia}>
+          {i18n('icu:allMediaMenuItem')}
+        </MenuItem>
+        <MenuItem divider />
+        {conversation.isArchived ? (
+          <MenuItem onClick={onConversationUnarchive}>
+            {i18n('icu:moveConversationToInbox')}
+          </MenuItem>
+        ) : (
+          <MenuItem onClick={onConversationArchive}>
+            {i18n('icu:archiveConversation')}
+          </MenuItem>
+        )}
+
+        <MenuItem onClick={onConversationDeleteMessages}>
+          {i18n('icu:deleteConversation')}
+        </MenuItem>
+      </ContextMenu>
+    );
+  }
+
+  const expireDurations: ReadonlyArray<ReactNode> = [
+    ...expirationTimer.DEFAULT_DURATIONS_IN_SECONDS,
+    DurationInSeconds.fromSeconds(-1),
+  ].map(seconds => {
+    let text: string;
+
+    if (seconds === -1) {
+      text = i18n('icu:customDisappearingTimeOption');
+    } else {
+      text = expirationTimer.format(i18n, seconds, {
+        capitalizeOff: true,
+      });
+    }
+
+    const onDurationClick = () => {
+      if (seconds === -1) {
+        onSetupCustomDisappearingTimeout();
+      } else {
+        onChangeDisappearingMessages(seconds);
+      }
+    };
+
+    return (
+      <MenuItem key={seconds} onClick={onDurationClick}>
+        <div
+          className={classNames(
+            TIMER_ITEM_CLASS,
+            isActiveExpireTimer(seconds) && `${TIMER_ITEM_CLASS}--active`
+          )}
+        >
+          {text}
+        </div>
+      </MenuItem>
+    );
+  });
+
+  return createPortal(
+    <ContextMenu id={triggerId} rtl={isRTL}>
+      {!conversation.acceptedMessageRequest && (
+        <>
+          {!conversation.isBlocked && (
+            <MenuItem onClick={onConversationBlock}>
+              {i18n('icu:ConversationHeader__MenuItem--Block')}
+            </MenuItem>
+          )}
+          {conversation.isBlocked && (
+            <MenuItem onClick={onConversationUnblock}>
+              {i18n('icu:ConversationHeader__MenuItem--Unblock')}
+            </MenuItem>
+          )}
+          {!conversation.isBlocked && (
+            <MenuItem onClick={onConversationAccept}>
+              {i18n('icu:ConversationHeader__MenuItem--Accept')}
+            </MenuItem>
+          )}
+          <MenuItem onClick={onConversationReportAndMaybeBlock}>
+            {i18n('icu:ConversationHeader__MenuItem--ReportSpam')}
+          </MenuItem>
+          <MenuItem onClick={onConversationDelete}>
+            {i18n('icu:ConversationHeader__MenuItem--DeleteChat')}
+          </MenuItem>
+        </>
+      )}
+      {conversation.acceptedMessageRequest && (
+        <>
+          {disableTimerChanges ? null : (
+            <SubMenu hoverDelay={1} title={disappearingTitle} rtl={!isRTL}>
+              {expireDurations}
+            </SubMenu>
+          )}
+          <SubMenu hoverDelay={1} title={muteTitle} rtl={!isRTL}>
+            {muteOptions.map(item => (
+              <MenuItem
+                key={item.name}
+                disabled={item.disabled}
+                onClick={() => {
+                  onChangeMuteExpiration(item.value);
+                }}
+              >
+                {item.name}
+              </MenuItem>
+            ))}
+          </SubMenu>
+          {!isGroup || hasGV2AdminEnabled ? (
+            <MenuItem onClick={onViewConversationDetails}>
+              {isGroup
+                ? i18n('icu:showConversationDetails')
+                : i18n('icu:showConversationDetails--direct')}
+            </MenuItem>
+          ) : null}
+          <MenuItem onClick={onViewAllMedia}>
+            {i18n('icu:allMediaMenuItem')}
+          </MenuItem>
+          <MenuItem divider />
+          <MenuItem onClick={onSelectModeEnter}>
+            {i18n('icu:ConversationHeader__menu__selectMessages')}
+          </MenuItem>
+          <MenuItem divider />
+          {!conversation.markedUnread ? (
+            <MenuItem onClick={onConversationMarkUnread}>
+              {i18n('icu:markUnread')}
+            </MenuItem>
+          ) : null}
+          {conversation.isPinned ? (
+            <MenuItem onClick={onConversationUnpin}>
+              {i18n('icu:unpinConversation')}
+            </MenuItem>
+          ) : (
+            <MenuItem onClick={onConversationPin}>
+              {i18n('icu:pinConversation')}
+            </MenuItem>
+          )}
+          {conversation.isArchived ? (
+            <MenuItem onClick={onConversationUnarchive}>
+              {i18n('icu:moveConversationToInbox')}
+            </MenuItem>
+          ) : (
+            <MenuItem onClick={onConversationArchive}>
+              {i18n('icu:archiveConversation')}
+            </MenuItem>
+          )}
+          {!conversation.isBlocked && (
+            <MenuItem onClick={onConversationBlock}>
+              {i18n('icu:ConversationHeader__MenuItem--Block')}
+            </MenuItem>
+          )}
+          {conversation.isBlocked && (
+            <MenuItem onClick={onConversationUnblock}>
+              {i18n('icu:ConversationHeader__MenuItem--Unblock')}
+            </MenuItem>
+          )}
+          <MenuItem onClick={onConversationDeleteMessages}>
+            {i18n('icu:deleteConversation')}
+          </MenuItem>
+          {isGroup && (
+            <MenuItem onClick={onConversationLeaveGroup}>
+              {i18n(
+                'icu:ConversationHeader__ContextMenu__LeaveGroupAction__title'
+              )}
+            </MenuItem>
+          )}
+        </>
+      )}
+    </ContextMenu>,
+    document.body
+  );
 }
 
 function OutgoingCallButtons({
-  announcementsOnly,
-  areWeAdmin,
+  conversation,
+  hasActiveCall,
   i18n,
   isNarrow,
-  onOutgoingAudioCallInConversation,
-  onOutgoingVideoCallInConversation,
+  onOutgoingAudioCall,
+  onOutgoingVideoCall,
   outgoingCallButtonStyle,
-  showBackButton,
 }: { isNarrow: boolean } & Pick<
   PropsType,
-  | 'announcementsOnly'
-  | 'areWeAdmin'
   | 'i18n'
-  | 'onOutgoingAudioCallInConversation'
-  | 'onOutgoingVideoCallInConversation'
+  | 'conversation'
+  | 'hasActiveCall'
+  | 'onOutgoingAudioCall'
+  | 'onOutgoingVideoCall'
   | 'outgoingCallButtonStyle'
-  | 'showBackButton'
 >): JSX.Element | null {
+  const disabled =
+    conversation.type === 'group' &&
+    conversation.announcementsOnly &&
+    !conversation.areWeAdmin;
+  const inAnotherCall = !disabled && hasActiveCall;
+
   const videoButton = (
     <button
-      aria-label={i18n('makeOutgoingVideoCall')}
+      aria-label={i18n('icu:makeOutgoingVideoCall')}
       className={classNames(
         'module-ConversationHeader__button',
         'module-ConversationHeader__button--video',
-        showBackButton ? null : 'module-ConversationHeader__button--show',
-        !showBackButton && announcementsOnly && !areWeAdmin
+        disabled
           ? 'module-ConversationHeader__button--show-disabled'
+          : undefined,
+        inAnotherCall
+          ? 'module-ConversationHeader__button--in-another-call'
           : undefined
       )}
-      disabled={showBackButton}
-      onClick={onOutgoingVideoCallInConversation}
+      onClick={onOutgoingVideoCall}
       type="button"
     />
   );
+  const videoElement = inAnotherCall ? (
+    <InAnotherCallTooltip i18n={i18n}>{videoButton}</InAnotherCallTooltip>
+  ) : (
+    videoButton
+  );
 
   const startCallShortcuts = useStartCallShortcuts(
-    onOutgoingAudioCallInConversation,
-    onOutgoingVideoCallInConversation
+    onOutgoingAudioCall,
+    onOutgoingVideoCall
   );
   useKeyboardShortcuts(startCallShortcuts);
 
@@ -667,41 +895,167 @@ function OutgoingCallButtons({
     case OutgoingCallButtonStyle.None:
       return null;
     case OutgoingCallButtonStyle.JustVideo:
-      return videoButton;
+      return videoElement;
     case OutgoingCallButtonStyle.Both:
+      // eslint-disable-next-line no-case-declarations
+      const audioButton = (
+        <button
+          type="button"
+          onClick={onOutgoingAudioCall}
+          className={classNames(
+            'module-ConversationHeader__button',
+            'module-ConversationHeader__button--audio',
+            inAnotherCall
+              ? 'module-ConversationHeader__button--in-another-call'
+              : undefined
+          )}
+          aria-label={i18n('icu:makeOutgoingCall')}
+        />
+      );
+
       return (
         <>
-          {videoButton}
-          <button
-            type="button"
-            onClick={onOutgoingAudioCallInConversation}
-            className={classNames(
-              'module-ConversationHeader__button',
-              'module-ConversationHeader__button--audio',
-              showBackButton ? null : 'module-ConversationHeader__button--show'
-            )}
-            disabled={showBackButton}
-            aria-label={i18n('makeOutgoingCall')}
-          />
+          {videoElement}
+          {inAnotherCall ? (
+            <InAnotherCallTooltip i18n={i18n}>
+              {audioButton}
+            </InAnotherCallTooltip>
+          ) : (
+            audioButton
+          )}
         </>
       );
     case OutgoingCallButtonStyle.Join:
-      return (
+      // eslint-disable-next-line no-case-declarations
+      const joinButton = (
         <button
-          aria-label={i18n('joinOngoingCall')}
+          aria-label={i18n('icu:joinOngoingCall')}
           className={classNames(
             'module-ConversationHeader__button',
             'module-ConversationHeader__button--join-call',
-            showBackButton ? null : 'module-ConversationHeader__button--show'
+            disabled
+              ? 'module-ConversationHeader__button--show-disabled'
+              : undefined,
+            inAnotherCall
+              ? 'module-ConversationHeader__button--in-another-call'
+              : undefined
           )}
-          disabled={showBackButton}
-          onClick={onOutgoingVideoCallInConversation}
+          onClick={onOutgoingVideoCall}
           type="button"
         >
-          {isNarrow ? null : i18n('joinOngoingCall')}
+          {isNarrow ? null : i18n('icu:joinOngoingCall')}
         </button>
+      );
+      return inAnotherCall ? (
+        <InAnotherCallTooltip i18n={i18n}>{joinButton}</InAnotherCallTooltip>
+      ) : (
+        joinButton
       );
     default:
       throw missingCaseError(outgoingCallButtonStyle);
   }
+}
+
+function LeaveGroupConfirmationDialog({
+  cannotLeaveBecauseYouAreLastAdmin,
+  i18n,
+  onLeaveGroup,
+  onClose,
+}: {
+  cannotLeaveBecauseYouAreLastAdmin: boolean;
+  i18n: LocalizerType;
+  onLeaveGroup: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ConfirmationDialog
+      dialogName="ConversationHeader.leaveGroup"
+      title={i18n('icu:ConversationHeader__LeaveGroupConfirmation__title')}
+      actions={[
+        {
+          disabled: cannotLeaveBecauseYouAreLastAdmin,
+          action: onLeaveGroup,
+          style: 'negative',
+          text: i18n(
+            'icu:ConversationHeader__LeaveGroupConfirmation__confirmButton'
+          ),
+        },
+      ]}
+      i18n={i18n}
+      onClose={onClose}
+    >
+      {i18n('icu:ConversationHeader__LeaveGroupConfirmation__description')}
+    </ConfirmationDialog>
+  );
+}
+
+function CannotLeaveGroupBecauseYouAreLastAdminAlert({
+  i18n,
+  onClose,
+}: {
+  i18n: LocalizerType;
+  onClose: () => void;
+}) {
+  return (
+    <Alert
+      i18n={i18n}
+      body={i18n(
+        'icu:ConversationHeader__CannotLeaveGroupBecauseYouAreLastAdminAlert__description'
+      )}
+      onClose={onClose}
+    />
+  );
+}
+
+function DeleteMessagesConfirmationDialog({
+  isDeleteSyncSendEnabled,
+  i18n,
+  localDeleteWarningShown,
+  onDestroyMessages,
+  onClose,
+  setLocalDeleteWarningShown,
+}: {
+  isDeleteSyncSendEnabled: boolean;
+  i18n: LocalizerType;
+  localDeleteWarningShown: boolean;
+  onDestroyMessages: () => void;
+  onClose: () => void;
+  setLocalDeleteWarningShown: () => void;
+}) {
+  if (!localDeleteWarningShown && isDeleteSyncSendEnabled) {
+    return (
+      <LocalDeleteWarningModal
+        i18n={i18n}
+        onClose={setLocalDeleteWarningShown}
+      />
+    );
+  }
+
+  const dialogBody = isDeleteSyncSendEnabled
+    ? i18n(
+        'icu:ConversationHeader__DeleteConversationConfirmation__description-with-sync'
+      )
+    : i18n(
+        'icu:ConversationHeader__DeleteConversationConfirmation__description'
+      );
+
+  return (
+    <ConfirmationDialog
+      dialogName="ConversationHeader.destroyMessages"
+      title={i18n(
+        'icu:ConversationHeader__DeleteConversationConfirmation__title'
+      )}
+      actions={[
+        {
+          action: onDestroyMessages,
+          style: 'negative',
+          text: i18n('icu:delete'),
+        },
+      ]}
+      i18n={i18n}
+      onClose={onClose}
+    >
+      {dialogBody}
+    </ConfirmationDialog>
+  );
 }

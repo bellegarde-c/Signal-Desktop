@@ -1,4 +1,4 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // For reference: https://github.com/airbnb/javascript
@@ -18,6 +18,16 @@ const rules = {
   // No omitting braces, keep on the same line
   'brace-style': ['error', '1tbs', { allowSingleLine: false }],
   curly: ['error', 'all'],
+
+  // Immer support
+  'no-param-reassign': [
+    'error',
+    {
+      props: true,
+      ignorePropertyModificationsForRegex: ['^draft'],
+      ignorePropertyModificationsFor: ['acc', 'ctx', 'context'],
+    },
+  ],
 
   // Always use === and !== except when directly comparing to null
   // (which only will equal null or undefined)
@@ -94,7 +104,49 @@ const rules = {
   // Prefer functional components with default params
   'react/require-default-props': 'off',
 
+  // Empty fragments are used in adapters between backbone and react views.
+  'react/jsx-no-useless-fragment': [
+    'error',
+    {
+      allowExpressions: true,
+    },
+  ],
+
+  // Our code base has tons of arrow functions passed directly to components.
+  'react/jsx-no-bind': 'off',
+
+  // Does not support forwardRef
+  'react/no-unused-prop-types': 'off',
+
+  // Not useful for us as we have lots of complicated types.
+  'react/destructuring-assignment': 'off',
+
+  'react/function-component-definition': [
+    'error',
+    {
+      namedComponents: 'function-declaration',
+      unnamedComponents: 'arrow-function',
+    },
+  ],
+
+  'react/display-name': 'error',
+
+  'react/jsx-pascal-case': ['error', { allowNamespace: true }],
+
+  // Allow returning values from promise executors for brevity.
+  'no-promise-executor-return': 'off',
+
+  // Redux ducks use this a lot
+  'default-param-last': 'off',
+
   'jsx-a11y/label-has-associated-control': ['error', { assert: 'either' }],
+
+  'jsx-a11y/no-static-element-interactions': 'error',
+
+  '@typescript-eslint/no-non-null-assertion': ['error'],
+  '@typescript-eslint/no-empty-interface': ['error'],
+  'no-empty-function': 'off',
+  '@typescript-eslint/no-empty-function': 'error',
 
   'no-restricted-syntax': [
     'error',
@@ -118,6 +170,13 @@ const rules = {
       selector: 'WithStatement',
       message:
         '`with` is disallowed in strict mode because it makes code impossible to predict and optimize.',
+    },
+  ],
+
+  'react-hooks/exhaustive-deps': [
+    'error',
+    {
+      additionalHooks: '^(useSpring|useSprings)$',
     },
   ],
 };
@@ -155,6 +214,17 @@ const typescriptRules = {
   '@typescript-eslint/no-redeclare': 'error',
   '@typescript-eslint/no-shadow': 'error',
   '@typescript-eslint/no-useless-constructor': ['error'],
+  '@typescript-eslint/no-misused-promises': [
+    'error',
+    {
+      checksVoidReturn: false,
+    },
+  ],
+
+  '@typescript-eslint/no-floating-promises': 'error',
+  // We allow "void promise", but new call-sites should use `drop(promise)`.
+  'no-void': ['error', { allowAsStatement: true }],
+
   'no-shadow': 'off',
   'no-useless-constructor': 'off',
 
@@ -166,8 +236,21 @@ const typescriptRules = {
 
   '@typescript-eslint/consistent-type-imports': 'error',
 
+  // Future: Maybe switch to never and always use `satisfies`
+  '@typescript-eslint/consistent-type-assertions': [
+    'error',
+    {
+      assertionStyle: 'as',
+      // Future: Maybe switch to allow-as-parameter or never
+      objectLiteralTypeAssertions: 'allow',
+    },
+  ],
+
   // Already enforced by TypeScript
   'consistent-return': 'off',
+
+  // TODO: DESKTOP-4655
+  'import/no-cycle': 'off',
 };
 
 module.exports = {
@@ -181,7 +264,7 @@ module.exports = {
 
   extends: ['airbnb-base', 'prettier'],
 
-  plugins: ['mocha', 'more'],
+  plugins: ['mocha', 'more', 'local-rules'],
 
   overrides: [
     {
@@ -189,8 +272,6 @@ module.exports = {
         'ts/**/*.ts',
         'ts/**/*.tsx',
         'app/**/*.ts',
-        'sticker-creator/**/*.ts',
-        'sticker-creator/**/*.tsx',
         'build/intl-linter/**/*.ts',
       ],
       parser: '@typescript-eslint/parser',
@@ -224,9 +305,25 @@ module.exports = {
         'react/no-array-index-key': 'off',
       },
     },
+    {
+      files: ['ts/state/ducks/**/*.ts'],
+      rules: {
+        'local-rules/type-alias-readonlydeep': 'error',
+      },
+    },
+    {
+      files: ['ts/**/*_test.{ts,tsx}'],
+      rules: {
+        'func-names': 'off',
+      },
+    },
   ],
 
-  rules,
+  rules: {
+    ...rules,
+    'import/no-unresolved': 'off',
+    'import/extensions': 'off',
+  },
 
   reportUnusedDisableDirectives: true,
 };

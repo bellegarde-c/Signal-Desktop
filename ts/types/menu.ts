@@ -1,4 +1,4 @@
-// Copyright 2017-2022 Signal Messenger, LLC
+// Copyright 2017 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { MenuItemConstructorOptions } from 'electron';
@@ -15,6 +15,7 @@ export type MenuOptionsType = Readonly<{
 
 export type MenuActionsType = Readonly<{
   forceUpdate: () => unknown;
+  openArtCreator: () => unknown;
   openContactUs: () => unknown;
   openForums: () => unknown;
   openJoinTheBeta: () => unknown;
@@ -24,10 +25,13 @@ export type MenuActionsType = Readonly<{
   setupAsStandalone: () => unknown;
   showAbout: () => unknown;
   showDebugLog: () => unknown;
+  showCallingDevTools: () => unknown;
   showKeyboardShortcuts: () => unknown;
   showSettings: () => unknown;
-  showStickerCreator: () => unknown;
   showWindow: () => unknown;
+  zoomIn: () => unknown;
+  zoomOut: () => unknown;
+  zoomReset: () => unknown;
 }>;
 
 export type MenuActionType = keyof MenuActionsType;

@@ -1,72 +1,105 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { identity, isEqual, isNumber, isObject, map, omit, pick } from 'lodash';
-import { createSelector, createSelectorCreator } from 'reselect';
-import filesize from 'filesize';
+import { groupBy, isEmpty, isNumber, isObject, map } from 'lodash';
+import { createSelector } from 'reselect';
 import getDirection from 'direction';
 import emojiRegex from 'emoji-regex';
 import LinkifyIt from 'linkify-it';
+import type { ReadonlyDeep } from 'type-fest';
 
+import type { StateType } from '../reducer';
 import type {
   LastMessageStatus,
+  ReadonlyMessageAttributesType,
   MessageReactionType,
+  QuotedAttachmentType,
   ShallowChallengeError,
 } from '../../model-types.d';
 
+import type {
+  Contact as SmartMessageDetailContact,
+  OwnProps as SmartMessageDetailPropsType,
+} from '../smart/MessageDetail';
 import type { TimelineItemType } from '../../components/conversation/TimelineItem';
 import type { PropsData } from '../../components/conversation/Message';
 import type { PropsData as TimelineMessagePropsData } from '../../components/conversation/TimelineMessage';
 import { TextDirection } from '../../components/conversation/Message';
 import type { PropsData as TimerNotificationProps } from '../../components/conversation/TimerNotification';
 import type { PropsData as ChangeNumberNotificationProps } from '../../components/conversation/ChangeNumberNotification';
+import type { PropsData as JoinedSignalNotificationProps } from '../../components/conversation/JoinedSignalNotification';
 import type { PropsData as SafetyNumberNotificationProps } from '../../components/conversation/SafetyNumberNotification';
 import type { PropsData as VerificationNotificationProps } from '../../components/conversation/VerificationNotification';
+import type { PropsData as TitleTransitionNotificationProps } from '../../components/conversation/TitleTransitionNotification';
 import type { PropsDataType as GroupsV2Props } from '../../components/conversation/GroupV2Change';
 import type { PropsDataType as GroupV1MigrationPropsType } from '../../components/conversation/GroupV1Migration';
 import type { PropsDataType as DeliveryIssuePropsType } from '../../components/conversation/DeliveryIssueNotification';
+import type { PropsType as PaymentEventNotificationPropsType } from '../../components/conversation/PaymentEventNotification';
+import type { PropsDataType as ConversationMergePropsType } from '../../components/conversation/ConversationMergeNotification';
+import type { PropsDataType as PhoneNumberDiscoveryPropsType } from '../../components/conversation/PhoneNumberDiscoveryNotification';
 import type {
   PropsData as GroupNotificationProps,
   ChangeType,
 } from '../../components/conversation/GroupNotification';
 import type { PropsType as ProfileChangeNotificationPropsType } from '../../components/conversation/ProfileChangeNotification';
-import type { QuotedAttachmentType } from '../../components/conversation/Quote';
 
-import { getDomain, isStickerPack } from '../../types/LinkPreview';
-import type { UUIDStringType } from '../../types/UUID';
+import {
+  getSafeDomain,
+  isCallLink,
+  isStickerPack,
+} from '../../types/LinkPreview';
+import type {
+  AciString,
+  PniString,
+  ServiceIdString,
+} from '../../types/ServiceId';
 
-import type { EmbeddedContactType } from '../../types/EmbeddedContact';
+import type { EmbeddedContactForUIType } from '../../types/EmbeddedContact';
 import { embeddedContactSelector } from '../../types/EmbeddedContact';
-import type { AssertProps, BodyRangesType } from '../../types/Util';
-import type { LinkPreviewType } from '../../types/message/LinkPreviews';
+import type { HydratedBodyRangesType } from '../../types/BodyRange';
+import { hydrateRanges } from '../../types/BodyRange';
+import type { AssertProps } from '../../types/Util';
+import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews';
 import { getMentionsRegex } from '../../types/Message';
-import { CallMode } from '../../types/Calling';
 import { SignalService as Proto } from '../../protobuf';
-import type { AttachmentType } from '../../types/Attachment';
-import { isVoiceMessage, canBeDownloaded } from '../../types/Attachment';
+import type {
+  AttachmentForUIType,
+  AttachmentType,
+} from '../../types/Attachment';
+import { isVoiceMessage, defaultBlurHash } from '../../types/Attachment';
+import type { AttachmentDownloadJobTypeType } from '../../types/AttachmentDownload';
+import { type DefaultConversationColorType } from '../../types/Colors';
 import { ReadStatus } from '../../messages/MessageReadStatus';
 
 import type { CallingNotificationType } from '../../util/callingNotification';
-import { memoizeByRoot } from '../../util/memoizeByRoot';
-import { missingCaseError } from '../../util/missingCaseError';
+import { getRecipients } from '../../util/getRecipients';
+import { getOwn } from '../../util/getOwn';
 import { isNotNil } from '../../util/isNotNil';
 import { isMoreRecentThan } from '../../util/timestamp';
 import * as iterables from '../../util/iterables';
 import { strictAssert } from '../../util/assert';
+import { canEditMessage } from '../../util/canEditMessage';
+import { getLocalAttachmentUrl } from '../../util/getLocalAttachmentUrl';
+import { isPermanentlyUndownloadable } from '../../jobs/AttachmentDownloadManager';
 
 import { getAccountSelector } from './accounts';
+import { getDefaultConversationColor } from './items';
 import {
-  getContactNameColorSelector,
   getConversationSelector,
-  getSelectedMessage,
+  getSelectedMessageIds,
+  getTargetedMessage,
   isMissingRequiredProfileSharing,
+  getMessages,
+  getCachedConversationMemberColorsSelector,
+  getContactNameColor,
 } from './conversations';
 import {
+  getIntl,
   getRegionCode,
-  getUserConversationId,
-  getUserNumber,
   getUserACI,
   getUserPNI,
+  getUserConversationId,
+  getUserNumber,
 } from './user';
 
 import type {
@@ -76,32 +109,51 @@ import type {
 
 import type { AccountSelectorType } from './accounts';
 import type { CallSelectorType, CallStateType } from './calling';
-import type {
-  GetConversationByIdType,
-  ContactNameColorSelectorType,
-} from './conversations';
+import type { GetConversationByIdType } from './conversations';
 import {
   SendStatus,
   isDelivered,
   isFailed,
-  isMessageJustForMe,
   isRead,
   isSent,
   isViewed,
-  maxStatus,
+  isMessageJustForMe,
+  someRecipientSendStatus,
+  getHighestSuccessfulRecipientStatus,
   someSendStatus,
 } from '../../messages/MessageSendState';
 import * as log from '../../logging/log';
 import { getConversationColorAttributes } from '../../util/getConversationColorAttributes';
-import { DAY, HOUR, SECOND } from '../../util/durations';
+import { DAY, DurationInSeconds } from '../../util/durations';
 import { getStoryReplyText } from '../../util/getStoryReplyText';
-import { isIncoming, isOutgoing, isStory } from '../../messages/helpers';
+import type { MessageAttributesWithPaymentEvent } from '../../messages/helpers';
+import {
+  isIncoming,
+  isOutgoing,
+  messageHasPaymentEvent,
+  isStory,
+} from '../../messages/helpers';
+
 import { calculateExpirationTimestamp } from '../../util/expirationTimer';
+import { isSignalConversation } from '../../util/isSignalConversation';
+import type { AnyPaymentEvent } from '../../types/Payment';
+import { isPaymentNotificationEvent } from '../../types/Payment';
+import {
+  getTitleNoDefault,
+  getTitle,
+  getNumber,
+  renderNumber,
+} from '../../util/getTitle';
+import { getMessageSentTimestamp } from '../../util/getMessageSentTimestamp';
+import type { CallHistorySelectorType } from './callHistory';
+import { CallMode, CallDirection } from '../../types/CallDisposition';
+import { getCallIdFromEra } from '../../util/callDisposition';
+import { LONG_MESSAGE } from '../../types/MIME';
+import type { MessageRequestResponseNotificationData } from '../../components/conversation/MessageRequestResponseNotification';
 
 export { isIncoming, isOutgoing, isStory };
 
-const THREE_HOURS = 3 * HOUR;
-const linkify = LinkifyIt();
+const linkify = new LinkifyIt();
 
 type FormattedContact = Partial<ConversationType> &
   Pick<
@@ -112,9 +164,12 @@ type FormattedContact = Partial<ConversationType> &
     | 'sharedGroupNames'
     | 'title'
     | 'type'
-    | 'unblurredAvatarPath'
   >;
 export type PropsForMessage = Omit<TimelineMessagePropsData, 'interactionMode'>;
+export type MessagePropsType = Omit<
+  PropsForMessage,
+  'renderingContext' | 'menu' | 'contextMenu'
+>;
 type PropsForUnsupportedMessage = {
   canProcessNow: boolean;
   contact: FormattedContact;
@@ -124,15 +179,18 @@ export type GetPropsForBubbleOptions = Readonly<{
   conversationSelector: GetConversationByIdType;
   ourConversationId?: string;
   ourNumber?: string;
-  ourACI?: UUIDStringType;
-  ourPNI?: UUIDStringType;
-  selectedMessageId?: string;
-  selectedMessageCounter?: number;
+  ourAci: AciString | undefined;
+  ourPni: PniString | undefined;
+  targetedMessageId?: string;
+  targetedMessageCounter?: number;
+  selectedMessageIds: ReadonlyArray<string> | undefined;
   regionCode?: string;
   callSelector: CallSelectorType;
+  callHistorySelector: CallHistorySelectorType;
   activeCall?: CallStateType;
   accountSelector: AccountSelectorType;
-  contactNameColorSelector: ContactNameColorSelectorType;
+  contactNameColors: Map<string, string>;
+  defaultConversationColor: DefaultConversationColorType;
 }>;
 
 export function hasErrors(
@@ -142,7 +200,7 @@ export function hasErrors(
 }
 
 export function getSource(
-  message: MessageWithUIFieldsType,
+  message: Pick<ReadonlyMessageAttributesType, 'type' | 'source'>,
   ourNumber: string | undefined
 ): string | undefined {
   if (isIncoming(message)) {
@@ -173,48 +231,44 @@ export function getSourceDevice(
   return sourceDevice || ourDeviceId;
 }
 
-export function getSourceUuid(
-  message: MessageWithUIFieldsType,
-  ourACI: string | undefined
-): string | undefined {
+export function getSourceServiceId(
+  message: Pick<ReadonlyMessageAttributesType, 'type' | 'sourceServiceId'>,
+  ourAci: AciString | undefined
+): ServiceIdString | undefined {
   if (isIncoming(message)) {
-    return message.sourceUuid;
+    return message.sourceServiceId;
   }
   if (!isOutgoing(message)) {
     log.warn(
-      'message.getSourceUuid: Called for non-incoming/non-outoing message'
+      'message.getSourceServiceId: Called for non-incoming/non-outoing message'
     );
   }
 
-  return ourACI;
+  return ourAci;
 }
 
 export type GetContactOptions = Pick<
   GetPropsForBubbleOptions,
-  | 'conversationSelector'
-  | 'ourConversationId'
-  | 'ourNumber'
-  | 'ourACI'
-  | 'ourPNI'
+  'conversationSelector' | 'ourConversationId' | 'ourNumber' | 'ourAci'
 >;
 
-export function getContactId(
+export function getAuthorId(
   message: MessageWithUIFieldsType,
   {
     conversationSelector,
     ourConversationId,
     ourNumber,
-    ourACI,
+    ourAci,
   }: GetContactOptions
 ): string | undefined {
   const source = getSource(message, ourNumber);
-  const sourceUuid = getSourceUuid(message, ourACI);
+  const sourceServiceId = getSourceServiceId(message, ourAci);
 
-  if (!source && !sourceUuid) {
+  if (!source && !sourceServiceId) {
     return ourConversationId;
   }
 
-  const conversation = conversationSelector(sourceUuid || source);
+  const conversation = conversationSelector(sourceServiceId || source);
   return conversation.id;
 }
 
@@ -225,17 +279,17 @@ export function getContact(
     conversationSelector,
     ourConversationId,
     ourNumber,
-    ourACI,
+    ourAci,
   }: GetContactOptions
 ): ConversationType {
   const source = getSource(message, ourNumber);
-  const sourceUuid = getSourceUuid(message, ourACI);
+  const sourceServiceId = getSourceServiceId(message, ourAci);
 
-  if (!source && !sourceUuid) {
+  if (!source && !sourceServiceId) {
     return conversationSelector(ourConversationId);
   }
 
-  return conversationSelector(sourceUuid || source);
+  return conversationSelector(sourceServiceId || source);
 }
 
 export function getConversation(
@@ -247,78 +301,133 @@ export function getConversation(
 
 // Message
 
-export const getAttachmentsForMessage = createSelectorCreator(memoizeByRoot)(
-  // `memoizeByRoot` requirement
-  identity,
+export const getAttachmentsForMessage = (
+  message: MessageWithUIFieldsType
+): Array<AttachmentType> => {
+  const { sticker, attachments = [] } = message;
+  if (sticker && sticker.data) {
+    const { data } = sticker;
 
-  ({ sticker }: MessageWithUIFieldsType) => sticker,
-  ({ attachments }: MessageWithUIFieldsType) => attachments,
-  (_, sticker, attachments = []): Array<AttachmentType> => {
-    if (sticker && sticker.data) {
-      const { data } = sticker;
-
-      // We don't show anything if we don't have the sticker or the blurhash...
-      if (!data.blurHash && (data.pending || !data.path)) {
-        return [];
-      }
-
-      return [
-        {
-          ...data,
-          // We want to show the blurhash for stickers, not the spinner
-          pending: false,
-          url: data.path
-            ? window.Signal.Migrations.getAbsoluteAttachmentPath(data.path)
-            : undefined,
-        },
-      ];
-    }
-
-    return attachments
-      .filter(attachment => !attachment.error || canBeDownloaded(attachment))
-      .map(attachment => getPropsForAttachment(attachment))
-      .filter(isNotNil);
+    return [
+      {
+        ...data,
+        // We want to show the blurhash for stickers, not the spinner
+        pending: false,
+        // Stickers are not guaranteed to have a blurhash (e.g. if imported but
+        // undownloaded from backup), so we want to make sure we have something to show
+        blurHash: data.blurHash ?? defaultBlurHash(),
+        url: data.path ? getLocalAttachmentUrl(data) : undefined,
+      },
+    ];
   }
-);
+  return (
+    attachments
+      // Long message attachments are removed from message.attachments quickly,
+      // but in case they are still around, let's make sure not to show them
+      .filter(attachment => attachment.contentType !== LONG_MESSAGE)
+      .map(attachment =>
+        getPropsForAttachment(attachment, 'attachment', message)
+      )
+      .filter(isNotNil)
+  );
+};
 
-export const processBodyRanges = createSelectorCreator(memoizeByRoot, isEqual)(
-  // `memoizeByRoot` requirement
-  identity,
+export const processBodyRanges = (
+  { bodyRanges }: Pick<MessageWithUIFieldsType, 'bodyRanges'>,
+  options: { conversationSelector: GetConversationByIdType }
+): HydratedBodyRangesType | undefined => {
+  if (!bodyRanges) {
+    return undefined;
+  }
 
-  (
-    { bodyRanges }: Pick<MessageWithUIFieldsType, 'bodyRanges'>,
-    { conversationSelector }: { conversationSelector: GetConversationByIdType }
-  ): BodyRangesType | undefined => {
-    if (!bodyRanges) {
-      return undefined;
+  return hydrateRanges(bodyRanges, options.conversationSelector)?.sort(
+    (a, b) => b.start - a.start
+  );
+};
+
+const getAuthorForMessage = (
+  message: MessageWithUIFieldsType,
+  options: GetContactOptions
+): PropsData['author'] => {
+  const {
+    avatarPlaceholderGradient,
+    acceptedMessageRequest,
+    avatarUrl,
+    badges,
+    color,
+    firstName,
+    hasAvatar,
+    id,
+    isMe,
+    name,
+    phoneNumber,
+    profileName,
+    sharedGroupNames,
+    title,
+  } = getContact(message, options);
+
+  const unsafe = {
+    avatarPlaceholderGradient,
+    acceptedMessageRequest,
+    avatarUrl,
+    badges,
+    color,
+    firstName,
+    hasAvatar,
+    id,
+    isMe,
+    name,
+    phoneNumber,
+    profileName,
+    sharedGroupNames,
+    title,
+  };
+
+  const safe: AssertProps<PropsData['author'], typeof unsafe> = unsafe;
+
+  return safe;
+};
+
+const getPreviewsForMessage = (
+  message: MessageWithUIFieldsType
+): Array<LinkPreviewForUIType> => {
+  const { preview: previews = [] } = message;
+  return previews.map(preview => ({
+    ...preview,
+    isStickerPack: isStickerPack(preview.url),
+    isCallLink: isCallLink(preview.url),
+    domain: getSafeDomain(preview.url),
+    image: preview.image
+      ? getPropsForAttachment(preview.image, 'preview', message)
+      : undefined,
+  }));
+};
+
+const getReactionsForMessage = (
+  { reactions = [] }: MessageWithUIFieldsType,
+  { conversationSelector }: { conversationSelector: GetConversationByIdType }
+) => {
+  const reactionBySender = new Map<string, MessageReactionType>();
+  for (const reaction of reactions) {
+    const existingReaction = reactionBySender.get(reaction.fromId);
+    if (!existingReaction || reaction.timestamp > existingReaction.timestamp) {
+      reactionBySender.set(reaction.fromId, reaction);
     }
+  }
 
-    return bodyRanges
-      .filter(range => range.mentionUuid)
-      .map(range => {
-        const conversation = conversationSelector(range.mentionUuid);
+  const reactionsWithEmpties = reactionBySender.values();
+  const reactionsWithEmoji = iterables.filter(
+    reactionsWithEmpties,
+    re => re.emoji
+  );
+  const formattedReactions = iterables.map(reactionsWithEmoji, re => {
+    const c = conversationSelector(re.fromId);
 
-        return {
-          ...range,
-          conversationID: conversation.id,
-          replacementText: conversation.title,
-        };
-      })
-      .sort((a, b) => b.start - a.start);
-  },
-  (_, ranges): undefined | BodyRangesType => ranges
-);
+    type From = NonNullable<PropsData['reactions']>[0]['from'];
 
-const getAuthorForMessage = createSelectorCreator(memoizeByRoot)(
-  // `memoizeByRoot` requirement
-  identity,
-
-  getContact,
-
-  (_, convo: ConversationType): PropsData['author'] => {
     const {
       acceptedMessageRequest,
-      avatarPath,
+      avatarUrl,
       badges,
       color,
       id,
@@ -328,12 +437,11 @@ const getAuthorForMessage = createSelectorCreator(memoizeByRoot)(
       profileName,
       sharedGroupNames,
       title,
-      unblurredAvatarPath,
-    } = convo;
+    } = c;
 
     const unsafe = {
       acceptedMessageRequest,
-      avatarPath,
+      avatarUrl,
       badges,
       color,
       id,
@@ -343,367 +451,168 @@ const getAuthorForMessage = createSelectorCreator(memoizeByRoot)(
       profileName,
       sharedGroupNames,
       title,
-      unblurredAvatarPath,
     };
 
-    const safe: AssertProps<PropsData['author'], typeof unsafe> = unsafe;
+    const from: AssertProps<From, typeof unsafe> = unsafe;
 
-    return safe;
-  }
-);
-
-const getCachedAuthorForMessage = createSelectorCreator(memoizeByRoot, isEqual)(
-  // `memoizeByRoot` requirement
-  identity,
-  getAuthorForMessage,
-  (_, author): PropsData['author'] => author
-);
-
-export const getPreviewsForMessage = createSelectorCreator(memoizeByRoot)(
-  // `memoizeByRoot` requirement
-  identity,
-  ({ preview }: MessageWithUIFieldsType) => preview,
-  (_, previews = []): Array<LinkPreviewType> => {
-    return previews.map(preview => ({
-      ...preview,
-      isStickerPack: isStickerPack(preview.url),
-      domain: getDomain(preview.url),
-      image: preview.image ? getPropsForAttachment(preview.image) : undefined,
-    }));
-  }
-);
-
-export const getReactionsForMessage = createSelectorCreator(
-  memoizeByRoot,
-  isEqual
-)(
-  // `memoizeByRoot` requirement
-  identity,
-
-  (
-    { reactions = [] }: MessageWithUIFieldsType,
-    { conversationSelector }: { conversationSelector: GetConversationByIdType }
-  ) => {
-    const reactionBySender = new Map<string, MessageReactionType>();
-    for (const reaction of reactions) {
-      const existingReaction = reactionBySender.get(reaction.fromId);
-      if (
-        !existingReaction ||
-        reaction.timestamp > existingReaction.timestamp
-      ) {
-        reactionBySender.set(reaction.fromId, reaction);
-      }
-    }
-
-    const reactionsWithEmpties = reactionBySender.values();
-    const reactionsWithEmoji = iterables.filter(
-      reactionsWithEmpties,
-      re => re.emoji
-    );
-    const formattedReactions = iterables.map(reactionsWithEmoji, re => {
-      const c = conversationSelector(re.fromId);
-
-      type From = NonNullable<PropsData['reactions']>[0]['from'];
-
-      const unsafe = pick(c, [
-        'acceptedMessageRequest',
-        'avatarPath',
-        'badges',
-        'color',
-        'id',
-        'isMe',
-        'name',
-        'phoneNumber',
-        'profileName',
-        'sharedGroupNames',
-        'title',
-      ]);
-
-      const from: AssertProps<From, typeof unsafe> = unsafe;
-
-      strictAssert(re.emoji, 'Expected all reactions to have an emoji');
-
-      return {
-        emoji: re.emoji,
-        timestamp: re.timestamp,
-        from,
-      };
-    });
-
-    return [...formattedReactions];
-  },
-
-  (_, reactions): PropsData['reactions'] => reactions
-);
-
-export const getPropsForStoryReplyContext = createSelectorCreator(
-  memoizeByRoot,
-  isEqual
-)(
-  // `memoizeByRoot` requirement
-  identity,
-
-  (
-    message: Pick<
-      MessageWithUIFieldsType,
-      'body' | 'conversationId' | 'storyReaction' | 'storyReplyContext'
-    >,
-    {
-      conversationSelector,
-      ourConversationId,
-    }: {
-      conversationSelector: GetConversationByIdType;
-      ourConversationId?: string;
-    }
-  ): PropsData['storyReplyContext'] => {
-    const { storyReaction, storyReplyContext } = message;
-    if (!storyReplyContext) {
-      return undefined;
-    }
-
-    const contact = conversationSelector(storyReplyContext.authorUuid);
-
-    const authorTitle = contact.firstName || contact.title;
-    const isFromMe = contact.id === ourConversationId;
-
-    const conversation = getConversation(message, conversationSelector);
-
-    const { conversationColor, customColor } =
-      getConversationColorAttributes(conversation);
+    strictAssert(re.emoji, 'Expected all reactions to have an emoji');
 
     return {
-      authorTitle,
-      conversationColor,
-      customColor,
-      emoji: storyReaction?.emoji,
-      isFromMe,
-      rawAttachment: storyReplyContext.attachment
-        ? processQuoteAttachment(storyReplyContext.attachment)
-        : undefined,
-      storyId: storyReplyContext.messageId,
-      text: getStoryReplyText(window.i18n, storyReplyContext.attachment),
+      emoji: re.emoji,
+      timestamp: re.timestamp,
+      from,
     };
-  },
+  });
 
-  (_, storyReplyContext): PropsData['storyReplyContext'] => storyReplyContext
-);
+  return [...formattedReactions];
+};
 
-export const getPropsForQuote = createSelectorCreator(memoizeByRoot, isEqual)(
-  // `memoizeByRoot` requirement
-  identity,
+const getPropsForStoryReplyContext = (
+  message: Pick<
+    MessageWithUIFieldsType,
+    'body' | 'conversationId' | 'storyReaction' | 'storyReplyContext'
+  >,
+  {
+    conversationSelector,
+    ourConversationId,
+    defaultConversationColor,
+  }: {
+    conversationSelector: GetConversationByIdType;
+    ourConversationId?: string;
+    defaultConversationColor: DefaultConversationColorType;
+  }
+): PropsData['storyReplyContext'] => {
+  const { storyReaction, storyReplyContext } = message;
+  if (!storyReplyContext) {
+    return undefined;
+  }
 
-  (
-    message: Pick<MessageWithUIFieldsType, 'conversationId' | 'quote'>,
-    {
-      conversationSelector,
-      ourConversationId,
-    }: {
-      conversationSelector: GetConversationByIdType;
-      ourConversationId?: string;
-    }
-  ): PropsData['quote'] => {
-    const { quote } = message;
-    if (!quote) {
-      return undefined;
-    }
+  const contact = conversationSelector(storyReplyContext.authorAci);
 
-    const {
-      author,
-      authorUuid,
-      id: sentAt,
-      isViewOnce,
-      isGiftBadge: isTargetGiftBadge,
-      referencedMessageNotFound,
-      text = '',
-    } = quote;
+  const authorTitle = contact.firstName || contact.title;
+  const isFromMe = contact.id === ourConversationId;
 
-    const contact = conversationSelector(authorUuid || author);
+  const conversation = getConversation(message, conversationSelector);
 
-    const authorId = contact.id;
-    const authorName = contact.name;
-    const authorPhoneNumber = contact.phoneNumber;
-    const authorProfileName = contact.profileName;
-    const authorTitle = contact.title;
-    const isFromMe = authorId === ourConversationId;
+  const { conversationColor, customColor } = getConversationColorAttributes(
+    conversation,
+    defaultConversationColor
+  );
 
-    const firstAttachment = quote.attachments && quote.attachments[0];
-    const conversation = getConversation(message, conversationSelector);
+  return {
+    authorTitle,
+    conversationColor,
+    customColor,
+    emoji: storyReaction?.emoji,
+    isFromMe,
+    rawAttachment: storyReplyContext.attachment
+      ? processQuoteAttachment(storyReplyContext.attachment)
+      : undefined,
+    storyId: storyReplyContext.messageId,
+    text: getStoryReplyText(window.i18n, storyReplyContext.attachment),
+  };
+};
 
-    const { conversationColor, customColor } =
-      getConversationColorAttributes(conversation);
+export const getPropsForQuote = (
+  message: ReadonlyDeep<
+    Pick<MessageWithUIFieldsType, 'conversationId' | 'quote'>
+  >,
+  {
+    conversationSelector,
+    ourConversationId,
+    defaultConversationColor,
+  }: {
+    conversationSelector: GetConversationByIdType;
+    ourConversationId?: string;
+    defaultConversationColor: DefaultConversationColorType;
+  }
+): PropsData['quote'] => {
+  const { quote } = message;
+  if (!quote) {
+    return undefined;
+  }
 
-    return {
-      authorId,
-      authorName,
-      authorPhoneNumber,
-      authorProfileName,
-      authorTitle,
-      bodyRanges: processBodyRanges(quote, { conversationSelector }),
-      conversationColor,
-      customColor,
-      isFromMe,
-      rawAttachment: firstAttachment
-        ? processQuoteAttachment(firstAttachment)
-        : undefined,
-      isGiftBadge: Boolean(isTargetGiftBadge),
-      isViewOnce,
-      referencedMessageNotFound,
-      sentAt: Number(sentAt),
-      text,
-    };
-  },
+  const {
+    author,
+    authorAci,
+    id: sentAt,
+    isViewOnce,
+    isGiftBadge: isTargetGiftBadge,
+    referencedMessageNotFound,
+    payment,
+    text = '',
+  } = quote;
 
-  (_, quote): PropsData['quote'] => quote
-);
+  const contact = conversationSelector(authorAci || author);
+
+  const authorId = contact.id;
+  const authorName = contact.name;
+  const authorPhoneNumber = contact.phoneNumber;
+  const authorProfileName = contact.profileName;
+  const authorTitle = contact.title;
+  const isFromMe = authorId === ourConversationId;
+
+  const firstAttachment = quote.attachments && quote.attachments[0];
+  const conversation = getConversation(message, conversationSelector);
+
+  const { conversationColor, customColor } = getConversationColorAttributes(
+    conversation,
+    defaultConversationColor
+  );
+
+  return {
+    authorId,
+    authorName,
+    authorPhoneNumber,
+    authorProfileName,
+    authorTitle,
+    bodyRanges: processBodyRanges(quote, { conversationSelector }),
+    conversationColor,
+    conversationTitle: conversation.title,
+    customColor,
+    isFromMe,
+    rawAttachment: firstAttachment
+      ? processQuoteAttachment(firstAttachment)
+      : undefined,
+    payment,
+    isGiftBadge: Boolean(isTargetGiftBadge),
+    isViewOnce,
+    referencedMessageNotFound,
+    sentAt: Number(sentAt),
+    text,
+  };
+};
 
 export type GetPropsForMessageOptions = Pick<
   GetPropsForBubbleOptions,
+  | 'activeCall'
   | 'conversationSelector'
   | 'ourConversationId'
-  | 'ourACI'
-  | 'ourPNI'
+  | 'ourAci'
+  | 'ourPni'
   | 'ourNumber'
-  | 'selectedMessageId'
-  | 'selectedMessageCounter'
+  | 'targetedMessageId'
+  | 'targetedMessageCounter'
+  | 'selectedMessageIds'
   | 'regionCode'
   | 'accountSelector'
-  | 'contactNameColorSelector'
+  | 'contactNameColors'
+  | 'defaultConversationColor'
 >;
-
-type ShallowPropsType = Pick<
-  PropsForMessage,
-  | 'canDeleteForEveryone'
-  | 'canDownload'
-  | 'canReact'
-  | 'canReply'
-  | 'canRetry'
-  | 'canRetryDeleteForEveryone'
-  | 'contact'
-  | 'contactNameColor'
-  | 'conversationColor'
-  | 'conversationId'
-  | 'conversationTitle'
-  | 'conversationType'
-  | 'customColor'
-  | 'deletedForEveryone'
-  | 'direction'
-  | 'displayLimit'
-  | 'expirationLength'
-  | 'expirationTimestamp'
-  | 'giftBadge'
-  | 'id'
-  | 'isBlocked'
-  | 'isMessageRequestAccepted'
-  | 'isSelected'
-  | 'isSelectedCounter'
-  | 'isSticker'
-  | 'isTapToView'
-  | 'isTapToViewError'
-  | 'isTapToViewExpired'
-  | 'readStatus'
-  | 'selectedReaction'
-  | 'status'
-  | 'text'
-  | 'textDirection'
-  | 'timestamp'
->;
-
-const getShallowPropsForMessage = createSelectorCreator(memoizeByRoot, isEqual)(
-  // `memoizeByRoot` requirement
-  identity,
-
-  (
-    message: MessageWithUIFieldsType,
-    {
-      accountSelector,
-      conversationSelector,
-      ourConversationId,
-      ourNumber,
-      ourACI,
-      regionCode,
-      selectedMessageId,
-      selectedMessageCounter,
-      contactNameColorSelector,
-    }: GetPropsForMessageOptions
-  ): ShallowPropsType => {
-    const { expireTimer, expirationStartTimestamp, conversationId } = message;
-    const expirationLength = expireTimer ? expireTimer * SECOND : undefined;
-
-    const conversation = getConversation(message, conversationSelector);
-    const isGroup = conversation.type === 'group';
-    const { sticker } = message;
-
-    const isMessageTapToView = isTapToView(message);
-
-    const isSelected = message.id === selectedMessageId;
-
-    const selectedReaction = (
-      (message.reactions || []).find(re => re.fromId === ourConversationId) ||
-      {}
-    ).emoji;
-
-    const authorId = getContactId(message, {
-      conversationSelector,
-      ourConversationId,
-      ourNumber,
-      ourACI,
-    });
-    const contactNameColor = contactNameColorSelector(conversationId, authorId);
-
-    const { conversationColor, customColor } =
-      getConversationColorAttributes(conversation);
-
-    return {
-      canDeleteForEveryone: canDeleteForEveryone(message),
-      canDownload: canDownload(message, conversationSelector),
-      canReact: canReact(message, ourConversationId, conversationSelector),
-      canReply: canReply(message, ourConversationId, conversationSelector),
-      canRetry: hasErrors(message),
-      canRetryDeleteForEveryone: canRetryDeleteForEveryone(message),
-      contact: getPropsForEmbeddedContact(message, regionCode, accountSelector),
-      contactNameColor,
-      conversationColor,
-      conversationId,
-      conversationTitle: conversation.title,
-      conversationType: isGroup ? 'group' : 'direct',
-      customColor,
-      deletedForEveryone: message.deletedForEveryone || false,
-      direction: isIncoming(message) ? 'incoming' : 'outgoing',
-      displayLimit: message.displayLimit,
-      expirationLength,
-      expirationTimestamp: calculateExpirationTimestamp({
-        expireTimer,
-        expirationStartTimestamp,
-      }),
-      giftBadge: message.giftBadge,
-      id: message.id,
-      isBlocked: conversation.isBlocked || false,
-      isMessageRequestAccepted: conversation?.acceptedMessageRequest ?? true,
-      isSelected,
-      isSelectedCounter: isSelected ? selectedMessageCounter : undefined,
-      isSticker: Boolean(sticker),
-      isTapToView: isMessageTapToView,
-      isTapToViewError:
-        isMessageTapToView && isIncoming(message) && message.isTapToViewInvalid,
-      isTapToViewExpired: isMessageTapToView && message.isErased,
-      readStatus: message.readStatus ?? ReadStatus.Read,
-      selectedReaction,
-      status: getMessagePropStatus(message, ourConversationId),
-      text: message.body,
-      textDirection: getTextDirection(message.body),
-      timestamp: message.sent_at,
-    };
-  },
-
-  (_: unknown, props: ShallowPropsType) => props
-);
 
 function getTextAttachment(
   message: MessageWithUIFieldsType
 ): AttachmentType | undefined {
   return (
-    message.bodyAttachment && getPropsForAttachment(message.bodyAttachment)
+    message.bodyAttachment &&
+    getPropsForAttachment(message.bodyAttachment, 'long-message', message)
   );
+}
+
+function getPayment(
+  message: MessageWithUIFieldsType
+): AnyPaymentEvent | undefined {
+  return message.payment;
 }
 
 export function cleanBodyForDirectionCheck(text: string): string {
@@ -759,48 +668,137 @@ function getTextDirection(body?: string): TextDirection {
   }
 }
 
-export const getPropsForMessage: (
+export const getPropsForMessage = (
   message: MessageWithUIFieldsType,
   options: GetPropsForMessageOptions
-) => Omit<PropsForMessage, 'renderingContext' | 'menu' | 'contextMenu'> =
-  createSelectorCreator(memoizeByRoot)(
-    // `memoizeByRoot` requirement
-    identity,
-
-    getAttachmentsForMessage,
-    processBodyRanges,
-    getCachedAuthorForMessage,
-    getPreviewsForMessage,
-    getReactionsForMessage,
-    getPropsForQuote,
-    getPropsForStoryReplyContext,
-    getTextAttachment,
-    getShallowPropsForMessage,
-    (
-      _,
-      attachments: Array<AttachmentType>,
-      bodyRanges: BodyRangesType | undefined,
-      author: PropsData['author'],
-      previews: Array<LinkPreviewType>,
-      reactions: PropsData['reactions'],
-      quote: PropsData['quote'],
-      storyReplyContext: PropsData['storyReplyContext'],
-      textAttachment: PropsData['textAttachment'],
-      shallowProps: ShallowPropsType
-    ): Omit<PropsForMessage, 'renderingContext' | 'menu' | 'contextMenu'> => {
-      return {
-        attachments,
-        author,
-        bodyRanges,
-        previews,
-        quote,
-        reactions,
-        storyReplyContext,
-        textAttachment,
-        ...shallowProps,
-      };
-    }
+): Omit<PropsForMessage, 'renderingContext' | 'menu' | 'contextMenu'> => {
+  const attachmentDroppedDueToSize = message.attachments?.some(
+    item => item.wasTooBig
   );
+  const attachments = getAttachmentsForMessage(message);
+  const bodyRanges = processBodyRanges(message, options);
+  const author = getAuthorForMessage(message, options);
+  const previews = getPreviewsForMessage(message);
+  const reactions = getReactionsForMessage(message, options);
+  const quote = getPropsForQuote(message, options);
+  const storyReplyContext = getPropsForStoryReplyContext(message, options);
+  const textAttachment = getTextAttachment(message);
+  const payment = getPayment(message);
+
+  const {
+    activeCall,
+    accountSelector,
+    conversationSelector,
+    ourConversationId,
+    ourNumber,
+    ourAci,
+    regionCode,
+    targetedMessageId,
+    targetedMessageCounter,
+    selectedMessageIds,
+    contactNameColors,
+    defaultConversationColor,
+  } = options;
+
+  const { expireTimer, expirationStartTimestamp, conversationId } = message;
+  const expirationLength = expireTimer
+    ? DurationInSeconds.toMillis(expireTimer)
+    : undefined;
+
+  const conversation = getConversation(message, conversationSelector);
+  const isGroup = conversation.type === 'group';
+  const { sticker } = message;
+
+  const isMessageTapToView = isTapToView(message);
+  const activeCallConversationId = activeCall?.conversationId;
+
+  const isTargeted = message.id === targetedMessageId;
+  const isSelected = selectedMessageIds?.includes(message.id) ?? false;
+  const isSelectMode = selectedMessageIds != null;
+
+  const selectedReaction = (
+    (message.reactions || []).find(re => re.fromId === ourConversationId) || {}
+  ).emoji;
+
+  const authorId = getAuthorId(message, {
+    conversationSelector,
+    ourConversationId,
+    ourNumber,
+    ourAci,
+  });
+  const contactNameColor = getContactNameColor(contactNameColors, authorId);
+
+  const { conversationColor, customColor } = getConversationColorAttributes(
+    conversation,
+    defaultConversationColor
+  );
+
+  return {
+    attachments: attachments?.map(attachment =>
+      getPropsForAttachment(attachment, 'attachment', message)
+    ),
+    attachmentDroppedDueToSize,
+    author,
+    bodyRanges,
+    activeCallConversationId,
+    previews,
+    quote,
+    reactions,
+    storyReplyContext,
+    textAttachment:
+      textAttachment == null
+        ? undefined
+        : getPropsForAttachment(textAttachment, 'long-message', message),
+    payment,
+    canCopy: canCopy(message),
+    canEditMessage: canEditMessage(message),
+    canDeleteForEveryone: canDeleteForEveryone(message, conversation.isMe),
+    canDownload: canDownload(message, conversationSelector),
+    canReact: canReact(message, ourConversationId, conversationSelector),
+    canReply: canReply(message, ourConversationId, conversationSelector),
+    canRetry: hasErrors(message),
+    canRetryDeleteForEveryone: canRetryDeleteForEveryone(message),
+    contact: getPropsForEmbeddedContact(message, regionCode, accountSelector),
+    contactNameColor,
+    conversationColor,
+    conversationId,
+    conversationTitle: conversation.title,
+    conversationType: isGroup ? 'group' : 'direct',
+    customColor,
+    deletedForEveryone: message.deletedForEveryone || false,
+    direction: isIncoming(message) ? 'incoming' : 'outgoing',
+    displayLimit: message.displayLimit,
+    expirationLength,
+    expirationTimestamp: calculateExpirationTimestamp({
+      expireTimer,
+      expirationStartTimestamp,
+    }),
+    giftBadge: message.giftBadge,
+    id: message.id,
+    isBlocked: conversation.isBlocked || false,
+    isEditedMessage: Boolean(message.editHistory),
+    isMessageRequestAccepted: conversation?.acceptedMessageRequest ?? true,
+    isSelected,
+    isSelectMode,
+    isSMS: message.sms === true,
+    isSpoilerExpanded: message.isSpoilerExpanded,
+    isSticker: Boolean(sticker),
+    isTargeted,
+    isTargetedCounter: isTargeted ? targetedMessageCounter : undefined,
+    isTapToView: isMessageTapToView,
+    isTapToViewError:
+      isMessageTapToView && isIncoming(message) && message.isTapToViewInvalid,
+    isTapToViewExpired:
+      isMessageTapToView && isIncoming(message) && message.isErased,
+    readStatus: message.readStatus ?? ReadStatus.Read,
+    selectedReaction,
+    status: getMessagePropStatus(message, ourConversationId),
+    text: message.body,
+    textDirection: getTextDirection(message.body),
+    timestamp: getMessageSentTimestamp(message, { includeEdits: false, log }),
+    receivedAtMS: message.received_at_ms,
+  };
+};
 
 // This is getPropsForMessage but wrapped in reselect's createSelector so that
 // we can derive all of the selector dependencies that getPropsForMessage
@@ -814,46 +812,42 @@ export const getMessagePropsSelector = createSelector(
   getUserNumber,
   getRegionCode,
   getAccountSelector,
-  getContactNameColorSelector,
-  getSelectedMessage,
+  getCachedConversationMemberColorsSelector,
+  getTargetedMessage,
+  getSelectedMessageIds,
+  getDefaultConversationColor,
   (
-      conversationSelector,
-      ourConversationId,
-      ourACI,
-      ourPNI,
-      ourNumber,
-      regionCode,
-      accountSelector,
-      contactNameColorSelector,
-      selectedMessage
-    ) =>
+    conversationSelector,
+    ourConversationId,
+    ourAci,
+    ourPni,
+    ourNumber,
+    regionCode,
+    accountSelector,
+    cachedConversationMemberColorsSelector,
+    targetedMessage,
+    selectedMessageIds,
+    defaultConversationColor
+  ) =>
     (message: MessageWithUIFieldsType) => {
+      const contactNameColors = cachedConversationMemberColorsSelector(
+        message.conversationId
+      );
       return getPropsForMessage(message, {
         accountSelector,
-        contactNameColorSelector,
+        contactNameColors,
         conversationSelector,
         ourConversationId,
         ourNumber,
-        ourACI,
-        ourPNI,
+        ourAci,
+        ourPni,
         regionCode,
-        selectedMessageCounter: selectedMessage?.counter,
-        selectedMessageId: selectedMessage?.id,
+        targetedMessageCounter: targetedMessage?.counter,
+        targetedMessageId: targetedMessage?.id,
+        selectedMessageIds,
+        defaultConversationColor,
       });
     }
-);
-
-export const getBubblePropsForMessage = createSelectorCreator(memoizeByRoot)(
-  // `memoizeByRoot` requirement
-  identity,
-
-  getPropsForMessage,
-
-  (_, data): TimelineItemType => ({
-    type: 'message' as const,
-    data,
-    timestamp: data.timestamp,
-  })
 );
 
 // Top-level prop generation for the message bubble
@@ -941,10 +935,31 @@ export function getPropsForBubble(
       timestamp,
     };
   }
+  if (isContactRemovedNotification(message)) {
+    return {
+      type: 'contactRemovedNotification',
+      data: null,
+      timestamp,
+    };
+  }
   if (isChangeNumberNotification(message)) {
     return {
       type: 'changeNumberNotification',
       data: getPropsForChangeNumberNotification(message, options),
+      timestamp,
+    };
+  }
+  if (isJoinedSignalNotification(message)) {
+    return {
+      type: 'joinedSignalNotification',
+      data: getPropsForJoinedSignalNotification(message),
+      timestamp,
+    };
+  }
+  if (isTitleTransitionNotification(message)) {
+    return {
+      type: 'titleTransitionNotification',
+      data: getPropsForTitleTransitionNotification(message),
       timestamp,
     };
   }
@@ -962,8 +977,83 @@ export function getPropsForBubble(
       timestamp,
     };
   }
+  if (isConversationMerge(message)) {
+    return {
+      type: 'conversationMerge',
+      data: getPropsForConversationMerge(message, options),
+      timestamp,
+    };
+  }
+  if (isPhoneNumberDiscovery(message)) {
+    return {
+      type: 'phoneNumberDiscovery',
+      data: getPropsForPhoneNumberDiscovery(message, options),
+      timestamp,
+    };
+  }
 
-  return getBubblePropsForMessage(message, options);
+  if (
+    messageHasPaymentEvent(message) &&
+    !isPaymentNotificationEvent(message.payment)
+  ) {
+    return {
+      type: 'paymentEvent',
+      data: getPropsForPaymentEvent(message, options),
+      timestamp,
+    };
+  }
+
+  if (isMessageRequestResponse(message)) {
+    return {
+      type: 'messageRequestResponse',
+      data: getPropsForMessageRequestResponse(message),
+      timestamp,
+    };
+  }
+
+  const data = getPropsForMessage(message, options);
+
+  return {
+    type: 'message' as const,
+    data,
+    timestamp: data.timestamp,
+  };
+}
+
+export function isNormalBubble(message: MessageWithUIFieldsType): boolean {
+  return (
+    !isCallHistory(message) &&
+    !isChatSessionRefreshed(message) &&
+    !isContactRemovedNotification(message) &&
+    !isConversationMerge(message) &&
+    !isEndSession(message) &&
+    !isExpirationTimerUpdate(message) &&
+    !isGroupUpdate(message) &&
+    !isGroupV1Migration(message) &&
+    !isGroupV2Change(message) &&
+    !isKeyChange(message) &&
+    !isPhoneNumberDiscovery(message) &&
+    !isTitleTransitionNotification(message) &&
+    !isProfileChange(message) &&
+    !isUniversalTimerNotification(message) &&
+    !isUnsupportedMessage(message) &&
+    !isVerifiedChange(message) &&
+    !isChangeNumberNotification(message) &&
+    !isJoinedSignalNotification(message) &&
+    !isDeliveryIssue(message) &&
+    !isMessageRequestResponse(message)
+  );
+}
+
+function getPropsForPaymentEvent(
+  message: MessageAttributesWithPaymentEvent,
+  { conversationSelector }: GetPropsForBubbleOptions
+): Omit<PaymentEventNotificationPropsType, 'i18n'> {
+  return {
+    sender: conversationSelector(message.sourceServiceId),
+    conversation: getConversation(message, conversationSelector),
+    event: message.payment,
+  };
 }
 
 // Unsupported Message
@@ -1008,7 +1098,7 @@ export function isGroupV2Change(message: MessageWithUIFieldsType): boolean {
 
 function getPropsForGroupV2Change(
   message: MessageWithUIFieldsType,
-  { conversationSelector, ourACI, ourPNI }: GetPropsForBubbleOptions
+  { conversationSelector, ourAci, ourPni }: GetPropsForBubbleOptions
 ): GroupsV2Props {
   const change = message.groupV2Change;
 
@@ -1020,11 +1110,12 @@ function getPropsForGroupV2Change(
 
   return {
     areWeAdmin: Boolean(conversation.areWeAdmin),
+    conversationId: conversation.id,
     groupName: conversation?.type === 'group' ? conversation?.name : undefined,
     groupMemberships: conversation.memberships,
     groupBannedMemberships: conversation.bannedMemberships,
-    ourACI,
-    ourPNI,
+    ourAci,
+    ourPni,
     change,
   };
 }
@@ -1054,8 +1145,11 @@ function getPropsForGroupV1Migration(
 
     return {
       areWeInvited: false,
+      conversationId: message.conversationId,
       droppedMembers,
       invitedMembers,
+      droppedMemberCount: droppedMembers.length,
+      invitedMemberCount: invitedMembers.length,
     };
   }
 
@@ -1063,18 +1157,30 @@ function getPropsForGroupV1Migration(
     areWeInvited,
     droppedMemberIds,
     invitedMembers: rawInvitedMembers,
+    droppedMemberCount: rawDroppedMemberCount,
+    invitedMemberCount: rawInvitedMemberCount,
   } = migration;
-  const invitedMembers = rawInvitedMembers.map(item =>
-    conversationSelector(item.uuid)
-  );
-  const droppedMembers = droppedMemberIds.map(conversationId =>
-    conversationSelector(conversationId)
-  );
+  const droppedMembers = droppedMemberIds
+    ? droppedMemberIds.map(conversationId =>
+        conversationSelector(conversationId)
+      )
+    : undefined;
+  const invitedMembers = rawInvitedMembers
+    ? rawInvitedMembers.map(item => conversationSelector(item.uuid))
+    : undefined;
+
+  const droppedMemberCount =
+    rawDroppedMemberCount ?? droppedMemberIds?.length ?? 0;
+  const invitedMemberCount =
+    rawInvitedMemberCount ?? invitedMembers?.length ?? 0;
 
   return {
     areWeInvited,
+    conversationId: message.conversationId,
     droppedMembers,
     invitedMembers,
+    droppedMemberCount,
+    invitedMemberCount,
   };
 }
 
@@ -1101,15 +1207,31 @@ function getPropsForTimerNotification(
     );
   }
 
-  const { expireTimer, fromSync, source, sourceUuid } = timerUpdate;
+  const { expireTimer, fromSync, source, sourceServiceId } = timerUpdate;
   const disabled = !expireTimer;
-  const sourceId = sourceUuid || source;
-  const formattedContact = conversationSelector(sourceId);
+  const sourceId = sourceServiceId || source;
+  const { id: formattedContactId, title } = conversationSelector(sourceId);
+
+  // Pacify typescript
+  type MaybeExpireTimerType =
+    | { disabled: true }
+    | {
+        disabled: false;
+        expireTimer: DurationInSeconds;
+      };
+
+  const maybeExpireTimer: MaybeExpireTimerType = disabled
+    ? {
+        disabled: true,
+      }
+    : {
+        disabled: false,
+        expireTimer,
+      };
 
   const basicProps = {
-    ...formattedContact,
-    disabled,
-    expireTimer,
+    title,
+    ...maybeExpireTimer,
     type: 'fromOther' as const,
   };
 
@@ -1119,7 +1241,7 @@ function getPropsForTimerNotification(
       type: 'fromSync' as const,
     };
   }
-  if (formattedContact.id === ourConversationId) {
+  if (formattedContactId === ourConversationId) {
     return {
       ...basicProps,
       type: 'fromMe' as const,
@@ -1148,7 +1270,14 @@ function getPropsForSafetyNumberNotification(
   const conversation = getConversation(message, conversationSelector);
   const isGroup = conversation?.type === 'group';
   const identifier = message.key_changed;
-  const contact = conversationSelector(identifier);
+
+  if (isGroup && !identifier) {
+    throw new Error(
+      'getPropsForSafetyNumberNotification: isGroup = true, but no identifier!'
+    );
+  }
+
+  const contact = identifier ? conversationSelector(identifier) : conversation;
 
   return {
     isGroup,
@@ -1284,69 +1413,106 @@ export function isCallHistory(message: MessageWithUIFieldsType): boolean {
 
 export type GetPropsForCallHistoryOptions = Pick<
   GetPropsForBubbleOptions,
-  'conversationSelector' | 'callSelector' | 'activeCall'
+  | 'callSelector'
+  | 'activeCall'
+  | 'callHistorySelector'
+  | 'conversationSelector'
+  | 'ourConversationId'
+  | 'selectedMessageIds'
+  | 'targetedMessageId'
 >;
+
+const emptyCallNotification: CallingNotificationType = {
+  callHistory: null,
+  callCreator: null,
+  activeConversationId: null,
+  groupCallEnded: null,
+  maxDevices: Infinity,
+  deviceCount: 0,
+  isSelectMode: false,
+  isTargeted: false,
+};
 
 export function getPropsForCallHistory(
   message: MessageWithUIFieldsType,
   {
-    conversationSelector,
     callSelector,
+    callHistorySelector,
     activeCall,
+    conversationSelector,
+    ourConversationId,
+    selectedMessageIds,
+    targetedMessageId,
   }: GetPropsForCallHistoryOptions
 ): CallingNotificationType {
-  const { callHistoryDetails } = message;
-  if (!callHistoryDetails) {
-    throw new Error('getPropsForCallHistory: Missing callHistoryDetails');
+  const { callId } = message;
+  if (callId == null) {
+    log.error('getPropsForCallHistory: Missing callId');
+    return emptyCallNotification;
+  }
+  const callHistory = callHistorySelector(callId);
+  if (callHistory == null) {
+    log.error('getPropsForCallHistory: Missing callHistory');
+    return emptyCallNotification;
   }
 
-  const activeCallConversationId = activeCall?.conversationId;
+  const activeConversationId = activeCall?.conversationId ?? null;
 
-  switch (callHistoryDetails.callMode) {
-    // Old messages weren't saved with a call mode.
-    case undefined:
-    case CallMode.Direct:
-      return {
-        ...callHistoryDetails,
-        activeCallConversationId,
-        callMode: CallMode.Direct,
-      };
-    case CallMode.Group: {
-      const { conversationId } = message;
-      if (!conversationId) {
-        throw new Error('getPropsForCallHistory: missing conversation ID');
-      }
+  const conversation = conversationSelector(callHistory.peerId);
+  strictAssert(
+    conversation != null,
+    'getPropsForCallHistory: Missing conversation'
+  );
 
-      let call = callSelector(conversationId);
-      if (call && call.callMode !== CallMode.Group) {
-        log.error(
-          'getPropsForCallHistory: there is an unexpected non-group call; pretending it does not exist'
-        );
-        call = undefined;
-      }
+  const isSelectMode = selectedMessageIds != null;
 
-      const creator = conversationSelector(callHistoryDetails.creatorUuid);
-      const deviceCount = call?.peekInfo?.deviceCount ?? 0;
-
-      return {
-        activeCallConversationId,
-        callMode: CallMode.Group,
-        conversationId,
-        creator,
-        deviceCount,
-        ended:
-          callHistoryDetails.eraId !== call?.peekInfo?.eraId || !deviceCount,
-        maxDevices: call?.peekInfo?.maxDevices ?? Infinity,
-        startedTime: callHistoryDetails.startedTime,
-      };
-    }
-    default:
-      throw new Error(
-        `getPropsForCallHistory: missing case ${missingCaseError(
-          callHistoryDetails
-        )}`
-      );
+  let callCreator: ConversationType | null = null;
+  if (callHistory.direction === CallDirection.Outgoing) {
+    callCreator = conversationSelector(ourConversationId);
+  } else if (callHistory.ringerId) {
+    callCreator = conversationSelector(callHistory.ringerId);
   }
+
+  if (callHistory.mode === CallMode.Direct) {
+    return {
+      callHistory,
+      callCreator,
+      activeConversationId,
+      groupCallEnded: false,
+      deviceCount: 0,
+      maxDevices: Infinity,
+      isSelectMode,
+      isTargeted: message.id === targetedMessageId,
+    };
+  }
+
+  // This could be a later call in the conversation
+  const conversationCall = callSelector(conversation.id);
+
+  if (conversationCall != null) {
+    strictAssert(
+      conversationCall?.callMode === CallMode.Group,
+      'getPropsForCallHistory: Call was expected to be a group call'
+    );
+  }
+
+  const conversationCallId =
+    conversationCall?.peekInfo?.eraId != null &&
+    getCallIdFromEra(conversationCall.peekInfo.eraId);
+
+  const deviceCount = conversationCall?.peekInfo?.deviceCount ?? 0;
+  const maxDevices = conversationCall?.peekInfo?.maxDevices ?? Infinity;
+
+  return {
+    callHistory,
+    callCreator,
+    activeConversationId,
+    groupCallEnded: callId !== conversationCallId || deviceCount === 0,
+    deviceCount,
+    maxDevices,
+    isSelectMode,
+    isTargeted: message.id === targetedMessageId,
+  };
 }
 
 // Profile Change
@@ -1373,6 +1539,24 @@ function getPropsForProfileChange(
   } as ProfileChangeNotificationPropsType;
 }
 
+// Message Request Response Event
+
+export function isMessageRequestResponse(
+  message: ReadonlyMessageAttributesType
+): boolean {
+  return message.type === 'message-request-response-event';
+}
+
+function getPropsForMessageRequestResponse(
+  message: ReadonlyMessageAttributesType
+): MessageRequestResponseNotificationData {
+  const { messageRequestResponseEvent } = message;
+  if (!messageRequestResponseEvent) {
+    throw new Error('getPropsForMessageRequestResponse: event is missing!');
+  }
+  return { messageRequestResponseEvent };
+}
+
 // Universal Timer Notification
 
 // Note: smart, so props not generated here
@@ -1381,6 +1565,16 @@ export function isUniversalTimerNotification(
   message: MessageWithUIFieldsType
 ): boolean {
   return message.type === 'universal-timer-notification';
+}
+
+// Contact Removed Notification
+
+// Note: smart, so props not generated here
+
+export function isContactRemovedNotification(
+  message: MessageWithUIFieldsType
+): boolean {
+  return message.type === 'contact-removed-notification';
 }
 
 // Change Number Notification
@@ -1396,8 +1590,49 @@ function getPropsForChangeNumberNotification(
   { conversationSelector }: GetPropsForBubbleOptions
 ): ChangeNumberNotificationProps {
   return {
-    sender: conversationSelector(message.sourceUuid),
+    sender: conversationSelector(message.sourceServiceId),
     timestamp: message.sent_at,
+  };
+}
+
+// Joined Signal Notification
+
+export function isJoinedSignalNotification(
+  message: MessageWithUIFieldsType
+): boolean {
+  return message.type === 'joined-signal-notification';
+}
+
+function getPropsForJoinedSignalNotification(
+  message: MessageWithUIFieldsType
+): JoinedSignalNotificationProps {
+  return {
+    timestamp: message.sent_at,
+  };
+}
+
+// Title Transition Notification
+
+export function isTitleTransitionNotification(
+  message: MessageWithUIFieldsType
+): boolean {
+  return (
+    message.type === 'title-transition-notification' &&
+    message.titleTransition != null
+  );
+}
+
+function getPropsForTitleTransitionNotification(
+  message: MessageWithUIFieldsType
+): TitleTransitionNotificationProps {
+  strictAssert(
+    message.titleTransition != null,
+    'Invalid attributes for title-transition-notification'
+  );
+  const { renderInfo } = message.titleTransition;
+  const oldTitle = getTitle(renderInfo);
+  return {
+    oldTitle,
   };
 }
 
@@ -1411,6 +1646,62 @@ export function isChatSessionRefreshed(
 
 // Note: props are null
 
+export function isConversationMerge(message: MessageWithUIFieldsType): boolean {
+  return message.type === 'conversation-merge';
+}
+export function getPropsForConversationMerge(
+  message: MessageWithUIFieldsType,
+  { conversationSelector }: GetPropsForBubbleOptions
+): ConversationMergePropsType {
+  const { conversationMerge } = message;
+  if (!conversationMerge) {
+    throw new Error(
+      'getPropsForConversationMerge: message is missing conversationMerge!'
+    );
+  }
+
+  const conversation = getConversation(message, conversationSelector);
+  const conversationTitle = conversation.title;
+
+  const { renderInfo } = conversationMerge;
+  const obsoleteConversationTitle = getTitleNoDefault(renderInfo);
+  const obsoleteConversationNumber = getNumber(renderInfo);
+
+  return {
+    conversationTitle,
+    obsoleteConversationTitle,
+    obsoleteConversationNumber,
+  };
+}
+
+export function isPhoneNumberDiscovery(
+  message: MessageWithUIFieldsType
+): boolean {
+  return message.type === 'phone-number-discovery';
+}
+export function getPropsForPhoneNumberDiscovery(
+  message: MessageWithUIFieldsType,
+  { conversationSelector }: GetPropsForBubbleOptions
+): PhoneNumberDiscoveryPropsType {
+  const { phoneNumberDiscovery } = message;
+  if (!phoneNumberDiscovery) {
+    throw new Error(
+      'getPropsForPhoneNumberDiscovery: message is missing phoneNumberDiscovery!'
+    );
+  }
+
+  const conversation = getConversation(message, conversationSelector);
+  const conversationTitle = conversation.title;
+  const sharedGroup = conversation.sharedGroupNames[0];
+  const { e164 } = phoneNumberDiscovery;
+
+  return {
+    conversationTitle,
+    phoneNumber: renderNumber(e164) ?? e164,
+    sharedGroup,
+  };
+}
+
 // Delivery Issue
 
 export function isDeliveryIssue(message: MessageWithUIFieldsType): boolean {
@@ -1421,8 +1712,8 @@ function getPropsForDeliveryIssue(
   message: MessageWithUIFieldsType,
   { conversationSelector }: GetPropsForBubbleOptions
 ): DeliveryIssuePropsType {
-  const sender = conversationSelector(message.sourceUuid);
-  const conversation = conversationSelector(message.conversationId);
+  const sender = conversationSelector(message.sourceServiceId);
+  const conversation = getConversation(message, conversationSelector);
 
   return {
     sender,
@@ -1503,14 +1794,9 @@ export function getMessagePropStatus(
     return sent ? 'viewed' : 'sending';
   }
 
-  const sendStates = Object.values(
+  const highestSuccessfulStatus = getHighestSuccessfulRecipientStatus(
+    sendStateByConversationId,
     ourConversationId
-      ? omit(sendStateByConversationId, ourConversationId)
-      : sendStateByConversationId
-  );
-  const highestSuccessfulStatus = sendStates.reduce(
-    (result: SendStatus, { status }) => maxStatus(result, status),
-    SendStatus.Pending
   );
 
   if (
@@ -1537,8 +1823,8 @@ export function getMessagePropStatus(
 export function getPropsForEmbeddedContact(
   message: MessageWithUIFieldsType,
   regionCode: string | undefined,
-  accountSelector: (identifier?: string) => UUIDStringType | undefined
-): EmbeddedContactType | undefined {
+  accountSelector: (identifier?: string) => ServiceIdString | undefined
+): ReadonlyDeep<EmbeddedContactForUIType> | undefined {
   const contacts = message.contact;
   if (!contacts || !contacts.length) {
     return undefined;
@@ -1550,57 +1836,58 @@ export function getPropsForEmbeddedContact(
 
   return embeddedContactSelector(firstContact, {
     regionCode,
-    getAbsoluteAttachmentPath:
-      window.Signal.Migrations.getAbsoluteAttachmentPath,
     firstNumber,
-    uuid: accountSelector(firstNumber),
+    serviceId: accountSelector(firstNumber),
   });
 }
 
 export function getPropsForAttachment(
-  attachment: AttachmentType
-): AttachmentType | undefined {
-  if (!attachment) {
-    return undefined;
-  }
-
-  const { path, pending, size, screenshot, thumbnail } = attachment;
+  attachment: AttachmentType,
+  disposition: AttachmentDownloadJobTypeType,
+  message: Pick<ReadonlyMessageAttributesType, 'type'>
+): AttachmentForUIType {
+  const { path, pending, screenshot, thumbnail, thumbnailFromBackup } =
+    attachment;
 
   return {
     ...attachment,
-    fileSize: size ? filesize(size) : undefined,
     isVoiceMessage: isVoiceMessage(attachment),
     pending,
-    url: path
-      ? window.Signal.Migrations.getAbsoluteAttachmentPath(path)
+    url: path ? getLocalAttachmentUrl(attachment) : undefined,
+    thumbnailFromBackup: thumbnailFromBackup?.path
+      ? {
+          ...thumbnailFromBackup,
+          url: getLocalAttachmentUrl(thumbnailFromBackup),
+        }
       : undefined,
     screenshot: screenshot?.path
       ? {
           ...screenshot,
-          url: window.Signal.Migrations.getAbsoluteAttachmentPath(
-            screenshot.path
-          ),
+          url: getLocalAttachmentUrl({
+            // Legacy v1 screenshots
+            size: 0,
+
+            ...screenshot,
+          }),
         }
       : undefined,
     thumbnail: thumbnail?.path
       ? {
           ...thumbnail,
-          url: window.Signal.Migrations.getAbsoluteAttachmentPath(
-            thumbnail.path
-          ),
+          url: getLocalAttachmentUrl(thumbnail),
         }
       : undefined,
+    isPermanentlyUndownloadable: isPermanentlyUndownloadable(
+      attachment,
+      disposition,
+      message
+    ),
   };
 }
 
-function processQuoteAttachment(
-  attachment: AttachmentType
-): QuotedAttachmentType {
+function processQuoteAttachment(attachment: QuotedAttachmentType) {
   const { thumbnail } = attachment;
-  const path =
-    thumbnail &&
-    thumbnail.path &&
-    window.Signal.Migrations.getAbsoluteAttachmentPath(thumbnail.path);
+  const path = thumbnail && thumbnail.path && getLocalAttachmentUrl(thumbnail);
   const objectUrl = thumbnail && thumbnail.objectUrl;
 
   const thumbnailWithObjectUrl =
@@ -1620,7 +1907,9 @@ function canReplyOrReact(
     MessageWithUIFieldsType,
     | 'canReplyToStory'
     | 'deletedForEveryone'
+    | 'payment'
     | 'sendStateByConversationId'
+    | 'sms'
     | 'type'
   >,
   ourConversationId: string | undefined,
@@ -1640,7 +1929,14 @@ function canReplyOrReact(
     return false;
   }
 
-  if (!conversation.acceptedMessageRequest) {
+  if (
+    !conversation.acceptedMessageRequest &&
+    conversation.removalStage !== 'justNotification'
+  ) {
+    return false;
+  }
+
+  if (conversation.isBlocked) {
     return false;
   }
 
@@ -1648,13 +1944,20 @@ function canReplyOrReact(
     return false;
   }
 
+  if (isSignalConversation(conversation)) {
+    return false;
+  }
+
+  if (message.sms) {
+    return false;
+  }
+
   if (isOutgoing(message)) {
     return (
-      isMessageJustForMe(sendStateByConversationId, ourConversationId) ||
-      someSendStatus(
-        ourConversationId
-          ? omit(sendStateByConversationId, ourConversationId)
-          : sendStateByConversationId,
+      isMessageJustForMe(sendStateByConversationId ?? {}, ourConversationId) ||
+      someRecipientSendStatus(
+        sendStateByConversationId ?? {},
+        ourConversationId,
         isSent
       )
     );
@@ -1683,6 +1986,7 @@ export function canReply(
     | 'conversationId'
     | 'deletedForEveryone'
     | 'sendStateByConversationId'
+    | 'sms'
     | 'type'
   >,
   ourConversationId: string | undefined,
@@ -1704,6 +2008,7 @@ export function canReact(
     | 'conversationId'
     | 'deletedForEveryone'
     | 'sendStateByConversationId'
+    | 'sms'
     | 'type'
   >,
   ourConversationId: string | undefined,
@@ -1713,23 +2018,50 @@ export function canReact(
   return canReplyOrReact(message, ourConversationId, conversation);
 }
 
+export function canCopy(
+  message: Pick<MessageWithUIFieldsType, 'body' | 'deletedForEveryone'>
+): boolean {
+  return !message.deletedForEveryone && Boolean(message.body);
+}
+
 export function canDeleteForEveryone(
   message: Pick<
     MessageWithUIFieldsType,
-    'type' | 'deletedForEveryone' | 'sent_at' | 'sendStateByConversationId'
-  >
+    | 'type'
+    | 'deletedForEveryone'
+    | 'sent_at'
+    | 'sendStateByConversationId'
+    | 'sms'
+  >,
+  isMe: boolean
 ): boolean {
   return (
+    // Is this an SMS restored from backup?
+    !message.sms &&
     // Is this a message I sent?
     isOutgoing(message) &&
     // Has the message already been deleted?
     !message.deletedForEveryone &&
-    // Is it too old to delete?
-    isMoreRecentThan(message.sent_at, THREE_HOURS) &&
+    // Is it too old to delete? (we relax that requirement in Note to Self)
+    (isMoreRecentThan(message.sent_at, DAY) || isMe) &&
     // Is it sent to anyone?
-    someSendStatus(message.sendStateByConversationId, isSent)
+    someSendStatus(message.sendStateByConversationId ?? {}, isSent)
   );
 }
+
+export const canDeleteMessagesForEveryone = createSelector(
+  [
+    getMessages,
+    (_state, options: { messageIds: ReadonlyArray<string>; isMe: boolean }) =>
+      options,
+  ],
+  (messagesLookup, options) => {
+    return options.messageIds.every(messageId => {
+      const message = getOwn(messagesLookup, messageId);
+      return message != null && canDeleteForEveryone(message, options.isMe);
+    });
+  }
+);
 
 export function canRetryDeleteForEveryone(
   message: Pick<
@@ -1749,15 +2081,19 @@ export function canDownload(
   message: MessageWithUIFieldsType,
   conversationSelector: GetConversationByIdType
 ): boolean {
-  if (isOutgoing(message)) {
-    return true;
-  }
-
   const conversation = getConversation(message, conversationSelector);
   const isAccepted = Boolean(
     conversation && conversation.acceptedMessageRequest
   );
-  if (!isAccepted) {
+  if (isIncoming(message) && !isAccepted) {
+    return false;
+  }
+
+  if (message.sticker) {
+    return false;
+  }
+
+  if (isTapToView(message)) {
     return false;
   }
 
@@ -1767,7 +2103,7 @@ export function canDownload(
     return attachments.every(attachment => Boolean(attachment.path));
   }
 
-  return true;
+  return false;
 }
 
 export function getLastChallengeError(
@@ -1790,3 +2126,180 @@ export function getLastChallengeError(
 
   return challengeErrors.pop();
 }
+
+const getTargetedMessageForDetails = (
+  state: StateType
+): ReadonlyMessageAttributesType | undefined =>
+  state.conversations.targetedMessageForDetails;
+
+const OUTGOING_KEY_ERROR = 'OutgoingIdentityKeyError';
+
+export const getMessageDetails = createSelector(
+  getAccountSelector,
+  getCachedConversationMemberColorsSelector,
+  getConversationSelector,
+  getIntl,
+  getRegionCode,
+  getTargetedMessageForDetails,
+  getUserACI,
+  getUserPNI,
+  getUserConversationId,
+  getUserNumber,
+  getSelectedMessageIds,
+  getDefaultConversationColor,
+  (
+    accountSelector,
+    cachedConversationMemberColorsSelector,
+    conversationSelector,
+    i18n,
+    regionCode,
+    message,
+    ourAci,
+    ourPni,
+    ourConversationId,
+    ourNumber,
+    selectedMessageIds,
+    defaultConversationColor
+  ): SmartMessageDetailPropsType | undefined => {
+    if (!message || !ourConversationId) {
+      return;
+    }
+
+    const {
+      errors: messageErrors = [],
+      sendStateByConversationId = {},
+      unidentifiedDeliveries = [],
+      unidentifiedDeliveryReceived,
+    } = message;
+
+    const unidentifiedDeliveriesSet = new Set(
+      map(
+        unidentifiedDeliveries,
+        identifier =>
+          window.ConversationController.getConversationId(identifier) as string
+      )
+    );
+
+    let conversationIds: Array<string>;
+    if (isIncoming(message)) {
+      conversationIds = [
+        getAuthorId(message, {
+          conversationSelector,
+          ourConversationId,
+          ourNumber,
+          ourAci,
+        }),
+      ].filter(isNotNil);
+    } else if (!isEmpty(sendStateByConversationId)) {
+      if (isMessageJustForMe(sendStateByConversationId, ourConversationId)) {
+        conversationIds = [ourConversationId];
+      } else {
+        conversationIds = Object.keys(sendStateByConversationId).filter(
+          id => id !== ourConversationId
+        );
+      }
+    } else {
+      const messageConversation = window.ConversationController.get(
+        message.conversationId
+      );
+      const conversationRecipients = messageConversation
+        ? getRecipients(messageConversation.attributes) || []
+        : [];
+      // Older messages don't have the recipients included on the message, so we fall back
+      //   to the conversation's current recipients
+      conversationIds = conversationRecipients
+        .map((id: string) =>
+          window.ConversationController.getConversationId(id)
+        )
+        .filter(isNotNil);
+    }
+
+    // This will make the error message for outgoing key errors a bit nicer
+    const allErrors = messageErrors.map(error => {
+      if (error.name === OUTGOING_KEY_ERROR) {
+        return {
+          ...error,
+          message: i18n('icu:newIdentity'),
+        };
+      }
+
+      return error;
+    });
+
+    // If an error has a specific number it's associated with, we'll show it next to
+    //   that contact. Otherwise, it will be a standalone entry.
+    const errors = allErrors.filter(error =>
+      Boolean(error.serviceId || error.number)
+    );
+    const errorsGroupedById = groupBy(allErrors, error => {
+      const serviceId = error.serviceId || error.number;
+      if (!serviceId) {
+        return null;
+      }
+
+      return window.ConversationController.getConversationId(serviceId);
+    });
+
+    const hasUnidentifiedDeliveryIndicators = window.storage.get(
+      'unidentifiedDeliveryIndicators',
+      false
+    );
+
+    const contacts: ReadonlyArray<SmartMessageDetailContact> =
+      conversationIds.map(id => {
+        const errorsForContact = getOwn(errorsGroupedById, id);
+        const isOutgoingKeyError = Boolean(
+          errorsForContact?.some(error => error.name === OUTGOING_KEY_ERROR)
+        );
+
+        let isUnidentifiedDelivery = false;
+        if (hasUnidentifiedDeliveryIndicators) {
+          isUnidentifiedDelivery = isIncoming(message)
+            ? Boolean(unidentifiedDeliveryReceived)
+            : unidentifiedDeliveriesSet.has(id);
+        }
+
+        const sendState = getOwn(sendStateByConversationId, id);
+
+        let status = sendState?.status;
+
+        // If a message was only sent to yourself (Note to Self or a lonely group), it
+        //   is shown read.
+        if (id === ourConversationId && status && isSent(status)) {
+          status = SendStatus.Read;
+        }
+
+        const statusTimestamp = sendState?.updatedAt;
+
+        return {
+          ...conversationSelector(id),
+          errors: errorsForContact,
+          isOutgoingKeyError,
+          isUnidentifiedDelivery,
+          status,
+          statusTimestamp:
+            statusTimestamp === message.timestamp ? undefined : statusTimestamp,
+        };
+      });
+
+    return {
+      contacts,
+      errors,
+      message: getPropsForMessage(message, {
+        accountSelector,
+        contactNameColors: cachedConversationMemberColorsSelector(
+          message.conversationId
+        ),
+        conversationSelector,
+        ourAci,
+        ourPni,
+        ourConversationId,
+        ourNumber,
+        regionCode,
+        selectedMessageIds,
+        defaultConversationColor,
+      }),
+      receivedAt: Number(message.received_at_ms || message.received_at),
+    };
+  }
+);

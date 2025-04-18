@@ -14,28 +14,30 @@ import { PanelSection } from './PanelSection';
 import { ConversationDetailsIcon, IconType } from './ConversationDetailsIcon';
 
 export type Props = {
+  acceptConversation: (id: string) => void;
+  blockConversation: (id: string) => void;
   cannotLeaveBecauseYouAreLastAdmin: boolean;
+  conversationId: string;
   conversationTitle: string;
   i18n: LocalizerType;
   isBlocked: boolean;
   isGroup: boolean;
   left: boolean;
-  onBlock: () => void;
   onLeave: () => void;
-  onUnblock: () => void;
 };
 
-export const ConversationDetailsActions: React.ComponentType<Props> = ({
+export function ConversationDetailsActions({
+  acceptConversation,
+  blockConversation,
   cannotLeaveBecauseYouAreLastAdmin,
+  conversationId,
   conversationTitle,
   i18n,
   isBlocked,
   isGroup,
   left,
-  onBlock,
   onLeave,
-  onUnblock,
-}) => {
+}: Props): JSX.Element {
   const [confirmLeave, gLeave] = useState<boolean>(false);
   const [confirmGroupBlock, gGroupBlock] = useState<boolean>(false);
   const [confirmGroupUnblock, gGroupUnblock] = useState<boolean>(false);
@@ -50,7 +52,7 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
         onClick={() => gLeave(true)}
         icon={
           <ConversationDetailsIcon
-            ariaLabel={i18n('ConversationDetailsActions--leave-group')}
+            ariaLabel={i18n('icu:ConversationDetailsActions--leave-group')}
             disabled={cannotLeaveBecauseYouAreLastAdmin}
             icon={IconType.leave}
           />
@@ -63,7 +65,7 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
                 'ConversationDetails__leave-group--disabled'
             )}
           >
-            {i18n('ConversationDetailsActions--leave-group')}
+            {i18n('icu:ConversationDetailsActions--leave-group')}
           </div>
         }
       />
@@ -72,7 +74,7 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
       leaveGroupNode = (
         <Tooltip
           content={i18n(
-            'ConversationDetailsActions--leave-group-must-choose-new-admin'
+            'icu:ConversationDetailsActions--leave-group-must-choose-new-admin'
           )}
           direction={TooltipPlacement.Top}
         >
@@ -90,13 +92,13 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
         onClick={() => gGroupBlock(true)}
         icon={
           <ConversationDetailsIcon
-            ariaLabel={i18n('ConversationDetailsActions--block-group')}
+            ariaLabel={i18n('icu:ConversationDetailsActions--block-group')}
             icon={IconType.block}
           />
         }
         label={
           <div className="ConversationDetails__block-group">
-            {i18n('ConversationDetailsActions--block-group')}
+            {i18n('icu:ConversationDetailsActions--block-group')}
           </div>
         }
       />
@@ -107,21 +109,21 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
         onClick={() => gGroupUnblock(true)}
         icon={
           <ConversationDetailsIcon
-            ariaLabel={i18n('ConversationDetailsActions--unblock-group')}
+            ariaLabel={i18n('icu:ConversationDetailsActions--unblock-group')}
             icon={IconType.unblock}
           />
         }
         label={
           <div className="ConversationDetails__unblock-group">
-            {i18n('ConversationDetailsActions--unblock-group')}
+            {i18n('icu:ConversationDetailsActions--unblock-group')}
           </div>
         }
       />
     );
   } else {
     const label = isBlocked
-      ? i18n('MessageRequests--unblock')
-      : i18n('MessageRequests--block');
+      ? i18n('icu:MessageRequests--unblock')
+      : i18n('icu:MessageRequests--block');
     blockNode = (
       <PanelRow
         onClick={() => (isBlocked ? gDirectUnblock(true) : gDirectBlock(true))}
@@ -150,7 +152,7 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
     blockNode = (
       <Tooltip
         content={i18n(
-          'ConversationDetailsActions--leave-group-must-choose-new-admin'
+          'icu:ConversationDetailsActions--leave-group-must-choose-new-admin'
         )}
         direction={TooltipPlacement.Top}
       >
@@ -171,7 +173,7 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           actions={[
             {
               text: i18n(
-                'ConversationDetailsActions--leave-group-modal-confirm'
+                'icu:ConversationDetailsActions--leave-group-modal-confirm'
               ),
               action: onLeave,
               style: 'affirmative',
@@ -179,9 +181,11 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           ]}
           i18n={i18n}
           onClose={() => gLeave(false)}
-          title={i18n('ConversationDetailsActions--leave-group-modal-title')}
+          title={i18n(
+            'icu:ConversationDetailsActions--leave-group-modal-title'
+          )}
         >
-          {i18n('ConversationDetailsActions--leave-group-modal-content')}
+          {i18n('icu:ConversationDetailsActions--leave-group-modal-content')}
         </ConfirmationDialog>
       )}
 
@@ -191,19 +195,22 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           actions={[
             {
               text: i18n(
-                'ConversationDetailsActions--block-group-modal-confirm'
+                'icu:ConversationDetailsActions--block-group-modal-confirm'
               ),
-              action: onBlock,
+              action: () => blockConversation(conversationId),
               style: 'affirmative',
             },
           ]}
           i18n={i18n}
           onClose={() => gGroupBlock(false)}
-          title={i18n('ConversationDetailsActions--block-group-modal-title', [
-            conversationTitle,
-          ])}
+          title={i18n(
+            'icu:ConversationDetailsActions--block-group-modal-title',
+            {
+              groupName: conversationTitle,
+            }
+          )}
         >
-          {i18n('ConversationDetailsActions--block-group-modal-content')}
+          {i18n('icu:ConversationDetailsActions--block-group-modal-content')}
         </ConfirmationDialog>
       )}
       {confirmGroupUnblock && (
@@ -212,19 +219,22 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           actions={[
             {
               text: i18n(
-                'ConversationDetailsActions--unblock-group-modal-confirm'
+                'icu:ConversationDetailsActions--unblock-group-modal-confirm'
               ),
-              action: onUnblock,
+              action: () => acceptConversation(conversationId),
               style: 'affirmative',
             },
           ]}
           i18n={i18n}
           onClose={() => gGroupUnblock(false)}
-          title={i18n('ConversationDetailsActions--unblock-group-modal-title', [
-            conversationTitle,
-          ])}
+          title={i18n(
+            'icu:ConversationDetailsActions--unblock-group-modal-title',
+            {
+              groupName: conversationTitle,
+            }
+          )}
         >
-          {i18n('ConversationDetailsActions--unblock-group-modal-content')}
+          {i18n('icu:ConversationDetailsActions--unblock-group-modal-content')}
         </ConfirmationDialog>
       )}
 
@@ -233,18 +243,18 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           dialogName="ConversationDetailsAction.confirmDirectBlock"
           actions={[
             {
-              text: i18n('MessageRequests--block'),
-              action: onBlock,
+              text: i18n('icu:MessageRequests--block'),
+              action: () => blockConversation(conversationId),
               style: 'affirmative',
             },
           ]}
           i18n={i18n}
           onClose={() => gDirectBlock(false)}
-          title={i18n('MessageRequests--block-direct-confirm-title', [
-            conversationTitle,
-          ])}
+          title={i18n('icu:MessageRequests--block-direct-confirm-title', {
+            title: conversationTitle,
+          })}
         >
-          {i18n('MessageRequests--block-direct-confirm-body')}
+          {i18n('icu:MessageRequests--block-direct-confirm-body')}
         </ConfirmationDialog>
       )}
       {confirmDirectUnblock && (
@@ -252,20 +262,20 @@ export const ConversationDetailsActions: React.ComponentType<Props> = ({
           dialogName="ConversationDetailsAction.confirmDirectUnblock"
           actions={[
             {
-              text: i18n('MessageRequests--unblock'),
-              action: onUnblock,
+              text: i18n('icu:MessageRequests--unblock'),
+              action: () => acceptConversation(conversationId),
               style: 'affirmative',
             },
           ]}
           i18n={i18n}
           onClose={() => gDirectUnblock(false)}
-          title={i18n('MessageRequests--unblock-direct-confirm-title', [
-            conversationTitle,
-          ])}
+          title={i18n('icu:MessageRequests--unblock-direct-confirm-title', {
+            name: conversationTitle,
+          })}
         >
-          {i18n('MessageRequests--unblock-direct-confirm-body')}
+          {i18n('icu:MessageRequests--unblock-direct-confirm-body')}
         </ConfirmationDialog>
       )}
     </>
   );
-};
+}

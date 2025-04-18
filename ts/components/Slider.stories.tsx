@@ -5,12 +5,13 @@ import React, { useState } from 'react';
 
 import { action } from '@storybook/addon-actions';
 
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './Slider';
 import { Slider } from './Slider';
 
 export default {
   title: 'Components/Slider',
-};
+} satisfies Meta<PropsType>;
 
 const createProps = (): PropsType => ({
   label: 'Slider Handle',
@@ -18,14 +19,16 @@ const createProps = (): PropsType => ({
   value: 30,
 });
 
-export const Default = (): JSX.Element => <Slider {...createProps()} />;
+export function Default(): JSX.Element {
+  return <Slider {...createProps()} />;
+}
 
-export const DraggableTest = (): JSX.Element => {
-  function StatefulSliderController(props: PropsType): JSX.Element {
-    const [value, setValue] = useState(30);
+function StatefulSliderController(props: PropsType): JSX.Element {
+  const [value, setValue] = useState(30);
 
-    return <Slider {...props} onChange={setValue} value={value} />;
-  }
+  return <Slider {...props} onChange={setValue} value={value} />;
+}
 
+export function DraggableTest(): JSX.Element {
   return <StatefulSliderController {...createProps()} />;
-};
+}

@@ -1,52 +1,41 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import * as moment from 'moment';
-import { boolean, number, select, text } from '@storybook/addon-knobs';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
+import { DurationInSeconds } from '../../util/durations';
 import type { Props } from './TimerNotification';
 import { TimerNotification } from './TimerNotification';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/TimerNotification',
-};
-
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  i18n,
-  type: select(
-    'type',
-    {
-      fromOther: 'fromOther',
-      fromMe: 'fromMe',
-      fromSync: 'fromSync',
+  argTypes: {
+    type: {
+      control: { type: 'select' },
+      options: ['fromOther', 'fromMe', 'fromSync'],
     },
-    overrideProps.type || 'fromOther'
-  ),
-  title: text('title', overrideProps.title || ''),
-  ...(boolean('disabled', overrideProps.disabled || false)
-    ? {
-        disabled: true,
-      }
-    : {
-        disabled: false,
-        expireTimer: number(
-          'expireTimer',
-          ('expireTimer' in overrideProps ? overrideProps.expireTimer : 0) || 0
-        ),
-      }),
-});
+    disabled: { control: { type: 'boolean' } },
+    expireTimer: { control: { type: 'number' } },
+  },
+  args: {
+    i18n,
+    type: 'fromOther',
+    title: '',
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(0),
+  },
+} satisfies Meta<Props>;
 
-export const SetByOther = (): JSX.Element => {
-  const props = createProps({
-    expireTimer: moment.duration(1, 'hour').asSeconds(),
+export function SetByOther(args: Props): JSX.Element {
+  const props: Props = {
+    ...args,
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(1),
     type: 'fromOther',
     title: 'Mr. Fire',
-  });
+  };
 
   return (
     <>
@@ -55,16 +44,18 @@ export const SetByOther = (): JSX.Element => {
       <TimerNotification {...props} disabled />
     </>
   );
-};
+}
 
-export const SetByOtherWithALongName = (): JSX.Element => {
+export function SetByOtherWithALongName(args: Props): JSX.Element {
   const longName = '🦴🧩📴'.repeat(50);
 
-  const props = createProps({
-    expireTimer: moment.duration(1, 'hour').asSeconds(),
+  const props: Props = {
+    ...args,
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(1),
     type: 'fromOther',
     title: longName,
-  });
+  };
 
   return (
     <>
@@ -73,18 +64,16 @@ export const SetByOtherWithALongName = (): JSX.Element => {
       <TimerNotification {...props} disabled />
     </>
   );
-};
+}
 
-SetByOtherWithALongName.story = {
-  name: 'Set By Other (with a long name)',
-};
-
-export const SetByYou = (): JSX.Element => {
-  const props = createProps({
-    expireTimer: moment.duration(1, 'hour').asSeconds(),
+export function SetByYou(args: Props): JSX.Element {
+  const props: Props = {
+    ...args,
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(1),
     type: 'fromMe',
     title: 'Mr. Fire',
-  });
+  };
 
   return (
     <>
@@ -93,14 +82,16 @@ export const SetByYou = (): JSX.Element => {
       <TimerNotification {...props} disabled />
     </>
   );
-};
+}
 
-export const SetBySync = (): JSX.Element => {
-  const props = createProps({
-    expireTimer: moment.duration(1, 'hour').asSeconds(),
+export function SetBySync(args: Props): JSX.Element {
+  const props: Props = {
+    ...args,
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(1),
     type: 'fromSync',
     title: 'Mr. Fire',
-  });
+  };
 
   return (
     <>
@@ -109,4 +100,22 @@ export const SetBySync = (): JSX.Element => {
       <TimerNotification {...props} disabled />
     </>
   );
-};
+}
+
+export function SetByUnknownContact(args: Props): JSX.Element {
+  const props: Props = {
+    ...args,
+    disabled: false,
+    expireTimer: DurationInSeconds.fromHours(1),
+    type: 'fromMember',
+    title: 'Unknown contact',
+  };
+
+  return (
+    <>
+      <TimerNotification {...props} />
+      <div style={{ padding: '1em' }} />
+      <TimerNotification {...props} disabled />
+    </>
+  );
+}

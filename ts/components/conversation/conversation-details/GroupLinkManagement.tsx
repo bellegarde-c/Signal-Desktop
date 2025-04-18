@@ -1,4 +1,4 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useState } from 'react';
@@ -13,7 +13,8 @@ import { PanelSection } from './PanelSection';
 import { Select } from '../../Select';
 import { SignalService as Proto } from '../../../protobuf';
 
-import { copyGroupLink } from '../../../util/copyGroupLink';
+import { copyGroupLink } from '../../../util/copyLinksWithToast';
+import { drop } from '../../../util/drop';
 import { useDelayedRestoreFocus } from '../../../hooks/useRestoreFocus';
 import { useUniqueId } from '../../../hooks/useUniqueId';
 
@@ -34,14 +35,14 @@ export type PropsType = PropsDataType & {
   ) => unknown;
 };
 
-export const GroupLinkManagement: React.ComponentType<PropsType> = ({
+export function GroupLinkManagement({
   changeHasGroupLink,
   conversation,
   generateNewGroupLink,
   i18n,
   isAdmin,
   setAccessControlAddFromInviteLinkSetting,
-}) => {
+}: PropsType): JSX.Element {
   const groupLinkSelectId = useUniqueId();
   const approveSelectId = useUniqueId();
 
@@ -67,7 +68,22 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
     conversation.groupLink &&
     conversation.accessControlAddFromInviteLink !==
       AccessControlEnum.UNSATISFIABLE;
-  const groupLinkInfo = hasGroupLink ? conversation.groupLink : '';
+
+  let groupLinkInfo: JSX.Element | undefined;
+  if (hasGroupLink) {
+    groupLinkInfo = (
+      <button
+        type="button"
+        className="ConversationDetails__panel-row__group-link"
+        aria-label={i18n('icu:GroupLinkManagement__CopyGroupLinkButtonLabel')}
+        onClick={() => {
+          drop(copyGroupLink(conversation.groupLink ?? ''));
+        }}
+      >
+        {conversation.groupLink}
+      </button>
+    );
+  }
 
   const [hasGenerateNewLinkDialog, setHasGenerateNewLinkDialog] =
     useState(false);
@@ -83,14 +99,14 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
                 generateNewGroupLink(conversation.id);
               },
               style: 'negative',
-              text: i18n('GroupLinkManagement--reset'),
+              text: i18n('icu:GroupLinkManagement--reset'),
             },
           ]}
           i18n={i18n}
           onClose={() => {
             setHasGenerateNewLinkDialog(false);
           }}
-          title={i18n('GroupLinkManagement--confirm-reset')}
+          title={i18n('icu:GroupLinkManagement--confirm-reset')}
         />
       )}
       <PanelSection>
@@ -98,7 +114,7 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
           info={groupLinkInfo}
           label={
             <label htmlFor={groupLinkSelectId}>
-              {i18n('ConversationDetails--group-link')}
+              {i18n('icu:ConversationDetails--group-link')}
             </label>
           }
           right={
@@ -108,11 +124,11 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
                 onChange={createEventHandler(changeHasGroupLink)}
                 options={[
                   {
-                    text: i18n('on'),
+                    text: i18n('icu:on'),
                     value: 'true',
                   },
                   {
-                    text: i18n('off'),
+                    text: i18n('icu:off'),
                     value: 'false',
                   },
                 ]}
@@ -130,15 +146,15 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
             <PanelRow
               icon={
                 <ConversationDetailsIcon
-                  ariaLabel={i18n('GroupLinkManagement--share')}
+                  ariaLabel={i18n('icu:GroupLinkManagement--share')}
                   icon={IconType.share}
                 />
               }
-              label={i18n('GroupLinkManagement--share')}
+              label={i18n('icu:GroupLinkManagement--share')}
               ref={!isAdmin ? focusRef : undefined}
               onClick={() => {
                 if (conversation.groupLink) {
-                  copyGroupLink(conversation.groupLink);
+                  drop(copyGroupLink(conversation.groupLink));
                 }
               }}
             />
@@ -146,11 +162,11 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
               <PanelRow
                 icon={
                   <ConversationDetailsIcon
-                    ariaLabel={i18n('GroupLinkManagement--reset')}
+                    ariaLabel={i18n('icu:GroupLinkManagement--reset')}
                     icon={IconType.reset}
                   />
                 }
-                label={i18n('GroupLinkManagement--reset')}
+                label={i18n('icu:GroupLinkManagement--reset')}
                 onClick={() => setHasGenerateNewLinkDialog(true)}
               />
             ) : null}
@@ -159,10 +175,10 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
           {isAdmin ? (
             <PanelSection>
               <PanelRow
-                info={i18n('GroupLinkManagement--approve-info')}
+                info={i18n('icu:GroupLinkManagement--approve-info')}
                 label={
                   <label htmlFor={approveSelectId}>
-                    {i18n('GroupLinkManagement--approve-label')}
+                    {i18n('icu:GroupLinkManagement--approve-label')}
                   </label>
                 }
                 right={
@@ -173,11 +189,11 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
                     )}
                     options={[
                       {
-                        text: i18n('on'),
+                        text: i18n('icu:on'),
                         value: 'true',
                       },
                       {
-                        text: i18n('off'),
+                        text: i18n('icu:off'),
                         value: 'false',
                       },
                     ]}
@@ -191,4 +207,4 @@ export const GroupLinkManagement: React.ComponentType<PropsType> = ({
       ) : null}
     </>
   );
-};
+}

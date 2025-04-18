@@ -1,7 +1,8 @@
-// Copyright 2018-2020 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { app, dialog, clipboard } from 'electron';
+import os from 'node:os';
 
 import * as Errors from '../ts/types/errors';
 import { redactAll } from '../ts/util/privacy';
@@ -13,35 +14,40 @@ let quitText = 'Quit';
 let copyErrorAndQuitText = 'Copy error and quit';
 
 function handleError(prefix: string, error: Error): void {
+  const formattedError = Errors.toLogFormat(error);
   if (console._error) {
-    console._error(`${prefix}:`, Errors.toLogFormat(error));
+    console._error(`${prefix}:`, formattedError);
   }
-  console.error(`${prefix}:`, Errors.toLogFormat(error));
+  console.error(`${prefix}:`, formattedError);
 
   if (app.isReady()) {
     // title field is not shown on macOS, so we don't use it
     const buttonIndex = dialog.showMessageBoxSync({
       buttons: [quitText, copyErrorAndQuitText],
       defaultId: 0,
-      detail: redactAll(error.stack || ''),
+      detail: redactAll(formattedError),
       message: prefix,
       noLink: true,
       type: 'error',
     });
 
     if (buttonIndex === 1) {
-      clipboard.writeText(`${prefix}\n\n${redactAll(error.stack || '')}`);
+      clipboard.writeText(
+        `${prefix}\n\n${redactAll(formattedError)}\n\n` +
+          `App Version: ${app.getVersion()}\n` +
+          `OS: ${os.platform()}`
+      );
     }
   } else {
-    dialog.showErrorBox(prefix, error.stack || '');
+    dialog.showErrorBox(prefix, formattedError);
   }
 
   app.exit(1);
 }
 
 export const updateLocale = (locale: LocaleType): void => {
-  quitText = locale.i18n('quit');
-  copyErrorAndQuitText = locale.i18n('copyErrorAndQuit');
+  quitText = locale.i18n('icu:quit');
+  copyErrorAndQuitText = locale.i18n('icu:copyErrorAndQuit');
 };
 
 function _getError(reason: unknown): Error {

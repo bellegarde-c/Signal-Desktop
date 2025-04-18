@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { isNumber, compact, isEmpty, range } from 'lodash';
@@ -8,11 +8,16 @@ import LinkifyIt from 'linkify-it';
 import { maybeParseUrl } from '../util/url';
 import { replaceEmojiWithSpaces } from '../util/emoji';
 
-import type { AttachmentType } from './Attachment';
+import type { AttachmentWithHydratedData } from './Attachment';
+import {
+  artAddStickersRoute,
+  groupInvitesRoute,
+  linkCallRoute,
+} from '../util/signalRoutes';
+import type { Backups } from '../protobuf';
+import type { LinkPreviewType } from './message/LinkPreviews';
 
-export type LinkPreviewImage = AttachmentType & {
-  data: Uint8Array;
-};
+export type LinkPreviewImage = AttachmentWithHydratedData;
 
 export type LinkPreviewResult = {
   title: string | null;
@@ -34,23 +39,85 @@ export enum LinkPreviewSourceType {
 
 export type MaybeGrabLinkPreviewOptionsType = Readonly<{
   caretLocation?: number;
+  conversationId?: string;
   mode?: 'conversation' | 'story';
 }>;
 
 export type AddLinkPreviewOptionsType = Readonly<{
+  conversationId?: string;
   disableFetch?: boolean;
 }>;
 
-const linkify = LinkifyIt();
+const linkify = new LinkifyIt();
+
+export function isValidLink(maybeUrl: string | undefined): boolean {
+  if (maybeUrl == null) {
+    return false;
+  }
+
+  try {
+    const url = new URL(maybeUrl);
+    return url.protocol === 'https:';
+  } catch (_error) {
+    return false;
+  }
+}
 
 export function shouldPreviewHref(href: string): boolean {
   const url = maybeParseUrl(href);
   return Boolean(
     url &&
       url.protocol === 'https:' &&
-      url.hostname !== 'debuglogs.org' &&
+      !isDomainExcluded(url) &&
       !isLinkSneaky(href)
   );
+}
+
+export function isValidLinkPreview(
+  urlsInBody: Array<string>,
+  preview: LinkPreviewType | Backups.ILinkPreview,
+  { isStory }: { isStory: boolean }
+): boolean {
+  const { url } = preview;
+  if (!url) {
+    return false;
+  }
+
+  if (!shouldPreviewHref(url)) {
+    return false;
+  }
+
+  // Story link previews don't have to correspond to links in the
+  // message body.
+  if (!urlsInBody.includes(url) && !isStory) {
+    return false;
+  }
+
+  return true;
+}
+
+const EXCLUDED_DOMAINS = [
+  'debuglogs.org',
+  'example',
+  'example.com',
+  'example.net',
+  'example.org',
+  'invalid',
+  'localhost',
+  'onion',
+  'test',
+];
+
+function isDomainExcluded(url: URL): boolean {
+  for (const excludedDomain of EXCLUDED_DOMAINS) {
+    if (
+      url.hostname.endsWith(`.${excludedDomain}`) ||
+      url.hostname === excludedDomain
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const DIRECTIONAL_OVERRIDES = /[\u202c\u202d\u202e]/;
@@ -66,19 +133,23 @@ export function shouldLinkifyMessage(
   if (DIRECTIONAL_OVERRIDES.test(message)) {
     return false;
   }
-  if (UNICODE_DRAWING.test(message)) {
-    return false;
-  }
 
   return true;
 }
 
+export function isCallLink(link = ''): boolean {
+  const url = maybeParseUrl(link);
+  return url?.protocol === 'https:' && linkCallRoute.isMatch(url);
+}
+
 export function isStickerPack(link = ''): boolean {
-  return link.startsWith('https://signal.art/addstickers/');
+  const url = maybeParseUrl(link);
+  return url?.protocol === 'https:' && artAddStickersRoute.isMatch(url);
 }
 
 export function isGroupLink(link = ''): boolean {
-  return link.startsWith('https://signal.group/');
+  const url = maybeParseUrl(link);
+  return url?.protocol === 'https:' && groupInvitesRoute.isMatch(url);
 }
 
 export function findLinks(text: string, caretLocation?: number): Array<string> {
@@ -111,6 +182,14 @@ export function findLinks(text: string, caretLocation?: number): Array<string> {
       return null;
     })
   );
+}
+
+export function getSafeDomain(href: string): string | undefined {
+  try {
+    return getDomain(href);
+  } catch {
+    return undefined;
+  }
 }
 
 export function getDomain(href: string): string {
@@ -153,13 +232,17 @@ const VALID_URI_CHARACTERS = new Set([
   '_',
   '~',
 ]);
-const ASCII_PATTERN = new RegExp('[\\u0020-\\u007F]', 'g');
+const ASCII_PATTERN = /[\u0020-\u007F]/g;
 const MAX_HREF_LENGTH = 2 ** 12;
 
 export function isLinkSneaky(href: string): boolean {
   // This helps users avoid extremely long links (which could be hiding something
   //   sketchy) and also sidesteps the performance implications of extremely long hrefs.
   if (href.length > MAX_HREF_LENGTH) {
+    return true;
+  }
+
+  if (UNICODE_DRAWING.test(href)) {
     return true;
   }
 

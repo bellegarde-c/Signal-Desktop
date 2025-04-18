@@ -1,57 +1,122 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import {
   DecryptionErrorMessage,
   PlaintextContent,
 } from '@signalapp/libsignal-client';
-import { isBoolean, isNumber } from 'lodash';
+import { isNumber, random } from 'lodash';
+import type PQueue from 'p-queue';
 
 import * as Bytes from '../Bytes';
-import dataInterface from '../sql/Client';
+import { DataReader, DataWriter } from '../sql/Client';
 import { isProduction } from './version';
 import { strictAssert } from './assert';
-import { getSendOptions } from './getSendOptions';
-import { handleMessageSend } from './handleMessageSend';
 import { isGroupV2 } from './whatTypeOfConversation';
 import { isOlderThan } from './timestamp';
 import { parseIntOrThrow } from './parseIntOrThrow';
 import * as RemoteConfig from '../RemoteConfig';
 import { Address } from '../types/Address';
 import { QualifiedAddress } from '../types/QualifiedAddress';
-import { UUID } from '../types/UUID';
-import {
-  ToastInternalError,
-  ToastInternalErrorKind,
-} from '../components/ToastInternalError';
-import { showToast } from './showToast';
+import type { AciString, ServiceIdString } from '../types/ServiceId';
+import { ToastType } from '../types/Toast';
 import * as Errors from '../types/errors';
 
 import type { ConversationModel } from '../models/conversations';
 import type {
   DecryptionErrorEvent,
   DecryptionErrorEventData,
+  InvalidPlaintextEvent,
   RetryRequestEvent,
   RetryRequestEventData,
+  SuccessfulDecryptEvent,
 } from '../textsecure/messageReceiverEvents';
 
 import { SignalService as Proto } from '../protobuf';
 import * as log from '../logging/log';
-import MessageSender from '../textsecure/SendMessage';
+import type MessageSender from '../textsecure/SendMessage';
 import type { StoryDistributionListDataType } from '../state/ducks/storyDistributionLists';
+import { drop } from './drop';
+import { conversationJobQueue } from '../jobs/conversationJobQueue';
+import { incrementMessageCounter } from './incrementMessageCounter';
+import { SECOND } from './durations';
+import { sleep } from './sleep';
 
 const RETRY_LIMIT = 5;
 
-// Note: Neither of the the two functions onRetryRequest and onDecrytionError use a job
-//   queue to make sure sends are reliable. That's unnecessary because these tasks are
-//   tied to incoming message processing queue, and will only confirm() completion on
-//   successful send.
+type RetryKeyType = `${AciString}.${number}:${number}`;
+const retryRecord = new Map<RetryKeyType, number>();
+
+const DELAY_UNIT = window.SignalCI ? 100 : SECOND;
 
 // Entrypoints
 
-const retryRecord = new Map<number, number>();
+export function onSuccessfulDecrypt(event: SuccessfulDecryptEvent): void {
+  const key = getRetryKey(event.data);
+  unregisterError(key);
+}
 
-export function _getRetryRecord(): Map<number, number> {
+export function getOnDecryptionError(getDecryptionErrorQueue: () => PQueue) {
+  return (event: DecryptionErrorEvent): void => {
+    const key = getRetryKey(event.decryptionError);
+    const logId = `decryption-error(${key})`;
+    if (isErrorRegistered(key)) {
+      log.warn(`${logId}: key registered before queueing job; dropping.`);
+      event.confirm();
+      return;
+    }
+
+    const needsDelay = !getDecryptionErrorQueue().isPaused;
+
+    registerError(key);
+    drop(
+      getDecryptionErrorQueue().add(async () => {
+        if (needsDelay) {
+          const jitter = random(5) * DELAY_UNIT;
+          const delay = DELAY_UNIT + jitter;
+          log.warn(`${logId}: delay needed; sleeping for ${delay}ms`);
+          await sleep(delay);
+        }
+
+        if (!isErrorRegistered(key)) {
+          log.warn(`${logId}: key unregistered before job ran; dropping.`);
+          event.confirm();
+          return;
+        }
+        try {
+          await handleDecryptionError(event);
+        } finally {
+          unregisterError(key);
+        }
+      })
+    );
+  };
+}
+
+export function getRetryKey({
+  senderAci,
+  senderDevice,
+  timestamp,
+}: {
+  senderAci: AciString;
+  senderDevice: number;
+  timestamp: number;
+}): RetryKeyType {
+  return `${senderAci}.${senderDevice}:${timestamp}`;
+}
+
+const registeredErrors = new Set<RetryKeyType>();
+export function registerError(key: RetryKeyType): void {
+  registeredErrors.add(key);
+}
+export function isErrorRegistered(key: RetryKeyType): boolean {
+  return registeredErrors.has(key);
+}
+export function unregisterError(key: RetryKeyType): void {
+  registeredErrors.delete(key);
+}
+
+export function _getRetryRecord(): Map<string, number> {
   return retryRecord;
 }
 
@@ -60,11 +125,11 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
   const {
     groupId: requestGroupId,
     requesterDevice,
-    requesterUuid,
+    requesterAci,
     senderDevice,
     sentAt,
   } = retryRequest;
-  const logId = `${requesterUuid}.${requesterDevice} ${sentAt}.${senderDevice}`;
+  const logId = `${requesterAci}.${requesterDevice} ${sentAt}.${senderDevice}`;
 
   log.info(`onRetryRequest/${logId}: Starting...`);
 
@@ -76,8 +141,13 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
     return;
   }
 
-  const retryCount = (retryRecord.get(sentAt) || 0) + 1;
-  retryRecord.set(sentAt, retryCount);
+  const retryKey = getRetryKey({
+    senderAci: requesterAci,
+    senderDevice: requesterDevice,
+    timestamp: sentAt,
+  });
+  const retryCount = (retryRecord.get(retryKey) || 0) + 1;
+  retryRecord.set(retryKey, retryCount);
   if (retryCount > RETRY_LIMIT) {
     log.warn(
       `onRetryRequest/${logId}: retryCount is ${retryCount}; returning early.`
@@ -102,7 +172,7 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
   } catch (error) {
     log.warn(
       `onRetryRequest/${logId}: Failed to parse integer from desktop.retryRespondMaxAge feature flag`,
-      error && error.stack ? error.stack : error
+      Errors.toLogFormat(error)
     );
   }
 
@@ -117,9 +187,9 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
     return;
   }
 
-  const sentProto = await window.Signal.Data.getSentProtoByRecipient({
+  const sentProto = await DataWriter.getSentProtoByRecipient({
     now: Date.now(),
-    recipientUuid: requesterUuid,
+    recipientServiceId: requesterAci,
     timestamp: sentAt,
   });
 
@@ -145,7 +215,7 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
     logId,
     messageIds,
     requestGroupId,
-    requesterUuid,
+    requesterAci,
     timestamp,
   });
   // eslint-disable-next-line prefer-destructuring
@@ -161,7 +231,7 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
       contentProto,
       logId,
       messaging,
-      requesterUuid,
+      requesterAci,
       timestamp,
     });
     if (!contentProto) {
@@ -171,26 +241,20 @@ export async function onRetryRequest(event: RetryRequestEvent): Promise<void> {
   const story = Boolean(contentProto.storyMessage);
 
   const recipientConversation = window.ConversationController.getOrCreate(
-    requesterUuid,
+    requesterAci,
     'private'
   );
-  const sendOptions = await getSendOptions(recipientConversation.attributes, {
-    story,
-  });
-  const promise = messaging.sendMessageProtoAndWait({
+  const protoToSend = new Proto.Content(contentProto);
+
+  await conversationJobQueue.add({
+    type: 'SavedProto',
+    conversationId: recipientConversation.id,
     contentHint,
     groupId,
-    options: sendOptions,
-    proto: new Proto.Content(contentProto),
-    recipients: [requesterUuid],
+    protoBase64: Bytes.toBase64(Proto.Content.encode(protoToSend).finish()),
+    story,
     timestamp,
     urgent,
-    story,
-  });
-
-  await handleMessageSend(promise, {
-    messageIds: [],
-    sendType: 'resendFromLog',
   });
 
   confirm();
@@ -207,62 +271,74 @@ function maybeShowDecryptionToast(
   }
 
   log.info(`maybeShowDecryptionToast/${logId}: Showing decryption error toast`);
-  showToast(ToastInternalError, {
-    kind: ToastInternalErrorKind.DecryptionError,
-    deviceId,
-    name,
-    onShowDebugLog: () => window.showDebugLog(),
+  window.reduxActions.toast.showToast({
+    toastType: ToastType.DecryptionError,
+    parameters: {
+      deviceId,
+      name,
+    },
   });
 }
 
-export async function onDecryptionError(
+export function onInvalidPlaintextMessage({
+  data,
+}: InvalidPlaintextEvent): void {
+  const { senderAci, senderDevice, timestamp } = data;
+  const logId = `${senderAci}.${senderDevice} ${timestamp}`;
+
+  log.info(`onInvalidPlaintextMessage/${logId}: Starting...`);
+
+  const conversation = window.ConversationController.getOrCreate(
+    senderAci,
+    'private'
+  );
+
+  const name = conversation.getTitle();
+  maybeShowDecryptionToast(logId, name, senderDevice);
+}
+
+export async function handleDecryptionError(
   event: DecryptionErrorEvent
 ): Promise<void> {
   const { confirm, decryptionError } = event;
-  const { senderUuid, senderDevice, timestamp } = decryptionError;
-  const logId = `${senderUuid}.${senderDevice} ${timestamp}`;
+  const { senderAci, senderDevice, timestamp } = decryptionError;
+  const logId = `${senderAci}.${senderDevice} ${timestamp}`;
 
-  log.info(`onDecryptionError/${logId}: Starting...`);
+  log.info(`handleDecryptionError/${logId}: Starting...`);
 
-  const retryCount = (retryRecord.get(timestamp) || 0) + 1;
-  retryRecord.set(timestamp, retryCount);
+  const retryKey = getRetryKey(decryptionError);
+  const retryCount = (retryRecord.get(retryKey) || 0) + 1;
+  retryRecord.set(retryKey, retryCount);
   if (retryCount > RETRY_LIMIT) {
     log.warn(
-      `onDecryptionError/${logId}: retryCount is ${retryCount}; returning early.`
+      `handleDecryptionError/${logId}: retryCount is ${retryCount}; returning early.`
     );
     confirm();
     return;
   }
 
   const conversation = window.ConversationController.getOrCreate(
-    senderUuid,
+    senderAci,
     'private'
   );
-  if (!conversation.get('capabilities')?.senderKey) {
-    await conversation.getProfiles();
-  }
-
   const name = conversation.getTitle();
   maybeShowDecryptionToast(logId, name, senderDevice);
 
-  if (
-    conversation.get('capabilities')?.senderKey &&
-    RemoteConfig.isEnabled('desktop.senderKey.retry')
-  ) {
+  if (RemoteConfig.isEnabled('desktop.senderKey.retry')) {
     await requestResend(decryptionError);
   } else {
     await startAutomaticSessionReset(decryptionError);
   }
 
   confirm();
-  log.info(`onDecryptionError/${logId}: ...complete`);
+  log.info(`handleDecryptionError/${logId}: ...complete`);
 }
 
 // Helpers
 
 async function archiveSessionOnMatch({
   ratchetKey,
-  requesterUuid,
+  requesterAci,
   requesterDevice,
   senderDevice,
 }: RetryRequestEventData): Promise<boolean> {
@@ -274,10 +350,10 @@ async function archiveSessionOnMatch({
     return false;
   }
 
-  const ourUuid = window.textsecure.storage.user.getCheckedUuid();
+  const ourAci = window.textsecure.storage.user.getCheckedAci();
   const address = new QualifiedAddress(
-    ourUuid,
-    Address.create(requesterUuid, requesterDevice)
+    ourAci,
+    Address.create(requesterAci, requesterDevice)
   );
   const session = await window.textsecure.storage.protocol.loadSession(address);
 
@@ -297,8 +373,7 @@ async function sendDistributionMessageOrNullMessage(
   options: RetryRequestEventData,
   didArchive: boolean
 ): Promise<void> {
-  const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-  const { groupId, requesterUuid } = options;
+  const { groupId, requesterAci } = options;
   let sentDistributionMessage = false;
   log.info(`sendDistributionMessageOrNullMessage/${logId}: Starting...`);
 
@@ -310,18 +385,17 @@ async function sendDistributionMessageOrNullMessage(
   }
 
   const conversation = window.ConversationController.getOrCreate(
-    requesterUuid,
+    requesterAci,
     'private'
   );
-  const sendOptions = await getSendOptions(conversation.attributes);
 
   if (groupId) {
     const group = window.ConversationController.get(groupId);
     const distributionId = group?.get('senderKeyInfo')?.distributionId;
 
-    if (group && !group.hasMember(new UUID(requesterUuid))) {
+    if (group && !group.hasMember(requesterAci)) {
       throw new Error(
-        `sendDistributionMessageOrNullMessage/${logId}: Requester ${requesterUuid} is not a member of ${conversation.idForLogging()}`
+        `sendDistributionMessageOrNullMessage/${logId}: Requester ${requesterAci} is not a member of ${conversation.idForLogging()}`
       );
     }
 
@@ -331,25 +405,16 @@ async function sendDistributionMessageOrNullMessage(
       );
 
       try {
-        await handleMessageSend(
-          messaging.sendSenderKeyDistributionMessage(
-            {
-              contentHint: ContentHint.RESENDABLE,
-              distributionId,
-              groupId,
-              identifiers: [requesterUuid],
-              throwIfNotInDatabase: true,
-              urgent: false,
-            },
-            sendOptions
-          ),
-          { messageIds: [], sendType: 'senderKeyDistributionMessage' }
-        );
+        await conversationJobQueue.add({
+          type: 'SenderKeyDistribution',
+          conversationId: conversation.id,
+          groupId,
+        });
         sentDistributionMessage = true;
       } catch (error) {
         log.error(
-          `sendDistributionMessageOrNullMessage/${logId}: Failed to send sender key distribution message`,
-          error && error.stack ? error.stack : error
+          `sendDistributionMessageOrNullMessage/${logId}: Failed to queue sender key distribution message`,
+          Errors.toLogFormat(error)
         );
       }
     }
@@ -369,24 +434,13 @@ async function sendDistributionMessageOrNullMessage(
 
     // Enqueue a null message using the newly-created session
     try {
-      const nullMessage = MessageSender.getNullMessage({
-        uuid: requesterUuid,
+      await conversationJobQueue.add({
+        type: 'NullMessage',
+        conversationId: conversation.id,
       });
-      await handleMessageSend(
-        messaging.sendIndividualProto({
-          ...nullMessage,
-          options: sendOptions,
-          proto: Proto.Content.decode(
-            Bytes.fromBase64(nullMessage.protoBase64)
-          ),
-          timestamp: Date.now(),
-          urgent: isBoolean(nullMessage.urgent) ? nullMessage.urgent : true,
-        }),
-        { messageIds: [], sendType: nullMessage.type }
-      );
     } catch (error) {
       log.error(
-        'sendDistributionMessageOrNullMessage: Failed to send null message',
+        'sendDistributionMessageOrNullMessage: Failed to queue null message',
         Errors.toLogFormat(error)
       );
     }
@@ -408,7 +462,7 @@ async function getRetryConversation({
   }
 
   const [messageId] = messageIds;
-  const message = await window.Signal.Data.getMessageById(messageId);
+  const message = await DataReader.getMessageById(messageId);
   if (!message) {
     log.warn(
       `getRetryConversation/${logId}: Unable to find message ${messageId}`
@@ -426,26 +480,26 @@ async function checkDistributionListAndAddSKDM({
   timestamp,
   confirm,
   logId,
-  requesterUuid,
+  requesterAci,
   messaging,
 }: {
   contentProto: Proto.IContent;
   timestamp: number;
   confirm: () => void;
-  requesterUuid: string;
+  requesterAci: AciString;
   logId: string;
   messaging: MessageSender;
 }): Promise<Proto.IContent | undefined> {
   let distributionList: StoryDistributionListDataType | undefined;
   const { storyDistributionLists } = window.reduxStore.getState();
-  const membersByListId = new Map<string, Set<string>>();
+  const membersByListId = new Map<string, Set<ServiceIdString>>();
   const listsById = new Map<string, StoryDistributionListDataType>();
   storyDistributionLists.distributionLists.forEach(list => {
-    membersByListId.set(list.id, new Set(list.memberUuids));
+    membersByListId.set(list.id, new Set(list.memberServiceIds));
     listsById.set(list.id, list);
   });
 
-  const messages = await dataInterface.getMessagesBySentAt(timestamp);
+  const messages = await DataReader.getMessagesBySentAt(timestamp);
   const isInAnyDistributionList = messages.some(message => {
     const listId = message.storyDistributionListId;
     if (!listId) {
@@ -457,7 +511,7 @@ async function checkDistributionListAndAddSKDM({
       return false;
     }
 
-    const isInList = members.has(requesterUuid);
+    const isInList = members.has(requesterAci);
 
     if (isInList) {
       distributionList = listsById.get(listId);
@@ -468,7 +522,7 @@ async function checkDistributionListAndAddSKDM({
 
   if (!isInAnyDistributionList) {
     log.warn(
-      `checkDistributionListAndAddSKDM/${logId}: requesterUuid is not in distribution list. Dropping.`
+      `checkDistributionListAndAddSKDM/${logId}: requesterAci is not in distribution list. Dropping.`
     );
     confirm();
     return undefined;
@@ -478,10 +532,9 @@ async function checkDistributionListAndAddSKDM({
     distributionList,
     `checkDistributionListAndAddSKDM/${logId}: Should have a distribution list by this point`
   );
-  const distributionDetails =
-    await window.Signal.Data.getStoryDistributionWithMembers(
-      distributionList.id
-    );
+  const distributionDetails = await DataReader.getStoryDistributionWithMembers(
+    distributionList.id
+  );
   const distributionId = distributionDetails?.senderKeyInfo?.distributionId;
   if (!distributionId) {
     log.warn(
@@ -508,14 +561,14 @@ async function maybeAddSenderKeyDistributionMessage({
   logId,
   messageIds,
   requestGroupId,
-  requesterUuid,
+  requesterAci,
   timestamp,
 }: {
   contentProto: Proto.IContent;
   logId: string;
   messageIds: Array<string>;
   requestGroupId?: string;
-  requesterUuid: string;
+  requesterAci: AciString;
   timestamp: number;
 }): Promise<{
   contentProto: Proto.IContent;
@@ -543,9 +596,9 @@ async function maybeAddSenderKeyDistributionMessage({
     };
   }
 
-  if (!conversation.hasMember(new UUID(requesterUuid))) {
+  if (!conversation.hasMember(requesterAci)) {
     throw new Error(
-      `maybeAddSenderKeyDistributionMessage/${logId}: Recipient ${requesterUuid} is not a member of ${conversation.idForLogging()}`
+      `maybeAddSenderKeyDistributionMessage/${logId}: Recipient ${requesterAci} is not a member of ${conversation.idForLogging()}`
     );
   }
 
@@ -588,10 +641,10 @@ async function requestResend(decryptionError: DecryptionErrorEventData) {
     receivedAtCounter,
     receivedAtDate,
     senderDevice,
-    senderUuid,
+    senderAci,
     timestamp,
   } = decryptionError;
-  const logId = `${senderUuid}.${senderDevice} ${timestamp}`;
+  const logId = `${senderAci}.${senderDevice} ${timestamp}`;
 
   log.info(`requestResend/${logId}: Starting...`, {
     cipherTextBytesLength: cipherTextBytes?.byteLength,
@@ -607,16 +660,12 @@ async function requestResend(decryptionError: DecryptionErrorEventData) {
 
   // 1. Find the target conversation
 
-  const group = groupId
-    ? window.ConversationController.get(groupId)
-    : undefined;
   const sender = window.ConversationController.getOrCreate(
-    senderUuid,
+    senderAci,
     'private'
   );
-  const conversation = group || sender;
 
-  // 2. Send resend request
+  // 2. Prepare resend request
 
   if (!cipherTextBytes || !isNumber(cipherTextType)) {
     log.warn(
@@ -626,83 +675,40 @@ async function requestResend(decryptionError: DecryptionErrorEventData) {
     return;
   }
 
-  try {
-    const message = DecryptionErrorMessage.forOriginal(
-      Buffer.from(cipherTextBytes),
-      cipherTextType,
-      timestamp,
-      senderDevice
-    );
+  const message = DecryptionErrorMessage.forOriginal(
+    Buffer.from(cipherTextBytes),
+    cipherTextType,
+    timestamp,
+    senderDevice
+  );
 
-    const plaintext = PlaintextContent.from(message);
-    const options = await getSendOptions(conversation.attributes);
-    const result = await handleMessageSend(
-      messaging.sendRetryRequest({
-        plaintext,
-        options,
-        groupId,
-        uuid: senderUuid,
-      }),
-      { messageIds: [], sendType: 'retryRequest' }
-    );
-    if (result && result.errors && result.errors.length > 0) {
-      throw result.errors[0];
-    }
+  const plaintext = PlaintextContent.from(message);
+
+  // 3. Queue resend request
+
+  try {
+    await conversationJobQueue.add({
+      type: 'ResendRequest',
+      contentHint,
+      conversationId: sender.id,
+      groupId,
+      plaintext: Bytes.toBase64(plaintext.serialize()),
+      receivedAtCounter,
+      receivedAtDate,
+      senderAci,
+      senderDevice,
+      timestamp,
+    });
   } catch (error) {
     log.error(
-      `requestResend/${logId}: Failed to send retry request, failing over to automatic reset`,
-      error && error.stack ? error.stack : error
+      `requestResend/${logId}: Failed to queue resend request, failing over to automatic reset`,
+      Errors.toLogFormat(error)
     );
     startAutomaticSessionReset(decryptionError);
-    return;
   }
-
-  const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-  // 3. Determine how to represent this to the user. Three different options.
-
-  // We believe that it could be successfully re-sent, so we'll add a placeholder.
-  if (contentHint === ContentHint.RESENDABLE) {
-    const { retryPlaceholders } = window.Signal.Services;
-    strictAssert(retryPlaceholders, 'requestResend: adding placeholder');
-
-    log.info(`requestResend/${logId}: Adding placeholder`);
-
-    const state = window.reduxStore.getState();
-    const selectedId = state.conversations.selectedConversationId;
-    const wasOpened = selectedId === conversation.id;
-
-    await retryPlaceholders.add({
-      conversationId: conversation.get('id'),
-      receivedAt: receivedAtDate,
-      receivedAtCounter,
-      sentAt: timestamp,
-      senderUuid,
-      wasOpened,
-    });
-
-    return;
-  }
-
-  // This message cannot be resent. We'll show no error and trust the other side to
-  //   reset their session.
-  if (contentHint === ContentHint.IMPLICIT) {
-    log.info(`requestResend/${logId}: contentHint is IMPLICIT, doing nothing.`);
-    return;
-  }
-
-  log.warn(`requestResend/${logId}: No content hint, adding error immediately`);
-  conversation.queueJob('addDeliveryIssue', async () => {
-    conversation.addDeliveryIssue({
-      receivedAt: receivedAtDate,
-      receivedAtCounter,
-      senderUuid,
-      sentAt: timestamp,
-    });
-  });
 }
 
-function scheduleSessionReset(senderUuid: string, senderDevice: number) {
+function scheduleSessionReset(senderAci: AciString, senderDevice: number) {
   // Postpone sending light session resets until the queue is empty
   const { lightSessionResetQueue } = window.Signal.Services;
 
@@ -712,36 +718,49 @@ function scheduleSessionReset(senderUuid: string, senderDevice: number) {
     );
   }
 
-  lightSessionResetQueue.add(async () => {
-    const ourUuid = window.textsecure.storage.user.getCheckedUuid();
+  drop(
+    lightSessionResetQueue.add(async () => {
+      const ourAci = window.textsecure.storage.user.getCheckedAci();
 
-    await window.textsecure.storage.protocol.lightSessionReset(
-      new QualifiedAddress(ourUuid, Address.create(senderUuid, senderDevice))
-    );
-  });
+      await window.textsecure.storage.protocol.lightSessionReset(
+        new QualifiedAddress(ourAci, Address.create(senderAci, senderDevice))
+      );
+    })
+  );
 }
 
-function startAutomaticSessionReset(decryptionError: DecryptionErrorEventData) {
-  const { senderUuid, senderDevice, timestamp } = decryptionError;
-  const logId = `${senderUuid}.${senderDevice} ${timestamp}`;
+export function startAutomaticSessionReset(
+  decryptionError: Pick<
+    DecryptionErrorEventData,
+    'senderAci' | 'senderDevice' | 'timestamp'
+  >
+): void {
+  const { senderAci, senderDevice, timestamp } = decryptionError;
+  const logId = `${senderAci}.${senderDevice} ${timestamp}`;
 
   log.info(`startAutomaticSessionReset/${logId}: Starting...`);
 
-  scheduleSessionReset(senderUuid, senderDevice);
+  scheduleSessionReset(senderAci, senderDevice);
 
   const conversation = window.ConversationController.lookupOrCreate({
-    uuid: senderUuid,
+    serviceId: senderAci,
+    reason: 'startAutomaticSessionReset',
   });
   if (!conversation) {
     log.warn(
-      'onLightSessionReset: No conversation, cannot add message to timeline'
+      'startAutomaticSessionReset: No conversation, cannot add message to timeline'
     );
     return;
   }
 
   const receivedAt = Date.now();
-  const receivedAtCounter = window.Signal.Util.incrementMessageCounter();
-  conversation.queueJob('addChatSessionRefreshed', async () => {
-    conversation.addChatSessionRefreshed({ receivedAt, receivedAtCounter });
-  });
+  const receivedAtCounter = incrementMessageCounter();
+  drop(
+    conversation.queueJob('addChatSessionRefreshed', async () => {
+      await conversation.addChatSessionRefreshed({
+        receivedAt,
+        receivedAtCounter,
+      });
+    })
+  );
 }

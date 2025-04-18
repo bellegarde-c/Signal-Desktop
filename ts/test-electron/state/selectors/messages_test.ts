@@ -10,6 +10,10 @@ import type {
   ShallowChallengeError,
 } from '../../../model-types.d';
 import type { ConversationType } from '../../../state/ducks/conversations';
+import {
+  getDefaultConversation,
+  getDefaultGroup,
+} from '../../../test-both/helpers/getDefaultConversation';
 
 import {
   canDeleteForEveryone,
@@ -69,8 +73,9 @@ describe('state/selectors/messages', () => {
         type: 'incoming' as const,
         sent_at: Date.now() - 1000,
       };
+      const isMe = false;
 
-      assert.isFalse(canDeleteForEveryone(message));
+      assert.isFalse(canDeleteForEveryone(message, isMe));
     });
 
     it('returns false for messages that were already deleted for everyone', () => {
@@ -89,14 +94,15 @@ describe('state/selectors/messages', () => {
           },
         },
       };
+      const isMe = false;
 
-      assert.isFalse(canDeleteForEveryone(message));
+      assert.isFalse(canDeleteForEveryone(message, isMe));
     });
 
     it('returns false for messages that were are too old to delete', () => {
       const message = {
         type: 'outgoing' as const,
-        sent_at: Date.now() - moment.duration(4, 'hours').asMilliseconds(),
+        sent_at: Date.now() - moment.duration(25, 'hours').asMilliseconds(),
         sendStateByConversationId: {
           [ourConversationId]: {
             status: SendStatus.Read,
@@ -108,8 +114,9 @@ describe('state/selectors/messages', () => {
           },
         },
       };
+      const isMe = false;
 
-      assert.isFalse(canDeleteForEveryone(message));
+      assert.isFalse(canDeleteForEveryone(message, isMe));
     });
 
     it("returns false for messages that haven't been sent to anyone", () => {
@@ -127,8 +134,9 @@ describe('state/selectors/messages', () => {
           },
         },
       };
+      const isMe = false;
 
-      assert.isFalse(canDeleteForEveryone(message));
+      assert.isFalse(canDeleteForEveryone(message, isMe));
     });
 
     it('returns true for messages that meet all criteria for deletion', () => {
@@ -150,21 +158,14 @@ describe('state/selectors/messages', () => {
           },
         },
       };
+      const isMe = false;
 
-      assert.isTrue(canDeleteForEveryone(message));
+      assert.isTrue(canDeleteForEveryone(message, isMe));
     });
   });
 
   describe('canReact', () => {
-    const defaultConversation: ConversationType = {
-      id: uuid(),
-      type: 'direct',
-      title: 'Test conversation',
-      isMe: false,
-      sharedGroupNames: [],
-      acceptedMessageRequest: true,
-      badges: [],
-    };
+    const defaultConversation = getDefaultConversation();
 
     it('returns false for disabled v1 groups', () => {
       const message = {
@@ -172,8 +173,7 @@ describe('state/selectors/messages', () => {
         type: 'incoming' as const,
       };
       const getConversationById = () => ({
-        ...defaultConversation,
-        type: 'group' as const,
+        ...getDefaultGroup(),
         isGroupV1AndDisabled: true,
       });
 
@@ -249,8 +249,7 @@ describe('state/selectors/messages', () => {
         },
       };
       const getConversationById = () => ({
-        ...defaultConversation,
-        type: 'group' as const,
+        ...getDefaultGroup(),
       });
 
       assert.isTrue(canReact(message, ourConversationId, getConversationById));
@@ -284,8 +283,7 @@ describe('state/selectors/messages', () => {
         type: 'incoming' as const,
       };
       const getConversationById = () => ({
-        ...defaultConversation,
-        type: 'group' as const,
+        ...getDefaultGroup(),
         isGroupV1AndDisabled: true,
       });
 
@@ -360,10 +358,7 @@ describe('state/selectors/messages', () => {
           },
         },
       };
-      const getConversationById = () => ({
-        ...defaultConversation,
-        type: 'group' as const,
-      });
+      const getConversationById = () => getDefaultGroup();
 
       assert.isTrue(canReply(message, ourConversationId, getConversationById));
     });

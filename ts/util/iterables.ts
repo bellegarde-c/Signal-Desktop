@@ -1,4 +1,4 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /* eslint-disable max-classes-per-file */
@@ -116,6 +116,7 @@ export function collectFirst<T, S>(
   iterable: Iterable<T>,
   fn: (value: T) => S | undefined
 ): S | undefined {
+  // eslint-disable-next-line no-unreachable-loop
   for (const v of collect(iterable, fn)) {
     return v;
   }
@@ -256,6 +257,23 @@ export function repeat<T>(value: T): Iterable<T> {
   return new RepeatIterable(value);
 }
 
+export function* chunk<A>(
+  iterable: Iterable<A>,
+  chunkSize: number
+): Iterable<Array<A>> {
+  let aChunk: Array<A> = [];
+  for (const item of iterable) {
+    aChunk.push(item);
+    if (aChunk.length === chunkSize) {
+      yield aChunk;
+      aChunk = [];
+    }
+  }
+  if (aChunk.length > 0) {
+    yield aChunk;
+  }
+}
+
 class RepeatIterable<T> implements Iterable<T> {
   constructor(private readonly value: T) {}
 
@@ -265,17 +283,17 @@ class RepeatIterable<T> implements Iterable<T> {
 }
 
 class RepeatIterator<T> implements Iterator<T> {
-  private readonly iteratorResult: IteratorResult<T>;
+  readonly #iteratorResult: IteratorResult<T>;
 
   constructor(value: Readonly<T>) {
-    this.iteratorResult = {
+    this.#iteratorResult = {
       done: false,
       value,
     };
   }
 
   next(): IteratorResult<T> {
-    return this.iteratorResult;
+    return this.#iteratorResult;
   }
 }
 
@@ -295,7 +313,10 @@ class TakeIterable<T> implements Iterable<T> {
 }
 
 class TakeIterator<T> implements Iterator<T> {
-  constructor(private readonly iterator: Iterator<T>, private amount: number) {}
+  constructor(
+    private readonly iterator: Iterator<T>,
+    private amount: number
+  ) {}
 
   next(): IteratorResult<T> {
     const nextIteration = this.iterator.next();

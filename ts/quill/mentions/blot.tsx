@@ -1,22 +1,16 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable max-classes-per-file */
-
 import React from 'react';
-import Parchment from 'parchment';
-import Quill from 'quill';
+import EmbedBlot from '@signalapp/quill-cjs/blots/embed';
 import { render } from 'react-dom';
+
 import { Emojify } from '../../components/conversation/Emojify';
+import { normalizeAci } from '../../util/normalizeAci';
 import type { MentionBlotValue } from '../util';
+import { FunEmojiLocalizationProvider } from '../../components/fun/FunEmojiLocalizationProvider';
 
-declare class QuillEmbed extends Parchment.Embed {
-  contentNode: HTMLElement;
-}
-
-const Embed: typeof QuillEmbed = Quill.import('blots/embed');
-
-export class MentionBlot extends Embed {
+export class MentionBlot extends EmbedBlot {
   static override blotName = 'mention';
 
   static override className = 'mention-blot';
@@ -32,33 +26,35 @@ export class MentionBlot extends Embed {
   }
 
   static override value(node: HTMLElement): MentionBlotValue {
-    const { uuid, title } = node.dataset;
-    if (uuid === undefined || title === undefined) {
+    const { aci, title } = node.dataset;
+    if (aci === undefined || title === undefined) {
       throw new Error(
-        `Failed to make MentionBlot with uuid: ${uuid} and title: ${title}`
+        `Failed to make MentionBlot with aci: ${aci}, title: ${title}`
       );
     }
 
     return {
-      uuid,
+      aci: normalizeAci(aci, 'quill mention blot'),
       title,
     };
   }
 
   static buildSpan(mention: MentionBlotValue, node: HTMLElement): void {
-    node.setAttribute('data-uuid', mention.uuid || '');
+    node.setAttribute('data-aci', mention.aci || '');
     node.setAttribute('data-title', mention.title || '');
     node.setAttribute('contenteditable', 'false');
 
     const mentionSpan = document.createElement('span');
 
     render(
-      <span className="module-composition-input__at-mention">
-        <bdi>
-          @
-          <Emojify text={mention.title} />
-        </bdi>
-      </span>,
+      <FunEmojiLocalizationProvider i18n={window.i18n}>
+        <span className="module-composition-input__at-mention">
+          <bdi>
+            @
+            <Emojify text={mention.title} />
+          </bdi>
+        </span>
+      </FunEmojiLocalizationProvider>,
       mentionSpan
     );
 

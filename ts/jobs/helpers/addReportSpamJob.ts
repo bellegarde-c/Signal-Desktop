@@ -2,30 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assertDev } from '../../util/assert';
+import { isDirectConversation } from '../../util/whatTypeOfConversation';
 import * as log from '../../logging/log';
-import type { ConversationType } from '../../state/ducks/conversations';
+import { isAciString } from '../../util/isAciString';
 import type { reportSpamJobQueue } from '../reportSpamJobQueue';
+import type { ConversationType } from '../../state/ducks/conversations';
 
 export async function addReportSpamJob({
   conversation,
   getMessageServerGuidsForSpam,
   jobQueue,
 }: Readonly<{
-  conversation: Readonly<ConversationType>;
+  conversation: Readonly<
+    Pick<ConversationType, 'id' | 'type' | 'serviceId' | 'reportingToken'>
+  >;
   getMessageServerGuidsForSpam: (
     conversationId: string
   ) => Promise<Array<string>>;
   jobQueue: Pick<typeof reportSpamJobQueue, 'add'>;
 }>): Promise<void> {
   assertDev(
-    conversation.type === 'direct',
+    isDirectConversation(conversation),
     'addReportSpamJob: cannot report spam for non-direct conversations'
   );
 
-  const { uuid } = conversation;
-  if (!uuid) {
+  const { serviceId: aci } = conversation;
+  if (!aci || !isAciString(aci)) {
     log.info(
-      'addReportSpamJob got a conversation with no UUID, which the server does not support. Doing nothing'
+      'addReportSpamJob got a conversation with no aci, which the server does not support. Doing nothing'
     );
     return;
   }
@@ -41,5 +45,5 @@ export async function addReportSpamJob({
     return;
   }
 
-  await jobQueue.add({ uuid, serverGuids });
+  await jobQueue.add({ aci, serverGuids, token: conversation.reportingToken });
 }

@@ -5,12 +5,11 @@ import React from 'react';
 
 import { action } from '@storybook/addon-actions';
 
-import enMessages from '../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './AvatarModalButtons';
 import { AvatarModalButtons } from './AvatarModalButtons';
-import { setupI18n } from '../util/setupI18n';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   hasChanges: Boolean(overrideProps.hasChanges),
@@ -21,24 +20,18 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/AvatarModalButtons',
-};
+} satisfies Meta<PropsType>;
 
-export const HasChanges = (): JSX.Element => (
-  <AvatarModalButtons
-    {...createProps({
-      hasChanges: true,
-    })}
-  />
-);
+export function HasChanges(): JSX.Element {
+  return (
+    <AvatarModalButtons
+      {...createProps({
+        hasChanges: true,
+      })}
+    />
+  );
+}
 
-HasChanges.story = {
-  name: 'Has changes',
-};
-
-export const NoChanges = (): JSX.Element => (
-  <AvatarModalButtons {...createProps()} />
-);
-
-NoChanges.story = {
-  name: 'No changes',
-};
+export function NoChanges(): JSX.Element {
+  return <AvatarModalButtons {...createProps()} />;
+}

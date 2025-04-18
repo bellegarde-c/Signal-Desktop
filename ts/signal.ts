@@ -1,66 +1,30 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The idea with this file is to make it webpackable for the style guide
 
+import type { ReadonlyDeep } from 'type-fest';
+
 import * as Crypto from './Crypto';
 import * as Curve from './Curve';
 import { start as conversationControllerStart } from './ConversationController';
-import Data from './sql/Client';
 import * as Groups from './groups';
-import * as OS from './OS';
+import OS from './util/os/osMain';
+import { isProduction } from './util/version';
 import * as RemoteConfig from './RemoteConfig';
-import * as Util from './util';
+import { DataReader, DataWriter } from './sql/Client';
 
 // Components
-import { AttachmentList } from './components/conversation/AttachmentList';
-import { ChatColorPicker } from './components/ChatColorPicker';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
-import { ContactModal } from './components/conversation/ContactModal';
-import { Emojify } from './components/conversation/Emojify';
-import { MessageDetail } from './components/conversation/MessageDetail';
-import { Quote } from './components/conversation/Quote';
-import { StagedLinkPreview } from './components/conversation/StagedLinkPreview';
-import { DisappearingTimeDialog } from './components/DisappearingTimeDialog';
 
 // State
-import { createChatColorPicker } from './state/roots/createChatColorPicker';
-import { createConversationDetails } from './state/roots/createConversationDetails';
 import { createApp } from './state/roots/createApp';
-import { createGroupLinkManagement } from './state/roots/createGroupLinkManagement';
-import { createGroupV1MigrationModal } from './state/roots/createGroupV1MigrationModal';
-import { createGroupV2JoinModal } from './state/roots/createGroupV2JoinModal';
-import { createMessageDetail } from './state/roots/createMessageDetail';
-import { createConversationNotificationsSettings } from './state/roots/createConversationNotificationsSettings';
-import { createGroupV2Permissions } from './state/roots/createGroupV2Permissions';
-import { createPendingInvites } from './state/roots/createPendingInvites';
 import { createSafetyNumberViewer } from './state/roots/createSafetyNumberViewer';
-import { createStickerManager } from './state/roots/createStickerManager';
-import { createStickerPreviewModal } from './state/roots/createStickerPreviewModal';
-import { createShortcutGuideModal } from './state/roots/createShortcutGuideModal';
-
-import { createStore } from './state/createStore';
-import * as appDuck from './state/ducks/app';
-import * as callingDuck from './state/ducks/calling';
-import * as conversationsDuck from './state/ducks/conversations';
-import * as emojisDuck from './state/ducks/emojis';
-import * as expirationDuck from './state/ducks/expiration';
-import * as itemsDuck from './state/ducks/items';
-import * as linkPreviewsDuck from './state/ducks/linkPreviews';
-import * as networkDuck from './state/ducks/network';
-import * as searchDuck from './state/ducks/search';
-import * as stickersDuck from './state/ducks/stickers';
-import * as updatesDuck from './state/ducks/updates';
-import * as userDuck from './state/ducks/user';
-
-import * as conversationsSelectors from './state/selectors/conversations';
-import * as searchSelectors from './state/selectors/search';
 
 // Types
 import * as TypesAttachment from './types/Attachment';
 import * as VisualAttachment from './types/VisualAttachment';
 import * as MessageType from './types/Message2';
-import { UUID } from './types/UUID';
 import { Address } from './types/Address';
 import { QualifiedAddress } from './types/QualifiedAddress';
 
@@ -70,18 +34,32 @@ import { initializeNetworkObserver } from './services/networkObserver';
 import { initializeUpdateListener } from './services/updateListener';
 import { calling } from './services/calling';
 import * as storage from './services/storage';
+import { backupsService } from './services/backups';
 
 import type { LoggerType } from './types/Logging';
 import type {
   AttachmentType,
   AttachmentWithHydratedData,
+  AddressableAttachmentType,
+  LocalAttachmentV2Type,
 } from './types/Attachment';
 import type { MessageAttributesType, QuotedMessageType } from './model-types.d';
 import type { SignalCoreType } from './window.d';
-import type { EmbeddedContactType } from './types/EmbeddedContact';
-import type { ContactWithHydratedAvatar } from './textsecure/SendMessage';
-import type { LinkPreviewType } from './types/message/LinkPreviews';
+import type {
+  EmbeddedContactType,
+  EmbeddedContactWithHydratedAvatar,
+} from './types/EmbeddedContact';
+import type {
+  LinkPreviewType,
+  LinkPreviewWithHydratedData,
+} from './types/message/LinkPreviews';
 import type { StickerType, StickerWithHydratedData } from './types/Stickers';
+
+type EncryptedReader = (
+  attachment: Partial<AddressableAttachmentType>
+) => Promise<Uint8Array>;
+
+type EncryptedWriter = (data: Uint8Array) => Promise<LocalAttachmentV2Type>;
 
 type MigrationsModuleType = {
   attachmentsPath: string;
@@ -93,6 +71,7 @@ type MigrationsModuleType = {
   ) => Promise<{ path: string; size: number }>;
   deleteAttachmentData: (path: string) => Promise<void>;
   deleteAvatar: (path: string) => Promise<void>;
+  deleteDownloadData: (path: string) => Promise<void>;
   deleteDraftFile: (path: string) => Promise<void>;
   deleteExternalMessageFiles: (
     attributes: MessageAttributesType
@@ -100,61 +79,67 @@ type MigrationsModuleType = {
   deleteSticker: (path: string) => Promise<void>;
   deleteTempFile: (path: string) => Promise<void>;
   doesAttachmentExist: (path: string) => Promise<boolean>;
+  ensureAttachmentIsReencryptable: (
+    attachment: TypesAttachment.LocallySavedAttachment
+  ) => Promise<TypesAttachment.ReencryptableAttachment>;
   getAbsoluteAttachmentPath: (path: string) => string;
   getAbsoluteAvatarPath: (src: string) => string;
   getAbsoluteBadgeImageFilePath: (path: string) => string;
+  getAbsoluteDownloadsPath: (path: string) => string;
   getAbsoluteDraftPath: (path: string) => string;
   getAbsoluteStickerPath: (path: string) => string;
   getAbsoluteTempPath: (path: string) => string;
   loadAttachmentData: (
-    attachment: Pick<AttachmentType, 'data' | 'path'>
+    attachment: Partial<AttachmentType>
   ) => Promise<AttachmentWithHydratedData>;
   loadContactData: (
-    contact: Array<EmbeddedContactType> | undefined
-  ) => Promise<Array<ContactWithHydratedAvatar> | undefined>;
+    contact: ReadonlyArray<ReadonlyDeep<EmbeddedContactType>> | undefined
+  ) => Promise<Array<EmbeddedContactWithHydratedAvatar> | undefined>;
   loadMessage: (
     message: MessageAttributesType
   ) => Promise<MessageAttributesType>;
   loadPreviewData: (
-    preview: Array<LinkPreviewType> | undefined
-  ) => Promise<Array<LinkPreviewType>>;
+    preview: ReadonlyArray<ReadonlyDeep<LinkPreviewType>> | undefined
+  ) => Promise<Array<LinkPreviewWithHydratedData>>;
   loadQuoteData: (
     quote: QuotedMessageType | null | undefined
   ) => Promise<QuotedMessageType | null>;
   loadStickerData: (
     sticker: StickerType | undefined
   ) => Promise<StickerWithHydratedData | undefined>;
-  openFileInFolder: (target: string) => Promise<void>;
-  readAttachmentData: (path: string) => Promise<Uint8Array>;
-  readDraftData: (path: string) => Promise<Uint8Array>;
-  readStickerData: (path: string) => Promise<Uint8Array>;
-  readTempData: (path: string) => Promise<Uint8Array>;
+  readAttachmentData: EncryptedReader;
+  readAvatarData: EncryptedReader;
+  readDraftData: EncryptedReader;
+  readStickerData: EncryptedReader;
+  readTempData: EncryptedReader;
   saveAttachmentToDisk: (options: {
     data: Uint8Array;
     name: string;
+    baseDir?: string;
   }) => Promise<null | { fullPath: string; name: string }>;
   processNewAttachment: (attachment: AttachmentType) => Promise<AttachmentType>;
-  processNewSticker: (stickerData: Uint8Array) => Promise<{
-    path: string;
-    width: number;
-    height: number;
-  }>;
-  processNewEphemeralSticker: (stickerData: Uint8Array) => Promise<{
-    path: string;
-    width: number;
-    height: number;
-  }>;
+  processNewSticker: (stickerData: Uint8Array) => Promise<
+    LocalAttachmentV2Type & {
+      width: number;
+      height: number;
+    }
+  >;
+  processNewEphemeralSticker: (stickerData: Uint8Array) => Promise<
+    LocalAttachmentV2Type & {
+      width: number;
+      height: number;
+    }
+  >;
   upgradeMessageSchema: (
     attributes: MessageAttributesType,
     options?: { maxVersion?: number }
   ) => Promise<MessageAttributesType>;
-  writeMessageAttachments: (
-    message: MessageAttributesType
-  ) => Promise<MessageAttributesType>;
-  writeNewAttachmentData: (data: Uint8Array) => Promise<string>;
-  writeNewDraftData: (data: Uint8Array) => Promise<string>;
-  writeNewAvatarData: (data: Uint8Array) => Promise<string>;
+  writeNewAttachmentData: EncryptedWriter;
+  writeNewDraftData: EncryptedWriter;
+  writeNewAvatarData: EncryptedWriter;
+  writeNewStickerData: EncryptedWriter;
   writeNewBadgeImageFileData: (data: Uint8Array) => Promise<string>;
+  writeNewPlaintextTempData: (data: Uint8Array) => Promise<string>;
 };
 
 export function initializeMigrations({
@@ -177,17 +162,18 @@ export function initializeMigrations({
   }
   const {
     createAbsolutePathGetter,
-    createReader,
-    createWriterForExisting,
+    createPlaintextReader,
     createWriterForNew,
     createDoesExist,
+    ensureAttachmentIsReencryptable,
     getAvatarsPath,
     getDraftPath,
+    getDownloadsPath,
     getPath,
     getStickersPath,
     getBadgesPath,
     getTempPath,
-    openFileInFolder,
+    readAndDecryptDataFromDisk,
     saveAttachmentToDisk,
   } = Attachments;
   const {
@@ -199,7 +185,52 @@ export function initializeMigrations({
   } = VisualType;
 
   const attachmentsPath = getPath(userDataPath);
-  const readAttachmentData = createReader(attachmentsPath);
+
+  function createEncryptedReader(basePath: string): EncryptedReader {
+    const fallbackReader = createPlaintextReader(basePath);
+    const pathGetter = createAbsolutePathGetter(basePath);
+
+    return async (
+      attachment: Partial<AddressableAttachmentType>
+    ): Promise<Uint8Array> => {
+      // In-memory
+      if (attachment.data != null) {
+        return attachment.data;
+      }
+
+      if (attachment.path == null) {
+        throw new Error('Attachment was not downloaded yet');
+      }
+
+      if (attachment.version !== 2) {
+        return fallbackReader(attachment.path);
+      }
+
+      if (attachment.localKey == null || attachment.size == null) {
+        throw new Error('Failed to decrypt v2 attachment');
+      }
+
+      const absolutePath = pathGetter(attachment.path);
+
+      return readAndDecryptDataFromDisk({
+        absolutePath,
+        keysBase64: attachment.localKey,
+        size: attachment.size,
+      });
+    };
+  }
+
+  function createEncryptedWriterForNew(basePath: string): EncryptedWriter {
+    const pathGetter = createAbsolutePathGetter(basePath);
+
+    return data =>
+      Attachments.writeNewAttachmentData({
+        data,
+        getAbsoluteAttachmentPath: pathGetter,
+      });
+  }
+
+  const readAttachmentData = createEncryptedReader(attachmentsPath);
   const loadAttachmentData = Type.loadData(readAttachmentData);
   const loadContactData = MessageType.loadContactData(loadAttachmentData);
   const loadPreviewData = MessageType.loadPreviewData(loadAttachmentData);
@@ -207,17 +238,16 @@ export function initializeMigrations({
   const loadStickerData = MessageType.loadStickerData(loadAttachmentData);
   const getAbsoluteAttachmentPath = createAbsolutePathGetter(attachmentsPath);
   const deleteOnDisk = Attachments.createDeleter(attachmentsPath);
-  const writeExistingAttachmentData = createWriterForExisting(attachmentsPath);
-  const writeNewAttachmentData = createWriterForNew(attachmentsPath);
+  const writeNewAttachmentData = createEncryptedWriterForNew(attachmentsPath);
   const copyIntoAttachmentsDirectory =
     Attachments.copyIntoAttachmentsDirectory(attachmentsPath);
   const doesAttachmentExist = createDoesExist(attachmentsPath);
 
   const stickersPath = getStickersPath(userDataPath);
-  const writeNewStickerData = createWriterForNew(stickersPath);
   const getAbsoluteStickerPath = createAbsolutePathGetter(stickersPath);
+  const writeNewStickerData = createEncryptedWriterForNew(stickersPath);
   const deleteSticker = Attachments.createDeleter(stickersPath);
-  const readStickerData = createReader(stickersPath);
+  const readStickerData = createEncryptedReader(stickersPath);
 
   const badgesPath = getBadgesPath(userDataPath);
   const getAbsoluteBadgeImageFilePath = createAbsolutePathGetter(badgesPath);
@@ -225,21 +255,27 @@ export function initializeMigrations({
 
   const tempPath = getTempPath(userDataPath);
   const getAbsoluteTempPath = createAbsolutePathGetter(tempPath);
-  const writeNewTempData = createWriterForNew(tempPath);
+  const writeNewTempData = createEncryptedWriterForNew(tempPath);
+  const writeNewPlaintextTempData = createWriterForNew(tempPath);
   const deleteTempFile = Attachments.createDeleter(tempPath);
-  const readTempData = createReader(tempPath);
+  const readTempData = createEncryptedReader(tempPath);
   const copyIntoTempDirectory =
     Attachments.copyIntoAttachmentsDirectory(tempPath);
 
   const draftPath = getDraftPath(userDataPath);
   const getAbsoluteDraftPath = createAbsolutePathGetter(draftPath);
-  const writeNewDraftData = createWriterForNew(draftPath);
+  const writeNewDraftData = createEncryptedWriterForNew(draftPath);
   const deleteDraftFile = Attachments.createDeleter(draftPath);
-  const readDraftData = createReader(draftPath);
+  const readDraftData = createEncryptedReader(draftPath);
+
+  const downloadsPath = getDownloadsPath(userDataPath);
+  const getAbsoluteDownloadsPath = createAbsolutePathGetter(downloadsPath);
+  const deleteDownloadOnDisk = Attachments.createDeleter(downloadsPath);
 
   const avatarsPath = getAvatarsPath(userDataPath);
+  const readAvatarData = createEncryptedReader(avatarsPath);
   const getAbsoluteAvatarPath = createAbsolutePathGetter(avatarsPath);
-  const writeNewAvatarData = createWriterForNew(avatarsPath);
+  const writeNewAvatarData = createEncryptedWriterForNew(avatarsPath);
   const deleteAvatar = Attachments.createDeleter(avatarsPath);
 
   return {
@@ -248,17 +284,23 @@ export function initializeMigrations({
     copyIntoTempDirectory,
     deleteAttachmentData: deleteOnDisk,
     deleteAvatar,
+    deleteDownloadData: deleteDownloadOnDisk,
     deleteDraftFile,
     deleteExternalMessageFiles: MessageType.deleteAllExternalFiles({
-      deleteAttachmentData: Type.deleteData(deleteOnDisk),
+      deleteAttachmentData: Type.deleteData({
+        deleteOnDisk,
+        deleteDownloadOnDisk,
+      }),
       deleteOnDisk,
     }),
     deleteSticker,
     deleteTempFile,
     doesAttachmentExist,
+    ensureAttachmentIsReencryptable,
     getAbsoluteAttachmentPath,
     getAbsoluteAvatarPath,
     getAbsoluteBadgeImageFilePath,
+    getAbsoluteDownloadsPath,
     getAbsoluteDraftPath,
     getAbsoluteStickerPath,
     getAbsoluteTempPath,
@@ -268,8 +310,8 @@ export function initializeMigrations({
     loadPreviewData,
     loadQuoteData,
     loadStickerData,
-    openFileInFolder,
     readAttachmentData,
+    readAvatarData,
     readDraftData,
     readStickerData,
     readTempData,
@@ -277,25 +319,24 @@ export function initializeMigrations({
     processNewAttachment: (attachment: AttachmentType) =>
       MessageType.processNewAttachment(attachment, {
         writeNewAttachmentData,
-        getAbsoluteAttachmentPath,
+        ensureAttachmentIsReencryptable,
         makeObjectUrl,
         revokeObjectUrl,
         getImageDimensions,
         makeImageThumbnail,
         makeVideoScreenshot,
+        deleteOnDisk,
         logger,
       }),
     processNewSticker: (stickerData: Uint8Array) =>
-      MessageType.processNewSticker(stickerData, {
+      MessageType.processNewSticker(stickerData, false, {
         writeNewStickerData,
-        getAbsoluteStickerPath,
         getImageDimensions,
         logger,
       }),
     processNewEphemeralSticker: (stickerData: Uint8Array) =>
-      MessageType.processNewSticker(stickerData, {
+      MessageType.processNewSticker(stickerData, true, {
         writeNewStickerData: writeNewTempData,
-        getAbsoluteStickerPath: getAbsoluteTempPath,
         getImageDimensions,
         logger,
       }),
@@ -306,28 +347,28 @@ export function initializeMigrations({
       const { maxVersion } = options;
 
       return MessageType.upgradeSchema(message, {
-        writeNewAttachmentData,
-        getRegionCode,
-        getAbsoluteAttachmentPath,
-        makeObjectUrl,
-        revokeObjectUrl,
+        deleteOnDisk,
+        doesAttachmentExist,
+        ensureAttachmentIsReencryptable,
         getImageDimensions,
+        getRegionCode,
         makeImageThumbnail,
+        makeObjectUrl,
         makeVideoScreenshot,
+        readAttachmentData,
+        revokeObjectUrl,
+        writeNewAttachmentData,
+        writeNewStickerData,
         logger,
         maxVersion,
-        getAbsoluteStickerPath,
-        writeNewStickerData,
       });
     },
-    writeMessageAttachments: MessageType.createAttachmentDataWriter({
-      writeExistingAttachmentData,
-      logger,
-    }),
-    writeNewAttachmentData: createWriterForNew(attachmentsPath),
+    writeNewAttachmentData,
     writeNewAvatarData,
     writeNewDraftData,
     writeNewBadgeImageFileData,
+    writeNewPlaintextTempData,
+    writeNewStickerData,
   };
 }
 
@@ -336,6 +377,7 @@ type StringGetterType = (basePath: string) => string;
 type AttachmentsModuleType = {
   getAvatarsPath: StringGetterType;
   getBadgesPath: StringGetterType;
+  getDownloadsPath: StringGetterType;
   getDraftPath: StringGetterType;
   getPath: StringGetterType;
   getStickersPath: StringGetterType;
@@ -344,9 +386,9 @@ type AttachmentsModuleType = {
 
   createDeleter: (root: string) => (relativePath: string) => Promise<void>;
 
-  createReader: (root: string) => (relativePath: string) => Promise<Uint8Array>;
-  getRelativePath: (name: string) => string;
-  createName: (suffix?: string) => string;
+  createPlaintextReader: (
+    root: string
+  ) => (relativePath: string) => Promise<Uint8Array>;
 
   copyIntoAttachmentsDirectory: (
     root: string
@@ -357,23 +399,34 @@ type AttachmentsModuleType = {
     suffix?: string
   ) => (bytes: Uint8Array) => Promise<string>;
 
-  createWriterForExisting: (
-    root: string
-  ) => (options: { data?: Uint8Array; path?: string }) => Promise<string>;
-
   createAbsolutePathGetter: (
     rootPath: string
   ) => (relativePath: string) => string;
 
   createDoesExist: (root: string) => (relativePath: string) => Promise<boolean>;
-  openFileInFolder: (target: string) => Promise<void>;
   saveAttachmentToDisk: ({
     data,
     name,
+    dirName,
   }: {
     data: Uint8Array;
     name: string;
+    dirName?: string;
   }) => Promise<null | { fullPath: string; name: string }>;
+
+  ensureAttachmentIsReencryptable: (
+    attachment: TypesAttachment.LocallySavedAttachment
+  ) => Promise<TypesAttachment.ReencryptableAttachment>;
+  readAndDecryptDataFromDisk: (options: {
+    absolutePath: string;
+    keysBase64: string;
+    size: number;
+  }) => Promise<Uint8Array>;
+
+  writeNewAttachmentData: (options: {
+    data: Uint8Array;
+    getAbsoluteAttachmentPath: (relativePath: string) => string;
+  }) => Promise<LocalAttachmentV2Type>;
 };
 
 export const setup = (options: {
@@ -394,55 +447,16 @@ export const setup = (options: {
   });
 
   const Components = {
-    AttachmentList,
-    ChatColorPicker,
     ConfirmationDialog,
-    ContactModal,
-    Emojify,
-    MessageDetail,
-    Quote,
-    StagedLinkPreview,
-    DisappearingTimeDialog,
   };
 
   const Roots = {
     createApp,
-    createChatColorPicker,
-    createConversationDetails,
-    createGroupLinkManagement,
-    createGroupV1MigrationModal,
-    createGroupV2JoinModal,
-    createGroupV2Permissions,
-    createMessageDetail,
-    createConversationNotificationsSettings,
-    createPendingInvites,
     createSafetyNumberViewer,
-    createShortcutGuideModal,
-    createStickerManager,
-    createStickerPreviewModal,
-  };
-
-  const Ducks = {
-    app: appDuck,
-    calling: callingDuck,
-    conversations: conversationsDuck,
-    emojis: emojisDuck,
-    expiration: expirationDuck,
-    items: itemsDuck,
-    linkPreviews: linkPreviewsDuck,
-    network: networkDuck,
-    updates: updatesDuck,
-    user: userDuck,
-    search: searchDuck,
-    stickers: stickersDuck,
-  };
-
-  const Selectors = {
-    conversations: conversationsSelectors,
-    search: searchSelectors,
   };
 
   const Services = {
+    backups: backupsService,
     calling,
     initializeGroupCredentialFetcher,
     initializeNetworkObserver,
@@ -453,17 +467,13 @@ export const setup = (options: {
   };
 
   const State = {
-    createStore,
     Roots,
-    Ducks,
-    Selectors,
   };
 
   const Types = {
     Message: MessageType,
 
     // Mostly for debugging
-    UUID,
     Address,
     QualifiedAddress,
   };
@@ -474,7 +484,6 @@ export const setup = (options: {
     Curve,
     // Note: used in test/index.html, and not type-checked!
     conversationControllerStart,
-    Data,
     Groups,
     Migrations,
     OS,
@@ -482,6 +491,12 @@ export const setup = (options: {
     Services,
     State,
     Types,
-    Util,
+
+    ...(isProduction(window.getVersion())
+      ? {}
+      : {
+          DataReader,
+          DataWriter,
+        }),
   };
 };

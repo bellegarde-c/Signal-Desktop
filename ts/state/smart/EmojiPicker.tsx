@@ -1,53 +1,64 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import React, { useCallback, forwardRef, memo } from 'react';
 import { useSelector } from 'react-redux';
-import type { StateType } from '../reducer';
 import { useRecentEmojis } from '../selectors/emojis';
-import { useActions as useEmojiActions } from '../ducks/emojis';
-
+import { useEmojisActions as useEmojiActions } from '../ducks/emojis';
 import type { Props as EmojiPickerProps } from '../../components/emoji/EmojiPicker';
 import { EmojiPicker } from '../../components/emoji/EmojiPicker';
 import { getIntl } from '../selectors/user';
-import { getEmojiSkinTone } from '../selectors/items';
-import type { LocalizerType } from '../../types/Util';
+import { getEmojiSkinToneDefault } from '../selectors/items';
+import { EmojiSkinTone } from '../../components/fun/data/emojis';
 
-export const SmartEmojiPicker = React.forwardRef<
-  HTMLDivElement,
-  Pick<
-    EmojiPickerProps,
-    'onClickSettings' | 'onPickEmoji' | 'onSetSkinTone' | 'onClose' | 'style'
-  >
->(({ onClickSettings, onPickEmoji, onSetSkinTone, onClose, style }, ref) => {
-  const i18n = useSelector<StateType, LocalizerType>(getIntl);
-  const skinTone = useSelector<StateType, number>(state =>
-    getEmojiSkinTone(state)
-  );
-
-  const recentEmojis = useRecentEmojis();
-
-  const { onUseEmoji } = useEmojiActions();
-
-  const handlePickEmoji = React.useCallback(
-    data => {
-      onUseEmoji({ shortName: data.shortName });
-      onPickEmoji(data);
+export const SmartEmojiPicker = memo(
+  forwardRef<
+    HTMLDivElement,
+    Pick<
+      EmojiPickerProps,
+      | 'onClickSettings'
+      | 'onPickEmoji'
+      | 'onEmojiSkinToneDefaultChange'
+      | 'onClose'
+      | 'style'
+    >
+  >(function SmartEmojiPickerInner(
+    {
+      onClickSettings,
+      onPickEmoji,
+      onEmojiSkinToneDefaultChange,
+      onClose,
+      style,
     },
-    [onUseEmoji, onPickEmoji]
-  );
+    ref
+  ) {
+    const i18n = useSelector(getIntl);
+    const emojiSkinToneDefault = useSelector(getEmojiSkinToneDefault);
 
-  return (
-    <EmojiPicker
-      ref={ref}
-      i18n={i18n}
-      skinTone={skinTone}
-      onClickSettings={onClickSettings}
-      onSetSkinTone={onSetSkinTone}
-      onPickEmoji={handlePickEmoji}
-      recentEmojis={recentEmojis}
-      onClose={onClose}
-      style={style}
-    />
-  );
-});
+    const recentEmojis = useRecentEmojis();
+    const { onUseEmoji } = useEmojiActions();
+
+    const handlePickEmoji = useCallback(
+      data => {
+        onUseEmoji({ shortName: data.shortName, skinTone: EmojiSkinTone.None });
+        onPickEmoji(data);
+      },
+      [onUseEmoji, onPickEmoji]
+    );
+
+    return (
+      <EmojiPicker
+        i18n={i18n}
+        onClickSettings={onClickSettings}
+        onClose={onClose}
+        onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+        onPickEmoji={handlePickEmoji}
+        recentEmojis={recentEmojis}
+        ref={ref}
+        emojiSkinToneDefault={emojiSkinToneDefault}
+        style={style}
+        wasInvokedFromKeyboard={false}
+      />
+    );
+  })
+);

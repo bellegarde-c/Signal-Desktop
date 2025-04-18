@@ -2,30 +2,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { Props } from './TypingAnimation';
 import { TypingAnimation } from './TypingAnimation';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/TypingAnimation',
-};
+} satisfies Meta<Props>;
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   i18n,
   color: overrideProps.color || '',
 });
 
-export const Default = (): JSX.Element => {
+export function Default(): JSX.Element {
   const props = createProps();
 
   return <TypingAnimation {...props} />;
-};
+}
 
-export const Light = (): JSX.Element => {
+export function Light(): JSX.Element {
   const props = createProps({
     color: 'light',
   });
@@ -35,4 +33,4 @@ export const Light = (): JSX.Element => {
       <TypingAnimation {...props} />
     </div>
   );
-};
+}

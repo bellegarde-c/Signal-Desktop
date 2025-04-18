@@ -3,8 +3,7 @@
 
 import type { ValidateConversationType } from '../model-types.d';
 import { isDirectConversation } from './whatTypeOfConversation';
-import { parseNumber } from './libphonenumberUtil';
-import { isValidUuid } from '../types/UUID';
+import { isServiceIdString } from '../types/ServiceId';
 
 export function validateConversation(
   attributes: ValidateConversationType
@@ -13,11 +12,11 @@ export function validateConversation(
     return `Invalid conversation type: ${attributes.type}`;
   }
 
-  if (!attributes.e164 && !attributes.uuid && !attributes.groupId) {
-    return 'Missing one of e164, uuid, or groupId';
+  if (!attributes.e164 && !attributes.serviceId && !attributes.groupId) {
+    return 'Missing one of e164, serviceId, or groupId';
   }
 
-  const error = validateNumber(attributes) || validateUuid(attributes);
+  const error = validateNumber(attributes) || validateServiceId(attributes);
 
   if (error) {
     return error;
@@ -27,35 +26,27 @@ export function validateConversation(
 }
 
 function validateNumber(attributes: ValidateConversationType): string | null {
-  if (isDirectConversation(attributes) && attributes.e164) {
-    const regionCode = window.storage.get('regionCode');
-    if (!regionCode) {
-      throw new Error('No region code');
-    }
-    const number = parseNumber(attributes.e164, regionCode);
-    if (number.isValidNumber) {
-      return null;
+  const { e164 } = attributes;
+  if (isDirectConversation(attributes) && e164) {
+    if (!/^\+[1-9][0-9]{0,18}$/.test(e164)) {
+      return 'Invalid E164';
     }
 
-    let errorMessage: undefined | string;
-    if (number.error instanceof Error) {
-      errorMessage = number.error.message;
-    } else if (typeof number.error === 'string') {
-      errorMessage = number.error;
-    }
-    return errorMessage || 'Invalid phone number';
+    return null;
   }
 
   return null;
 }
 
-function validateUuid(attributes: ValidateConversationType): string | null {
-  if (isDirectConversation(attributes) && attributes.uuid) {
-    if (isValidUuid(attributes.uuid)) {
+function validateServiceId(
+  attributes: ValidateConversationType
+): string | null {
+  if (isDirectConversation(attributes) && attributes.serviceId) {
+    if (isServiceIdString(attributes.serviceId)) {
       return null;
     }
 
-    return 'Invalid UUID';
+    return 'Invalid ServiceId';
   }
 
   return null;

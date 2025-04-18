@@ -4,13 +4,11 @@
 import React from 'react';
 
 import { action } from '@storybook/addon-actions';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './ConfirmDiscardDialog';
 import { ConfirmDiscardDialog } from './ConfirmDiscardDialog';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (): PropsType => ({
   i18n,
@@ -20,8 +18,8 @@ const createProps = (): PropsType => ({
 
 export default {
   title: 'Components/ConfirmDiscardDialog',
-};
+} satisfies Meta<PropsType>;
 
-export const Default = (): JSX.Element => (
-  <ConfirmDiscardDialog {...createProps()} />
-);
+export function Default(): JSX.Element {
+  return <ConfirmDiscardDialog {...createProps()} />;
+}

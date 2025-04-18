@@ -1,8 +1,7 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable camelcase */
-
+import { z } from 'zod';
 import type { LocalizerType } from './Util';
 
 export type { LocalizerType } from './Util';
@@ -18,9 +17,9 @@ type SmartlingConfigType = {
 };
 
 export type LocaleMessageType = {
-  message?: string;
   messageformat?: string;
   description?: string;
+  ignoreUnused?: boolean;
 };
 
 export type LocaleMessagesType = {
@@ -30,11 +29,15 @@ export type LocaleMessagesType = {
   [key: string]: LocaleMessageType | SmartlingConfigType;
 };
 
-export type ReplacementValuesType<T> = {
-  [key: string]: T;
-};
-
 export type LocaleType = {
   i18n: LocalizerType;
   messages: LocaleMessagesType;
 };
+
+export enum HourCyclePreference {
+  Prefer24 = 'Prefer24', // either h23 or h24
+  Prefer12 = 'Prefer12', // either h11 or h12
+  UnknownPreference = 'UnknownPreference',
+}
+
+export const HourCyclePreferenceSchema = z.nativeEnum(HourCyclePreference);

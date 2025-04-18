@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import type { AttachmentDraftType } from '../../types/Attachment';
+import type { Meta } from '@storybook/react';
+import type {
+  AttachmentDraftType,
+  AttachmentForUIType,
+} from '../../types/Attachment';
 import type { Props } from './AttachmentList';
 import { AttachmentList } from './AttachmentList';
 import {
@@ -15,16 +17,13 @@ import {
   VIDEO_MP4,
   stringToMIMEType,
 } from '../../types/MIME';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
-
 import { fakeDraftAttachment } from '../../test-both/helpers/fakeAttachment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/AttachmentList',
-};
+} satisfies Meta<Props<AttachmentDraftType | AttachmentForUIType>>;
 
 const createProps = (
   overrideProps: Partial<Props<AttachmentDraftType>> = {}
@@ -37,7 +36,7 @@ const createProps = (
   onCloseAttachment: action('onCloseAttachment'),
 });
 
-export const OneFile = (): JSX.Element => {
+export function OneFile(): JSX.Element {
   const props = createProps({
     attachments: [
       fakeDraftAttachment({
@@ -48,9 +47,9 @@ export const OneFile = (): JSX.Element => {
     ],
   });
   return <AttachmentList {...props} />;
-};
+}
 
-export const MultipleVisualAttachments = (): JSX.Element => {
+export function MultipleVisualAttachments(): JSX.Element {
   const props = createProps({
     attachments: [
       fakeDraftAttachment({
@@ -73,9 +72,9 @@ export const MultipleVisualAttachments = (): JSX.Element => {
   });
 
   return <AttachmentList {...props} />;
-};
+}
 
-export const MultipleWithNonVisualTypes = (): JSX.Element => {
+export function MultipleWithNonVisualTypes(): JSX.Element {
   const props = createProps({
     attachments: [
       fakeDraftAttachment({
@@ -108,14 +107,10 @@ export const MultipleWithNonVisualTypes = (): JSX.Element => {
   });
 
   return <AttachmentList {...props} />;
-};
+}
 
-MultipleWithNonVisualTypes.story = {
-  name: 'Multiple with Non-Visual Types',
-};
-
-export const EmptyList = (): JSX.Element => {
+export function EmptyList(): JSX.Element {
   const props = createProps();
 
   return <AttachmentList {...props} />;
-};
+}

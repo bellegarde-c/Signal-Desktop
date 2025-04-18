@@ -1,18 +1,24 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as sinon from 'sinon';
+import { v4 as generateUuid } from 'uuid';
+
 import { times } from 'lodash';
 import { ConversationModel } from '../models/conversations';
 import type { ConversationAttributesType } from '../model-types.d';
-import { UUID } from '../types/UUID';
-import { DAY } from '../util/durations';
+import { generateAci } from '../types/ServiceId';
+import { DAY, HOUR, MINUTE, MONTH } from '../util/durations';
 
 import { routineProfileRefresh } from '../routineProfileRefresh';
+import type { getProfile } from '../util/getProfile';
 
 describe('routineProfileRefresh', () => {
   let sinonSandbox: sinon.SinonSandbox;
-  let getProfileFn: sinon.SinonStub;
+  let getProfileFn: sinon.SinonStub<
+    Parameters<typeof getProfile>,
+    ReturnType<typeof getProfile>
+  >;
 
   beforeEach(() => {
     sinonSandbox = sinon.createSandbox();
@@ -27,12 +33,12 @@ describe('routineProfileRefresh', () => {
     overrideAttributes: Partial<ConversationAttributesType> = {}
   ): ConversationModel {
     const result = new ConversationModel({
-      accessKey: UUID.generate().toString(),
+      accessKey: generateUuid(),
       active_at: Date.now(),
       draftAttachments: [],
       draftBodyRanges: [],
       draftTimestamp: null,
-      id: UUID.generate().toString(),
+      id: generateUuid(),
       inbox_position: 0,
       isPinned: false,
       lastMessageDeletedForEveryone: false,
@@ -44,7 +50,7 @@ describe('routineProfileRefresh', () => {
       messageRequestResponseType: 0,
       muteExpiresAt: 0,
       profileAvatar: undefined,
-      profileKeyCredential: UUID.generate().toString(),
+      profileKeyCredential: generateUuid(),
       profileKeyCredentialExpiration: Date.now() + 2 * DAY,
       profileSharing: true,
       quotedMessageId: null,
@@ -53,8 +59,9 @@ describe('routineProfileRefresh', () => {
       sharedGroupNames: [],
       timestamp: Date.now(),
       type: 'private',
-      uuid: UUID.generate().toString(),
+      serviceId: generateAci(),
       version: 2,
+      expireTimerVersion: 1,
       ...overrideAttributes,
     });
     return result;
@@ -79,14 +86,14 @@ describe('routineProfileRefresh', () => {
     };
   }
 
-  it('does nothing when the last refresh time is less than 12 hours ago', async () => {
+  it('does nothing when the last refresh time is less one hour', async () => {
     const conversation1 = makeConversation();
     const conversation2 = makeConversation();
-    const storage = makeStorage(Date.now() - 1234);
+    const storage = makeStorage(Date.now() - 47 * MINUTE);
 
     await routineProfileRefresh({
       allConversations: [conversation1, conversation2],
-      ourConversationId: UUID.generate().toString(),
+      ourConversationId: generateUuid(),
       storage,
       getProfileFn,
       id: 1,
@@ -102,55 +109,57 @@ describe('routineProfileRefresh', () => {
 
     await routineProfileRefresh({
       allConversations: [conversation1, conversation2],
-      ourConversationId: UUID.generate().toString(),
+      ourConversationId: generateUuid(),
       storage: makeStorage(),
       getProfileFn,
       id: 1,
     });
 
-    sinon.assert.calledWith(
-      getProfileFn,
-      conversation1.get('uuid'),
-      conversation1.get('e164')
-    );
-    sinon.assert.calledWith(
-      getProfileFn,
-      conversation2.get('uuid'),
-      conversation2.get('e164')
-    );
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: conversation1.getServiceId() ?? null,
+      e164: conversation1.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: conversation2.getServiceId() ?? null,
+      e164: conversation2.get('e164') ?? null,
+      groupId: null,
+    });
   });
 
-  it("skips conversations that haven't been active in 30 days", async () => {
-    const recentlyActive = makeConversation();
-    const inactive = makeConversation({
-      active_at: Date.now() - 31 * 24 * 60 * 60 * 1000,
+  it('skips unregistered conversations and those fetched in the last three days', async () => {
+    const normal = makeConversation();
+    const recentlyFetched = makeConversation({
+      profileLastFetchedAt: Date.now() - DAY * 2 - HOUR * 3,
     });
-    const neverActive = makeConversation({ active_at: undefined });
+    const unregisteredAndStale = makeConversation({
+      firstUnregisteredAt: Date.now() - 2 * MONTH,
+    });
 
     await routineProfileRefresh({
-      allConversations: [recentlyActive, inactive, neverActive],
-      ourConversationId: UUID.generate().toString(),
+      allConversations: [normal, recentlyFetched, unregisteredAndStale],
+      ourConversationId: generateUuid(),
       storage: makeStorage(),
       getProfileFn,
       id: 1,
     });
 
     sinon.assert.calledOnce(getProfileFn);
-    sinon.assert.calledWith(
-      getProfileFn,
-      recentlyActive.get('uuid'),
-      recentlyActive.get('e164')
-    );
-    sinon.assert.neverCalledWith(
-      getProfileFn,
-      inactive.get('uuid'),
-      inactive.get('e164')
-    );
-    sinon.assert.neverCalledWith(
-      getProfileFn,
-      neverActive.get('uuid'),
-      neverActive.get('e164')
-    );
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: normal.getServiceId() ?? null,
+      e164: normal.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: recentlyFetched.getServiceId() ?? null,
+      e164: recentlyFetched.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: unregisteredAndStale.getServiceId() ?? null,
+      e164: unregisteredAndStale.get('e164') ?? null,
+      groupId: null,
+    });
   });
 
   it('skips your own conversation', async () => {
@@ -165,131 +174,132 @@ describe('routineProfileRefresh', () => {
       id: 1,
     });
 
-    sinon.assert.calledWith(getProfileFn, notMe.get('uuid'), notMe.get('e164'));
-    sinon.assert.neverCalledWith(getProfileFn, me.get('uuid'), me.get('e164'));
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: notMe.getServiceId() ?? null,
+      e164: notMe.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: me.getServiceId() ?? null,
+      e164: me.get('e164') ?? null,
+      groupId: null,
+    });
   });
 
-  it('skips conversations that were refreshed in the last hour', async () => {
-    const neverRefreshed = makeConversation();
-    const recentlyFetched = makeConversation({
-      profileLastFetchedAt: Date.now() - 59 * 60 * 1000,
+  it('includes your own conversation if profileKeyCredential is expired', async () => {
+    const notMe = makeConversation();
+    const me = makeConversation({
+      profileKey: 'fakeProfileKey',
+      profileKeyCredential: undefined,
+      profileKeyCredentialExpiration: undefined,
     });
 
     await routineProfileRefresh({
-      allConversations: [neverRefreshed, recentlyFetched],
-      ourConversationId: UUID.generate().toString(),
+      allConversations: [notMe, me],
+      ourConversationId: me.id,
       storage: makeStorage(),
       getProfileFn,
       id: 1,
     });
 
-    sinon.assert.calledOnce(getProfileFn);
-    sinon.assert.calledWith(
-      getProfileFn,
-      neverRefreshed.get('uuid'),
-      neverRefreshed.get('e164')
-    );
-    sinon.assert.neverCalledWith(
-      getProfileFn,
-      recentlyFetched.get('uuid'),
-      recentlyFetched.get('e164')
-    );
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: notMe.getServiceId() ?? null,
+      e164: notMe.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: me.getServiceId() ?? null,
+      e164: me.get('e164') ?? null,
+      groupId: null,
+    });
   });
 
-  it('"digs into" the members of an active group', async () => {
-    const privateConversation = makeConversation();
-
-    const recentlyActiveGroupMember = makeConversation();
-    const inactiveGroupMember = makeConversation({
-      active_at: Date.now() - 31 * 24 * 60 * 60 * 1000,
+  it('skips conversations that were refreshed in last three days', async () => {
+    const neverRefreshed = makeConversation();
+    const refreshedToday = makeConversation({
+      profileLastFetchedAt: Date.now() - HOUR * 5,
     });
-    const memberWhoHasRecentlyRefreshed = makeConversation({
-      profileLastFetchedAt: Date.now() - 59 * 60 * 1000,
+    const refreshedYesterday = makeConversation({
+      profileLastFetchedAt: Date.now() - DAY,
     });
-
-    const groupConversation = makeGroup([
-      recentlyActiveGroupMember,
-      inactiveGroupMember,
-      memberWhoHasRecentlyRefreshed,
-    ]);
+    const refreshedTwoDaysAgo = makeConversation({
+      profileLastFetchedAt: Date.now() - DAY * 2,
+    });
+    const refreshedThreeDaysAgo = makeConversation({
+      profileLastFetchedAt: Date.now() - DAY * 3 - 1,
+    });
 
     await routineProfileRefresh({
       allConversations: [
-        privateConversation,
-        recentlyActiveGroupMember,
-        inactiveGroupMember,
-        memberWhoHasRecentlyRefreshed,
-        groupConversation,
+        neverRefreshed,
+        refreshedToday,
+        refreshedYesterday,
+        refreshedTwoDaysAgo,
+        refreshedThreeDaysAgo,
       ],
-      ourConversationId: UUID.generate().toString(),
+      ourConversationId: generateUuid(),
       storage: makeStorage(),
       getProfileFn,
       id: 1,
     });
 
-    sinon.assert.calledWith(
-      getProfileFn,
-      privateConversation.get('uuid'),
-      privateConversation.get('e164')
-    );
-    sinon.assert.calledWith(
-      getProfileFn,
-      recentlyActiveGroupMember.get('uuid'),
-      recentlyActiveGroupMember.get('e164')
-    );
-    sinon.assert.calledWith(
-      getProfileFn,
-      inactiveGroupMember.get('uuid'),
-      inactiveGroupMember.get('e164')
-    );
-    sinon.assert.neverCalledWith(
-      getProfileFn,
-      memberWhoHasRecentlyRefreshed.get('uuid'),
-      memberWhoHasRecentlyRefreshed.get('e164')
-    );
-    sinon.assert.neverCalledWith(
-      getProfileFn,
-      groupConversation.get('uuid'),
-      groupConversation.get('e164')
-    );
+    sinon.assert.calledTwice(getProfileFn);
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: neverRefreshed.getServiceId() ?? null,
+      e164: neverRefreshed.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: refreshedToday.getServiceId() ?? null,
+      e164: refreshedToday.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: refreshedYesterday.getServiceId() ?? null,
+      e164: refreshedYesterday.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.neverCalledWith(getProfileFn, {
+      serviceId: refreshedTwoDaysAgo.getServiceId() ?? null,
+      e164: refreshedTwoDaysAgo.get('e164') ?? null,
+      groupId: null,
+    });
+    sinon.assert.calledWith(getProfileFn, {
+      serviceId: refreshedThreeDaysAgo.getServiceId() ?? null,
+      e164: refreshedThreeDaysAgo.get('e164') ?? null,
+      groupId: null,
+    });
   });
 
-  it('only refreshes profiles for the 50 most recently active direct conversations', async () => {
+  it('only refreshes profiles for the 50 conversations with the oldest profileLastFetchedAt', async () => {
     const me = makeConversation();
 
-    const activeConversations = times(40, () => makeConversation());
-
-    const inactiveGroupMembers = times(10, () =>
+    const normalConversations = times(25, () => makeConversation());
+    const neverFetched = times(10, () =>
       makeConversation({
-        active_at: Date.now() - 999 * 24 * 60 * 60 * 1000,
+        profileLastFetchedAt: undefined,
       })
     );
-    const recentlyActiveGroup = makeGroup(inactiveGroupMembers);
+    const unregisteredUsers = times(10, () =>
+      makeConversation({
+        firstUnregisteredAt: Date.now() - MONTH * 2,
+      })
+    );
 
     const shouldNotBeIncluded = [
       // Recently-active groups with no other members
       makeGroup([]),
       makeGroup([me]),
-      // Old direct conversations
-      ...times(3, () =>
-        makeConversation({
-          active_at: Date.now() - 365 * 24 * 60 * 60 * 1000,
-        })
-      ),
-      // Old groups
-      ...times(3, () => makeGroup(inactiveGroupMembers)),
+      ...unregisteredUsers,
     ];
 
     await routineProfileRefresh({
       allConversations: [
         me,
 
-        ...activeConversations,
-
-        recentlyActiveGroup,
-        ...inactiveGroupMembers,
-
-        ...shouldNotBeIncluded,
+        ...unregisteredUsers,
+        ...normalConversations,
+        ...neverFetched,
       ],
       ourConversationId: me.id,
       storage: makeStorage(),
@@ -297,20 +307,20 @@ describe('routineProfileRefresh', () => {
       id: 1,
     });
 
-    [...activeConversations, ...inactiveGroupMembers].forEach(conversation => {
-      sinon.assert.calledWith(
-        getProfileFn,
-        conversation.get('uuid'),
-        conversation.get('e164')
-      );
+    [...normalConversations, ...neverFetched].forEach(conversation => {
+      sinon.assert.calledWith(getProfileFn, {
+        serviceId: conversation.getServiceId() ?? null,
+        e164: conversation.get('e164') ?? null,
+        groupId: null,
+      });
     });
 
     [me, ...shouldNotBeIncluded].forEach(conversation => {
-      sinon.assert.neverCalledWith(
-        getProfileFn,
-        conversation.get('uuid'),
-        conversation.get('e164')
-      );
+      sinon.assert.neverCalledWith(getProfileFn, {
+        serviceId: conversation.getServiceId() ?? null,
+        e164: conversation.get('e164') ?? null,
+        groupId: null,
+      });
     });
   });
 });

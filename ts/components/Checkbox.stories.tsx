@@ -4,6 +4,7 @@
 import React from 'react';
 import { action } from '@storybook/addon-actions';
 
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './Checkbox';
 import { Checkbox } from './Checkbox';
 
@@ -16,17 +17,19 @@ const createProps = (): PropsType => ({
 
 export default {
   title: 'Components/Checkbox',
-};
+} satisfies Meta<PropsType>;
 
-export const Normal = (): JSX.Element => <Checkbox {...createProps()} />;
-export const Checked = (): JSX.Element => (
-  <Checkbox {...createProps()} checked />
-);
+export function Normal(): JSX.Element {
+  return <Checkbox {...createProps()} />;
+}
+export function Checked(): JSX.Element {
+  return <Checkbox {...createProps()} checked />;
+}
 
-export const Description = (): JSX.Element => (
-  <Checkbox {...createProps()} description="This is a checkbox" />
-);
+export function Description(): JSX.Element {
+  return <Checkbox {...createProps()} description="This is a checkbox" />;
+}
 
-export const Disabled = (): JSX.Element => (
-  <Checkbox {...createProps()} disabled />
-);
+export function Disabled(): JSX.Element {
+  return <Checkbox {...createProps()} disabled />;
+}

@@ -7,7 +7,7 @@ import type {
   ShowConversationType,
 } from '../../../state/ducks/conversations';
 import type { LocalizerType } from '../../../types/Util';
-import { Avatar } from '../../Avatar';
+import { Avatar, AvatarSize } from '../../Avatar';
 import { ConversationDetailsIcon, IconType } from './ConversationDetailsIcon';
 import { PanelRow } from './PanelRow';
 import { PanelSection } from './PanelSection';
@@ -15,18 +15,18 @@ import { PanelSection } from './PanelSection';
 type Props = {
   contactId: string;
   i18n: LocalizerType;
-  groupsInCommon: Array<ConversationType>;
+  groupsInCommon: ReadonlyArray<ConversationType>;
   toggleAddUserToAnotherGroupModal: (contactId?: string) => void;
   showConversation: ShowConversationType;
 };
 
-export const ConversationDetailsGroups = ({
+export function ConversationDetailsGroups({
   contactId,
   i18n,
   groupsInCommon,
   toggleAddUserToAnotherGroupModal,
   showConversation,
-}: Props): JSX.Element => {
+}: Props): JSX.Element {
   const [showAllGroups, setShowAllGroups] = React.useState(false);
 
   const maxShownGroupCount = 5;
@@ -37,13 +37,19 @@ export const ConversationDetailsGroups = ({
 
   return (
     <PanelSection
-      title={i18n('ConversationDetailsGroups--title', {
-        number: groupsInCommon.length,
-      })}
+      title={
+        groupsInCommon.length > 0
+          ? i18n('icu:ConversationDetailsGroups--title', {
+              count: groupsInCommon.length,
+            })
+          : i18n(
+              'icu:ConversationDetailsGroups--title--with-zero-groups-in-common'
+            )
+      }
     >
       <PanelRow
         icon={<div className="ConversationDetails-groups__add-to-group-icon" />}
-        label={i18n('ConversationDetailsGroups--add-to-group')}
+        label={i18n('icu:ConversationDetailsGroups--add-to-group')}
         onClick={() => toggleAddUserToAnotherGroupModal(contactId)}
       />
       {groupsInCommon.slice(0, groupsToShow).map(group => (
@@ -60,7 +66,7 @@ export const ConversationDetailsGroups = ({
               conversationType="group"
               badge={undefined}
               i18n={i18n}
-              size={32}
+              size={AvatarSize.THIRTY_TWO}
               {...group}
             />
           }
@@ -71,14 +77,14 @@ export const ConversationDetailsGroups = ({
         <PanelRow
           icon={
             <ConversationDetailsIcon
-              ariaLabel={i18n('ConversationDetailsGroups--show-all')}
+              ariaLabel={i18n('icu:ConversationDetailsGroups--show-all')}
               icon={IconType.down}
             />
           }
           onClick={() => setShowAllGroups(true)}
-          label={i18n('ConversationDetailsGroups--show-all')}
+          label={i18n('icu:ConversationDetailsGroups--show-all')}
         />
       )}
     </PanelSection>
   );
-};
+}

@@ -3,19 +3,19 @@
 
 import React, { useState } from 'react';
 import classNames from 'classnames';
-import type { ConversationType } from '../state/ducks/conversations';
 import type { ConversationStoryType, StoryViewType } from '../types/Stories';
-import { StoryViewTargetType, HasStories } from '../types/Stories';
-import type { LocalizerType } from '../types/Util';
+import type { ConversationType } from '../state/ducks/conversations';
+import type { LocalizerType, ThemeType } from '../types/Util';
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges';
 import type { ViewUserStoriesActionCreatorType } from '../state/ducks/stories';
 import { Avatar, AvatarSize } from './Avatar';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { ContextMenu } from './ContextMenu';
+import { SIGNAL_ACI } from '../types/SignalConversation';
+import { StoryViewTargetType, HasStories } from '../types/Stories';
 
 import { MessageTimestamp } from './conversation/MessageTimestamp';
 import { StoryImage } from './StoryImage';
-import { ThemeType } from '../types/Util';
 import { getAvatarColor } from '../types/Colors';
 
 export type PropsType = Pick<ConversationStoryType, 'group' | 'isHidden'> & {
@@ -27,26 +27,28 @@ export type PropsType = Pick<ConversationStoryType, 'group' | 'isHidden'> & {
   onGoToConversation: (conversationId: string) => unknown;
   onHideStory: (conversationId: string) => unknown;
   queueStoryDownload: (storyId: string) => unknown;
+  onMediaPlaybackStart: () => void;
   story: StoryViewType;
+  theme: ThemeType;
   viewUserStories: ViewUserStoriesActionCreatorType;
 };
 
 function StoryListItemAvatar({
-  acceptedMessageRequest,
-  avatarPath,
+  avatarPlaceholderGradient,
+  avatarUrl,
   avatarStoryRing,
   badges,
   color,
   getPreferredBadge,
   i18n,
-  isMe,
   profileName,
   sharedGroupNames,
   title,
+  theme,
 }: Pick<
   ConversationType,
-  | 'acceptedMessageRequest'
-  | 'avatarPath'
+  | 'avatarPlaceholderGradient'
+  | 'avatarUrl'
   | 'color'
   | 'profileName'
   | 'sharedGroupNames'
@@ -56,28 +58,27 @@ function StoryListItemAvatar({
   badges?: ConversationType['badges'];
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
-  isMe?: boolean;
+  theme: ThemeType;
 }): JSX.Element {
   return (
     <Avatar
-      acceptedMessageRequest={acceptedMessageRequest}
-      avatarPath={avatarPath}
+      avatarPlaceholderGradient={avatarPlaceholderGradient}
+      avatarUrl={avatarUrl}
       badge={badges ? getPreferredBadge(badges) : undefined}
       color={getAvatarColor(color)}
       conversationType="direct"
       i18n={i18n}
-      isMe={Boolean(isMe)}
       profileName={profileName}
       sharedGroupNames={sharedGroupNames}
       size={AvatarSize.FORTY_EIGHT}
       storyRing={avatarStoryRing}
-      theme={ThemeType.dark}
+      theme={theme}
       title={title}
     />
   );
 }
 
-export const StoryListItem = ({
+export function StoryListItem({
   conversationId,
   getPreferredBadge,
   group,
@@ -87,15 +88,19 @@ export const StoryListItem = ({
   isHidden,
   onGoToConversation,
   onHideStory,
+  onMediaPlaybackStart,
   queueStoryDownload,
   story,
+  theme,
   viewUserStories,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   const [hasConfirmHideStory, setHasConfirmHideStory] = useState(false);
 
   const { attachment, isUnread, sender, timestamp } = story;
 
   const { firstName, title } = sender;
+
+  const isSignalOfficial = sender.serviceId === SIGNAL_ACI;
 
   let avatarStoryRing: HasStories | undefined;
   if (attachment) {
@@ -103,46 +108,55 @@ export const StoryListItem = ({
   }
 
   let repliesElement: JSX.Element | undefined;
-  if (hasRepliesFromSelf) {
+  if (group === undefined && hasRepliesFromSelf) {
     repliesElement = <div className="StoryListItem__info--replies--self" />;
-  } else if (hasReplies) {
+  } else if (group && (hasReplies || hasRepliesFromSelf)) {
     repliesElement = <div className="StoryListItem__info--replies--others" />;
+  }
+
+  const menuOptions = [];
+  if (isHidden) {
+    menuOptions.push({
+      icon: 'StoryListItem__icon--unhide',
+      label: i18n('icu:StoryListItem__unhide'),
+      onClick: () => {
+        onHideStory(conversationId);
+      },
+    });
+  } else {
+    menuOptions.push({
+      icon: 'StoryListItem__icon--hide',
+      label: i18n('icu:StoryListItem__hide'),
+      onClick: () => {
+        setHasConfirmHideStory(true);
+      },
+    });
+  }
+
+  if (!isSignalOfficial) {
+    menuOptions.push({
+      icon: 'StoryListItem__icon--info',
+      label: i18n('icu:StoryListItem__info'),
+      onClick: () =>
+        viewUserStories({
+          conversationId,
+          viewTarget: StoryViewTargetType.Details,
+        }),
+    });
+
+    menuOptions.push({
+      icon: 'StoryListItem__icon--chat',
+      label: i18n('icu:StoryListItem__go-to-chat'),
+      onClick: () => onGoToConversation(conversationId),
+    });
   }
 
   return (
     <>
       <ContextMenu
-        aria-label={i18n('StoryListItem__label')}
+        aria-label={i18n('icu:StoryListItem__label')}
         i18n={i18n}
-        menuOptions={[
-          {
-            icon: 'StoryListItem__icon--hide',
-            label: isHidden
-              ? i18n('StoryListItem__unhide')
-              : i18n('StoryListItem__hide'),
-            onClick: () => {
-              if (isHidden) {
-                onHideStory(conversationId);
-              } else {
-                setHasConfirmHideStory(true);
-              }
-            },
-          },
-          {
-            icon: 'StoryListItem__icon--info',
-            label: i18n('StoryListItem__info'),
-            onClick: () =>
-              viewUserStories({
-                conversationId,
-                viewTarget: StoryViewTargetType.Details,
-              }),
-          },
-          {
-            icon: 'StoryListItem__icon--chat',
-            label: i18n('StoryListItem__go-to-chat'),
-            onClick: () => onGoToConversation(conversationId),
-          },
-        ]}
+        menuOptions={menuOptions}
         moduleClassName={classNames('StoryListItem', {
           'StoryListItem--hidden': isHidden,
         })}
@@ -156,20 +170,24 @@ export const StoryListItem = ({
           avatarStoryRing={avatarStoryRing}
           getPreferredBadge={getPreferredBadge}
           i18n={i18n}
+          theme={theme}
           {...(group || sender)}
         />
         <div className="StoryListItem__info">
-          <>
-            <div className="StoryListItem__info--title">
-              {group ? group.title : title}
-            </div>
+          <div className="StoryListItem__info--title">
+            {group ? group.title : title}
+            {isSignalOfficial && (
+              <span className="ContactModal__official-badge" />
+            )}
+          </div>
+          {!isSignalOfficial && (
             <MessageTimestamp
               i18n={i18n}
               isRelativeTime
               module="StoryListItem__info--timestamp"
               timestamp={timestamp}
             />
-          </>
+          )}
           {repliesElement}
         </div>
 
@@ -183,6 +201,7 @@ export const StoryListItem = ({
             moduleClassName="StoryListItem__previews--image"
             queueStoryDownload={queueStoryDownload}
             storyId={story.messageId}
+            onMediaPlaybackStart={onMediaPlaybackStart}
           />
         </div>
       </ContextMenu>
@@ -193,7 +212,7 @@ export const StoryListItem = ({
             {
               action: () => onHideStory(conversationId),
               style: 'affirmative',
-              text: i18n('StoryListItem__hide-modal--confirm'),
+              text: i18n('icu:StoryListItem__hide-modal--confirm'),
             },
           ]}
           i18n={i18n}
@@ -201,9 +220,11 @@ export const StoryListItem = ({
             setHasConfirmHideStory(false);
           }}
         >
-          {i18n('StoryListItem__hide-modal--body', [String(firstName)])}
+          {i18n('icu:StoryListItem__hide-modal--body', {
+            name: String(firstName),
+          })}
         </ConfirmationDialog>
       )}
     </>
   );
-};
+}

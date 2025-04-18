@@ -1,8 +1,8 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ChangeEvent } from 'react';
-import React from 'react';
+import React, { useCallback } from 'react';
 import classNames from 'classnames';
 
 export type Option = Readonly<{
@@ -22,51 +22,52 @@ export type PropsType = Readonly<{
   value?: string | number;
 }>;
 
-export const Select = React.forwardRef(
-  (
-    {
-      ariaLabel,
-      disabled,
-      id,
-      moduleClassName,
-      name,
-      onChange,
-      options,
-      value,
-    }: PropsType,
-    ref: React.Ref<HTMLSelectElement>
-  ): JSX.Element => {
-    const onSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+export const Select = React.forwardRef(function SelectInner(
+  {
+    ariaLabel,
+    disabled,
+    id,
+    moduleClassName,
+    name,
+    onChange,
+    options,
+    value,
+  }: PropsType,
+  ref: React.Ref<HTMLSelectElement>
+): JSX.Element {
+  const onSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
       onChange(event.target.value);
-    };
+    },
+    [onChange]
+  );
 
-    return (
-      <div className={classNames(['module-select', moduleClassName])}>
-        <select
-          aria-label={ariaLabel}
-          disabled={disabled}
-          id={id}
-          name={name}
-          value={value}
-          onChange={onSelectChange}
-          ref={ref}
-        >
-          {options.map(
-            ({ disabled: optionDisabled, text, value: optionValue }) => {
-              return (
-                <option
-                  disabled={optionDisabled}
-                  value={optionValue}
-                  key={optionValue}
-                  aria-label={text}
-                >
-                  {text}
-                </option>
-              );
-            }
-          )}
-        </select>
-      </div>
-    );
-  }
-);
+  return (
+    <div className={classNames(['module-select', moduleClassName])}>
+      <select
+        aria-label={ariaLabel}
+        disabled={disabled}
+        id={id}
+        name={name}
+        value={value}
+        onChange={onSelectChange}
+        ref={ref}
+      >
+        {options.map(
+          ({ disabled: optionDisabled, text, value: optionValue }) => {
+            return (
+              <option
+                disabled={optionDisabled}
+                value={optionValue}
+                key={optionValue}
+                aria-label={text}
+              >
+                {text}
+              </option>
+            );
+          }
+        )}
+      </select>
+    </div>
+  );
+});

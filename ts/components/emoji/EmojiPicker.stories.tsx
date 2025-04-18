@@ -1,29 +1,27 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
+import type { Props } from './EmojiPicker';
 import { EmojiPicker } from './EmojiPicker';
+import { EmojiSkinTone } from '../fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Emoji/EmojiPicker',
-};
+} satisfies Meta<Props>;
 
-export const Base = (): JSX.Element => {
+export function Base(): JSX.Element {
   return (
     <EmojiPicker
       i18n={i18n}
       onPickEmoji={action('onPickEmoji')}
-      onSetSkinTone={action('onSetSkinTone')}
+      onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
       onClose={action('onClose')}
-      skinTone={0}
+      emojiSkinToneDefault={EmojiSkinTone.None}
       recentEmojis={[
         'grinning',
         'grin',
@@ -58,37 +56,36 @@ export const Base = (): JSX.Element => {
         'open_mouth',
         'zipper_mouth_face',
       ]}
+      wasInvokedFromKeyboard={false}
     />
   );
-};
+}
 
-export const NoRecents = (): JSX.Element => {
+export function NoRecents(): JSX.Element {
   return (
     <EmojiPicker
       i18n={i18n}
       onPickEmoji={action('onPickEmoji')}
-      onSetSkinTone={action('onSetSkinTone')}
+      onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
       onClose={action('onClose')}
-      skinTone={0}
+      emojiSkinToneDefault={EmojiSkinTone.None}
       recentEmojis={[]}
+      wasInvokedFromKeyboard={false}
     />
   );
-};
+}
 
-export const WithSettingsButton = (): JSX.Element => {
+export function WithSettingsButton(): JSX.Element {
   return (
     <EmojiPicker
       i18n={i18n}
       onPickEmoji={action('onPickEmoji')}
-      onSetSkinTone={action('onSetSkinTone')}
+      onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
       onClickSettings={action('onClickSettings')}
       onClose={action('onClose')}
-      skinTone={0}
+      emojiSkinToneDefault={EmojiSkinTone.None}
       recentEmojis={[]}
+      wasInvokedFromKeyboard={false}
     />
   );
-};
-
-WithSettingsButton.story = {
-  name: 'With settings button',
-};
+}

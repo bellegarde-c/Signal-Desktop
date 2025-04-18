@@ -2,50 +2,58 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
-
+import type { Meta } from '@storybook/react';
+import type { Props } from './UniversalTimerNotification';
 import { UniversalTimerNotification } from './UniversalTimerNotification';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
-
 import { EXPIRE_TIMERS } from '../../test-both/util/expireTimers';
 
 export default {
   title: 'Components/UniversalTimerNotification',
-};
+} satisfies Meta<Props>;
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
-export const Seconds = (): JSX.Element => (
-  <UniversalTimerNotification
-    i18n={i18n}
-    expireTimer={EXPIRE_TIMERS[0].value / 1000}
-  />
-);
+export function Seconds(): JSX.Element {
+  return (
+    <UniversalTimerNotification
+      i18n={i18n}
+      expireTimer={EXPIRE_TIMERS[0].value}
+    />
+  );
+}
 
-export const Minutes = (): JSX.Element => (
-  <UniversalTimerNotification
-    i18n={i18n}
-    expireTimer={EXPIRE_TIMERS[1].value / 1000}
-  />
-);
+export function Minutes(): JSX.Element {
+  return (
+    <UniversalTimerNotification
+      i18n={i18n}
+      expireTimer={EXPIRE_TIMERS[1].value}
+    />
+  );
+}
 
-export const Hours = (): JSX.Element => (
-  <UniversalTimerNotification
-    i18n={i18n}
-    expireTimer={EXPIRE_TIMERS[2].value / 1000}
-  />
-);
+export function Hours(): JSX.Element {
+  return (
+    <UniversalTimerNotification
+      i18n={i18n}
+      expireTimer={EXPIRE_TIMERS[2].value}
+    />
+  );
+}
 
-export const Days = (): JSX.Element => (
-  <UniversalTimerNotification
-    i18n={i18n}
-    expireTimer={EXPIRE_TIMERS[3].value / 1000}
-  />
-);
+export function Days(): JSX.Element {
+  return (
+    <UniversalTimerNotification
+      i18n={i18n}
+      expireTimer={EXPIRE_TIMERS[3].value}
+    />
+  );
+}
 
-export const Weeks = (): JSX.Element => (
-  <UniversalTimerNotification
-    i18n={i18n}
-    expireTimer={EXPIRE_TIMERS[4].value / 1000}
-  />
-);
+export function Weeks(): JSX.Element {
+  return (
+    <UniversalTimerNotification
+      i18n={i18n}
+      expireTimer={EXPIRE_TIMERS[4].value}
+    />
+  );
+}

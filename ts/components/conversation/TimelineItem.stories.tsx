@@ -1,23 +1,24 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
+import type { Meta } from '@storybook/react';
 import { EmojiPicker } from '../emoji/EmojiPicker';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import { DurationInSeconds } from '../../util/durations';
 import type { PropsType as TimelineItemProps } from './TimelineItem';
 import { TimelineItem } from './TimelineItem';
 import { UniversalTimerNotification } from './UniversalTimerNotification';
-import { CallMode } from '../../types/Calling';
+import { CallMode } from '../../types/CallDisposition';
 import { AvatarColors } from '../../types/Colors';
 import { getDefaultConversation } from '../../test-both/helpers/getDefaultConversation';
 import { WidthBreakpoint } from '../_util';
 import { ThemeType } from '../../types/Util';
+import { PaymentEventKind } from '../../types/Payment';
+import { ErrorBoundary } from './ErrorBoundary';
+import { EmojiSkinTone } from '../fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const renderEmojiPicker: TimelineItemProps['renderEmojiPicker'] = ({
   onClose,
@@ -25,12 +26,15 @@ const renderEmojiPicker: TimelineItemProps['renderEmojiPicker'] = ({
   ref,
 }) => (
   <EmojiPicker
-    i18n={setupI18n('en', enMessages)}
-    skinTone={0}
-    onSetSkinTone={action('EmojiPicker::onSetSkinTone')}
+    i18n={i18n}
+    emojiSkinToneDefault={EmojiSkinTone.None}
+    onEmojiSkinToneDefaultChange={action(
+      'EmojiPicker::onEmojiSkinToneDefaultChange'
+    )}
     ref={ref}
     onClose={onClose}
     onPickEmoji={onPickEmoji}
+    wasInvokedFromKeyboard={false}
   />
 );
 
@@ -43,7 +47,10 @@ const renderContact = (conversationId: string) => (
 );
 
 const renderUniversalTimerNotification = () => (
-  <UniversalTimerNotification i18n={i18n} expireTimer={3600} />
+  <UniversalTimerNotification
+    i18n={i18n}
+    expireTimer={DurationInSeconds.HOUR}
+  />
 );
 
 const getDefaultProps = () => ({
@@ -53,52 +60,66 @@ const getDefaultProps = () => ({
   getPreferredBadge: () => undefined,
   id: 'asdf',
   isNextItemCallingNotification: false,
-  isSelected: false,
+  isTargeted: false,
+  isBlocked: false,
+  isGroup: false,
   interactionMode: 'keyboard' as const,
   theme: ThemeType.light,
-  selectMessage: action('selectMessage'),
+  platform: 'darwin',
+  targetMessage: action('targetMessage'),
+  toggleSelectMessage: action('toggleSelectMessage'),
   reactToMessage: action('reactToMessage'),
   checkForAccount: action('checkForAccount'),
-  clearSelectedMessage: action('clearSelectedMessage'),
-  contactSupport: action('contactSupport'),
-  replyToMessage: action('replyToMessage'),
+  clearTargetedMessage: action('clearTargetedMessage'),
+  setMessageToEdit: action('setMessageToEdit'),
+  setQuoteByMessageId: action('setQuoteByMessageId'),
+  copyMessageText: action('copyMessageText'),
   retryDeleteForEveryone: action('retryDeleteForEveryone'),
-  retrySend: action('retrySend'),
+  retryMessageSend: action('retryMessageSend'),
   blockGroupLinkRequests: action('blockGroupLinkRequests'),
-  deleteMessage: action('deleteMessage'),
-  deleteMessageForEveryone: action('deleteMessageForEveryone'),
+  cancelAttachmentDownload: action('cancelAttachmentDownload'),
   kickOffAttachmentDownload: action('kickOffAttachmentDownload'),
-  learnMoreAboutDeliveryIssue: action('learnMoreAboutDeliveryIssue'),
   markAttachmentAsCorrupted: action('markAttachmentAsCorrupted'),
-  markViewed: action('markViewed'),
   messageExpanded: action('messageExpanded'),
-  showMessageDetail: action('showMessageDetail'),
-  openConversation: action('openConversation'),
+  showConversation: action('showConversation'),
   openGiftBadge: action('openGiftBadge'),
-  showContactDetail: action('showContactDetail'),
+  saveAttachment: action('saveAttachment'),
+  saveAttachments: action('saveAttachments'),
+  onOpenEditNicknameAndNoteModal: action('onOpenEditNicknameAndNoteModal'),
+  onOutgoingAudioCallInConversation: action(
+    'onOutgoingAudioCallInConversation'
+  ),
+  onOutgoingVideoCallInConversation: action(
+    'onOutgoingVideoCallInConversation'
+  ),
+  pushPanelForConversation: action('pushPanelForConversation'),
   showContactModal: action('showContactModal'),
-  showForwardMessageModal: action('showForwardMessageModal'),
-  showVisualAttachment: action('showVisualAttachment'),
-  downloadAttachment: action('downloadAttachment'),
-  displayTapToViewMessage: action('displayTapToViewMessage'),
+  showLightbox: action('showLightbox'),
+  toggleDeleteMessagesModal: action('toggleDeleteMessagesModal'),
+  toggleForwardMessagesModal: action('toggleForwardMessagesModal'),
+  showLightboxForViewOnceMedia: action('showLightboxForViewOnceMedia'),
   doubleCheckMissingQuoteReference: action('doubleCheckMissingQuoteReference'),
+  showAttachmentDownloadStillInProgressToast: action(
+    'showAttachmentDownloadStillInProgressToast'
+  ),
   showExpiredIncomingTapToViewToast: action(
     'showExpiredIncomingTapToViewToast'
   ),
   showExpiredOutgoingTapToViewToast: action(
     'showExpiredIncomingTapToViewToast'
   ),
-  openLink: action('openLink'),
+  showAttachmentNotAvailableModal: action('showAttachmentNotAvailableModal'),
+  showMediaNoLongerAvailableToast: action('showMediaNoLongerAvailableToast'),
+  showTapToViewNotAvailableModal: action('showTapToViewNotAvailableModal'),
   scrollToQuotedMessage: action('scrollToQuotedMessage'),
-  downloadNewVersion: action('downloadNewVersion'),
-  showIdentity: action('showIdentity'),
-  startCallingLobby: action('startCallingLobby'),
+  showSpoiler: action('showSpoiler'),
   startConversation: action('startConversation'),
   returnToActiveCall: action('returnToActiveCall'),
   shouldCollapseAbove: false,
   shouldCollapseBelow: false,
   shouldHideMetadata: false,
   shouldRenderDateHeader: false,
+  toggleSafetyNumberModal: action('toggleSafetyNumberModal'),
 
   now: Date.now(),
 
@@ -108,13 +129,18 @@ const getDefaultProps = () => ({
   renderReactionPicker,
   renderAudioAttachment: () => <div>*AudioAttachment*</div>,
   viewStory: action('viewStory'),
+
+  onReplyToMessage: action('onReplyToMessage'),
+  onOpenMessageRequestActionsConfirmation: action(
+    'onOpenMessageRequestActionsConfirmation'
+  ),
 });
 
 export default {
   title: 'Components/Conversation/TimelineItem',
-};
+} satisfies Meta<TimelineItemProps>;
 
-export const PlainMessage = (): JSX.Element => {
+export function PlainMessage(): JSX.Element {
   const item = {
     type: 'message',
     data: {
@@ -130,15 +156,24 @@ export const PlainMessage = (): JSX.Element => {
   } as TimelineItemProps['item'];
 
   return <TimelineItem {...getDefaultProps()} item={item} i18n={i18n} />;
-};
+}
 
-export const Notification = (): JSX.Element => {
+export function Notification(): JSX.Element {
   const items = [
     {
       type: 'timerNotification',
       data: {
         phoneNumber: '(202) 555-0000',
-        expireTimer: 60,
+        expireTimer: DurationInSeconds.MINUTE,
+        ...getDefaultConversation(),
+        type: 'fromOther',
+      },
+    },
+    {
+      type: 'timerNotification',
+      data: {
+        phoneNumber: '(202) 555-0000',
+        disabled: true,
         ...getDefaultConversation(),
         type: 'fromOther',
       },
@@ -149,6 +184,10 @@ export const Notification = (): JSX.Element => {
     },
     {
       type: 'chatSessionRefreshed',
+    },
+    {
+      type: 'contactRemovedNotification',
+      data: null,
     },
     {
       type: 'safetyNumberNotification',
@@ -168,6 +207,12 @@ export const Notification = (): JSX.Element => {
       data: {
         sender: getDefaultConversation(),
         timestamp: Date.now(),
+      },
+    },
+    {
+      type: 'titleTransitionNotification',
+      data: {
+        oldTitle: 'alice.01',
       },
     },
     {
@@ -434,6 +479,50 @@ export const Notification = (): JSX.Element => {
       },
     },
     {
+      type: 'paymentEvent',
+      data: {
+        event: {
+          kind: PaymentEventKind.ActivationRequest,
+        },
+        sender: getDefaultConversation(),
+        conversation: getDefaultConversation(),
+      },
+    },
+    {
+      type: 'paymentEvent',
+      data: {
+        event: {
+          kind: PaymentEventKind.Activation,
+        },
+        sender: getDefaultConversation(),
+        conversation: getDefaultConversation(),
+      },
+    },
+    {
+      type: 'paymentEvent',
+      data: {
+        event: {
+          kind: PaymentEventKind.ActivationRequest,
+        },
+        sender: getDefaultConversation({
+          isMe: true,
+        }),
+        conversation: getDefaultConversation(),
+      },
+    },
+    {
+      type: 'paymentEvent',
+      data: {
+        event: {
+          kind: PaymentEventKind.Activation,
+        },
+        sender: getDefaultConversation({
+          isMe: true,
+        }),
+        conversation: getDefaultConversation(),
+      },
+    },
+    {
       type: 'resetSessionNotification',
       data: null,
     },
@@ -483,6 +572,14 @@ export const Notification = (): JSX.Element => {
         contact: getDefaultConversation(),
       },
     },
+    {
+      type: 'conversationMerge',
+      data: {
+        conversationTitle: 'Alice',
+        obsoleteConversationTitle: 'Nancy',
+        obsoleteConversationNumber: '+121255501234',
+      },
+    },
   ];
 
   return (
@@ -498,9 +595,9 @@ export const Notification = (): JSX.Element => {
       ))}
     </>
   );
-};
+}
 
-export const UnknownType = (): JSX.Element => {
+export function UnknownType(): JSX.Element {
   const item = {
     type: 'random',
     data: {
@@ -509,12 +606,16 @@ export const UnknownType = (): JSX.Element => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any as TimelineItemProps['item'];
 
-  return <TimelineItem {...getDefaultProps()} item={item} i18n={i18n} />;
-};
+  return (
+    <ErrorBoundary i18n={i18n} showDebugLog={action('showDebugLog')}>
+      <TimelineItem {...getDefaultProps()} item={item} i18n={i18n} />
+    </ErrorBoundary>
+  );
+}
 
-export const MissingItem = (): JSX.Element => {
+export function MissingItem(): JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const item = null as any as TimelineItemProps['item'];
 
   return <TimelineItem {...getDefaultProps()} item={item} i18n={i18n} />;
-};
+}

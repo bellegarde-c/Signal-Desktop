@@ -1,126 +1,97 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ComponentProps } from 'react';
 import React, { useEffect } from 'react';
-import { Globals } from '@react-spring/web';
 import classNames from 'classnames';
 
-import type { ExecuteMenuRoleType } from './TitleBarContainer';
-import type { MenuOptionsType, MenuActionType } from '../types/menu';
-import type { ToastType } from '../state/ducks/toast';
 import type { ViewStoryActionCreatorType } from '../state/ducks/stories';
-import type { ReplacementValuesType } from '../types/Util';
+import type { VerificationTransport } from '../types/VerificationTransport';
 import { ThemeType } from '../types/Util';
-import { AppViewType } from '../state/ducks/app';
-import { Inbox } from './Inbox';
+import { missingCaseError } from '../util/missingCaseError';
+import { type AppStateType, AppViewType } from '../state/ducks/app';
 import { SmartInstallScreen } from '../state/smart/InstallScreen';
 import { StandaloneRegistration } from './StandaloneRegistration';
-import { TitleBarContainer } from './TitleBarContainer';
-import { ToastManager } from './ToastManager';
 import { usePageVisibility } from '../hooks/usePageVisibility';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type PropsType = {
-  appView: AppViewType;
+  state: AppStateType;
   openInbox: () => void;
-  registerSingleDevice: (number: string, code: string) => Promise<void>;
+  getCaptchaToken: () => Promise<string>;
+  registerSingleDevice: (
+    number: string,
+    code: string,
+    sessionId: string
+  ) => Promise<void>;
+  uploadProfile: (opts: {
+    firstName: string;
+    lastName: string;
+  }) => Promise<void>;
   renderCallManager: () => JSX.Element;
   renderGlobalModalContainer: () => JSX.Element;
-  isShowingStoriesView: boolean;
-  renderStories: (closeView: () => unknown) => JSX.Element;
   hasSelectedStoryData: boolean;
+  readyForUpdates: () => void;
   renderStoryViewer: (closeView: () => unknown) => JSX.Element;
+  renderLightbox: () => JSX.Element | null;
   requestVerification: (
-    type: 'sms' | 'voice',
     number: string,
-    token: string
-  ) => Promise<void>;
+    captcha: string,
+    transport: VerificationTransport
+  ) => Promise<{ sessionId: string }>;
   theme: ThemeType;
   isMaximized: boolean;
   isFullScreen: boolean;
-  menuOptions: MenuOptionsType;
-  hasCustomTitleBar: boolean;
-  hideMenuBar: boolean;
+  osClassName: string;
 
-  executeMenuRole: ExecuteMenuRoleType;
-  executeMenuAction: (action: MenuActionType) => void;
-  titleBarDoubleClick: () => void;
-  toast?: {
-    toastType: ToastType;
-    parameters?: ReplacementValuesType;
-  };
-  hideToast: () => unknown;
-  toggleStoriesView: () => unknown;
+  scrollToMessage: (conversationId: string, messageId: string) => unknown;
   viewStory: ViewStoryActionCreatorType;
-} & ComponentProps<typeof Inbox>;
+  renderInbox: () => JSX.Element;
+};
 
-export const App = ({
-  appView,
-  executeMenuAction,
-  executeMenuRole,
-  hasInitialLoadCompleted,
+export function App({
+  state,
+  getCaptchaToken,
   hasSelectedStoryData,
-  hideMenuBar,
-  hideToast,
-  i18n,
-  isCustomizingPreferredReactions,
   isFullScreen,
   isMaximized,
-  isShowingStoriesView,
-  hasCustomTitleBar,
-  menuOptions,
   openInbox,
+  osClassName,
+  readyForUpdates,
   registerSingleDevice,
   renderCallManager,
-  renderCustomizingPreferredReactionsModal,
   renderGlobalModalContainer,
-  renderLeftPane,
-  renderStories,
+  renderInbox,
+  renderLightbox,
   renderStoryViewer,
   requestVerification,
-  selectedConversationId,
-  selectedMessage,
-  showConversation,
-  showWhatsNewModal,
   theme,
-  titleBarDoubleClick,
-  toast,
-  toggleStoriesView,
+  uploadProfile,
   viewStory,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   let contents;
 
-  if (appView === AppViewType.Installer) {
+  if (state.appView === AppViewType.Installer) {
     contents = <SmartInstallScreen />;
-  } else if (appView === AppViewType.Standalone) {
+  } else if (state.appView === AppViewType.Standalone) {
     const onComplete = () => {
-      window.removeSetupMenuItems();
+      window.IPC.removeSetupMenuItems();
       openInbox();
     };
     contents = (
       <StandaloneRegistration
         onComplete={onComplete}
+        getCaptchaToken={getCaptchaToken}
+        readyForUpdates={readyForUpdates}
         requestVerification={requestVerification}
         registerSingleDevice={registerSingleDevice}
+        uploadProfile={uploadProfile}
       />
     );
-  } else if (appView === AppViewType.Inbox) {
-    contents = (
-      <Inbox
-        hasInitialLoadCompleted={hasInitialLoadCompleted}
-        i18n={i18n}
-        isCustomizingPreferredReactions={isCustomizingPreferredReactions}
-        renderCustomizingPreferredReactionsModal={
-          renderCustomizingPreferredReactionsModal
-        }
-        renderLeftPane={renderLeftPane}
-        selectedConversationId={selectedConversationId}
-        selectedMessage={selectedMessage}
-        showConversation={showConversation}
-        showWhatsNewModal={showWhatsNewModal}
-      />
-    );
+  } else if (state.appView === AppViewType.Inbox) {
+    contents = renderInbox();
+  } else if (state.appView === AppViewType.Blank) {
+    contents = undefined;
+  } else {
+    throw missingCaseError(state.appView);
   }
 
   // This are here so that themes are properly applied to anything that is
@@ -137,48 +108,34 @@ export const App = ({
     }
   }, [theme]);
 
+  useEffect(() => {
+    document.body.classList.add(osClassName);
+  }, [osClassName]);
+
+  useEffect(() => {
+    document.body.classList.toggle('full-screen', isFullScreen);
+    document.body.classList.toggle('maximized', isMaximized);
+  }, [isFullScreen, isMaximized]);
+
   const isPageVisible = usePageVisibility();
   useEffect(() => {
     document.body.classList.toggle('page-is-visible', isPageVisible);
   }, [isPageVisible]);
 
-  // A11y settings for react-spring
-  const prefersReducedMotion = useReducedMotion();
-  useEffect(() => {
-    Globals.assign({
-      skipAnimation: prefersReducedMotion,
-    });
-  }, [prefersReducedMotion]);
-
   return (
-    <TitleBarContainer
-      theme={theme}
-      isMaximized={isMaximized}
-      isFullScreen={isFullScreen}
-      hasCustomTitleBar={hasCustomTitleBar}
-      executeMenuRole={executeMenuRole}
-      titleBarDoubleClick={titleBarDoubleClick}
-      hasMenu
-      hideMenuBar={hideMenuBar}
-      i18n={i18n}
-      menuOptions={menuOptions}
-      executeMenuAction={executeMenuAction}
+    <div
+      className={classNames({
+        App: true,
+        'light-theme': theme === ThemeType.light,
+        'dark-theme': theme === ThemeType.dark,
+      })}
     >
-      <div
-        className={classNames({
-          App: true,
-          'light-theme': theme === ThemeType.light,
-          'dark-theme': theme === ThemeType.dark,
-        })}
-      >
-        <ToastManager hideToast={hideToast} i18n={i18n} toast={toast} />
-        {renderGlobalModalContainer()}
-        {renderCallManager()}
-        {isShowingStoriesView && renderStories(toggleStoriesView)}
-        {hasSelectedStoryData &&
-          renderStoryViewer(() => viewStory({ closeViewer: true }))}
-        {contents}
-      </div>
-    </TitleBarContainer>
+      {contents}
+      {renderGlobalModalContainer()}
+      {renderCallManager()}
+      {renderLightbox()}
+      {hasSelectedStoryData &&
+        renderStoryViewer(() => viewStory({ closeViewer: true }))}
+    </div>
   );
-};
+}

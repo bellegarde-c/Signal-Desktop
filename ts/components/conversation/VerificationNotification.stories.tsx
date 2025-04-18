@@ -1,80 +1,65 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { boolean } from '@storybook/addon-knobs';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { Props } from './VerificationNotification';
 import { VerificationNotification } from './VerificationNotification';
 
-const i18n = setupI18n('en', enMessages);
-
-export default {
-  title: 'Components/Conversation/VerificationNotification',
-};
+const { i18n } = window.SignalContext;
 
 const contact = { title: 'Mr. Fire' };
 
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  i18n,
-  type: overrideProps.type || 'markVerified',
-  isLocal: boolean('isLocal', overrideProps.isLocal !== false),
-  contact: overrideProps.contact || contact,
-});
-
-export const MarkAsVerified = (): JSX.Element => {
-  const props = createProps({ type: 'markVerified' });
-
-  return <VerificationNotification {...props} />;
-};
-
-MarkAsVerified.story = {
-  name: 'Mark as Verified',
-};
-
-export const MarkAsNotVerified = (): JSX.Element => {
-  const props = createProps({ type: 'markNotVerified' });
-
-  return <VerificationNotification {...props} />;
-};
-
-MarkAsNotVerified.story = {
-  name: 'Mark as Not Verified',
-};
-
-export const MarkAsVerifiedRemotely = (): JSX.Element => {
-  const props = createProps({ type: 'markVerified', isLocal: false });
-
-  return <VerificationNotification {...props} />;
-};
-
-MarkAsVerifiedRemotely.story = {
-  name: 'Mark as Verified Remotely',
-};
-
-export const MarkAsNotVerifiedRemotely = (): JSX.Element => {
-  const props = createProps({ type: 'markNotVerified', isLocal: false });
-
-  return <VerificationNotification {...props} />;
-};
-
-MarkAsNotVerifiedRemotely.story = {
-  name: 'Mark as Not Verified Remotely',
-};
-
-export const LongName = (): JSX.Element => {
-  const longName = '🎆🍬🏈'.repeat(50);
-
-  const props = createProps({
+export default {
+  title: 'Components/Conversation/VerificationNotification',
+  argTypes: {
+    type: {
+      control: {
+        type: 'select',
+        options: ['markVerified', 'markNotVerified'],
+      },
+    },
+    isLocal: { control: { type: 'boolean' } },
+  },
+  args: {
+    i18n,
     type: 'markVerified',
-    contact: { title: longName },
-  });
+    isLocal: true,
+    contact,
+  },
+} satisfies Meta<Props>;
 
-  return <VerificationNotification {...props} />;
-};
+export function MarkAsVerified(args: Props): JSX.Element {
+  return <VerificationNotification {...args} type="markVerified" />;
+}
 
-LongName.story = {
-  name: 'Long name',
-};
+export function MarkAsNotVerified(args: Props): JSX.Element {
+  return <VerificationNotification {...args} type="markNotVerified" />;
+}
+
+export function MarkAsVerifiedRemotely(args: Props): JSX.Element {
+  return (
+    <VerificationNotification {...args} type="markVerified" isLocal={false} />
+  );
+}
+
+export function MarkAsNotVerifiedRemotely(args: Props): JSX.Element {
+  return (
+    <VerificationNotification
+      {...args}
+      type="markNotVerified"
+      isLocal={false}
+    />
+  );
+}
+
+export function LongName(args: Props): JSX.Element {
+  const longName = '🎆🍬🏈'.repeat(50);
+  return (
+    <VerificationNotification
+      {...args}
+      type="markVerified"
+      contact={{ title: longName }}
+    />
+  );
+}

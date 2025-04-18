@@ -3,39 +3,48 @@
 
 import type { ThunkAction } from 'redux-thunk';
 
+import type { ReadonlyDeep } from 'type-fest';
 import type { UsernameReservationType } from '../../types/Username';
-import { ReserveUsernameError } from '../../types/Username';
-import * as usernameServices from '../../services/username';
-import type { ReserveUsernameResultType } from '../../services/username';
 import {
-  isValidNickname,
-  getMinNickname,
-  getMaxNickname,
-} from '../../util/Username';
+  ReserveUsernameError,
+  ConfirmUsernameResult,
+} from '../../types/Username';
+import * as usernameServices from '../../services/username';
+import { storageServiceUploadJob } from '../../services/storage';
+import type { ReserveUsernameResultType } from '../../services/username';
 import { missingCaseError } from '../../util/missingCaseError';
 import { sleep } from '../../util/sleep';
 import { assertDev } from '../../util/assert';
 import type { StateType as RootStateType } from '../reducer';
 import type { PromiseAction } from '../util';
 import { getMe } from '../selectors/conversations';
+import { getUsernameCorrupted } from '../selectors/items';
 import {
   UsernameEditState,
+  UsernameLinkState,
   UsernameReservationState,
   UsernameReservationError,
 } from './usernameEnums';
-import { showToast, ToastType } from './toast';
+import { showToast } from './toast';
+import { ToastType } from '../../types/Toast';
 import type { ToastActionType } from './toast';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
+import { useBoundActions } from '../../hooks/useBoundActions';
 
-export type UsernameReservationStateType = Readonly<{
+export type UsernameReservationStateType = ReadonlyDeep<{
   state: UsernameReservationState;
+  recoveredUsername?: string;
   reservation?: UsernameReservationType;
   error?: UsernameReservationError;
   abortController?: AbortController;
 }>;
 
-export type UsernameStateType = Readonly<{
+export type UsernameStateType = ReadonlyDeep<{
   // ProfileEditor
   editState: UsernameEditState;
+
+  // UsernameLinkModalBody
+  linkState: UsernameLinkState;
 
   // EditUsernameModalBody
   usernameReservation: UsernameReservationStateType;
@@ -47,58 +56,85 @@ const SET_USERNAME_EDIT_STATE = 'username/SET_USERNAME_EDIT_STATE';
 const OPEN_USERNAME_RESERVATION_MODAL = 'username/OPEN_RESERVATION_MODAL';
 const CLOSE_USERNAME_RESERVATION_MODAL = 'username/CLOSE_RESERVATION_MODAL';
 const SET_USERNAME_RESERVATION_ERROR = 'username/SET_RESERVATION_ERROR';
+const CLEAR_USERNAME_RESERVATION = 'username/CLEAR_RESERVATION';
 const RESERVE_USERNAME = 'username/RESERVE_USERNAME';
 const CONFIRM_USERNAME = 'username/CONFIRM_USERNAME';
 const DELETE_USERNAME = 'username/DELETE_USERNAME';
+const RESET_USERNAME_LINK = 'username/RESET_USERNAME_LINK';
 
-type SetUsernameEditStateActionType = {
+type SetUsernameEditStateActionType = ReadonlyDeep<{
   type: typeof SET_USERNAME_EDIT_STATE;
   payload: {
     editState: UsernameEditState;
   };
-};
+}>;
 
-type OpenUsernameReservationModalActionType = {
+type OpenUsernameReservationModalActionType = ReadonlyDeep<{
   type: typeof OPEN_USERNAME_RESERVATION_MODAL;
-};
+}>;
 
-type CloseUsernameReservationModalActionType = {
+type CloseUsernameReservationModalActionType = ReadonlyDeep<{
   type: typeof CLOSE_USERNAME_RESERVATION_MODAL;
-};
+}>;
 
-type SetUsernameReservationErrorActionType = {
+type SetUsernameReservationErrorActionType = ReadonlyDeep<{
   type: typeof SET_USERNAME_RESERVATION_ERROR;
   payload: {
     error: UsernameReservationError | undefined;
   };
-};
+}>;
 
-type ReserveUsernameActionType = PromiseAction<
-  typeof RESERVE_USERNAME,
-  ReserveUsernameResultType | undefined,
-  { abortController: AbortController }
+type ClearUsernameReservationActionType = ReadonlyDeep<{
+  type: typeof CLEAR_USERNAME_RESERVATION;
+}>;
+
+type ReserveUsernameActionType = ReadonlyDeep<
+  PromiseAction<
+    typeof RESERVE_USERNAME,
+    ReserveUsernameResultType | undefined,
+    { abortController: AbortController }
+  >
 >;
-type ConfirmUsernameActionType = PromiseAction<typeof CONFIRM_USERNAME, void>;
-type DeleteUsernameActionType = PromiseAction<typeof DELETE_USERNAME, void>;
+type ConfirmUsernameActionType = ReadonlyDeep<
+  PromiseAction<typeof CONFIRM_USERNAME, ConfirmUsernameResult>
+>;
+type DeleteUsernameActionType = ReadonlyDeep<
+  PromiseAction<typeof DELETE_USERNAME, void>
+>;
+type ResetUsernameLinkActionType = ReadonlyDeep<
+  PromiseAction<typeof RESET_USERNAME_LINK, void>
+>;
 
-export type UsernameActionType =
+export type UsernameActionType = ReadonlyDeep<
   | SetUsernameEditStateActionType
   | OpenUsernameReservationModalActionType
   | CloseUsernameReservationModalActionType
   | SetUsernameReservationErrorActionType
+  | ClearUsernameReservationActionType
   | ReserveUsernameActionType
   | ConfirmUsernameActionType
-  | DeleteUsernameActionType;
+  | DeleteUsernameActionType
+  | ResetUsernameLinkActionType
+>;
 
 export const actions = {
   setUsernameEditState,
   openUsernameReservationModal,
   closeUsernameReservationModal,
   setUsernameReservationError,
+  clearUsernameReservation,
   reserveUsername,
   confirmUsername,
   deleteUsername,
+  markCompletedUsernameOnboarding,
+  resetUsernameLink,
+  setUsernameLinkColor,
+  markCompletedUsernameLinkOnboarding,
 };
+
+export const useUsernameActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 export function setUsernameEditState(
   editState: UsernameEditState
@@ -130,20 +166,27 @@ export function setUsernameReservationError(
   };
 }
 
+export function clearUsernameReservation(): ClearUsernameReservationActionType {
+  return {
+    type: CLEAR_USERNAME_RESERVATION,
+  };
+}
+
 const INPUT_DELAY_MS = 500;
 
-export type ReserveUsernameOptionsType = Readonly<{
+export type ReserveUsernameOptionsType = ReadonlyDeep<{
+  nickname: string;
+  customDiscriminator?: string;
   doReserveUsername?: typeof usernameServices.reserveUsername;
   delay?: number;
 }>;
 
-export function reserveUsername(
-  nickname: string,
-  {
-    doReserveUsername = usernameServices.reserveUsername,
-    delay = INPUT_DELAY_MS,
-  }: ReserveUsernameOptionsType = {}
-): ThunkAction<
+export function reserveUsername({
+  nickname,
+  customDiscriminator,
+  doReserveUsername = usernameServices.reserveUsername,
+  delay = INPUT_DELAY_MS,
+}: ReserveUsernameOptionsType): ThunkAction<
   void,
   RootStateType,
   unknown,
@@ -151,17 +194,6 @@ export function reserveUsername(
 > {
   return (dispatch, getState) => {
     if (!nickname) {
-      return;
-    }
-
-    if (!isValidNickname(nickname)) {
-      const error = getNicknameInvalidError(nickname);
-      if (error) {
-        dispatch(setUsernameReservationError(error));
-      } else {
-        assertDev(false, 'This should not happen');
-        dispatch(setUsernameReservationError(UsernameReservationError.General));
-      }
       return;
     }
 
@@ -181,6 +213,7 @@ export function reserveUsername(
       return doReserveUsername({
         previousUsername: username,
         nickname,
+        customDiscriminator,
         abortSignal,
       });
     };
@@ -193,7 +226,7 @@ export function reserveUsername(
   };
 }
 
-export type ConfirmUsernameOptionsType = Readonly<{
+export type ConfirmUsernameOptionsType = ReadonlyDeep<{
   doConfirmUsername?: typeof usernameServices.confirmUsername;
 }>;
 
@@ -220,7 +253,7 @@ export function confirmUsername({
   };
 }
 
-export type DeleteUsernameOptionsType = Readonly<{
+export type DeleteUsernameOptionsType = ReadonlyDeep<{
   doDeleteUsername?: typeof usernameServices.deleteUsername;
 
   // Only for testing
@@ -238,9 +271,10 @@ export function deleteUsername({
 > {
   return (dispatch, getState) => {
     const me = getMe(getState());
+    const isUsernameCorrupted = getUsernameCorrupted(getState());
     const username = me.username ?? defaultUsername;
 
-    if (!username) {
+    if (!username && !isUsernameCorrupted) {
       return;
     }
 
@@ -248,7 +282,7 @@ export function deleteUsername({
       try {
         await doDeleteUsername(username);
       } catch {
-        dispatch(showToast(ToastType.FailedToDeleteUsername));
+        dispatch(showToast({ toastType: ToastType.FailedToDeleteUsername }));
       }
     };
 
@@ -259,11 +293,72 @@ export function deleteUsername({
   };
 }
 
+export type ResetUsernameLinkOptionsType = ReadonlyDeep<{
+  doResetLink?: typeof usernameServices.resetLink;
+}>;
+
+export function resetUsernameLink({
+  doResetLink = usernameServices.resetLink,
+}: ResetUsernameLinkOptionsType = {}): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  ResetUsernameLinkActionType
+> {
+  return dispatch => {
+    const me = window.ConversationController.getOurConversationOrThrow();
+    const username = me.get('username');
+    assertDev(username, 'Username is required for resetting link');
+
+    dispatch({
+      type: RESET_USERNAME_LINK,
+      payload: doResetLink(username),
+    });
+  };
+}
+
+function markCompletedUsernameOnboarding(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  never
+> {
+  return async () => {
+    await window.storage.put('hasCompletedUsernameOnboarding', true);
+    const me = window.ConversationController.getOurConversationOrThrow();
+    me.captureChange('usernameOnboarding');
+    storageServiceUploadJob({ reason: 'markCompletedUsernameOnboarding' });
+  };
+}
+
+function markCompletedUsernameLinkOnboarding(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  never
+> {
+  return async () => {
+    await window.storage.put('hasCompletedUsernameLinkOnboarding', true);
+  };
+}
+
+function setUsernameLinkColor(
+  color: number
+): ThunkAction<void, RootStateType, unknown, never> {
+  return async () => {
+    await window.storage.put('usernameLinkColor', color);
+    const me = window.ConversationController.getOurConversationOrThrow();
+    me.captureChange('usernameLinkColor');
+    storageServiceUploadJob({ reason: 'setUsernameLinkColor' });
+  };
+}
+
 // Reducers
 
 export function getEmptyState(): UsernameStateType {
   return {
     editState: UsernameEditState.Editing,
+    linkState: UsernameLinkState.Ready,
     usernameReservation: {
       state: UsernameReservationState.Closed,
     },
@@ -276,20 +371,22 @@ export function reducer(
 ): UsernameStateType {
   const { usernameReservation } = state;
 
+  if (action.type === OPEN_USERNAME_RESERVATION_MODAL) {
+    return {
+      ...state,
+      editState: UsernameEditState.Editing,
+      linkState: UsernameLinkState.Ready,
+      usernameReservation: {
+        state: UsernameReservationState.Open,
+      },
+    };
+  }
+
   if (action.type === SET_USERNAME_EDIT_STATE) {
     const { editState } = action.payload;
     return {
       ...state,
       editState,
-    };
-  }
-
-  if (action.type === OPEN_USERNAME_RESERVATION_MODAL) {
-    return {
-      ...state,
-      usernameReservation: {
-        state: UsernameReservationState.Open,
-      },
     };
   }
 
@@ -314,6 +411,17 @@ export function reducer(
     };
   }
 
+  if (action.type === CLEAR_USERNAME_RESERVATION) {
+    return {
+      ...state,
+      usernameReservation: {
+        ...usernameReservation,
+        error: undefined,
+        reservation: undefined,
+      },
+    };
+  }
+
   if (action.type === 'username/RESERVE_USERNAME_PENDING') {
     usernameReservation.abortController?.abort();
 
@@ -321,6 +429,8 @@ export function reducer(
     return {
       ...state,
       usernameReservation: {
+        ...usernameReservation,
+        error: undefined,
         state: UsernameReservationState.Reserving,
         abortController: meta.abortController,
       },
@@ -352,6 +462,22 @@ export function reducer(
         stateError = UsernameReservationError.CheckCharacters;
       } else if (error === ReserveUsernameError.Conflict) {
         stateError = UsernameReservationError.UsernameNotAvailable;
+      } else if (error === ReserveUsernameError.NotEnoughCharacters) {
+        stateError = UsernameReservationError.NotEnoughCharacters;
+      } else if (error === ReserveUsernameError.TooManyCharacters) {
+        stateError = UsernameReservationError.TooManyCharacters;
+      } else if (error === ReserveUsernameError.CheckStartingCharacter) {
+        stateError = UsernameReservationError.CheckStartingCharacter;
+      } else if (error === ReserveUsernameError.CheckCharacters) {
+        stateError = UsernameReservationError.CheckCharacters;
+      } else if (error === ReserveUsernameError.NotEnoughDiscriminator) {
+        stateError = UsernameReservationError.NotEnoughDiscriminator;
+      } else if (error === ReserveUsernameError.AllZeroDiscriminator) {
+        stateError = UsernameReservationError.AllZeroDiscriminator;
+      } else if (error === ReserveUsernameError.LeadingZeroDiscriminator) {
+        stateError = UsernameReservationError.LeadingZeroDiscriminator;
+      } else if (error === ReserveUsernameError.TooManyAttempts) {
+        stateError = UsernameReservationError.TooManyAttempts;
       } else {
         throw missingCaseError(error);
       }
@@ -416,12 +542,40 @@ export function reducer(
       'Must be reserving before resolving confirmation'
     );
 
-    return {
-      ...state,
-      usernameReservation: {
-        state: UsernameReservationState.Closed,
-      },
-    };
+    const { payload } = action;
+    if (payload === ConfirmUsernameResult.Ok) {
+      return {
+        ...state,
+        usernameReservation: {
+          state: UsernameReservationState.Closed,
+        },
+      };
+    }
+    if (payload === ConfirmUsernameResult.OkRecovered) {
+      const { reservation } = state.usernameReservation;
+      assertDev(
+        reservation !== undefined,
+        'Must be reserving before resolving confirmation'
+      );
+      return {
+        ...state,
+        usernameReservation: {
+          state: UsernameReservationState.Closed,
+          recoveredUsername: reservation.username,
+        },
+      };
+    }
+    if (payload === ConfirmUsernameResult.ConflictOrGone) {
+      return {
+        ...state,
+        usernameReservation: {
+          reservation: state.usernameReservation.reservation,
+          state: UsernameReservationState.Open,
+          error: UsernameReservationError.ConflictOrGone,
+        },
+      };
+    }
+    throw missingCaseError(payload);
   }
 
   if (action.type === 'username/CONFIRM_USERNAME_REJECTED') {
@@ -458,32 +612,26 @@ export function reducer(
     return state;
   }
 
+  if (action.type === 'username/RESET_USERNAME_LINK_PENDING') {
+    return {
+      ...state,
+      linkState: UsernameLinkState.Updating,
+    };
+  }
+
+  if (action.type === 'username/RESET_USERNAME_LINK_FULFILLED') {
+    return {
+      ...state,
+      linkState: UsernameLinkState.Ready,
+    };
+  }
+
+  if (action.type === 'username/RESET_USERNAME_LINK_REJECTED') {
+    return {
+      ...state,
+      linkState: UsernameLinkState.Error,
+    };
+  }
+
   return state;
-}
-
-// Helpers
-
-function getNicknameInvalidError(
-  nickname: string | undefined
-): UsernameReservationError | undefined {
-  if (!nickname) {
-    return undefined;
-  }
-
-  if (nickname.length < getMinNickname()) {
-    return UsernameReservationError.NotEnoughCharacters;
-  }
-
-  if (!/^[0-9a-z_]+$/.test(nickname)) {
-    return UsernameReservationError.CheckCharacters;
-  }
-  if (!/^[a-z_]/.test(nickname)) {
-    return UsernameReservationError.CheckStartingCharacter;
-  }
-
-  if (nickname.length > getMaxNickname()) {
-    return UsernameReservationError.TooManyCharacters;
-  }
-
-  return undefined;
 }

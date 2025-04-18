@@ -1,18 +1,18 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
-import FocusTrap from 'focus-trap-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
-import { get, has, noop } from 'lodash';
+import { noop } from 'lodash';
 import { usePopper } from 'react-popper';
-
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
-import type { LocalizerType } from '../types/Util';
+import { FocusScope } from 'react-aria';
+import type { EmojiPickDataType } from './emoji/EmojiPicker';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews';
+import { ThemeType, type LocalizerType } from '../types/Util';
+import type { Props as EmojiButtonPropsType } from './emoji/EmojiButton';
 import type { TextAttachmentType } from '../types/Attachment';
-
 import { Button, ButtonVariant } from './Button';
 import { ContextMenu } from './ContextMenu';
+import { EmojiButton } from './emoji/EmojiButton';
 import { LinkPreviewSourceType, findLinks } from '../types/LinkPreview';
 import type { MaybeGrabLinkPreviewOptionsType } from '../types/LinkPreview';
 import { Input } from './Input';
@@ -26,10 +26,16 @@ import {
   COLOR_WHITE_INT,
   getBackgroundColor,
 } from '../util/getStoryBackground';
+import { convertShortName } from './emoji/lib';
 import { objectMap } from '../util/objectMap';
 import { handleOutsideClick } from '../util/handleOutsideClick';
 import { ConfirmDiscardDialog } from './ConfirmDiscardDialog';
 import { Spinner } from './Spinner';
+import { FunEmojiPicker } from './fun/FunEmojiPicker';
+import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis';
+import { getEmojiVariantByKey } from './fun/data/emojis';
+import { FunEmojiPickerButton } from './fun/FunButton';
+import { isFunPickerEnabled } from './fun/isFunPickerEnabled';
 
 export type PropsType = {
   debouncedMaybeGrabLinkPreview: (
@@ -39,10 +45,14 @@ export type PropsType = {
   ) => unknown;
   i18n: LocalizerType;
   isSending: boolean;
-  linkPreview?: LinkPreviewType;
+  linkPreview?: LinkPreviewForUIType;
   onClose: () => unknown;
   onDone: (textAttachment: TextAttachmentType) => unknown;
-};
+  onUseEmoji: (_: EmojiPickDataType) => unknown;
+} & Pick<
+  EmojiButtonPropsType,
+  'onEmojiSkinToneDefaultChange' | 'recentEmojis' | 'emojiSkinToneDefault'
+>;
 
 enum LinkPreviewApplied {
   None = 'None',
@@ -73,36 +83,41 @@ const BackgroundStyle = {
   BG5: { color: 4283667331 },
   BG6: {
     angle: 180,
-    startColor: 4279871994,
-    endColor: 4294951785,
+    colors: [0xff19a9fa, 0xff7097d7, 0xffd1998d, 0xffffc369],
+    positions: [0, 0.33, 0.66, 1],
   },
   BG7: {
     angle: 180,
-    startColor: 4282660824,
-    endColor: 4294938254,
+    colors: [0xff4437d8, 0xff6b70de, 0xffb774e0, 0xffff8e8e],
+    positions: [0, 0.33, 0.66, 1],
   },
   BG8: {
     angle: 180,
-    startColor: 4278206532,
-    endColor: 4287871076,
+    colors: [0xff004044, 0xff2c5f45, 0xff648e52, 0xff93b864],
+    positions: [0, 0.33, 0.66, 1],
   },
 };
 
-type BackgroundStyleType = typeof BackgroundStyle[keyof typeof BackgroundStyle];
+type BackgroundStyleType =
+  (typeof BackgroundStyle)[keyof typeof BackgroundStyle];
 
 function getBackground(
   bgStyle: BackgroundStyleType
 ): Pick<TextAttachmentType, 'color' | 'gradient'> {
-  if (has(bgStyle, 'color')) {
-    return { color: get(bgStyle, 'color') };
+  if ('color' in bgStyle) {
+    return { color: bgStyle.color };
   }
 
-  const angle = get(bgStyle, 'angle');
-  const startColor = get(bgStyle, 'startColor');
-  const endColor = get(bgStyle, 'endColor');
+  const { angle, colors, positions } = bgStyle;
 
   return {
-    gradient: { angle, startColor, endColor },
+    gradient: {
+      angle,
+      startColor: colors.at(0),
+      endColor: colors.at(-1),
+      colors,
+      positions,
+    },
   };
 }
 
@@ -111,24 +126,28 @@ function getBgButtonAriaLabel(
   textBackground: TextBackground
 ): string {
   if (textBackground === TextBackground.Background) {
-    return i18n('StoryCreator__text-bg--background');
+    return i18n('icu:StoryCreator__text-bg--background');
   }
 
   if (textBackground === TextBackground.Inverse) {
-    return i18n('StoryCreator__text-bg--inverse');
+    return i18n('icu:StoryCreator__text-bg--inverse');
   }
 
-  return i18n('StoryCreator__text-bg--none');
+  return i18n('icu:StoryCreator__text-bg--none');
 }
 
-export const TextStoryCreator = ({
+export function TextStoryCreator({
   debouncedMaybeGrabLinkPreview,
   i18n,
   isSending,
   linkPreview,
   onClose,
   onDone,
-}: PropsType): JSX.Element => {
+  onEmojiSkinToneDefaultChange,
+  onUseEmoji,
+  recentEmojis,
+  emojiSkinToneDefault,
+}: PropsType): JSX.Element {
   const [showConfirmDiscardModal, setShowConfirmDiscardModal] = useState(false);
 
   const onTryClose = useCallback(() => {
@@ -144,16 +163,6 @@ export const TextStoryCreator = ({
   );
   const [sliderValue, setSliderValue] = useState<number>(100);
   const [text, setText] = useState<string>('');
-
-  const textEditorRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (isEditingText) {
-      textEditorRef.current?.focus();
-    } else {
-      textEditorRef.current?.blur();
-    }
-  }, [isEditingText]);
 
   const [isColorPickerShowing, setIsColorPickerShowing] = useState(false);
   const [colorPickerPopperButtonRef, setColorPickerPopperButtonRef] =
@@ -328,9 +337,32 @@ export const TextStoryCreator = ({
 
   const hasChanges = Boolean(text || hasLinkPreviewApplied);
 
+  const textEditorRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const handleEmojiPickerOpenChange = useCallback((open: boolean) => {
+    setEmojiPickerOpen(open);
+  }, []);
+
+  const handleSelectEmoji = useCallback((emojiSelection: FunEmojiSelection) => {
+    const emojiVariant = getEmojiVariantByKey(emojiSelection.variantKey);
+    const emojiValue = emojiVariant.value;
+
+    setText(originalText => {
+      const insertAt =
+        textEditorRef.current?.selectionEnd ?? originalText.length;
+
+      const before = originalText.substr(0, insertAt);
+      const after = originalText.substr(insertAt, originalText.length);
+
+      return `${before}${emojiValue}${after}`;
+    });
+  }, []);
+
   return (
-    <FocusTrap focusTrapOptions={{ allowOutsideClick: true }}>
-      <div className="StoryCreator">
+    <FocusScope contain restoreFocus>
+      <div className="StoryCreator dark-theme">
         <div className="StoryCreator__container">
           <TextAttachment
             disableLinkPreviewPopup
@@ -345,6 +377,7 @@ export const TextStoryCreator = ({
             onRemoveLinkPreview={() => {
               setLinkPreviewApplied(LinkPreviewApplied.None);
             }}
+            ref={textEditorRef}
             textAttachment={textAttachment}
           />
         </div>
@@ -363,31 +396,31 @@ export const TextStoryCreator = ({
                 menuOptions={[
                   {
                     icon: 'StoryCreator__icon--font-regular',
-                    label: i18n('StoryCreator__text--regular'),
+                    label: i18n('icu:StoryCreator__text--regular'),
                     onClick: () => setTextStyle(TextStyle.Regular),
                     value: TextStyle.Regular,
                   },
                   {
                     icon: 'StoryCreator__icon--font-bold',
-                    label: i18n('StoryCreator__text--bold'),
+                    label: i18n('icu:StoryCreator__text--bold'),
                     onClick: () => setTextStyle(TextStyle.Bold),
                     value: TextStyle.Bold,
                   },
                   {
                     icon: 'StoryCreator__icon--font-serif',
-                    label: i18n('StoryCreator__text--serif'),
+                    label: i18n('icu:StoryCreator__text--serif'),
                     onClick: () => setTextStyle(TextStyle.Serif),
                     value: TextStyle.Serif,
                   },
                   {
                     icon: 'StoryCreator__icon--font-script',
-                    label: i18n('StoryCreator__text--script'),
+                    label: i18n('icu:StoryCreator__text--script'),
                     onClick: () => setTextStyle(TextStyle.Script),
                     value: TextStyle.Script,
                   },
                   {
                     icon: 'StoryCreator__icon--font-condensed',
-                    label: i18n('StoryCreator__text--condensed'),
+                    label: i18n('icu:StoryCreator__text--condensed'),
                     onClick: () => setTextStyle(TextStyle.Condensed),
                     value: TextStyle.Condensed,
                   },
@@ -428,6 +461,43 @@ export const TextStoryCreator = ({
                 }}
                 type="button"
               />
+              {!isFunPickerEnabled() && (
+                <EmojiButton
+                  className="StoryCreator__emoji-button"
+                  i18n={i18n}
+                  onPickEmoji={data => {
+                    onUseEmoji(data);
+                    const emoji = convertShortName(
+                      data.shortName,
+                      data.skinTone
+                    );
+                    const insertAt =
+                      textEditorRef.current?.selectionEnd ?? text.length;
+                    setText(
+                      originalText =>
+                        `${originalText.substr(
+                          0,
+                          insertAt
+                        )}${emoji}${originalText.substr(insertAt, text.length)}`
+                    );
+                  }}
+                  recentEmojis={recentEmojis}
+                  emojiSkinToneDefault={emojiSkinToneDefault}
+                  onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+                />
+              )}
+              {isFunPickerEnabled() && (
+                <FunEmojiPicker
+                  open={emojiPickerOpen}
+                  onOpenChange={handleEmojiPickerOpenChange}
+                  placement="top"
+                  onSelectEmoji={handleSelectEmoji}
+                  theme={ThemeType.dark}
+                  closeOnSelect
+                >
+                  <FunEmojiPickerButton i18n={i18n} />
+                </FunEmojiPicker>
+              )}
             </div>
           ) : (
             <div className="StoryCreator__toolbar--space" />
@@ -438,11 +508,11 @@ export const TextStoryCreator = ({
               theme={Theme.Dark}
               variant={ButtonVariant.Secondary}
             >
-              {i18n('discard')}
+              {i18n('icu:discard')}
             </Button>
             <div className="StoryCreator__controls">
               <button
-                aria-label={i18n('StoryCreator__story-bg')}
+                aria-label={i18n('icu:StoryCreator__story-bg')}
                 className={classNames({
                   StoryCreator__control: true,
                   'StoryCreator__control--bg': true,
@@ -472,7 +542,7 @@ export const TextStoryCreator = ({
                     BackgroundStyle,
                     (bg, backgroundValue) => (
                       <button
-                        aria-label={i18n('StoryCreator__story-bg')}
+                        aria-label={i18n('icu:StoryCreator__story-bg')}
                         className={classNames({
                           StoryCreator__bg: true,
                           'StoryCreator__bg--selected':
@@ -495,7 +565,7 @@ export const TextStoryCreator = ({
                 </div>
               )}
               <button
-                aria-label={i18n('StoryCreator__control--text')}
+                aria-label={i18n('icu:StoryCreator__control--text')}
                 className={classNames({
                   StoryCreator__control: true,
                   'StoryCreator__control--text': true,
@@ -507,7 +577,7 @@ export const TextStoryCreator = ({
                 type="button"
               />
               <button
-                aria-label={i18n('StoryCreator__control--link')}
+                aria-label={i18n('icu:StoryCreator__control--link')}
                 className="StoryCreator__control StoryCreator__control--link"
                 onClick={() =>
                   setIsLinkPreviewInputShowing(!isLinkPreviewInputShowing)
@@ -534,7 +604,9 @@ export const TextStoryCreator = ({
                     i18n={i18n}
                     moduleClassName="StoryCreator__link-preview-input"
                     onChange={setLinkPreviewInputValue}
-                    placeholder={i18n('StoryCreator__link-preview-placeholder')}
+                    placeholder={i18n(
+                      'icu:StoryCreator__link-preview-placeholder'
+                    )}
                     ref={el => el?.focus()}
                     value={linkPreviewInputValue}
                   />
@@ -557,13 +629,13 @@ export const TextStoryCreator = ({
                           theme={Theme.Dark}
                           variant={ButtonVariant.Primary}
                         >
-                          {i18n('StoryCreator__add-link')}
+                          {i18n('icu:StoryCreator__add-link')}
                         </Button>
                       </>
                     ) : (
                       <div className="StoryCreator__link-preview-empty">
                         <div className="StoryCreator__link-preview-empty__icon" />
-                        {i18n('StoryCreator__link-preview-empty')}
+                        {i18n('icu:StoryCreator__link-preview-empty')}
                       </div>
                     )}
                   </div>
@@ -579,7 +651,7 @@ export const TextStoryCreator = ({
               {isSending ? (
                 <Spinner svgSize="small" />
               ) : (
-                i18n('StoryCreator__next')
+                i18n('icu:StoryCreator__next')
               )}
             </Button>
           </div>
@@ -592,6 +664,6 @@ export const TextStoryCreator = ({
           />
         )}
       </div>
-    </FocusTrap>
+    </FocusScope>
   );
-};
+}

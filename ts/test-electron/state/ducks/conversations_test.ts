@@ -1,10 +1,12 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { v4 as uuid } from 'uuid';
+import { v4 as generateUuid } from 'uuid';
 import { times } from 'lodash';
+import type { ReadonlyDeep } from 'type-fest';
+
 import { reducer as rootReducer } from '../../../state/reducer';
 import { noopAction } from '../../../state/ducks/noop';
 import {
@@ -18,11 +20,13 @@ import type {
   ConversationType,
   ConversationsStateType,
   MessageType,
-  SelectedConversationChangedActionType,
+  TargetedConversationChangedActionType,
   ToggleConversationInChooseMembersActionType,
+  MessageChangedActionType,
+  ConversationsUpdatedActionType,
 } from '../../../state/ducks/conversations';
 import {
-  SELECTED_CONVERSATION_CHANGED,
+  TARGETED_CONVERSATION_CHANGED,
   actions,
   cancelConversationVerification,
   clearCancelledConversationVerification,
@@ -32,12 +36,19 @@ import {
   updateConversationLookups,
 } from '../../../state/ducks/conversations';
 import { ReadStatus } from '../../../messages/MessageReadStatus';
-import { ContactSpoofingType } from '../../../util/contactSpoofing';
-import { CallMode } from '../../../types/Calling';
-import { UUID } from '../../../types/UUID';
+import type { SingleServePromiseIdString } from '../../../services/singleServePromise';
+import { CallMode } from '../../../types/CallDisposition';
+import {
+  type AciString,
+  type PniString,
+  generateAci,
+  getAciFromPrefix,
+} from '../../../types/ServiceId';
+import { generateStoryDistributionId } from '../../../types/StoryDistributionId';
 import {
   getDefaultConversation,
-  getDefaultConversationWithUuid,
+  getDefaultConversationWithServiceId,
+  getDefaultGroup,
 } from '../../../test-both/helpers/getDefaultConversation';
 import { getDefaultAvatars } from '../../../types/Avatar';
 import {
@@ -46,22 +57,32 @@ import {
   defaultSetGroupMetadataComposerState,
 } from '../../../test-both/helpers/defaultComposerStates';
 import { updateRemoteConfig } from '../../../test-both/helpers/RemoteConfigStub';
+import type { ShowSendAnywayDialogActionType } from '../../../state/ducks/globalModals';
+import { SHOW_SEND_ANYWAY_DIALOG } from '../../../state/ducks/globalModals';
+import type { StoryDistributionListsActionType } from '../../../state/ducks/storyDistributionLists';
+import {
+  DELETE_LIST,
+  HIDE_MY_STORIES_FROM,
+  MODIFY_LIST,
+  VIEWERS_CHANGED,
+} from '../../../state/ducks/storyDistributionLists';
+import { MY_STORY_ID } from '../../../types/Stories';
+import type { ReadonlyMessageAttributesType } from '../../../model-types.d';
+import { strictAssert } from '../../../util/assert';
 
 const {
   clearGroupCreationError,
-  clearInvitedUuidsForNewlyCreatedGroup,
+  clearInvitedServiceIdsForNewlyCreatedGroup,
   closeContactSpoofingReview,
   closeMaximumGroupSizeModal,
   closeRecommendedGroupSizeModal,
   conversationStoppedByMissingVerification,
   createGroup,
   discardMessages,
-  messageChanged,
   repairNewestMessage,
   repairOldestMessage,
   resetAllChatColors,
-  reviewGroupMemberNameCollision,
-  reviewMessageRequestNameCollision,
+  reviewConversationNameCollision,
   setComposeGroupAvatar,
   setComposeGroupName,
   setComposeSearchTerm,
@@ -75,13 +96,38 @@ const {
   toggleConversationInChooseMembers,
 } = actions;
 
+// can't use messageChanged action creator because it's a ThunkAction
+function messageChanged(
+  messageId: string,
+  conversationId: string,
+  data: ReadonlyMessageAttributesType
+): ReadonlyDeep<MessageChangedActionType> {
+  return {
+    type: 'MESSAGE_CHANGED',
+    payload: {
+      id: messageId,
+      conversationId,
+      data,
+    },
+  };
+}
+
 describe('both/state/ducks/conversations', () => {
+  const LIST_ID_1 = generateStoryDistributionId();
+  const LIST_ID_2 = generateStoryDistributionId();
+  const SERVICE_ID_1 = generateAci();
+  const SERVICE_ID_2 = generateAci();
+  const SERVICE_ID_3 = generateAci();
+  const SERVICE_ID_4 = generateAci();
+
   const getEmptyRootState = () => rootReducer(undefined, noopAction());
 
   let sinonSandbox: sinon.SinonSandbox;
   let createGroupStub: sinon.SinonStub;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await window.ConversationController.load();
+
     sinonSandbox = sinon.createSandbox();
 
     sinonSandbox.stub(window.Whisper.events, 'trigger');
@@ -96,65 +142,63 @@ describe('both/state/ducks/conversations', () => {
   describe('helpers', () => {
     describe('getConversationCallMode', () => {
       const fakeConversation: ConversationType = getDefaultConversation();
+      const fakeGroup: ConversationType = getDefaultGroup();
 
-      it("returns CallMode.None if you've left the conversation", () => {
+      it("returns null if you've left the conversation", () => {
         assert.strictEqual(
           getConversationCallMode({
             ...fakeConversation,
             left: true,
           }),
-          CallMode.None
+          null
         );
       });
 
-      it("returns CallMode.None if you've blocked the other person", () => {
+      it("returns null if you've blocked the other person", () => {
         assert.strictEqual(
           getConversationCallMode({
             ...fakeConversation,
             isBlocked: true,
           }),
-          CallMode.None
+          null
         );
       });
 
-      it("returns CallMode.None if you haven't accepted message requests", () => {
+      it("returns null if you haven't accepted message requests", () => {
         assert.strictEqual(
           getConversationCallMode({
             ...fakeConversation,
             acceptedMessageRequest: false,
           }),
-          CallMode.None
+          null
         );
       });
 
-      it('returns CallMode.None if the conversation is Note to Self', () => {
+      it('returns null if the conversation is Note to Self', () => {
         assert.strictEqual(
           getConversationCallMode({
             ...fakeConversation,
             isMe: true,
           }),
-          CallMode.None
+          null
         );
       });
 
-      it('returns CallMode.None for v1 groups', () => {
+      it('returns null for v1 groups', () => {
         assert.strictEqual(
           getConversationCallMode({
-            ...fakeConversation,
-            type: 'group',
+            ...fakeGroup,
             groupVersion: 1,
-            sharedGroupNames: [],
           }),
-          CallMode.None
+          null
         );
 
         assert.strictEqual(
           getConversationCallMode({
-            ...fakeConversation,
-            type: 'group',
-            sharedGroupNames: [],
+            ...fakeGroup,
+            groupVersion: undefined,
           }),
-          CallMode.None
+          null
         );
       });
 
@@ -168,10 +212,8 @@ describe('both/state/ducks/conversations', () => {
       it('returns CallMode.Group if the conversation is a v2 group', () => {
         assert.strictEqual(
           getConversationCallMode({
-            ...fakeConversation,
-            type: 'group',
+            ...fakeGroup,
             groupVersion: 2,
-            sharedGroupNames: [],
           }),
           CallMode.Group
         );
@@ -188,8 +230,8 @@ describe('both/state/ducks/conversations', () => {
           result.conversationsByE164
         );
         assert.strictEqual(
-          state.conversationsByUuid,
-          result.conversationsByUuid
+          state.conversationsByServiceId,
+          result.conversationsByServiceId
         );
         assert.strictEqual(
           state.conversationsByGroupId,
@@ -201,7 +243,7 @@ describe('both/state/ducks/conversations', () => {
         const removed = getDefaultConversation({
           id: 'id-removed',
           e164: 'e164-removed',
-          uuid: undefined,
+          serviceId: undefined,
         });
 
         const state = {
@@ -213,19 +255,19 @@ describe('both/state/ducks/conversations', () => {
         const added = getDefaultConversation({
           id: 'id-added',
           e164: 'e164-added',
-          uuid: undefined,
+          serviceId: undefined,
         });
 
         const expected = {
           'e164-added': added,
         };
 
-        const actual = updateConversationLookups(added, removed, state);
+        const actual = updateConversationLookups([added], [removed], state);
 
         assert.deepEqual(actual.conversationsByE164, expected);
         assert.strictEqual(
-          state.conversationsByUuid,
-          actual.conversationsByUuid
+          state.conversationsByServiceId,
+          actual.conversationsByServiceId
         );
         assert.strictEqual(
           state.conversationsByGroupId,
@@ -234,33 +276,33 @@ describe('both/state/ducks/conversations', () => {
       });
 
       it('adds and removes uuid-only contact', () => {
-        const removed = getDefaultConversationWithUuid({
+        const removed = getDefaultConversationWithServiceId({
           id: 'id-removed',
           e164: undefined,
         });
 
         const state = {
           ...getEmptyState(),
-          conversationsByuuid: {
-            [removed.uuid]: removed,
+          conversationsByServiceId: {
+            [removed.serviceId]: removed,
           },
         };
-        const added = getDefaultConversationWithUuid({
+        const added = getDefaultConversationWithServiceId({
           id: 'id-added',
           e164: undefined,
         });
 
         const expected = {
-          [added.uuid]: added,
+          [added.serviceId]: added,
         };
 
-        const actual = updateConversationLookups(added, removed, state);
+        const actual = updateConversationLookups([added], [removed], state);
 
         assert.strictEqual(
           state.conversationsByE164,
           actual.conversationsByE164
         );
-        assert.deepEqual(actual.conversationsByUuid, expected);
+        assert.deepEqual(actual.conversationsByServiceId, expected);
         assert.strictEqual(
           state.conversationsByGroupId,
           actual.conversationsByGroupId
@@ -272,12 +314,12 @@ describe('both/state/ducks/conversations', () => {
           id: 'id-removed',
           groupId: 'groupId-removed',
           e164: undefined,
-          uuid: undefined,
+          serviceId: undefined,
         });
 
-        const state = {
+        const state: ConversationsStateType = {
           ...getEmptyState(),
-          conversationsBygroupId: {
+          conversationsByGroupId: {
             'groupId-removed': removed,
           },
         };
@@ -285,24 +327,111 @@ describe('both/state/ducks/conversations', () => {
           id: 'id-added',
           groupId: 'groupId-added',
           e164: undefined,
-          uuid: undefined,
+          serviceId: undefined,
         });
 
         const expected = {
           'groupId-added': added,
         };
 
-        const actual = updateConversationLookups(added, removed, state);
+        const actual = updateConversationLookups([added], [removed], state);
 
         assert.strictEqual(
           state.conversationsByE164,
           actual.conversationsByE164
         );
         assert.strictEqual(
-          state.conversationsByUuid,
-          actual.conversationsByUuid
+          state.conversationsByServiceId,
+          actual.conversationsByServiceId
         );
         assert.deepEqual(actual.conversationsByGroupId, expected);
+      });
+      it('adds and removes multiple conversations', () => {
+        const removed = getDefaultConversation({
+          id: 'id-removed',
+          groupId: 'groupId-removed',
+          e164: 'e164-removed',
+          serviceId: 'serviceId-removed' as unknown as AciString,
+          pni: 'pni-removed' as unknown as PniString,
+          username: 'username-removed',
+        });
+        const stable = getDefaultConversation({
+          id: 'id-stable',
+          groupId: 'groupId-stable',
+          e164: 'e164-stable',
+          serviceId: 'serviceId-stable' as unknown as AciString,
+          pni: 'pni-stable' as unknown as PniString,
+          username: 'username-stable',
+        });
+
+        const state: ConversationsStateType = {
+          ...getEmptyState(),
+          conversationsByServiceId: {
+            'serviceId-removed': removed,
+            'serviceId-stable': stable,
+            'pni-removed': removed,
+            'pni-stable': stable,
+          },
+          conversationsByE164: {
+            'e164-removed': removed,
+            'e164-stable': stable,
+          },
+          conversationsByGroupId: {
+            'groupId-removed': removed,
+            'groupId-stable': stable,
+          },
+          conversationsByUsername: {
+            'username-removed': removed,
+            'username-stable': stable,
+          },
+        };
+
+        const added1 = getDefaultConversation({
+          id: 'id-added1',
+          groupId: 'groupId-added1',
+          e164: 'e164-added1',
+          serviceId: 'serviceId-added1' as unknown as AciString,
+          pni: 'pni-added1' as unknown as PniString,
+          username: 'username-added1',
+        });
+        const added2 = getDefaultConversation({
+          id: 'id-added2',
+          groupId: 'groupId-added2',
+          e164: undefined,
+          serviceId: undefined,
+          pni: undefined,
+          username: undefined,
+        });
+
+        const actual = {
+          ...state,
+          ...updateConversationLookups([added1, added2], [removed], state),
+        };
+
+        const expected = {
+          ...getEmptyState(),
+          conversationsByServiceId: {
+            'serviceId-added1': added1,
+            'pni-added1': added1,
+            'serviceId-stable': stable,
+            'pni-stable': stable,
+          },
+          conversationsByE164: {
+            'e164-added1': added1,
+            'e164-stable': stable,
+          },
+          conversationsByGroupId: {
+            'groupId-added1': added1,
+            'groupId-stable': stable,
+            'groupId-added2': added2,
+          },
+          conversationsByUsername: {
+            'username-added1': added1,
+            'username-stable': stable,
+          },
+        };
+
+        assert.deepEqual(actual, expected);
       });
     });
   });
@@ -314,7 +443,7 @@ describe('both/state/ducks/conversations', () => {
     const messageId = 'message-guid-1';
     const messageIdTwo = 'message-guid-2';
     const messageIdThree = 'message-guid-3';
-    const sourceUuid = UUID.generate().toString();
+    const sourceServiceId = generateAci();
 
     function getDefaultMessage(id: string): MessageType {
       return {
@@ -324,7 +453,7 @@ describe('both/state/ducks/conversations', () => {
         received_at: previousTime,
         sent_at: previousTime,
         source: 'source',
-        sourceUuid,
+        sourceServiceId,
         timestamp: previousTime,
         type: 'incoming' as const,
         readStatus: ReadStatus.Read,
@@ -343,39 +472,79 @@ describe('both/state/ducks/conversations', () => {
     }
 
     describe('showConversation', () => {
-      it('selects a conversation id', () => {
+      it('does not select a conversation if it does not exist', () => {
         const state = {
           ...getEmptyState(),
         };
-        const action = showConversation({ conversationId: 'abc123' });
+        const dispatch = sinon.spy();
+        showConversation({ conversationId: 'abc123' })(
+          dispatch,
+          getEmptyRootState,
+          null
+        );
+        const action = dispatch.getCall(0).args[0];
+        const nextState = reducer(state, action);
+
+        assert.isUndefined(nextState.selectedConversationId);
+        assert.isUndefined(nextState.targetedMessage);
+      });
+
+      it('selects a conversation id', () => {
+        const conversation = getDefaultConversation({
+          id: 'abc123',
+        });
+        const state = {
+          ...getEmptyState(),
+          conversationLookup: {
+            [conversation.id]: conversation,
+          },
+        };
+        const dispatch = sinon.spy();
+        showConversation({ conversationId: 'abc123' })(
+          dispatch,
+          getEmptyRootState,
+          null
+        );
+        const action = dispatch.getCall(0).args[0];
         const nextState = reducer(state, action);
 
         assert.equal(nextState.selectedConversationId, 'abc123');
-        assert.isUndefined(nextState.selectedMessage);
+        assert.isUndefined(nextState.targetedMessage);
       });
 
       it('selects a conversation and a message', () => {
+        const conversation = getDefaultConversation({
+          id: 'abc123',
+        });
         const state = {
           ...getEmptyState(),
+          conversationLookup: {
+            [conversation.id]: conversation,
+          },
         };
-        const action = showConversation({
+
+        const dispatch = sinon.spy();
+        showConversation({
           conversationId: 'abc123',
           messageId: 'xyz987',
-        });
+        })(dispatch, getEmptyRootState, null);
+        const action = dispatch.getCall(0).args[0];
         const nextState = reducer(state, action);
 
         assert.equal(nextState.selectedConversationId, 'abc123');
-        assert.equal(nextState.selectedMessage, 'xyz987');
+        assert.equal(nextState.targetedMessage, 'xyz987');
       });
 
       describe('showConversation switchToAssociatedView=true', () => {
-        let action: SelectedConversationChangedActionType;
+        let action: TargetedConversationChangedActionType;
 
         beforeEach(() => {
-          action = showConversation({
+          const dispatch = sinon.spy();
+          showConversation({
             conversationId: 'fake-conversation-id',
             switchToAssociatedView: true,
-          });
+          })(dispatch, getEmptyRootState, null);
+          [action] = dispatch.getCall(0).args;
         });
 
         it('shows the inbox if the conversation is not archived', () => {
@@ -436,15 +605,12 @@ describe('both/state/ducks/conversations', () => {
       it('clears the list of invited conversation UUIDs', () => {
         const state = {
           ...getEmptyState(),
-          invitedUuidsForNewlyCreatedGroup: [
-            UUID.generate().toString(),
-            UUID.generate().toString(),
-          ],
+          invitedServiceIdsForNewlyCreatedGroup: [generateAci(), generateAci()],
         };
-        const action = clearInvitedUuidsForNewlyCreatedGroup();
+        const action = clearInvitedServiceIdsForNewlyCreatedGroup();
         const result = reducer(state, action);
 
-        assert.isUndefined(result.invitedUuidsForNewlyCreatedGroup);
+        assert.isUndefined(result.invitedServiceIdsForNewlyCreatedGroup);
       });
     });
 
@@ -452,15 +618,12 @@ describe('both/state/ducks/conversations', () => {
       it('closes the contact spoofing review modal if it was open', () => {
         const state = {
           ...getEmptyState(),
-          contactSpoofingReview: {
-            type: ContactSpoofingType.DirectConversationWithSameTitle as const,
-            safeConversationId: 'abc123',
-          },
+          hasContactSpoofingReview: true,
         };
         const action = closeContactSpoofingReview();
         const actual = reducer(state, action);
 
-        assert.isUndefined(actual.contactSpoofingReview);
+        assert.isFalse(actual.hasContactSpoofingReview);
       });
 
       it("does nothing if the modal wasn't already open", () => {
@@ -699,14 +862,14 @@ describe('both/state/ducks/conversations', () => {
       });
 
       it('dispatches a CREATE_GROUP_FULFILLED event (which updates the newly-created conversation IDs), triggers a showConversation event and switches to the associated conversation on success', async () => {
-        const abc = UUID.fromPrefix('abc').toString();
+        const abc = getAciFromPrefix('abc');
         createGroupStub.resolves({
           id: '9876',
           get: (key: string) => {
             if (key !== 'pendingMembersV2') {
               throw new Error('This getter is not set up for this test');
             }
-            return [{ uuid: abc }];
+            return [{ serviceId: abc }];
           },
         });
 
@@ -723,13 +886,13 @@ describe('both/state/ducks/conversations', () => {
 
         sinon.assert.calledWith(dispatch, {
           type: 'CREATE_GROUP_FULFILLED',
-          payload: { invitedUuids: [abc] },
+          payload: { invitedServiceIds: [abc] },
         });
 
         sinon.assert.calledWith(dispatch, {
-          type: SELECTED_CONVERSATION_CHANGED,
+          type: TARGETED_CONVERSATION_CHANGED,
           payload: {
-            id: '9876',
+            conversationId: '9876',
             messageId: undefined,
             switchToAssociatedView: true,
           },
@@ -737,7 +900,7 @@ describe('both/state/ducks/conversations', () => {
 
         const fulfilledAction = dispatch.getCall(1).args[0];
         const result = reducer(conversationsState, fulfilledAction);
-        assert.deepEqual(result.invitedUuidsForNewlyCreatedGroup, [abc]);
+        assert.deepEqual(result.invitedServiceIdsForNewlyCreatedGroup, [abc]);
       });
     });
 
@@ -747,28 +910,32 @@ describe('both/state/ducks/conversations', () => {
           getEmptyState(),
           conversationStoppedByMissingVerification({
             conversationId: 'convo A',
-            untrustedUuids: ['convo 1'],
+            untrustedServiceIds: [SERVICE_ID_1],
           })
         );
         const second = reducer(
           first,
           conversationStoppedByMissingVerification({
             conversationId: 'convo A',
-            untrustedUuids: ['convo 2'],
+            untrustedServiceIds: [SERVICE_ID_2],
           })
         );
         const third = reducer(
           second,
           conversationStoppedByMissingVerification({
             conversationId: 'convo A',
-            untrustedUuids: ['convo 1', 'convo 3'],
+            untrustedServiceIds: [SERVICE_ID_1, SERVICE_ID_3],
           })
         );
 
         assert.deepStrictEqual(third.verificationDataByConversation, {
           'convo A': {
             type: ConversationVerificationState.PendingVerification,
-            uuidsNeedingVerification: ['convo 1', 'convo 2', 'convo 3'],
+            serviceIdsNeedingVerification: [
+              SERVICE_ID_1,
+              SERVICE_ID_2,
+              SERVICE_ID_3,
+            ],
           },
         });
       });
@@ -787,14 +954,123 @@ describe('both/state/ducks/conversations', () => {
           state,
           conversationStoppedByMissingVerification({
             conversationId: 'convo A',
-            untrustedUuids: ['convo 1', 'convo 2'],
+            untrustedServiceIds: [SERVICE_ID_1, SERVICE_ID_2],
           })
         );
 
         assert.deepStrictEqual(actual.verificationDataByConversation, {
           'convo A': {
             type: ConversationVerificationState.PendingVerification,
-            uuidsNeedingVerification: ['convo 1', 'convo 2'],
+            serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
+          },
+        });
+      });
+    });
+    describe('SHOW_SEND_ANYWAY_DIALOG', () => {
+      it('adds nothing to existing empty state', () => {
+        const state = getEmptyState();
+        const action: ShowSendAnywayDialogActionType = {
+          type: SHOW_SEND_ANYWAY_DIALOG,
+          payload: {
+            untrustedByConversation: {},
+            promiseUuid: generateUuid() as SingleServePromiseIdString,
+            source: undefined,
+          },
+        };
+        const actual = reducer(state, action);
+
+        assert.deepStrictEqual(actual.verificationDataByConversation, {});
+      });
+
+      it('adds multiple conversations and distribution lists to empty list', () => {
+        const state = getEmptyState();
+        const action: ShowSendAnywayDialogActionType = {
+          type: SHOW_SEND_ANYWAY_DIALOG,
+          payload: {
+            untrustedByConversation: {
+              [LIST_ID_1]: {
+                serviceIds: [SERVICE_ID_1, SERVICE_ID_2],
+                byDistributionId: {
+                  [LIST_ID_1]: {
+                    serviceIds: [SERVICE_ID_1, SERVICE_ID_3],
+                  },
+                  [LIST_ID_2]: {
+                    serviceIds: [SERVICE_ID_2, SERVICE_ID_4],
+                  },
+                },
+              },
+            },
+            promiseUuid: generateUuid() as SingleServePromiseIdString,
+            source: undefined,
+          },
+        };
+        const actual = reducer(state, action);
+
+        assert.deepStrictEqual(actual.verificationDataByConversation, {
+          [LIST_ID_1]: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_3],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_2, SERVICE_ID_4],
+              },
+            },
+          },
+        });
+      });
+
+      it('adds and de-dupes in multiple conversations and distribution lists', () => {
+        const state: ConversationsStateType = {
+          ...getEmptyState(),
+          verificationDataByConversation: {
+            [LIST_ID_1]: {
+              type: ConversationVerificationState.PendingVerification,
+              serviceIdsNeedingVerification: [SERVICE_ID_1],
+              byDistributionId: {
+                [LIST_ID_1]: {
+                  serviceIdsNeedingVerification: [SERVICE_ID_1],
+                },
+              },
+            },
+          },
+        };
+        const action: ShowSendAnywayDialogActionType = {
+          type: SHOW_SEND_ANYWAY_DIALOG,
+          payload: {
+            untrustedByConversation: {
+              [LIST_ID_1]: {
+                serviceIds: [SERVICE_ID_1, SERVICE_ID_2],
+                byDistributionId: {
+                  [LIST_ID_1]: {
+                    serviceIds: [SERVICE_ID_1, SERVICE_ID_3],
+                  },
+                  [LIST_ID_2]: {
+                    serviceIds: [SERVICE_ID_2, SERVICE_ID_4],
+                  },
+                },
+              },
+            },
+            promiseUuid: generateUuid() as SingleServePromiseIdString,
+            source: undefined,
+          },
+        };
+        const actual = reducer(state, action);
+
+        assert.deepStrictEqual(actual.verificationDataByConversation, {
+          [LIST_ID_1]: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_3],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_2, SERVICE_ID_4],
+              },
+            },
           },
         });
       });
@@ -826,7 +1102,7 @@ describe('both/state/ducks/conversations', () => {
           verificationDataByConversation: {
             'convo A': {
               type: ConversationVerificationState.PendingVerification,
-              uuidsNeedingVerification: ['convo 1', 'convo 2'],
+              serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
             },
           },
         };
@@ -920,7 +1196,7 @@ describe('both/state/ducks/conversations', () => {
           verificationDataByConversation: {
             'convo A': {
               type: ConversationVerificationState.PendingVerification,
-              uuidsNeedingVerification: ['convo 1', 'convo 2'],
+              serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
             },
           },
         };
@@ -1163,31 +1439,13 @@ describe('both/state/ducks/conversations', () => {
       });
     });
 
-    describe('REVIEW_GROUP_MEMBER_NAME_COLLISION', () => {
-      it('starts reviewing a group member name collision', () => {
+    describe('REVIEW_CONVERSATION_NAME_COLLISION', () => {
+      it('starts reviewing a name collision', () => {
         const state = getEmptyState();
-        const action = reviewGroupMemberNameCollision('abc123');
+        const action = reviewConversationNameCollision();
         const actual = reducer(state, action);
 
-        assert.deepEqual(actual.contactSpoofingReview, {
-          type: ContactSpoofingType.MultipleGroupMembersWithSameTitle as const,
-          groupConversationId: 'abc123',
-        });
-      });
-    });
-
-    describe('REVIEW_MESSAGE_REQUEST_NAME_COLLISION', () => {
-      it('starts reviewing a message request name collision', () => {
-        const state = getEmptyState();
-        const action = reviewMessageRequestNameCollision({
-          safeConversationId: 'def',
-        });
-        const actual = reducer(state, action);
-
-        assert.deepEqual(actual.contactSpoofingReview, {
-          type: ContactSpoofingType.DirectConversationWithSameTitle as const,
-          safeConversationId: 'def',
-        });
+        assert.isTrue(actual.hasContactSpoofingReview);
       });
     });
 
@@ -1379,6 +1637,7 @@ describe('both/state/ducks/conversations', () => {
         ...getDefaultMessage(messageId),
         body: 'changed',
         displayLimit: undefined,
+        isSpoilerExpanded: undefined,
       };
 
       it('updates message data', () => {
@@ -1407,64 +1666,6 @@ describe('both/state/ducks/conversations', () => {
           state.messagesLookup[messageId],
           startState.messagesLookup[messageId]
         );
-        assert.strictEqual(
-          state.messagesByConversation[conversationId]?.messageChangeCounter,
-          0
-        );
-      });
-
-      it('increments message change counter if new message has reactions', () => {
-        const changedMessageWithReaction: MessageType = {
-          ...changedMessage,
-          reactions: [
-            {
-              emoji: '🎁',
-              fromId: 'some-other-id',
-              timestamp: 2222,
-              targetTimestamp: 1111,
-              targetAuthorUuid: 'author-uuid',
-            },
-          ],
-        };
-        const state = reducer(
-          startState,
-          messageChanged(messageId, conversationId, changedMessageWithReaction)
-        );
-
-        assert.deepEqual(
-          state.messagesLookup[messageId],
-          changedMessageWithReaction
-        );
-        assert.strictEqual(
-          state.messagesByConversation[conversationId]?.messageChangeCounter,
-          1
-        );
-      });
-
-      it('does not increment message change counter if only old message had reactions', () => {
-        const updatedStartState = {
-          ...startState,
-          messagesLookup: {
-            [messageId]: {
-              ...startState.messagesLookup[messageId],
-              reactions: [
-                {
-                  emoji: '🎁',
-                  fromId: 'some-other-id',
-                  timestamp: 2222,
-                  targetTimestamp: 1111,
-                  targetAuthorUuid: 'author-uuid',
-                },
-              ],
-            },
-          },
-        };
-        const state = reducer(
-          updatedStartState,
-          messageChanged(messageId, conversationId, changedMessage)
-        );
-
-        assert.deepEqual(state.messagesLookup[messageId], changedMessage);
         assert.strictEqual(
           state.messagesByConversation[conversationId]?.messageChangeCounter,
           0
@@ -1811,8 +2012,8 @@ describe('both/state/ducks/conversations', () => {
       });
 
       it('shows the recommended group size modal when first crossing the maximum recommended group size', () => {
-        const oldSelectedConversationIds = times(21, () => uuid());
-        const newUuid = uuid();
+        const oldSelectedConversationIds = times(21, () => generateUuid());
+        const newUuid = generateUuid();
 
         const state = {
           ...getEmptyState(),
@@ -1832,8 +2033,8 @@ describe('both/state/ducks/conversations', () => {
       });
 
       it("doesn't show the recommended group size modal twice", () => {
-        const oldSelectedConversationIds = times(21, () => uuid());
-        const newUuid = uuid();
+        const oldSelectedConversationIds = times(21, () => generateUuid());
+        const newUuid = generateUuid();
 
         const state = {
           ...getEmptyState(),
@@ -1873,15 +2074,15 @@ describe('both/state/ducks/conversations', () => {
             ...getEmptyState(),
             composer: defaultChooseGroupMembersComposerState,
           };
-          const action = getAction(uuid(), state);
+          const action = getAction(generateUuid(), state);
 
           assert.strictEqual(action.payload.maxRecommendedGroupSize, 151);
         }
       });
 
       it('shows the maximum group size modal when first reaching the maximum group size', () => {
-        const oldSelectedConversationIds = times(31, () => uuid());
-        const newUuid = uuid();
+        const oldSelectedConversationIds = times(31, () => generateUuid());
+        const newUuid = generateUuid();
 
         const state = {
           ...getEmptyState(),
@@ -1904,8 +2105,8 @@ describe('both/state/ducks/conversations', () => {
       });
 
       it("doesn't show the maximum group size modal twice", () => {
-        const oldSelectedConversationIds = times(31, () => uuid());
-        const newUuid = uuid();
+        const oldSelectedConversationIds = times(31, () => generateUuid());
+        const newUuid = generateUuid();
 
         const state = {
           ...getEmptyState(),
@@ -1932,10 +2133,10 @@ describe('both/state/ducks/conversations', () => {
           ...getEmptyState(),
           composer: {
             ...defaultChooseGroupMembersComposerState,
-            selectedConversationIds: times(1000, () => uuid()),
+            selectedConversationIds: times(1000, () => generateUuid()),
           },
         };
-        const action = getAction(uuid(), state);
+        const action = getAction(generateUuid(), state);
         const result = reducer(state, action);
 
         assert.deepEqual(result, state);
@@ -1957,7 +2158,7 @@ describe('both/state/ducks/conversations', () => {
             ...getEmptyState(),
             composer: defaultChooseGroupMembersComposerState,
           };
-          const action = getAction(uuid(), state);
+          const action = getAction(generateUuid(), state);
 
           assert.strictEqual(action.payload.maxGroupSize, 1001);
         }
@@ -1981,78 +2182,553 @@ describe('both/state/ducks/conversations', () => {
           ...getEmptyState(),
           composer: defaultChooseGroupMembersComposerState,
         };
-        const action = getAction(uuid(), state);
+        const action = getAction(generateUuid(), state);
 
         assert.strictEqual(action.payload.maxGroupSize, 1235);
       });
     });
-  });
 
-  describe('COLORS_CHANGED', () => {
-    const abc = getDefaultConversationWithUuid({
-      id: 'abc',
-      conversationColor: 'wintergreen',
+    describe('COLORS_CHANGED', () => {
+      const abc = getDefaultConversationWithServiceId({
+        id: 'abc',
+        conversationColor: 'wintergreen',
+      });
+      const def = getDefaultConversationWithServiceId({
+        id: 'def',
+        conversationColor: 'infrared',
+      });
+      const ghi = getDefaultConversation({
+        id: 'ghi',
+        e164: 'ghi',
+        conversationColor: 'ember',
+      });
+      const jkl = getDefaultConversation({
+        id: 'jkl',
+        groupId: 'jkl',
+        conversationColor: 'plum',
+      });
+      const getState = () => ({
+        ...getEmptyRootState(),
+        conversations: {
+          ...getEmptyState(),
+          conversationLookup: {
+            abc,
+            def,
+            ghi,
+            jkl,
+          },
+          conversationsByServiceId: {
+            abc,
+            def,
+          },
+          conversationsByE164: {
+            ghi,
+          },
+          conversationsByGroupId: {
+            jkl,
+          },
+        },
+      });
+
+      it('resetAllChatColors', async () => {
+        const dispatch = sinon.spy();
+        await resetAllChatColors()(dispatch, getState, null);
+
+        const [action] = dispatch.getCall(0).args;
+        const nextState = reducer(getState().conversations, action);
+
+        sinon.assert.calledOnce(dispatch);
+        assert.isUndefined(nextState.conversationLookup.abc.conversationColor);
+        assert.isUndefined(nextState.conversationLookup.def.conversationColor);
+        assert.isUndefined(nextState.conversationLookup.ghi.conversationColor);
+        assert.isUndefined(nextState.conversationLookup.jkl.conversationColor);
+        assert.isUndefined(
+          nextState.conversationsByServiceId[abc.serviceId].conversationColor
+        );
+        assert.isUndefined(
+          nextState.conversationsByServiceId[def.serviceId].conversationColor
+        );
+        assert.isUndefined(nextState.conversationsByE164.ghi.conversationColor);
+        assert.isUndefined(
+          nextState.conversationsByGroupId.jkl.conversationColor
+        );
+        await window.storage.remove('defaultConversationColor');
+      });
     });
-    const def = getDefaultConversationWithUuid({
-      id: 'def',
-      conversationColor: 'infrared',
-    });
-    const ghi = getDefaultConversation({
-      id: 'ghi',
-      e164: 'ghi',
-      conversationColor: 'ember',
-    });
-    const jkl = getDefaultConversation({
-      id: 'jkl',
-      groupId: 'jkl',
-      conversationColor: 'plum',
-    });
-    const getState = () => ({
-      ...getEmptyRootState(),
-      conversations: {
+
+    // When distribution lists change
+
+    describe('VIEWERS_CHANGED', () => {
+      const state: ConversationsStateType = {
         ...getEmptyState(),
-        conversationLookup: {
-          abc,
-          def,
-          ghi,
-          jkl,
+        verificationDataByConversation: {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [
+                  SERVICE_ID_1,
+                  SERVICE_ID_2,
+                  SERVICE_ID_3,
+                ],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
         },
-        conversationsByUuid: {
-          abc,
-          def,
+      };
+
+      it('removes uuids now missing from the list', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: VIEWERS_CHANGED,
+          payload: {
+            listId: LIST_ID_1,
+            memberServiceIds: [SERVICE_ID_1, SERVICE_ID_2],
+          },
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+      it('removes now-empty list', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: VIEWERS_CHANGED,
+          payload: {
+            listId: LIST_ID_1,
+            memberServiceIds: [],
+          },
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+    });
+    describe('HIDE_MY_STORIES_FROM', () => {
+      const state: ConversationsStateType = {
+        ...getEmptyState(),
+        verificationDataByConversation: {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [MY_STORY_ID]: {
+                serviceIdsNeedingVerification: [
+                  SERVICE_ID_1,
+                  SERVICE_ID_2,
+                  SERVICE_ID_3,
+                ],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
         },
-        conversationsByE164: {
-          ghi,
+      };
+
+      it('removes now hidden uuids', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: HIDE_MY_STORIES_FROM,
+          payload: [SERVICE_ID_1, SERVICE_ID_2],
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [MY_STORY_ID]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+      it('eliminates list if all items removed', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: HIDE_MY_STORIES_FROM,
+          payload: [SERVICE_ID_1, SERVICE_ID_2, SERVICE_ID_3],
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+    });
+    describe('DELETE_LIST', () => {
+      const state: ConversationsStateType = {
+        ...getEmptyState(),
+        verificationDataByConversation: {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [
+                  SERVICE_ID_1,
+                  SERVICE_ID_2,
+                  SERVICE_ID_3,
+                ],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
         },
-        conversationsByGroupId: {
-          jkl,
+      };
+
+      it('eliminates deleted list entirely', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: DELETE_LIST,
+          payload: {
+            deletedAtTimestamp: Date.now(),
+            listId: LIST_ID_1,
+          },
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+
+      it('deletes parent conversation if no other lists, no top-level uuids', async () => {
+        const starting: ConversationsStateType = {
+          ...getEmptyState(),
+          verificationDataByConversation: {
+            convo1: {
+              type: ConversationVerificationState.PendingVerification,
+              serviceIdsNeedingVerification: [],
+              byDistributionId: {
+                [LIST_ID_1]: {
+                  serviceIdsNeedingVerification: [
+                    SERVICE_ID_1,
+                    SERVICE_ID_2,
+                    SERVICE_ID_3,
+                  ],
+                },
+              },
+            },
+          },
+        };
+
+        const action: StoryDistributionListsActionType = {
+          type: DELETE_LIST,
+          payload: {
+            deletedAtTimestamp: Date.now(),
+            listId: LIST_ID_1,
+          },
+        };
+
+        const actual = reducer(starting, action);
+        assert.deepEqual(actual.verificationDataByConversation, {});
+      });
+
+      it('deletes byDistributionId if top-level list does have uuids', async () => {
+        const starting: ConversationsStateType = {
+          ...getEmptyState(),
+          verificationDataByConversation: {
+            convo1: {
+              type: ConversationVerificationState.PendingVerification,
+              serviceIdsNeedingVerification: [SERVICE_ID_1],
+              byDistributionId: {
+                [LIST_ID_1]: {
+                  serviceIdsNeedingVerification: [
+                    SERVICE_ID_1,
+                    SERVICE_ID_2,
+                    SERVICE_ID_3,
+                  ],
+                },
+              },
+            },
+          },
+        };
+
+        const action: StoryDistributionListsActionType = {
+          type: DELETE_LIST,
+          payload: {
+            deletedAtTimestamp: Date.now(),
+            listId: LIST_ID_1,
+          },
+        };
+
+        const actual = reducer(starting, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [SERVICE_ID_1],
+          },
+        });
+      });
+    });
+    describe('MODIFY_LIST', () => {
+      const state: ConversationsStateType = {
+        ...getEmptyState(),
+        verificationDataByConversation: {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [
+                  SERVICE_ID_1,
+                  SERVICE_ID_2,
+                  SERVICE_ID_3,
+                ],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
         },
-      },
+      };
+
+      it('removes toRemove uuids for isBlockList = false', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: MODIFY_LIST,
+          payload: {
+            id: LIST_ID_1,
+            name: 'list1',
+            allowsReplies: true,
+            isBlockList: false,
+            membersToAdd: [SERVICE_ID_2, SERVICE_ID_4],
+            membersToRemove: [SERVICE_ID_3],
+          },
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_1, SERVICE_ID_2],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
+
+      it('removes toAdd uuids for isBlocklist = true', async () => {
+        const action: StoryDistributionListsActionType = {
+          type: MODIFY_LIST,
+          payload: {
+            id: LIST_ID_1,
+            name: 'list1',
+            allowsReplies: true,
+            isBlockList: true,
+            membersToAdd: [SERVICE_ID_2, SERVICE_ID_1],
+            membersToRemove: [SERVICE_ID_3],
+          },
+        };
+
+        const actual = reducer(state, action);
+        assert.deepEqual(actual.verificationDataByConversation, {
+          convo1: {
+            type: ConversationVerificationState.PendingVerification,
+            serviceIdsNeedingVerification: [],
+            byDistributionId: {
+              [LIST_ID_1]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+              [LIST_ID_2]: {
+                serviceIdsNeedingVerification: [SERVICE_ID_3],
+              },
+            },
+          },
+        });
+      });
     });
 
-    it('resetAllChatColors', async () => {
-      const dispatch = sinon.spy();
-      await resetAllChatColors()(dispatch, getState, null);
+    describe('CONVERSATIONS_UPDATED', () => {
+      it('adds and updates multiple conversations', () => {
+        const conversation1 = getDefaultConversation();
+        const conversation2 = getDefaultConversation();
+        const newConversation = getDefaultConversation();
+        strictAssert(conversation1.serviceId, 'must exist');
+        strictAssert(conversation1.e164, 'must exist');
+        strictAssert(conversation2.serviceId, 'must exist');
+        strictAssert(conversation2.e164, 'must exist');
+        strictAssert(newConversation.serviceId, 'must exist');
+        strictAssert(newConversation.e164, 'must exist');
 
-      const [action] = dispatch.getCall(0).args;
-      const nextState = reducer(getState().conversations, action);
+        const state = {
+          ...getEmptyState(),
+          conversationLookup: {
+            [conversation1.id]: conversation1,
+            [conversation2.id]: conversation2,
+          },
+          conversationsByE164: {
+            [conversation1.e164]: conversation1,
+            [conversation2.e164]: conversation2,
+          },
+          conversationsByServiceId: {
+            [conversation1.serviceId]: conversation1,
+            [conversation2.serviceId]: conversation2,
+          },
+        };
 
-      sinon.assert.calledOnce(dispatch);
-      assert.isUndefined(nextState.conversationLookup.abc.conversationColor);
-      assert.isUndefined(nextState.conversationLookup.def.conversationColor);
-      assert.isUndefined(nextState.conversationLookup.ghi.conversationColor);
-      assert.isUndefined(nextState.conversationLookup.jkl.conversationColor);
-      assert.isUndefined(
-        nextState.conversationsByUuid[abc.uuid].conversationColor
-      );
-      assert.isUndefined(
-        nextState.conversationsByUuid[def.uuid].conversationColor
-      );
-      assert.isUndefined(nextState.conversationsByE164.ghi.conversationColor);
-      assert.isUndefined(
-        nextState.conversationsByGroupId.jkl.conversationColor
-      );
-      window.storage.remove('defaultConversationColor');
+        const updatedConversation1 = {
+          ...conversation1,
+          e164: undefined,
+          title: 'new title',
+        };
+        const updatedConversation2 = {
+          ...conversation2,
+          active_at: 12345,
+        };
+        const updatedConversation2Again = {
+          ...conversation2,
+          active_at: 98765,
+        };
+
+        const action: ConversationsUpdatedActionType = {
+          type: 'CONVERSATIONS_UPDATED',
+          payload: {
+            data: [
+              updatedConversation1,
+              updatedConversation2,
+              newConversation,
+              updatedConversation2Again,
+            ],
+          },
+        };
+
+        const actual = reducer(state, action);
+        const expected: ConversationsStateType = {
+          ...state,
+          conversationLookup: {
+            [conversation1.id]: updatedConversation1,
+            [conversation2.id]: updatedConversation2Again,
+            [newConversation.id]: newConversation,
+          },
+          conversationsByE164: {
+            [conversation2.e164]: updatedConversation2Again,
+            [newConversation.e164]: newConversation,
+          },
+          conversationsByServiceId: {
+            [conversation1.serviceId]: updatedConversation1,
+            [conversation2.serviceId]: updatedConversation2Again,
+            [newConversation.serviceId]: newConversation,
+          },
+        };
+        assert.deepEqual(actual, expected);
+      });
+
+      it('updates root state if conversation is selected', () => {
+        const conversation1 = getDefaultConversation({ isArchived: true });
+        const conversation2 = getDefaultConversation();
+        strictAssert(conversation1.serviceId, 'must exist');
+        strictAssert(conversation1.e164, 'must exist');
+        strictAssert(conversation2.serviceId, 'must exist');
+        strictAssert(conversation2.e164, 'must exist');
+
+        const state: ConversationsStateType = {
+          ...getEmptyState(),
+          selectedConversationId: conversation1.id,
+          showArchived: true,
+          conversationLookup: {
+            [conversation1.id]: conversation1,
+            [conversation2.id]: conversation2,
+          },
+          conversationsByE164: {
+            [conversation1.e164]: conversation1,
+            [conversation2.e164]: conversation2,
+          },
+          conversationsByServiceId: {
+            [conversation1.serviceId]: conversation1,
+            [conversation2.serviceId]: conversation2,
+          },
+        };
+
+        const updatedConversation1 = {
+          ...conversation1,
+          isArchived: false,
+        };
+        const updatedConversation2 = {
+          ...conversation2,
+          active_at: 12345,
+        };
+
+        const action: ConversationsUpdatedActionType = {
+          type: 'CONVERSATIONS_UPDATED',
+          payload: {
+            data: [updatedConversation1, updatedConversation2],
+          },
+        };
+
+        const actual = reducer(state, action);
+        const expected: ConversationsStateType = {
+          ...state,
+          showArchived: false,
+          conversationLookup: {
+            [conversation1.id]: updatedConversation1,
+            [conversation2.id]: updatedConversation2,
+          },
+          conversationsByE164: {
+            [conversation1.e164]: updatedConversation1,
+            [conversation2.e164]: updatedConversation2,
+          },
+          conversationsByServiceId: {
+            [conversation1.serviceId]: updatedConversation1,
+            [conversation2.serviceId]: updatedConversation2,
+          },
+        };
+        assert.deepEqual(actual, expected);
+      });
     });
   });
 });

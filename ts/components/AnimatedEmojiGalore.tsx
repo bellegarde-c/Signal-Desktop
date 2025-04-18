@@ -4,7 +4,14 @@
 import React from 'react';
 import { animated, to as interpolate, useSprings } from '@react-spring/web';
 import { random } from 'lodash';
-import { Emojify } from './conversation/Emojify';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { FunStaticEmoji } from './fun/FunEmoji';
+import { strictAssert } from '../util/assert';
+import {
+  getEmojiVariantByKey,
+  getEmojiVariantKeyByValue,
+  isEmojiVariantValue,
+} from './fun/data/emojis';
 
 export type PropsType = {
   emoji: string;
@@ -34,13 +41,19 @@ function transform(y: number, scale: number, rotate: number): string {
   return `translateY(${y}px) scale(${scale}) rotate(${rotate}deg)`;
 }
 
-export const AnimatedEmojiGalore = ({
+export function AnimatedEmojiGalore({
   emoji,
   onAnimationEnd,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
+  strictAssert(isEmojiVariantValue(emoji), 'Must be valid english short name');
+  const emojiVariantKey = getEmojiVariantKeyByValue(emoji);
+  const emojiVariant = getEmojiVariantByKey(emojiVariantKey);
+
+  const reducedMotion = useReducedMotion();
   const [springs] = useSprings(NUM_EMOJIS, i => ({
     ...to(i, onAnimationEnd),
     from: from(i),
+    immediate: reducedMotion,
     config: {
       mass: 20,
       tension: 120,
@@ -64,9 +77,9 @@ export const AnimatedEmojiGalore = ({
             ),
           }}
         >
-          <Emojify sizeClass="extra-large" text={emoji} />
+          <FunStaticEmoji size={48} emoji={emojiVariant} role="presentation" />
         </animated.div>
       ))}
     </>
   );
-};
+}

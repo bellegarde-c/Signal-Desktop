@@ -6,13 +6,12 @@ import { chunk } from 'lodash';
 
 import { action } from '@storybook/addon-actions';
 
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './AvatarPreview';
 import { AvatarPreview } from './AvatarPreview';
 import { AvatarColors } from '../types/Colors';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const TEST_IMAGE = new Uint8Array(
   chunk(
@@ -23,7 +22,7 @@ const TEST_IMAGE = new Uint8Array(
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   avatarColor: overrideProps.avatarColor,
-  avatarPath: overrideProps.avatarPath,
+  avatarUrl: overrideProps.avatarUrl,
   avatarValue: overrideProps.avatarValue,
   conversationTitle: overrideProps.conversationTitle,
   i18n,
@@ -37,88 +36,72 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/AvatarPreview',
-};
+} satisfies Meta<PropsType>;
 
-export const NoStatePersonal = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({
-      avatarColor: AvatarColors[0],
-      conversationTitle: 'Just Testing',
-    })}
-  />
-);
+export function NoStatePersonal(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({
+        avatarColor: AvatarColors[0],
+        conversationTitle: 'Just Testing',
+      })}
+    />
+  );
+}
 
-NoStatePersonal.story = {
-  name: 'No state (personal)',
-};
+export function NoStateGroup(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({
+        avatarColor: AvatarColors[1],
+        isGroup: true,
+      })}
+    />
+  );
+}
 
-export const NoStateGroup = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({
-      avatarColor: AvatarColors[1],
-      isGroup: true,
-    })}
-  />
-);
+export function NoStateGroupUploadMe(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({
+        avatarColor: AvatarColors[1],
+        isEditable: true,
+        isGroup: true,
+      })}
+    />
+  );
+}
 
-NoStateGroup.story = {
-  name: 'No state (group)',
-};
+export function Value(): JSX.Element {
+  return <AvatarPreview {...createProps({ avatarValue: TEST_IMAGE })} />;
+}
 
-export const NoStateGroupUploadMe = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({
-      avatarColor: AvatarColors[1],
-      isEditable: true,
-      isGroup: true,
-    })}
-  />
-);
+export function Path(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({ avatarUrl: '/fixtures/kitten-3-64-64.jpg' })}
+    />
+  );
+}
 
-NoStateGroupUploadMe.story = {
-  name: 'No state (group) + upload me',
-};
+export function ValueAndPath(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({
+        avatarUrl: '/fixtures/kitten-3-64-64.jpg',
+        avatarValue: TEST_IMAGE,
+      })}
+    />
+  );
+}
 
-export const Value = (): JSX.Element => (
-  <AvatarPreview {...createProps({ avatarValue: TEST_IMAGE })} />
-);
-
-Value.story = {
-  name: 'value',
-};
-
-export const Path = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({ avatarPath: '/fixtures/kitten-3-64-64.jpg' })}
-  />
-);
-
-Path.story = {
-  name: 'path',
-};
-
-export const ValuePath = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({
-      avatarPath: '/fixtures/kitten-3-64-64.jpg',
-      avatarValue: TEST_IMAGE,
-    })}
-  />
-);
-
-ValuePath.story = {
-  name: 'value & path',
-};
-
-export const Style = (): JSX.Element => (
-  <AvatarPreview
-    {...createProps({
-      avatarValue: TEST_IMAGE,
-      style: { height: 100, width: 100 },
-    })}
-  />
-);
-
-Style.story = {
-  name: 'style',
-};
+export function Style(): JSX.Element {
+  return (
+    <AvatarPreview
+      {...createProps({
+        avatarValue: TEST_IMAGE,
+        style: { height: 100, width: 100 },
+      })}
+    />
+  );
+}

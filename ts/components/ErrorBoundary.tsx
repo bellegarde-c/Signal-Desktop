@@ -6,7 +6,7 @@ import React from 'react';
 
 import * as Errors from '../types/errors';
 import * as log from '../logging/log';
-import { ToastType } from '../state/ducks/toast';
+import { ToastType } from '../types/Toast';
 
 export type Props = {
   children: ReactNode;
@@ -38,7 +38,7 @@ export class ErrorBoundary extends React.PureComponent<Props, State> {
         `\nerrorInfo: ${errorInfo.componentStack}`
     );
     if (window.reduxActions) {
-      window.reduxActions.toast.showToast(ToastType.Error);
+      window.reduxActions.toast.showToast({ toastType: ToastType.Error });
     }
     if (closeView) {
       closeView();

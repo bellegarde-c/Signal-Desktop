@@ -1,13 +1,15 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { StrictOptions as GotOptions } from 'got';
 import config from 'config';
-import ProxyAgent from 'proxy-agent';
+import { Agent as HTTPAgent } from 'http';
 
 import * as packageJson from '../../package.json';
 import { getUserAgent } from '../util/getUserAgent';
 import * as durations from '../util/durations';
+import { createHTTPSAgent } from '../util/createHTTPSAgent';
+import { createProxyAgent } from '../util/createProxyAgent';
 
 export const GOT_CONNECT_TIMEOUT = durations.MINUTE;
 export const GOT_LOOKUP_TIMEOUT = durations.MINUTE;
@@ -22,15 +24,20 @@ export function getCertificateAuthority(): string {
   return config.get('certificateAuthority');
 }
 
-export function getGotOptions(): GotOptions {
+export type { GotOptions };
+
+export async function getGotOptions(): Promise<GotOptions> {
   const certificateAuthority = getCertificateAuthority();
   const proxyUrl = getProxyUrl();
   const agent = proxyUrl
     ? {
-        http: new ProxyAgent(proxyUrl),
-        https: new ProxyAgent(proxyUrl),
+        http: await createProxyAgent(proxyUrl),
+        https: await createProxyAgent(proxyUrl),
       }
-    : undefined;
+    : {
+        http: new HTTPAgent(),
+        https: createHTTPSAgent(),
+      };
 
   return {
     agent,

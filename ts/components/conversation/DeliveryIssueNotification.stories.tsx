@@ -2,38 +2,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
+import type { PropsType } from './DeliveryIssueNotification';
 import { DeliveryIssueNotification } from './DeliveryIssueNotification';
 import { getDefaultConversation } from '../../test-both/helpers/getDefaultConversation';
 
 export default {
   title: 'Components/Conversation/DeliveryIssueNotification',
-};
+} satisfies Meta<PropsType>;
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 const sender = getDefaultConversation();
 
-export const Default = (): JSX.Element => {
+export function Default(): JSX.Element {
   return (
-    <DeliveryIssueNotification
-      i18n={i18n}
-      inGroup={false}
-      learnMoreAboutDeliveryIssue={action('learnMoreAboutDeliveryIssue')}
-      sender={sender}
-    />
+    <DeliveryIssueNotification i18n={i18n} inGroup={false} sender={sender} />
   );
-};
+}
 
-export const WithALongName = (): JSX.Element => {
+export function WithALongName(): JSX.Element {
   const longName = '🤷🏽‍♀️❤️🐞'.repeat(50);
   return (
     <DeliveryIssueNotification
       i18n={i18n}
       inGroup={false}
-      learnMoreAboutDeliveryIssue={action('learnMoreAboutDeliveryIssue')}
       sender={getDefaultConversation({
         firstName: longName,
         name: longName,
@@ -42,19 +34,8 @@ export const WithALongName = (): JSX.Element => {
       })}
     />
   );
-};
+}
 
-WithALongName.story = {
-  name: 'With a long name',
-};
-
-export const InGroup = (): JSX.Element => {
-  return (
-    <DeliveryIssueNotification
-      i18n={i18n}
-      inGroup
-      learnMoreAboutDeliveryIssue={action('learnMoreAboutDeliveryIssue')}
-      sender={sender}
-    />
-  );
-};
+export function InGroup(): JSX.Element {
+  return <DeliveryIssueNotification i18n={i18n} inGroup sender={sender} />;
+}

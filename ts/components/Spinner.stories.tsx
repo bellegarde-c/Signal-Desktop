@@ -2,59 +2,44 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
-import { select, text } from '@storybook/addon-knobs';
+import type { Meta } from '@storybook/react';
 import type { Props } from './Spinner';
 import { Spinner, SpinnerDirections, SpinnerSvgSizes } from './Spinner';
 
 export default {
   title: 'Components/Spinner',
-};
+  argTypes: {
+    size: { control: { type: 'text' } },
+    svgSize: { control: { type: 'select' }, options: SpinnerSvgSizes },
+    direction: { control: { type: 'select' }, options: SpinnerDirections },
+  },
+  args: {
+    size: '20px',
+    svgSize: 'normal',
+    direction: undefined,
+  },
+} satisfies Meta<Props>;
 
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  size: text('size', overrideProps.size || ''),
-  svgSize: select(
-    'svgSize',
-    SpinnerSvgSizes.reduce((m, s) => ({ ...m, [s]: s }), {}),
-    overrideProps.svgSize || 'normal'
-  ),
-  direction: select(
-    'direction',
-    SpinnerDirections.reduce((d, s) => ({ ...d, [s]: s }), {}),
-    overrideProps.direction
-  ),
-});
+export function Normal(args: Props): JSX.Element {
+  return <Spinner {...args} />;
+}
 
-export const Normal = (): JSX.Element => {
-  const props = createProps();
-
-  return <Spinner {...props} />;
-};
-
-export const SvgSizes = (): JSX.Element => {
-  const props = createProps();
-
+export function SvgSizes(args: Props): JSX.Element {
   return (
     <>
       {SpinnerSvgSizes.map(svgSize => (
-        <Spinner key={svgSize} {...props} svgSize={svgSize} />
+        <Spinner key={svgSize} {...args} svgSize={svgSize} />
       ))}
     </>
   );
-};
+}
 
-SvgSizes.story = {
-  name: 'SVG Sizes',
-};
-
-export const Directions = (): JSX.Element => {
-  const props = createProps();
-
+export function Directions(args: Props): JSX.Element {
   return (
     <>
       {SpinnerDirections.map(direction => (
-        <Spinner key={direction} {...props} direction={direction} />
+        <Spinner key={direction} {...args} direction={direction} />
       ))}
     </>
   );
-};
+}

@@ -1,30 +1,39 @@
-// Copyright 2019-2020 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { StickerPackInstallButton } from './StickerPackInstallButton';
 import { ConfirmationDialog } from '../ConfirmationDialog';
 import type { LocalizerType } from '../../types/Util';
 import type { StickerPackType } from '../../state/ducks/stickers';
+import { Button, ButtonVariant } from '../Button';
+import { UserText } from '../UserText';
 
 export type OwnProps = {
   readonly i18n: LocalizerType;
   readonly pack: StickerPackType;
   readonly onClickPreview?: (sticker: StickerPackType) => unknown;
-  readonly installStickerPack?: (packId: string, packKey: string) => unknown;
-  readonly uninstallStickerPack?: (packId: string, packKey: string) => unknown;
+  readonly installStickerPack?: (
+    packId: string,
+    packKey: string,
+    options: { actionSource: 'ui' }
+  ) => unknown;
+  readonly uninstallStickerPack?: (
+    packId: string,
+    packKey: string,
+    options: { actionSource: 'ui' }
+  ) => unknown;
 };
 
 export type Props = OwnProps;
 
 export const StickerManagerPackRow = React.memo(
-  ({
+  function StickerManagerPackRowInner({
     installStickerPack,
     uninstallStickerPack,
     onClickPreview,
     pack,
     i18n,
-  }: Props) => {
+  }: Props) {
     const { id, key, isBlessed } = pack;
     const [uninstalling, setUninstalling] = React.useState(false);
 
@@ -36,7 +45,7 @@ export const StickerManagerPackRow = React.memo(
       (e: React.MouseEvent) => {
         e.stopPropagation();
         if (installStickerPack) {
-          installStickerPack(id, key);
+          installStickerPack(id, key, { actionSource: 'ui' });
         }
       },
       [id, installStickerPack, key]
@@ -46,7 +55,7 @@ export const StickerManagerPackRow = React.memo(
       (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isBlessed && uninstallStickerPack) {
-          uninstallStickerPack(id, key);
+          uninstallStickerPack(id, key, { actionSource: 'ui' });
         } else {
           setUninstalling(true);
         }
@@ -57,7 +66,7 @@ export const StickerManagerPackRow = React.memo(
     const handleConfirmUninstall = React.useCallback(() => {
       clearUninstalling();
       if (uninstallStickerPack) {
-        uninstallStickerPack(id, key);
+        uninstallStickerPack(id, key, { actionSource: 'ui' });
       }
     }, [id, key, clearUninstalling, uninstallStickerPack]);
 
@@ -98,12 +107,12 @@ export const StickerManagerPackRow = React.memo(
             actions={[
               {
                 style: 'negative',
-                text: i18n('stickers--StickerManager--Uninstall'),
+                text: i18n('icu:stickers--StickerManager--Uninstall'),
                 action: handleConfirmUninstall,
               },
             ]}
           >
-            {i18n('stickers--StickerManager--UninstallWarning')}
+            {i18n('icu:stickers--StickerManager--UninstallWarning')}
           </ConfirmationDialog>
         ) : null}
         <div
@@ -113,6 +122,7 @@ export const StickerManagerPackRow = React.memo(
           onKeyDown={handleKeyDown}
           onClick={handleClickPreview}
           className="module-sticker-manager__pack-row"
+          data-testid={id}
         >
           {pack.cover ? (
             <img
@@ -125,7 +135,7 @@ export const StickerManagerPackRow = React.memo(
           )}
           <div className="module-sticker-manager__pack-row__meta">
             <div className="module-sticker-manager__pack-row__meta__title">
-              {pack.title}
+              <UserText text={pack.title} />
               {pack.isBlessed ? (
                 <span className="module-sticker-manager__pack-row__meta__blessed-icon" />
               ) : null}
@@ -136,17 +146,21 @@ export const StickerManagerPackRow = React.memo(
           </div>
           <div className="module-sticker-manager__pack-row__controls">
             {pack.status === 'installed' ? (
-              <StickerPackInstallButton
-                installed
-                i18n={i18n}
+              <Button
+                aria-label={i18n('icu:stickers--StickerManager--Uninstall')}
+                variant={ButtonVariant.Secondary}
                 onClick={handleUninstall}
-              />
+              >
+                {i18n('icu:stickers--StickerManager--Uninstall')}
+              </Button>
             ) : (
-              <StickerPackInstallButton
-                installed={false}
-                i18n={i18n}
+              <Button
+                aria-label={i18n('icu:stickers--StickerManager--Install')}
+                variant={ButtonVariant.Secondary}
                 onClick={handleInstall}
-              />
+              >
+                {i18n('icu:stickers--StickerManager--Install')}
+              </Button>
             )}
           </div>
         </div>

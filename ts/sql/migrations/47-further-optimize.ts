@@ -1,15 +1,13 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
-
 import type { LoggerType } from '../../types/Logging';
 import { getOurUuid } from './41-uuid-keys';
-import type { Query } from '../util';
+import type { WritableDB } from '../Interface';
 
 export default function updateToSchemaVersion47(
   currentVersion: number,
-  db: Database,
+  db: WritableDB,
   logger: LoggerType
 ): void {
   if (currentVersion >= 47) {
@@ -122,9 +120,9 @@ export default function updateToSchemaVersion47(
 
     const ourUuid = getOurUuid(db);
     if (!ourUuid) {
-      logger.warn('updateToSchemaVersion47: our UUID not found');
+      logger.info('updateToSchemaVersion47: our UUID not found');
     } else {
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE messages SET
           isChangeCreatedByUs = json_extract(json, '$.groupV2Change.from') IS $ourUuid;

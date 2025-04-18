@@ -1,66 +1,58 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
 
+import { action } from '@storybook/addon-actions';
 import type { PropsType } from './StoriesSettingsModal';
-import enMessages from '../../_locales/en/messages.json';
 import { StoriesSettingsModal } from './StoriesSettingsModal';
 import {
   getDefaultConversation,
   getDefaultGroup,
 } from '../test-both/helpers/getDefaultConversation';
-import { setupI18n } from '../util/setupI18n';
 import {
   getMyStories,
   getFakeDistributionList,
 } from '../test-both/helpers/getFakeDistributionLists';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/StoriesSettingsModal',
   component: StoriesSettingsModal,
   argTypes: {
-    candidateConversations: {
-      defaultValue: Array.from(Array(100), () => getDefaultConversation()),
-    },
-    signalConnections: {
-      defaultValue: Array.from(Array(42), getDefaultConversation),
-    },
-    distributionLists: {
-      defaultValue: [],
-    },
-    groupStories: {
-      defaultValue: Array.from(Array(2), getDefaultGroup),
-    },
-    getPreferredBadge: { action: true },
-    hideStoriesSettings: { action: true },
-    i18n: {
-      defaultValue: i18n,
-    },
-    me: {
-      defaultValue: getDefaultConversation(),
-    },
     storyViewReceiptsEnabled: { control: 'boolean' },
-    onDeleteList: { action: true },
-    toggleGroupsForStorySend: { action: true },
-    onDistributionListCreated: { action: true },
-    onHideMyStoriesFrom: { action: true },
-    onRemoveMember: { action: true },
-    onRepliesNReactionsChanged: { action: true },
-    onViewersUpdated: { action: true },
-    setMyStoriesToAllSignalConnections: { action: true },
-    toggleSignalConnectionsModal: { action: true },
-    setStoriesDisabled: { action: true },
-    getConversationByUuid: {
-      defaultValue: () => getDefaultGroup(),
-    },
   },
-} as Meta;
+  args: {
+    candidateConversations: Array.from(Array(100), () =>
+      getDefaultConversation()
+    ),
+    signalConnections: Array.from(Array(42), getDefaultConversation),
+    distributionLists: [],
+    groupStories: Array.from(Array(2), getDefaultGroup),
+    getPreferredBadge: () => undefined,
+    hideStoriesSettings: action('hideStoriesSettings'),
+    i18n,
+    me: getDefaultConversation(),
+    onDeleteList: action('onDeleteList'),
+    toggleGroupsForStorySend: action('toggleGroupsForStorySend'),
+    onDistributionListCreated: () => Promise.resolve(''),
+    onHideMyStoriesFrom: action('onHideMyStoriesFrom'),
+    onRemoveMembers: action('onRemoveMembers'),
+    onRepliesNReactionsChanged: action('onRepliesNReactionsChanged'),
+    onViewersUpdated: action('onViewersUpdated'),
+    setMyStoriesToAllSignalConnections: action(
+      'setMyStoriesToAllSignalConnections'
+    ),
+    toggleSignalConnectionsModal: action('toggleSignalConnectionsModal'),
+    setStoriesDisabled: action('setStoriesDisabled'),
+    getConversationByServiceId: () => getDefaultGroup(),
+  },
+} satisfies Meta<PropsType>;
 
-const Template: Story<PropsType> = args => <StoriesSettingsModal {...args} />;
+// eslint-disable-next-line react/function-component-definition
+const Template: StoryFn<PropsType> = args => <StoriesSettingsModal {...args} />;
 
 export const MyStories = Template.bind({});
 {
@@ -114,7 +106,9 @@ export const SingleList = Template.bind({});
       },
       {
         ...fakeDistroList,
-        members: fakeDistroList.memberUuids.map(() => getDefaultConversation()),
+        members: fakeDistroList.memberServiceIds.map(() =>
+          getDefaultConversation()
+        ),
       },
     ],
   };

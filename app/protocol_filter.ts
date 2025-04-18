@@ -1,11 +1,7 @@
-// Copyright 2018-2020 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type {
-  protocol as ElectronProtocol,
-  ProtocolRequest,
-  ProtocolResponse,
-} from 'electron';
+import type { ProtocolRequest, ProtocolResponse, Session } from 'electron';
 
 import { isAbsolute, normalize } from 'path';
 import { existsSync, realpathSync } from 'fs';
@@ -13,6 +9,7 @@ import {
   getAvatarsPath,
   getBadgesPath,
   getDraftPath,
+  getDownloadsPath,
   getPath,
   getStickersPath,
   getTempPath,
@@ -46,9 +43,8 @@ export function _urlToPath(
     : decoded.slice(options?.isWindows ? 8 : 7);
 
   const withoutQuerystring = _eliminateAllAfterCharacter(withoutScheme, '?');
-  const withoutHash = _eliminateAllAfterCharacter(withoutQuerystring, '#');
 
-  return withoutHash;
+  return withoutQuerystring;
 }
 
 function _createFileHandler({
@@ -66,6 +62,7 @@ function _createFileHandler({
     getAvatarsPath(userDataPath),
     getBadgesPath(userDataPath),
     getDraftPath(userDataPath),
+    getDownloadsPath(userDataPath),
     getPath(userDataPath),
     getStickersPath(userDataPath),
     getTempPath(userDataPath),
@@ -130,17 +127,17 @@ function _createFileHandler({
 }
 
 export function installFileHandler({
-  protocol,
+  session,
   userDataPath,
   installPath,
   isWindows,
 }: {
-  protocol: typeof ElectronProtocol;
+  session: Session;
   userDataPath: string;
   installPath: string;
   isWindows: boolean;
 }): void {
-  protocol.interceptFileProtocol(
+  session.protocol.interceptFileProtocol(
     'file',
     _createFileHandler({ userDataPath, installPath, isWindows })
   );
@@ -155,12 +152,13 @@ function _disabledHandler(
 }
 
 export function installWebHandler({
-  protocol,
+  session,
   enableHttp,
 }: {
-  protocol: typeof ElectronProtocol;
+  session: Session;
   enableHttp: boolean;
 }): void {
+  const { protocol } = session;
   protocol.interceptFileProtocol('about', _disabledHandler);
   protocol.interceptFileProtocol('content', _disabledHandler);
   protocol.interceptFileProtocol('chrome', _disabledHandler);

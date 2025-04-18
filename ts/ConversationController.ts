@@ -1,38 +1,52 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { debounce, pick, uniq, without } from 'lodash';
 import PQueue from 'p-queue';
+import { v4 as generateUuid } from 'uuid';
+import { batch as batchDispatch } from 'react-redux';
 
 import type {
   ConversationModelCollectionType,
   ConversationAttributesType,
   ConversationAttributesTypeType,
+  ConversationRenderInfoType,
 } from './model-types.d';
 import type { ConversationModel } from './models/conversations';
-import type { MessageModel } from './models/messages';
-import type { UUIDStringType } from './types/UUID';
 
-import dataInterface from './sql/Client';
+import { DataReader, DataWriter } from './sql/Client';
 import * as log from './logging/log';
 import * as Errors from './types/errors';
-import { getContactId } from './messages/helpers';
+import { getAuthorId } from './messages/helpers';
 import { maybeDeriveGroupV2Id } from './groups';
 import { assertDev, strictAssert } from './util/assert';
-import { isGroupV1, isGroupV2 } from './util/whatTypeOfConversation';
-import { getConversationUnreadCountForAppBadge } from './util/getConversationUnreadCountForAppBadge';
-import { UUID, isValidUuid, UUIDKind } from './types/UUID';
-import { Address } from './types/Address';
-import { QualifiedAddress } from './types/QualifiedAddress';
+import { drop } from './util/drop';
+import { isGroup, isGroupV1, isGroupV2 } from './util/whatTypeOfConversation';
+import type { ServiceIdString, AciString, PniString } from './types/ServiceId';
+import {
+  isServiceIdString,
+  normalizePni,
+  normalizeServiceId,
+} from './types/ServiceId';
+import { normalizeAci } from './util/normalizeAci';
 import { sleep } from './util/sleep';
 import { isNotNil } from './util/isNotNil';
 import { MINUTE, SECOND } from './util/durations';
-import { getUuidsForE164s } from './util/getUuidsForE164s';
+import { getServiceIdsForE164s } from './util/getServiceIdsForE164s';
+import { SIGNAL_ACI, SIGNAL_AVATAR_PATH } from './types/SignalConversation';
+import { getTitleNoDefault } from './util/getTitle';
+import * as StorageService from './services/storage';
+import type { ConversationPropsForUnreadStats } from './util/countUnreadStats';
+import { countAllConversationsUnreadStats } from './util/countUnreadStats';
+import { isTestOrMockEnvironment } from './environment';
+import { isConversationAccepted } from './util/isConversationAccepted';
+import { areWePending } from './util/groupMembershipUtils';
+import { conversationJobQueue } from './jobs/conversationJobQueue';
 
 type ConvoMatchType =
   | {
-      key: 'uuid' | 'pni';
-      value: UUIDStringType | undefined;
+      key: 'serviceId' | 'pni';
+      value: ServiceIdString | undefined;
       match: ConversationModel | undefined;
     }
   | {
@@ -45,8 +59,9 @@ const { hasOwnProperty } = Object.prototype;
 
 function applyChangeToConversation(
   conversation: ConversationModel,
+  pniSignatureVerified: boolean,
   suggestedChange: Partial<
-    Pick<ConversationAttributesType, 'uuid' | 'e164' | 'pni'>
+    Pick<ConversationAttributesType, 'serviceId' | 'e164' | 'pni'>
   >
 ) {
   const change = { ...suggestedChange };
@@ -56,57 +71,56 @@ function applyChangeToConversation(
     change.pni = undefined;
   }
 
-  // If we have a PNI but not an ACI, then the PNI will go in the UUID field
-  //   Tricky: We need a special check here, because the PNI can be in the uuid slot
+  // If we have a PNI but not an ACI, then the PNI will go in the serviceId field
+  //   Tricky: We need a special check here, because the PNI can be in the serviceId slot
   if (
     change.pni &&
-    !change.uuid &&
-    (!conversation.get('uuid') ||
-      conversation.get('uuid') === conversation.get('pni'))
+    !change.serviceId &&
+    (!conversation.getServiceId() ||
+      conversation.getServiceId() === conversation.getPni())
   ) {
-    change.uuid = change.pni;
+    change.serviceId = change.pni;
   }
 
-  // If we're clearing a PNI, but we didn't have an ACI - we need to clear UUID field
+  // If we're clearing a PNI, but we didn't have an ACI - we need to clear serviceId field
   if (
-    !change.uuid &&
+    !change.serviceId &&
     hasOwnProperty.call(change, 'pni') &&
     !change.pni &&
-    conversation.get('uuid') === conversation.get('pni')
+    conversation.getServiceId() === conversation.getPni()
   ) {
-    change.uuid = undefined;
+    change.serviceId = undefined;
   }
 
-  if (hasOwnProperty.call(change, 'uuid')) {
-    conversation.updateUuid(change.uuid);
+  if (hasOwnProperty.call(change, 'serviceId')) {
+    conversation.updateServiceId(change.serviceId);
   }
   if (hasOwnProperty.call(change, 'e164')) {
     conversation.updateE164(change.e164);
   }
   if (hasOwnProperty.call(change, 'pni')) {
-    conversation.updatePni(change.pni);
+    conversation.updatePni(change.pni, pniSignatureVerified);
   }
 
   // Note: we don't do a conversation.set here, because change is limited to these fields
 }
 
-async function safeCombineConversations({
-  logId,
-  oldConversation,
-  newConversation,
-}: {
-  logId: string;
-  oldConversation: ConversationModel;
-  newConversation: ConversationModel;
-}) {
+export type CombineConversationsParams = Readonly<{
+  current: ConversationModel;
+  obsolete: ConversationModel;
+  obsoleteTitleInfo?: ConversationRenderInfoType;
+}>;
+export type SafeCombineConversationsParams = Readonly<{ logId: string }> &
+  CombineConversationsParams;
+
+async function safeCombineConversations(
+  options: SafeCombineConversationsParams
+) {
   try {
-    await window.ConversationController.combineConversations(
-      newConversation,
-      oldConversation
-    );
+    await window.ConversationController.combineConversations(options);
   } catch (error) {
     log.warn(
-      `${logId}: error combining contacts: ${Errors.toLogFormat(error)}`
+      `${options.logId}: error combining contacts: ${Errors.toLogFormat(error)}`
     );
   }
 }
@@ -115,13 +129,17 @@ const MAX_MESSAGE_BODY_LENGTH = 64 * 1024;
 
 const {
   getAllConversations,
-  getAllGroupsInvolvingUuid,
+  getAllGroupsInvolvingServiceId,
   getMessagesBySentAt,
+} = DataReader;
+
+const {
   migrateConversationMessages,
   removeConversation,
   saveConversation,
   updateConversation,
-} = dataInterface;
+  updateConversations,
+} = DataWriter;
 
 // We have to run this in background.js, after all backbone models and collections on
 //   Whisper.* have been created. Once those are in typescript we can use more reasonable
@@ -129,20 +147,20 @@ const {
 export function start(): void {
   const conversations = new window.Whisper.ConversationCollection();
 
-  window.getConversations = () => conversations;
   window.ConversationController = new ConversationController(conversations);
+  window.getConversations = () => conversations;
 }
 
 export class ConversationController {
-  private _initialFetchComplete = false;
+  #_initialFetchComplete = false;
+  #isReadOnly = false;
 
   private _initialPromise: undefined | Promise<void>;
 
-  private _conversationOpenStart = new Map<string, number>();
-
-  private _hasQueueEmptied = false;
-
-  private _combineConversationsQueue = new PQueue({ concurrency: 1 });
+  #_conversationOpenStart = new Map<string, number>();
+  #_hasQueueEmptied = false;
+  #_combineConversationsQueue = new PQueue({ concurrency: 1 });
+  #_signalConversationId: undefined | string;
 
   constructor(private _conversations: ConversationModelCollectionType) {
     const debouncedUpdateUnreadCount = debounce(
@@ -166,46 +184,67 @@ export class ConversationController {
     // we can reset the mute state on the model. If the mute has already expired
     // then we reset the state right away.
     this._conversations.on('add', (model: ConversationModel): void => {
+      // Don't modify conversations in backup integration testing
+      if (isTestOrMockEnvironment()) {
+        return;
+      }
       model.startMuteTimer();
     });
   }
 
   updateUnreadCount(): void {
-    if (!this._hasQueueEmptied) {
+    if (!this.#_hasQueueEmptied) {
       return;
     }
 
-    const canCountMutedConversations =
+    const includeMuted =
       window.storage.get('badge-count-muted-conversations') || false;
 
-    const newUnreadCount = this._conversations.reduce(
-      (result: number, conversation: ConversationModel) =>
-        result +
-        getConversationUnreadCountForAppBadge(
-          conversation.attributes,
-          canCountMutedConversations
-        ),
-      0
+    const unreadStats = countAllConversationsUnreadStats(
+      this._conversations.map(
+        (conversation): ConversationPropsForUnreadStats => {
+          // Need to pull this out manually into the Redux shape
+          // because `conversation.format()` can return cached props by the
+          // time this runs
+          return {
+            activeAt: conversation.get('active_at') ?? undefined,
+            isArchived: conversation.get('isArchived'),
+            markedUnread: conversation.get('markedUnread'),
+            muteExpiresAt: conversation.get('muteExpiresAt'),
+            unreadCount: conversation.get('unreadCount'),
+            unreadMentionsCount: conversation.get('unreadMentionsCount'),
+          };
+        }
+      ),
+      { includeMuted }
     );
-    window.storage.put('unreadCount', newUnreadCount);
 
-    if (newUnreadCount > 0) {
-      window.setBadgeCount(newUnreadCount);
-      window.document.title = `${window.getTitle()} (${newUnreadCount})`;
+    drop(window.storage.put('unreadCount', unreadStats.unreadCount));
+
+    if (unreadStats.unreadCount > 0) {
+      window.IPC.setBadge(unreadStats.unreadCount);
+      window.IPC.updateTrayIcon(unreadStats.unreadCount);
+      window.document.title = `${window.getTitle()} (${
+        unreadStats.unreadCount
+      })`;
+    } else if (unreadStats.markedUnread) {
+      window.IPC.setBadge('marked-unread');
+      window.IPC.updateTrayIcon(1);
+      window.document.title = `${window.getTitle()} (1)`;
     } else {
-      window.setBadgeCount(0);
+      window.IPC.setBadge(0);
+      window.IPC.updateTrayIcon(0);
       window.document.title = window.getTitle();
     }
-    window.updateTrayIcon(newUnreadCount);
   }
 
   onEmpty(): void {
-    this._hasQueueEmptied = true;
+    this.#_hasQueueEmptied = true;
     this.updateUnreadCount();
   }
 
   get(id?: string | null): ConversationModel | undefined {
-    if (!this._initialFetchComplete) {
+    if (!this.#_initialFetchComplete) {
       throw new Error(
         'ConversationController.get() needs complete initial fetch'
       );
@@ -233,7 +272,7 @@ export class ConversationController {
   getOrCreate(
     identifier: string | null,
     type: ConversationAttributesTypeType,
-    additionalInitialProps = {}
+    additionalInitialProps: Partial<ConversationAttributesType> = {}
   ): ConversationModel {
     if (typeof identifier !== 'string') {
       throw new TypeError("'id' must be a string");
@@ -245,7 +284,7 @@ export class ConversationController {
       );
     }
 
-    if (!this._initialFetchComplete) {
+    if (!this.#_initialFetchComplete) {
       throw new Error(
         'ConversationController.get() needs complete initial fetch'
       );
@@ -256,22 +295,26 @@ export class ConversationController {
       return conversation;
     }
 
-    const id = UUID.generate().toString();
+    if (this.#isReadOnly) {
+      throw new Error('ConversationController is read-only');
+    }
+
+    const id = generateUuid();
 
     if (type === 'group') {
       conversation = this._conversations.add({
         id,
-        uuid: undefined,
+        serviceId: undefined,
         e164: undefined,
         groupId: identifier,
         type,
         version: 2,
         ...additionalInitialProps,
       });
-    } else if (isValidUuid(identifier)) {
+    } else if (isServiceIdString(identifier)) {
       conversation = this._conversations.add({
         id,
-        uuid: identifier,
+        serviceId: identifier,
         e164: undefined,
         groupId: undefined,
         type,
@@ -281,7 +324,7 @@ export class ConversationController {
     } else {
       conversation = this._conversations.add({
         id,
-        uuid: undefined,
+        serviceId: undefined,
         e164: identifier,
         groupId: undefined,
         type,
@@ -296,7 +339,7 @@ export class ConversationController {
         log.error(
           'Contact is not valid. Not saving, but adding to collection:',
           conversation.idForLogging(),
-          validationError.stack
+          Errors.toLogFormat(validationError)
         );
 
         return conversation;
@@ -313,7 +356,7 @@ export class ConversationController {
           identifier,
           type,
           'Error:',
-          error && error.stack ? error.stack : error
+          Errors.toLogFormat(error)
         );
         throw error;
       }
@@ -329,7 +372,7 @@ export class ConversationController {
   async getOrCreateAndWait(
     id: string | null,
     type: ConversationAttributesTypeType,
-    additionalInitialProps = {}
+    additionalInitialProps: Partial<ConversationAttributesType> = {}
   ): Promise<ConversationModel> {
     await this.load();
     const conversation = this.getOrCreate(id, type, additionalInitialProps);
@@ -359,25 +402,21 @@ export class ConversationController {
 
   getOurConversationId(): string | undefined {
     const e164 = window.textsecure.storage.user.getNumber();
-    const aci = window.textsecure.storage.user
-      .getUuid(UUIDKind.ACI)
-      ?.toString();
-    const pni = window.textsecure.storage.user
-      .getUuid(UUIDKind.PNI)
-      ?.toString();
+    const aci = window.textsecure.storage.user.getAci();
+    const pni = window.textsecure.storage.user.getPni();
 
     if (!e164 && !aci && !pni) {
       return undefined;
     }
 
-    const conversation = this.maybeMergeContacts({
+    const { conversation } = this.maybeMergeContacts({
       aci,
       e164,
       pni,
       reason: 'getOurConversationId',
     });
 
-    return conversation?.id;
+    return conversation.id;
   }
 
   getOurConversationIdOrThrow(): string {
@@ -406,45 +445,92 @@ export class ConversationController {
     return conversation;
   }
 
+  async getOrCreateSignalConversation(): Promise<ConversationModel> {
+    const conversation = await this.getOrCreateAndWait(SIGNAL_ACI, 'private', {
+      muteExpiresAt: Number.MAX_SAFE_INTEGER,
+      profileAvatar: { path: SIGNAL_AVATAR_PATH },
+      profileName: 'Signal',
+      profileSharing: true,
+    });
+
+    if (conversation.get('profileAvatar')?.path !== SIGNAL_AVATAR_PATH) {
+      conversation.set({
+        profileAvatar: { hash: SIGNAL_AVATAR_PATH, path: SIGNAL_AVATAR_PATH },
+      });
+      await updateConversation(conversation.attributes);
+    }
+
+    if (!conversation.get('profileName')) {
+      conversation.set({ profileName: 'Signal' });
+      await updateConversation(conversation.attributes);
+    }
+
+    this.#_signalConversationId = conversation.id;
+
+    return conversation;
+  }
+
+  isSignalConversationId(conversationId: string): boolean {
+    return this.#_signalConversationId === conversationId;
+  }
+
   areWePrimaryDevice(): boolean {
     const ourDeviceId = window.textsecure.storage.user.getDeviceId();
 
     return ourDeviceId === 1;
   }
 
-  // Note: If you don't know what kind of UUID it is, put it in the 'aci' param.
+  // Note: If you don't know what kind of serviceId it is, put it in the 'aci' param.
   maybeMergeContacts({
     aci: providedAci,
     e164,
     pni: providedPni,
     reason,
+    fromPniSignature = false,
     mergeOldAndNew = safeCombineConversations,
   }: {
-    aci?: string;
+    aci?: AciString;
     e164?: string;
-    pni?: string;
+    pni?: PniString;
     reason: string;
-    recursionCount?: number;
-    mergeOldAndNew?: (options: {
-      logId: string;
-      oldConversation: ConversationModel;
-      newConversation: ConversationModel;
-    }) => Promise<void>;
-  }): ConversationModel | undefined {
+    fromPniSignature?: boolean;
+    mergeOldAndNew?: (options: SafeCombineConversationsParams) => Promise<void>;
+  }): {
+    conversation: ConversationModel;
+    mergePromises: Array<Promise<void>>;
+  } {
     const dataProvided = [];
     if (providedAci) {
-      dataProvided.push('aci');
-    }
-    if (e164) {
-      dataProvided.push('e164');
-    }
-    if (providedPni) {
-      dataProvided.push('pni');
-    }
-    const logId = `maybeMergeContacts/${reason}/${dataProvided.join('+')}`;
+      dataProvided.push(`aci=${providedAci}`);
 
-    const aci = providedAci ? UUID.cast(providedAci) : undefined;
-    const pni = providedPni ? UUID.cast(providedPni) : undefined;
+      if (e164) {
+        dataProvided.push('e164');
+      }
+      if (providedPni) {
+        dataProvided.push('pni');
+      }
+    } else {
+      if (e164) {
+        dataProvided.push(`e164=${e164}`);
+      }
+      if (providedPni) {
+        dataProvided.push(`pni=${providedPni}`);
+      }
+    }
+    if (fromPniSignature) {
+      dataProvided.push(`fromPniSignature=${fromPniSignature}`);
+    }
+    const logId = `maybeMergeContacts/${reason}/${dataProvided.join(',')}`;
+
+    const aci = providedAci
+      ? normalizeAci(providedAci, 'maybeMergeContacts.aci')
+      : undefined;
+    const pni = providedPni
+      ? normalizePni(providedPni, 'maybeMergeContacts.pni')
+      : undefined;
+    const mergePromises: Array<Promise<void>> = [];
+
+    const pniSignatureVerified = aci != null && pni != null && fromPniSignature;
 
     if (!aci && !e164 && !pni) {
       throw new Error(
@@ -454,7 +540,7 @@ export class ConversationController {
 
     const matches: Array<ConvoMatchType> = [
       {
-        key: 'uuid',
+        key: 'serviceId',
         value: aci,
         match: window.ConversationController.get(aci),
       },
@@ -468,6 +554,12 @@ export class ConversationController {
     let unusedMatches: Array<ConvoMatchType> = [];
 
     let targetConversation: ConversationModel | undefined;
+    let targetOldServiceIds:
+      | {
+          aci?: AciString;
+          pni?: PniString;
+        }
+      | undefined;
     let matchCount = 0;
     matches.forEach(item => {
       const { key, value, match } = item;
@@ -479,10 +571,11 @@ export class ConversationController {
       if (!match) {
         if (targetConversation) {
           log.info(
-            `${logId}: No match for ${key}, applying to target conversation`
+            `${logId}: No match for ${key}, applying to target ` +
+              `conversation - ${targetConversation.idForLogging()}`
           );
           // Note: This line might erase a known e164 or PNI
-          applyChangeToConversation(targetConversation, {
+          applyChangeToConversation(targetConversation, pniSignatureVerified, {
             [key]: value,
           });
         } else {
@@ -496,14 +589,34 @@ export class ConversationController {
         strictAssert(unused.value, 'An unused value should always be truthy');
 
         // Example: If we find that our PNI match has no ACI, then it will be our target.
-        //   Tricky: PNI can end up in UUID slot, so we need to special-case it
-        if (
-          !targetConversation &&
-          (!match.get(unused.key) ||
-            (unused.key === 'uuid' && match.get(unused.key) === pni))
-        ) {
+
+        if (!targetConversation && !match.get(unused.key)) {
           log.info(
             `${logId}: Match on ${key} does not have ${unused.key}, ` +
+              `so it will be our target conversation - ${match.idForLogging()}`
+          );
+          targetConversation = match;
+        }
+        // Tricky: PNI can end up in serviceId slot, so we need to special-case it
+        if (
+          !targetConversation &&
+          unused.key === 'serviceId' &&
+          match.get(unused.key) === pni
+        ) {
+          log.info(
+            `${logId}: Match on ${key} has serviceId matching incoming pni, ` +
+              `so it will be our target conversation - ${match.idForLogging()}`
+          );
+          targetConversation = match;
+        }
+        // Tricky: PNI can end up in serviceId slot, so we need to special-case it
+        if (
+          !targetConversation &&
+          unused.key === 'serviceId' &&
+          match.get(unused.key) === match.getPni()
+        ) {
+          log.info(
+            `${logId}: Match on ${key} has pni/serviceId which are the same value, ` +
               `so it will be our target conversation - ${match.idForLogging()}`
           );
           targetConversation = match;
@@ -518,10 +631,15 @@ export class ConversationController {
           );
         }
 
+        targetOldServiceIds = {
+          aci: targetConversation.getAci(),
+          pni: targetConversation.getPni(),
+        };
+
         log.info(
           `${logId}: Applying new value for ${unused.key} to target conversation`
         );
-        applyChangeToConversation(targetConversation, {
+        applyChangeToConversation(targetConversation, pniSignatureVerified, {
           [unused.key]: unused.value,
         });
       });
@@ -529,44 +647,74 @@ export class ConversationController {
       unusedMatches = [];
 
       if (targetConversation && targetConversation !== match) {
+        // We need to grab this before we start taking key data from it. If we're merging
+        //   by e164, we want to be sure that is what is rendered in the notification.
+        const obsoleteTitleInfo =
+          key === 'e164'
+            ? pick(match.attributes as ConversationAttributesType, [
+                'e164',
+                'type',
+              ])
+            : pick(match.attributes as ConversationAttributesType, [
+                'e164',
+                'profileFamilyName',
+                'profileName',
+                'systemGivenName',
+                'systemFamilyName',
+                'systemNickname',
+                'type',
+                'username',
+              ]);
+
         // Clear the value on the current match, since it belongs on targetConversation!
         //   Note: we need to do the remove first, because it will clear the lookup!
         log.info(
-          `${logId}: Clearing ${key} on match, and adding it to target conversation`
+          `${logId}: Clearing ${key} on match, and adding it to target ` +
+            `conversation - ${targetConversation.idForLogging()}`
         );
         const change: Pick<
           Partial<ConversationAttributesType>,
-          'uuid' | 'e164' | 'pni'
+          'serviceId' | 'e164' | 'pni'
         > = {
           [key]: undefined,
         };
-        // When the PNI is being used in the uuid field alone, we need to clear it
-        if (key === 'pni' && match.get('uuid') === pni) {
-          change.uuid = undefined;
+        // When the PNI is being used in the serviceId field alone, we need to clear it
+        if ((key === 'pni' || key === 'e164') && match.getServiceId() === pni) {
+          change.serviceId = undefined;
         }
-        applyChangeToConversation(match, change);
+        applyChangeToConversation(match, pniSignatureVerified, change);
 
-        applyChangeToConversation(targetConversation, {
+        // Note: The PNI check here is just to be bulletproof; if we know a
+        //   serviceId is a PNI, then that should be put in the serviceId field
+        //   as well!
+        const willMerge =
+          !match.getServiceId() && !match.get('e164') && !match.getPni();
+
+        applyChangeToConversation(targetConversation, pniSignatureVerified, {
           [key]: value,
         });
 
-        // Note: The PNI check here is just to be bulletproof; if we know a UUID is a PNI,
-        //   then that should be put in the UUID field as well!
-        if (!match.get('uuid') && !match.get('e164') && !match.get('pni')) {
+        if (willMerge) {
           log.warn(
             `${logId}: Removing old conversation which matched on ${key}. ` +
-              'Merging with target conversation.'
+              `Merging with target conversation - ${targetConversation.idForLogging()}`
           );
-          mergeOldAndNew({
-            logId,
-            oldConversation: match,
-            newConversation: targetConversation,
-          });
+          mergePromises.push(
+            mergeOldAndNew({
+              current: targetConversation,
+              logId,
+              obsolete: match,
+              obsoleteTitleInfo,
+            })
+          );
         }
       } else if (targetConversation && !targetConversation?.get(key)) {
         // This is mostly for the situation where PNI was erased when updating e164
-        log.debug(`${logId}: Re-adding ${key} on target conversation`);
-        applyChangeToConversation(targetConversation, {
+        log.debug(
+          `${logId}: Re-adding ${key} on target conversation - ` +
+            `${targetConversation.idForLogging()}`
+        );
+        applyChangeToConversation(targetConversation, pniSignatureVerified, {
           [key]: value,
         });
       }
@@ -576,11 +724,35 @@ export class ConversationController {
         //   `${logId}: Match on ${key} is target conversation - ${match.idForLogging()}`
         // );
         targetConversation = match;
+        targetOldServiceIds = {
+          aci: targetConversation.getAci(),
+          pni: targetConversation.getPni(),
+        };
       }
     });
 
+    // If the change is not coming from PNI Signature, and target conversation
+    // had PNI and has acquired new ACI and/or PNI we should check if it had
+    // a PNI session on the original PNI. If yes - add a PhoneNumberDiscovery notification
+    if (
+      e164 &&
+      pni &&
+      targetConversation &&
+      targetOldServiceIds?.pni &&
+      !fromPniSignature &&
+      (targetOldServiceIds.pni !== pni ||
+        (aci && targetOldServiceIds.aci !== aci))
+    ) {
+      targetConversation.unset('needsTitleTransition');
+      mergePromises.push(
+        targetConversation.addPhoneNumberDiscoveryIfNeeded(
+          targetOldServiceIds.pni
+        )
+      );
+    }
+
     if (targetConversation) {
-      return targetConversation;
+      return { conversation: targetConversation, mergePromises };
     }
 
     strictAssert(
@@ -591,90 +763,99 @@ export class ConversationController {
     log.info(`${logId}: Creating a new conversation with all inputs`);
 
     // This is not our precedence for lookup, but it ensures that the PNI gets into the
-    //   uuid slot if we have no ACI.
+    //   serviceId slot if we have no ACI.
     const identifier = aci || pni || e164;
     strictAssert(identifier, `${logId}: identifier must be truthy!`);
 
-    return this.getOrCreate(identifier, 'private', { e164, pni });
+    return {
+      conversation: this.getOrCreate(identifier, 'private', { e164, pni }),
+      mergePromises,
+    };
   }
 
   /**
-   * Given a UUID and/or an E164, returns a string representing the local
+   * Given a serviceId and/or an E164, returns a string representing the local
    * database id of the given contact. Will create a new conversation if none exists;
    * otherwise will return whatever is found.
    */
   lookupOrCreate({
     e164,
-    uuid,
+    serviceId,
+    reason,
   }: {
     e164?: string | null;
-    uuid?: string | null;
+    serviceId?: ServiceIdString | null;
+    reason: string;
   }): ConversationModel | undefined {
-    const normalizedUuid = uuid ? uuid.toLowerCase() : undefined;
-    const identifier = normalizedUuid || e164;
+    const normalizedServiceId = serviceId
+      ? normalizeServiceId(serviceId, 'ConversationController.lookupOrCreate')
+      : undefined;
+    const identifier = normalizedServiceId || e164;
 
-    if ((!e164 && !uuid) || !identifier) {
-      log.warn('lookupOrCreate: Called with neither e164 nor uuid!');
+    if ((!e164 && !serviceId) || !identifier) {
+      log.warn(
+        `lookupOrCreate: Called with neither e164 nor serviceId! reason: ${reason}`
+      );
       return undefined;
     }
 
     const convoE164 = this.get(e164);
-    const convoUuid = this.get(normalizedUuid);
+    const convoServiceId = this.get(normalizedServiceId);
 
     // 1. Handle no match at all
-    if (!convoE164 && !convoUuid) {
+    if (!convoE164 && !convoServiceId) {
       log.info('lookupOrCreate: Creating new contact, no matches found');
       const newConvo = this.getOrCreate(identifier, 'private');
 
-      // `identifier` would resolve to uuid if we had both, so fix up e164
-      if (normalizedUuid && e164) {
+      // `identifier` would resolve to serviceId if we had both, so fix up e164
+      if (normalizedServiceId && e164) {
         newConvo.updateE164(e164);
       }
 
       return newConvo;
     }
 
-    // 2. Handle match on only UUID
-    if (!convoE164 && convoUuid) {
-      return convoUuid;
+    // 2. Handle match on only service id
+    if (!convoE164 && convoServiceId) {
+      return convoServiceId;
     }
 
     // 3. Handle match on only E164
-    if (convoE164 && !convoUuid) {
+    if (convoE164 && !convoServiceId) {
       return convoE164;
     }
 
     // For some reason, TypeScript doesn't believe that we can trust that these two values
     //   are truthy by this point. So we'll throw if that isn't the case.
-    if (!convoE164 || !convoUuid) {
+    if (!convoE164 || !convoServiceId) {
       throw new Error(
-        'lookupOrCreate: convoE164 or convoUuid are falsey but should both be true!'
+        `lookupOrCreate: convoE164 or convoServiceId are falsey but should both be true! reason: ${reason}`
       );
     }
 
     // 4. If the two lookups agree, return that conversation
-    if (convoE164 === convoUuid) {
-      return convoUuid;
+    if (convoE164 === convoServiceId) {
+      return convoServiceId;
     }
 
-    // 5. If the two lookups disagree, log and return the UUID match
+    // 5. If the two lookups disagree, log and return the service id match
     log.warn(
-      `lookupOrCreate: Found a split contact - UUID ${normalizedUuid} and E164 ${e164}. Returning UUID match.`
+      `lookupOrCreate: Found a split contact - service id ${normalizedServiceId} and E164 ${e164}. Returning service id match. reason: ${reason}`
     );
-    return convoUuid;
+    return convoServiceId;
   }
 
   checkForConflicts(): Promise<void> {
-    return this._combineConversationsQueue.add(() =>
-      this.doCheckForConflicts()
+    return this.#_combineConversationsQueue.add(() =>
+      this.#doCheckForConflicts()
     );
   }
 
-  // Note: `doCombineConversations` is used within this function since both
-  // run on `_combineConversationsQueue` queue and we don't want deadlocks.
-  private async doCheckForConflicts(): Promise<void> {
-    log.info('checkForConflicts: starting...');
-    const byUuid = Object.create(null);
+  // Note: `doCombineConversations` is directly used within this function since both
+  //   run on `_combineConversationsQueue` queue and we don't want deadlocks.
+  async #doCheckForConflicts(): Promise<void> {
+    log.info('ConversationController.checkForConflicts: starting...');
+    const byServiceId = Object.create(null);
     const byE164 = Object.create(null);
     const byGroupV2Id = Object.create(null);
     // We also want to find duplicate GV1 IDs. You might expect to see a "byGroupV1Id" map
@@ -691,55 +872,69 @@ export class ConversationController {
         'Expected conversation to be found in array during iteration'
       );
 
-      const uuid = conversation.get('uuid');
-      const pni = conversation.get('pni');
+      const serviceId = conversation.getServiceId();
+      const pni = conversation.getPni();
       const e164 = conversation.get('e164');
 
-      if (uuid) {
-        const existing = byUuid[uuid];
+      if (serviceId) {
+        const existing = byServiceId[serviceId];
         if (!existing) {
-          byUuid[uuid] = conversation;
+          byServiceId[serviceId] = conversation;
         } else {
-          log.warn(`checkForConflicts: Found conflict with uuid ${uuid}`);
+          log.warn(
+            `checkForConflicts: Found conflict with serviceId ${serviceId}`
+          );
 
           // Keep the newer one if it has an e164, otherwise keep existing
           if (conversation.get('e164')) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(conversation, existing);
-            byUuid[uuid] = conversation;
+            await this.#doCombineConversations({
+              current: conversation,
+              obsolete: existing,
+            });
+            byServiceId[serviceId] = conversation;
           } else {
             // Keep existing - note that this applies if neither had an e164
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(existing, conversation);
+            await this.#doCombineConversations({
+              current: existing,
+              obsolete: conversation,
+            });
           }
         }
       }
 
       if (pni) {
-        const existing = byUuid[pni];
+        const existing = byServiceId[pni];
         if (!existing) {
-          byUuid[pni] = conversation;
+          byServiceId[pni] = conversation;
         } else if (existing === conversation) {
-          // Conversation has both uuid and pni set to the same value. This
+          // Conversation has both service id and pni set to the same value. This
           // happens when starting a conversation by E164.
           assertDev(
-            pni === uuid,
-            'checkForConflicts: expected PNI to be equal to UUID'
+            pni === serviceId,
+            'checkForConflicts: expected PNI to be equal to serviceId'
           );
         } else {
           log.warn(`checkForConflicts: Found conflict with pni ${pni}`);
 
           // Keep the newer one if it has additional data, otherwise keep existing
-          if (conversation.get('e164') || conversation.get('pni')) {
+          if (conversation.get('e164') || conversation.getPni()) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(conversation, existing);
-            byUuid[pni] = conversation;
+            await this.#doCombineConversations({
+              current: conversation,
+              obsolete: existing,
+            });
+            byServiceId[pni] = conversation;
           } else {
             // Keep existing - note that this applies if neither had an e164
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(existing, conversation);
+            await this.#doCombineConversations({
+              current: existing,
+              obsolete: conversation,
+            });
           }
         }
       }
@@ -749,19 +944,19 @@ export class ConversationController {
         if (!existing) {
           byE164[e164] = conversation;
         } else {
-          // If we have two contacts with the same e164 but different truthy UUIDs, then
-          //   we'll delete the e164 on the older one
+          // If we have two contacts with the same e164 but different truthy
+          //   service ids, then we'll delete the e164 on the older one
           if (
-            conversation.get('uuid') &&
-            existing.get('uuid') &&
-            conversation.get('uuid') !== existing.get('uuid')
+            conversation.getServiceId() &&
+            existing.getServiceId() &&
+            conversation.getServiceId() !== existing.getServiceId()
           ) {
             log.warn(
-              `checkForConflicts: Found two matches on e164 ${e164} with different truthy UUIDs. Dropping e164 on older.`
+              `checkForConflicts: Found two matches on e164 ${e164} with different truthy service ids. Dropping e164 on older.`
             );
 
             existing.set({ e164: undefined });
-            updateConversation(existing.attributes);
+            drop(updateConversation(existing.attributes));
 
             byE164[e164] = conversation;
 
@@ -770,16 +965,22 @@ export class ConversationController {
 
           log.warn(`checkForConflicts: Found conflict with e164 ${e164}`);
 
-          // Keep the newer one if it has a UUID, otherwise keep existing
-          if (conversation.get('uuid')) {
+          // Keep the newer one if it has a service id, otherwise keep existing
+          if (conversation.getServiceId()) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(conversation, existing);
+            await this.#doCombineConversations({
+              current: conversation,
+              obsolete: existing,
+            });
             byE164[e164] = conversation;
           } else {
-            // Keep existing - note that this applies if neither had a UUID
+            // Keep existing - note that this applies if neither had a service id
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(existing, conversation);
+            await this.#doCombineConversations({
+              current: existing,
+              obsolete: conversation,
+            });
           }
         }
       }
@@ -814,11 +1015,17 @@ export class ConversationController {
             !isGroupV2(existing.attributes)
           ) {
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(conversation, existing);
+            await this.#doCombineConversations({
+              current: conversation,
+              obsolete: existing,
+            });
             byGroupV2Id[groupV2Id] = conversation;
           } else {
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations(existing, conversation);
+            await this.#doCombineConversations({
+              current: existing,
+              obsolete: conversation,
+            });
           }
         }
       }
@@ -828,24 +1035,25 @@ export class ConversationController {
   }
 
   async combineConversations(
-    current: ConversationModel,
-    obsolete: ConversationModel
+    options: CombineConversationsParams
   ): Promise<void> {
-    return this._combineConversationsQueue.add(() =>
-      this.doCombineConversations(current, obsolete)
+    return this.#_combineConversationsQueue.add(() =>
+      this.#doCombineConversations(options)
     );
   }
 
-  private async doCombineConversations(
-    current: ConversationModel,
-    obsolete: ConversationModel
-  ): Promise<void> {
+  async #doCombineConversations({
+    current,
+    obsolete,
+    obsoleteTitleInfo,
+  }: CombineConversationsParams): Promise<void> {
     const logId = `combineConversations/${obsolete.id}->${current.id}`;
 
     const conversationType = current.get('type');
 
     if (!this.get(obsolete.id)) {
       log.warn(`${logId}: Already combined obsolete conversation`);
+      return;
     }
 
     if (obsolete.get('type') !== conversationType) {
@@ -856,6 +1064,41 @@ export class ConversationController {
       return;
     }
 
+    log.warn(
+      `${logId}: Combining two conversations -`,
+      `old: ${obsolete.idForLogging()} -> new: ${current.idForLogging()}`
+    );
+
+    const obsoleteActiveAt = obsolete.get('active_at');
+    const currentActiveAt = current.get('active_at');
+    let activeAt: number | null | undefined;
+
+    if (obsoleteActiveAt && currentActiveAt) {
+      activeAt = Math.max(obsoleteActiveAt, currentActiveAt);
+    } else {
+      activeAt = obsoleteActiveAt || currentActiveAt;
+    }
+    current.set('active_at', activeAt);
+
+    current.set(
+      'expireTimerVersion',
+      Math.max(
+        obsolete.get('expireTimerVersion') ?? 1,
+        current.get('expireTimerVersion') ?? 1
+      )
+    );
+
+    const obsoleteExpireTimer = obsolete.get('expireTimer');
+    const currentExpireTimer = current.get('expireTimer');
+    if (
+      !currentExpireTimer ||
+      (obsoleteExpireTimer && obsoleteExpireTimer < currentExpireTimer)
+    ) {
+      current.set('expireTimer', obsoleteExpireTimer);
+    }
+
+    const currentHadMessages = (current.get('messageCount') ?? 0) > 0;
+
     const dataToCopy: Partial<ConversationAttributesType> = pick(
       obsolete.attributes,
       [
@@ -865,8 +1108,12 @@ export class ConversationController {
         'draftAttachments',
         'draftBodyRanges',
         'draftTimestamp',
+        'draft',
+        'draftEditMessage',
         'messageCount',
         'messageRequestResponseType',
+        'needsTitleTransition',
+        'profileSharing',
         'quotedMessageId',
         'sentMessageCount',
       ]
@@ -895,63 +1142,42 @@ export class ConversationController {
     }
 
     const obsoleteId = obsolete.get('id');
-    const obsoleteUuid = obsolete.getUuid();
+    const obsoleteServiceId = obsolete.getServiceId();
     const currentId = current.get('id');
-    log.warn(
-      `${logId}: Combining two conversations -`,
-      `old: ${obsolete.idForLogging()} -> new: ${current.idForLogging()}`
-    );
 
-    if (conversationType === 'private' && obsoleteUuid) {
+    if (conversationType === 'private' && obsoleteServiceId) {
       if (!current.get('profileKey') && obsolete.get('profileKey')) {
         log.warn(`${logId}: Copying profile key from old to new contact`);
 
         const profileKey = obsolete.get('profileKey');
 
         if (profileKey) {
-          await current.setProfileKey(profileKey);
+          await current.setProfileKey(profileKey, {
+            reason: 'doCombineConversations ',
+          });
         }
       }
 
       log.warn(`${logId}: Delete all sessions tied to old conversationId`);
-      const ourACI = window.textsecure.storage.user.getUuid(UUIDKind.ACI);
-      const ourPNI = window.textsecure.storage.user.getUuid(UUIDKind.PNI);
-      await Promise.all(
-        [ourACI, ourPNI].map(async ourUuid => {
-          if (!ourUuid) {
-            return;
-          }
-          const deviceIds =
-            await window.textsecure.storage.protocol.getDeviceIds({
-              ourUuid,
-              identifier: obsoleteUuid.toString(),
-            });
-          await Promise.all(
-            deviceIds.map(async deviceId => {
-              const addr = new QualifiedAddress(
-                ourUuid,
-                new Address(obsoleteUuid, deviceId)
-              );
-              await window.textsecure.storage.protocol.removeSession(addr);
-            })
-          );
-        })
+      // Note: we use the conversationId here in case we've already lost our service id.
+      await window.textsecure.storage.protocol.removeSessionsByConversation(
+        obsoleteId
       );
 
       log.warn(
         `${logId}: Delete all identity information tied to old conversationId`
       );
-
-      if (obsoleteUuid) {
+      if (obsoleteServiceId) {
         await window.textsecure.storage.protocol.removeIdentityKey(
-          obsoleteUuid
+          obsoleteServiceId
         );
       }
 
       log.warn(
         `${logId}: Ensure that all V1 groups have new conversationId instead of old`
       );
-      const groups = await this.getAllGroupsInvolvingUuid(obsoleteUuid);
+      const groups =
+        await this.getAllGroupsInvolvingServiceId(obsoleteServiceId);
       groups.forEach(group => {
         const members = group.get('members');
         const withoutObsolete = without(members, obsoleteId);
@@ -960,22 +1186,36 @@ export class ConversationController {
         group.set({
           members: currentAdded,
         });
-        updateConversation(group.attributes);
+        drop(updateConversation(group.attributes));
       });
     }
 
     // Note: we explicitly don't want to update V2 groups
 
+    const obsoleteHadMessages = (obsolete.get('messageCount') ?? 0) > 0;
+
     log.warn(`${logId}: Delete the obsolete conversation from the database`);
     await removeConversation(obsoleteId);
 
-    log.warn(`${logId}: Update cached messages in MessageController`);
-    window.MessageController.update((message: MessageModel) => {
-      if (message.get('conversationId') === obsoleteId) {
-        message.set({ conversationId: currentId });
-      }
-    });
+    const obsoleteStorageID = obsolete.get('storageID');
 
+    if (obsoleteStorageID) {
+      log.warn(
+        `${logId}: Obsolete conversation was in storage service, scheduling removal`
+      );
+
+      const obsoleteStorageVersion = obsolete.get('storageVersion');
+      StorageService.addPendingDelete({
+        storageID: obsoleteStorageID,
+        storageVersion: obsoleteStorageVersion,
+      });
+    }
+
+    log.warn(`${logId}: Update cached messages in MessageCache`);
+    window.MessageCache.replaceAllObsoleteConversationIds({
+      conversationId: currentId,
+      obsoleteId,
+    });
     log.warn(`${logId}: Update messages table`);
     await migrateConversationMessages(obsoleteId, currentId);
 
@@ -992,6 +1232,28 @@ export class ConversationController {
     this._conversations.resetLookups();
 
     current.captureChange('combineConversations');
+    drop(current.updateLastMessage());
+
+    const state = window.reduxStore.getState();
+    if (state.conversations.selectedConversationId === current.id) {
+      // TODO: DESKTOP-4807
+      drop(current.loadNewestMessages(undefined, undefined));
+    }
+
+    const titleIsUseful = Boolean(
+      obsoleteTitleInfo && getTitleNoDefault(obsoleteTitleInfo)
+    );
+    // If both conversations had messages - add merge
+    if (
+      titleIsUseful &&
+      conversationType === 'private' &&
+      currentHadMessages &&
+      obsoleteHadMessages
+    ) {
+      assertDev(obsoleteTitleInfo, 'part of titleIsUseful boolean');
+
+      drop(current.addConversationMerge(obsoleteTitleInfo));
+    }
 
     log.warn(`${logId}: Complete!`);
   }
@@ -1016,7 +1278,7 @@ export class ConversationController {
     targetTimestamp: number
   ): Promise<ConversationModel | null | undefined> {
     const messages = await getMessagesBySentAt(targetTimestamp);
-    const targetMessage = messages.find(m => getContactId(m) === targetFromId);
+    const targetMessage = messages.find(m => getAuthorId(m) === targetFromId);
 
     if (targetMessage) {
       return this.get(targetMessage.conversationId);
@@ -1025,10 +1287,10 @@ export class ConversationController {
     return null;
   }
 
-  async getAllGroupsInvolvingUuid(
-    uuid: UUID
+  async getAllGroupsInvolvingServiceId(
+    serviceId: ServiceIdString
   ): Promise<Array<ConversationModel>> {
-    const groups = await getAllGroupsInvolvingUuid(uuid.toString());
+    const groups = await getAllGroupsInvolvingServiceId(serviceId);
     return groups.map(group => {
       const existing = this.get(group.id);
       if (existing) {
@@ -1045,14 +1307,24 @@ export class ConversationController {
     );
   }
 
+  setReadOnly(value: boolean): void {
+    if (this.#isReadOnly === value) {
+      log.warn(`ConversationController: already at readOnly=${value}`);
+      return;
+    }
+
+    log.info(`ConversationController: readOnly=${value}`);
+    this.#isReadOnly = value;
+  }
+
   reset(): void {
     delete this._initialPromise;
-    this._initialFetchComplete = false;
+    this.#_initialFetchComplete = false;
     this._conversations.reset([]);
   }
 
   load(): Promise<void> {
-    this._initialPromise ||= this.doLoad();
+    this._initialPromise ||= this.#doLoad();
     return this._initialPromise;
   }
 
@@ -1089,17 +1361,63 @@ export class ConversationController {
   }
 
   onConvoOpenStart(conversationId: string): void {
-    this._conversationOpenStart.set(conversationId, Date.now());
+    this.#_conversationOpenStart.set(conversationId, Date.now());
   }
 
   onConvoMessageMount(conversationId: string): void {
-    const loadStart = this._conversationOpenStart.get(conversationId);
+    const loadStart = this.#_conversationOpenStart.get(conversationId);
     if (loadStart === undefined) {
       return;
     }
 
-    this._conversationOpenStart.delete(conversationId);
+    this.#_conversationOpenStart.delete(conversationId);
     this.get(conversationId)?.onOpenComplete(loadStart);
+  }
+
+  migrateAvatarsForNonAcceptedConversations(): void {
+    if (window.storage.get('avatarsHaveBeenMigrated')) {
+      return;
+    }
+    const conversations = this.getAll();
+    let numberOfConversationsMigrated = 0;
+    for (const conversation of conversations) {
+      const attrs = conversation.attributes;
+      if (
+        !isConversationAccepted(attrs) ||
+        (isGroup(attrs) && areWePending(attrs))
+      ) {
+        const avatarPath = attrs.avatar?.path;
+        const profileAvatarPath = attrs.profileAvatar?.path;
+
+        if (avatarPath || profileAvatarPath) {
+          drop(
+            (async () => {
+              const { doesAttachmentExist, deleteAttachmentData } =
+                window.Signal.Migrations;
+              if (avatarPath && (await doesAttachmentExist(avatarPath))) {
+                await deleteAttachmentData(avatarPath);
+              }
+
+              if (
+                profileAvatarPath &&
+                (await doesAttachmentExist(profileAvatarPath))
+              ) {
+                await deleteAttachmentData(profileAvatarPath);
+              }
+            })()
+          );
+        }
+
+        conversation.set('avatar', undefined);
+        conversation.set('profileAvatar', undefined);
+        drop(updateConversation(conversation.attributes));
+        numberOfConversationsMigrated += 1;
+      }
+    }
+    log.info(
+      `ConversationController: unset avatars for ${numberOfConversationsMigrated} unaccepted conversations`
+    );
+    drop(window.storage.put('avatarsHaveBeenMigrated', true));
   }
 
   repairPinnedConversations(): void {
@@ -1117,21 +1435,43 @@ export class ConversationController {
       );
       convo.set('isPinned', true);
 
-      window.Signal.Data.updateConversation(convo.attributes);
+      drop(updateConversation(convo.attributes));
     }
+  }
+
+  async clearShareMyPhoneNumber(): Promise<void> {
+    const sharedWith = this.getAll().filter(c => c.get('shareMyPhoneNumber'));
+
+    if (sharedWith.length === 0) {
+      return;
+    }
+
+    log.info(
+      'ConversationController.clearShareMyPhoneNumber: ' +
+        `updating ${sharedWith.length} conversations`
+    );
+
+    await updateConversations(
+      sharedWith.map(c => {
+        c.unset('shareMyPhoneNumber');
+        return c.attributes;
+      })
+    );
   }
 
   // For testing
   async _forgetE164(e164: string): Promise<void> {
     const { server } = window.textsecure;
     strictAssert(server, 'Server must be initialized');
-    const uuidMap = await getUuidsForE164s(server, [e164]);
+    const { entries: serviceIdMap, transformedE164s } =
+      await getServiceIdsForE164s(server, [e164]);
 
-    const pni = uuidMap.get(e164)?.pni;
+    const e164ToUse = transformedE164s.get(e164) ?? e164;
+    const pni = serviceIdMap.get(e164ToUse)?.pni;
 
-    log.info(`ConversationController: forgetting e164=${e164} pni=${pni}`);
+    log.info(`ConversationController: forgetting e164=${e164ToUse} pni=${pni}`);
 
-    const convos = [this.get(e164), this.get(pni)];
+    const convos = [this.get(e164ToUse), this.get(pni)];
 
     for (const convo of convos) {
       if (!convo) {
@@ -1145,7 +1485,7 @@ export class ConversationController {
     }
   }
 
-  private async doLoad(): Promise<void> {
+  async #doLoad(): Promise<void> {
     log.info('ConversationController: starting initial fetch');
 
     if (this._conversations.length) {
@@ -1170,19 +1510,25 @@ export class ConversationController {
         timeout: MINUTE * 30,
         throwOnTimeout: true,
       });
-      queue.addAll(
-        temporaryConversations.map(item => async () => {
-          await removeConversation(item.id);
-        })
+      drop(
+        queue.addAll(
+          temporaryConversations.map(item => async () => {
+            await removeConversation(item.id);
+          })
+        )
       );
       await queue.onIdle();
 
-      // Hydrate the final set of conversations
-      this._conversations.add(
-        collection.filter(conversation => !conversation.isTemporary)
-      );
+      // It is alright to call it first because the 'add'/'update' events are
+      // triggered after updating the collection.
+      this.#_initialFetchComplete = true;
 
-      this._initialFetchComplete = true;
+      // Hydrate the final set of conversations
+      batchDispatch(() => {
+        this._conversations.add(
+          collection.filter(conversation => !conversation.isTemporary)
+        );
+      });
 
       await Promise.all(
         this._conversations.map(async conversation => {
@@ -1192,7 +1538,7 @@ export class ConversationController {
 
             const isChanged = maybeDeriveGroupV2Id(conversation);
             if (isChanged) {
-              updateConversation(conversation.attributes);
+              await updateConversation(conversation.attributes);
             }
 
             // In case a too-large draft was saved to the database
@@ -1201,33 +1547,79 @@ export class ConversationController {
               conversation.set({
                 draft: draft.slice(0, MAX_MESSAGE_BODY_LENGTH),
               });
-              updateConversation(conversation.attributes);
+              await updateConversation(conversation.attributes);
             }
 
-            // Clean up the conversations that have UUID as their e164.
+            // Clean up the conversations that have service id as their e164.
             const e164 = conversation.get('e164');
-            const uuid = conversation.get('uuid');
-            if (isValidUuid(e164) && uuid) {
+            const serviceId = conversation.getServiceId();
+            if (e164 && isServiceIdString(e164) && serviceId) {
               conversation.set({ e164: undefined });
-              updateConversation(conversation.attributes);
+              await updateConversation(conversation.attributes);
 
-              log.info(`Cleaning up conversation(${uuid}) with invalid e164`);
+              log.info(
+                `Cleaning up conversation(${serviceId}) with invalid e164`
+              );
             }
           } catch (error) {
             log.error(
               'ConversationController.load/map: Failed to prepare a conversation',
-              error && error.stack ? error.stack : error
+              Errors.toLogFormat(error)
             );
           }
         })
       );
-      log.info('ConversationController: done with initial fetch');
+      log.info(
+        'ConversationController: done with initial fetch, ' +
+          `got ${this._conversations.length} conversations`
+      );
     } catch (error) {
       log.error(
         'ConversationController: initial fetch failed',
-        error && error.stack ? error.stack : error
+        Errors.toLogFormat(error)
       );
       throw error;
     }
+  }
+  async archiveSessionsForConversation(
+    conversationId: string | undefined
+  ): Promise<void> {
+    const conversation = window.ConversationController.get(conversationId);
+    if (!conversation) {
+      return;
+    }
+
+    const logId = `archiveSessionsForConversation/${conversation.idForLogging()}`;
+
+    log.info(`${logId}: Starting. First archiving sessions...`);
+    const recipients = conversation.getRecipients();
+    const queue = new PQueue({ concurrency: 1 });
+    recipients.forEach(serviceId => {
+      drop(
+        queue.add(async () => {
+          await window.textsecure.storage.protocol.archiveAllSessions(
+            serviceId
+          );
+        })
+      );
+    });
+    await queue.onEmpty();
+
+    if (conversation.get('senderKeyInfo')) {
+      log.info(`${logId}: Next, clearing senderKeyInfo...`);
+      conversation.set({ senderKeyInfo: undefined });
+      await DataWriter.updateConversation(conversation.attributes);
+    }
+
+    log.info(`${logId}: Now queuing null message send...`);
+    const job = await conversationJobQueue.add({
+      type: 'NullMessage',
+      conversationId: conversation.id,
+    });
+
+    log.info(`${logId}: Send queued; waiting for send completion...`);
+    await job.completion;
+
+    log.info(`${logId}: Complete!`);
   }
 }

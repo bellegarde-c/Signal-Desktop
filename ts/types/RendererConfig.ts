@@ -3,8 +3,12 @@
 
 import { z } from 'zod';
 
+import { Environment } from '../environment';
 import { themeSettingSchema } from './StorageUIKeys';
-import { environmentSchema } from '../environment';
+import { HourCyclePreferenceSchema } from './I18N';
+import { DNSFallbackSchema } from './DNSFallback';
+
+const environmentSchema = z.nativeEnum(Environment);
 
 const configRequiredStringSchema = z.string().nonempty();
 export type ConfigRequiredStringType = z.infer<
@@ -30,25 +34,44 @@ export const rendererConfigSchema = z.object({
   buildExpiration: z.number(),
   cdnUrl0: configRequiredStringSchema,
   cdnUrl2: configRequiredStringSchema,
+  cdnUrl3: configRequiredStringSchema,
+  challengeUrl: configRequiredStringSchema,
   certificateAuthority: configRequiredStringSchema,
   contentProxyUrl: configRequiredStringSchema,
   crashDumpsPath: configRequiredStringSchema,
-  enableCI: z.boolean(),
+  ciMode: z.enum(['full', 'benchmark']).or(z.literal(false)),
+  ciForceUnprocessed: z.boolean(),
+  devTools: z.boolean(),
+  disableIPv6: z.boolean(),
+  dnsFallback: DNSFallbackSchema,
   environment: environmentSchema,
+  isMockTestEnvironment: z.boolean(),
   homePath: configRequiredStringSchema,
   hostname: configRequiredStringSchema,
-  locale: configRequiredStringSchema,
+  installPath: configRequiredStringSchema,
+  osRelease: configRequiredStringSchema,
+  osVersion: configRequiredStringSchema,
+  availableLocales: z.array(configRequiredStringSchema),
+  resolvedTranslationsLocale: configRequiredStringSchema,
+  resolvedTranslationsLocaleDirection: z.enum(['ltr', 'rtl']),
+  hourCyclePreference: HourCyclePreferenceSchema,
+  preferredSystemLocales: z.array(configRequiredStringSchema),
+  localeOverride: z.string().nullable(),
   name: configRequiredStringSchema,
   nodeVersion: configRequiredStringSchema,
   proxyUrl: configOptionalStringSchema,
   reducedMotionSetting: z.boolean(),
+  registrationChallengeUrl: configRequiredStringSchema,
   serverPublicParams: configRequiredStringSchema,
   serverTrustRoot: configRequiredStringSchema,
+  genericServerPublicParams: configRequiredStringSchema,
+  backupServerPublicParams: configRequiredStringSchema,
   serverUrl: configRequiredStringSchema,
   sfuUrl: configRequiredStringSchema,
   storageUrl: configRequiredStringSchema,
   theme: themeSettingSchema,
   updatesUrl: configRequiredStringSchema,
+  resourcesUrl: configRequiredStringSchema,
   userDataPath: configRequiredStringSchema,
   version: configRequiredStringSchema,
   directoryConfig: directoryConfigSchema,
@@ -59,10 +82,6 @@ export const rendererConfigSchema = z.object({
 
   // Only for tests
   argv: configOptionalStringSchema,
-
-  // Only for permission popup window
-  forCalling: z.boolean(),
-  forCamera: z.boolean(),
 });
 
 export type RendererConfigType = z.infer<typeof rendererConfigSchema>;

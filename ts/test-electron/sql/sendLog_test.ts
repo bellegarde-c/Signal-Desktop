@@ -2,34 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
+import { v4 as generateUuid } from 'uuid';
 
-import dataInterface from '../../sql/Client';
-import { UUID } from '../../types/UUID';
-import type { UUIDStringType } from '../../types/UUID';
+import { DataReader, DataWriter } from '../../sql/Client';
+import { generateAci } from '../../types/ServiceId';
 import { constantTimeEqual, getRandomBytes } from '../../Crypto';
-
-function getUuid(): UUIDStringType {
-  return UUID.generate().toString();
-}
+import { cleanupMessages, postSaveUpdates } from '../../util/cleanup';
 
 const {
   _getAllSentProtoMessageIds,
   _getAllSentProtoRecipients,
+  getAllSentProtos,
+} = DataReader;
+const {
   deleteSentProtoByMessageId,
   deleteSentProtoRecipient,
   deleteSentProtosOlderThan,
-  getAllSentProtos,
   getSentProtoByRecipient,
   insertProtoRecipients,
   insertSentProto,
   removeAllSentProtos,
   removeMessage,
   saveMessage,
-} = dataInterface;
+} = DataWriter;
 
 describe('sql/sendLog', () => {
   beforeEach(async () => {
     await removeAllSentProtos();
+    await window.ConversationController.load();
   });
 
   it('roundtrips with insertSentProto/getAllSentProtos', async () => {
@@ -43,9 +43,9 @@ describe('sql/sendLog', () => {
       hasPniSignatureMessage: false,
     };
     await insertSentProto(proto, {
-      messageIds: [getUuid()],
+      messageIds: [generateUuid()],
       recipients: {
-        [getUuid()]: [1, 2],
+        [generateAci()]: [1, 2],
       },
     });
     const allProtos = await getAllSentProtos();
@@ -82,10 +82,10 @@ describe('sql/sendLog', () => {
       hasPniSignatureMessage: true,
     };
     await insertSentProto(proto, {
-      messageIds: [getUuid(), getUuid()],
+      messageIds: [generateUuid(), generateUuid()],
       recipients: {
-        [getUuid()]: [1, 2],
-        [getUuid()]: [1],
+        [generateAci()]: [1, 2],
+        [generateAci()]: [1],
       },
     });
 
@@ -113,22 +113,22 @@ describe('sql/sendLog', () => {
   });
 
   it('trigger deletes payload when referenced message is deleted', async () => {
-    const id = getUuid();
+    const id = generateUuid();
     const timestamp = Date.now();
-    const ourUuid = getUuid();
+    const ourAci = generateAci();
 
     await saveMessage(
       {
         id,
 
         body: 'some text',
-        conversationId: getUuid(),
+        conversationId: generateUuid(),
         received_at: timestamp,
         sent_at: timestamp,
         timestamp,
         type: 'outgoing',
       },
-      { forceSave: true, ourUuid }
+      { forceSave: true, ourAci, postSaveUpdates }
     );
 
     const bytes = getRandomBytes(128);
@@ -142,7 +142,7 @@ describe('sql/sendLog', () => {
     await insertSentProto(proto, {
       messageIds: [id],
       recipients: {
-        [getUuid()]: [1, 2],
+        [generateAci()]: [1, 2],
       },
     });
     const allProtos = await getAllSentProtos();
@@ -152,7 +152,7 @@ describe('sql/sendLog', () => {
 
     assert.strictEqual(actual.timestamp, proto.timestamp);
 
-    await removeMessage(id);
+    await removeMessage(id, { cleanupMessages });
 
     assert.lengthOf(await getAllSentProtos(), 0);
   });
@@ -161,9 +161,9 @@ describe('sql/sendLog', () => {
     it('supports adding duplicates', async () => {
       const timestamp = Date.now();
 
-      const messageIds = [getUuid()];
+      const messageIds = [generateUuid()];
       const recipients = {
-        [getUuid()]: [1],
+        [generateAci()]: [1],
       };
       const proto1 = {
         contentHint: 7,
@@ -202,7 +202,7 @@ describe('sql/sendLog', () => {
     it('handles duplicates, adding new recipients if needed', async () => {
       const timestamp = Date.now();
 
-      const messageIds = [getUuid()];
+      const messageIds = [generateUuid()];
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -218,7 +218,7 @@ describe('sql/sendLog', () => {
       const id = await insertSentProto(proto, {
         messageIds,
         recipients: {
-          [getUuid()]: [1],
+          [generateAci()]: [1],
         },
       });
 
@@ -226,10 +226,10 @@ describe('sql/sendLog', () => {
       assert.lengthOf(await _getAllSentProtoMessageIds(), 1);
       assert.lengthOf(await _getAllSentProtoRecipients(), 1);
 
-      const recipientUuid = getUuid();
+      const recipientServiceId = generateAci();
       await insertProtoRecipients({
         id,
-        recipientUuid,
+        recipientServiceId,
         deviceIds: [1, 2],
       });
 
@@ -265,21 +265,21 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto1, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [getUuid()]: [1],
+          [generateAci()]: [1],
         },
       });
       await insertSentProto(proto2, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [getUuid()]: [1, 2],
+          [generateAci()]: [1, 2],
         },
       });
       await insertSentProto(proto3, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [getUuid()]: [1, 2, 3],
+          [generateAci()]: [1, 2, 3],
         },
       });
 
@@ -308,7 +308,7 @@ describe('sql/sendLog', () => {
       assert.lengthOf(await _getAllSentProtoMessageIds(), 0);
       assert.lengthOf(await _getAllSentProtoRecipients(), 0);
 
-      const messageId = getUuid();
+      const messageId = generateUuid();
       const timestamp = Date.now();
       const proto1 = {
         contentHint: 1,
@@ -332,22 +332,22 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto1, {
-        messageIds: [messageId, getUuid()],
+        messageIds: [messageId, generateUuid()],
         recipients: {
-          [getUuid()]: [1, 2],
-          [getUuid()]: [1],
+          [generateAci()]: [1, 2],
+          [generateAci()]: [1],
         },
       });
       await insertSentProto(proto2, {
         messageIds: [messageId],
         recipients: {
-          [getUuid()]: [1],
+          [generateAci()]: [1],
         },
       });
       await insertSentProto(proto3, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [getUuid()]: [1],
+          [generateAci()]: [1],
         },
       });
 
@@ -367,8 +367,8 @@ describe('sql/sendLog', () => {
     it('does not delete payload if recipient remains', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid1 = getUuid();
-      const recipientUuid2 = getUuid();
+      const recipientServiceId1 = generateAci();
+      const recipientServiceId2 = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -377,10 +377,10 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid1]: [1, 2],
-          [recipientUuid2]: [1],
+          [recipientServiceId1]: [1, 2],
+          [recipientServiceId2]: [1],
         },
       });
 
@@ -389,7 +389,7 @@ describe('sql/sendLog', () => {
 
       const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
         timestamp,
-        recipientUuid: recipientUuid1,
+        recipientServiceId: recipientServiceId1,
         deviceId: 1,
       });
       assert.lengthOf(successfulPhoneNumberShares, 0);
@@ -401,8 +401,8 @@ describe('sql/sendLog', () => {
     it('deletes payload if no recipients remain', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid1 = getUuid();
-      const recipientUuid2 = getUuid();
+      const recipientServiceId1 = generateAci();
+      const recipientServiceId2 = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -411,10 +411,10 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid1]: [1, 2],
-          [recipientUuid2]: [1],
+          [recipientServiceId1]: [1, 2],
+          [recipientServiceId2]: [1],
         },
       });
 
@@ -424,7 +424,7 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 1,
         });
         assert.lengthOf(successfulPhoneNumberShares, 0);
@@ -436,7 +436,7 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 2,
         });
         assert.lengthOf(successfulPhoneNumberShares, 0);
@@ -448,7 +448,7 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid2,
+          recipientServiceId: recipientServiceId2,
           deviceId: 1,
         });
         assert.lengthOf(successfulPhoneNumberShares, 0);
@@ -461,8 +461,8 @@ describe('sql/sendLog', () => {
     it('returns deleted recipients when pni signature was sent', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid1 = getUuid();
-      const recipientUuid2 = getUuid();
+      const recipientServiceId1 = generateAci();
+      const recipientServiceId2 = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -471,10 +471,10 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: true,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid1]: [1, 2],
-          [recipientUuid2]: [1],
+          [recipientServiceId1]: [1, 2],
+          [recipientServiceId2]: [1],
         },
       });
 
@@ -484,7 +484,7 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 1,
         });
         assert.lengthOf(successfulPhoneNumberShares, 0);
@@ -496,10 +496,12 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 2,
         });
-        assert.deepStrictEqual(successfulPhoneNumberShares, [recipientUuid1]);
+        assert.deepStrictEqual(successfulPhoneNumberShares, [
+          recipientServiceId1,
+        ]);
       }
 
       assert.lengthOf(await getAllSentProtos(), 1);
@@ -508,10 +510,12 @@ describe('sql/sendLog', () => {
       {
         const { successfulPhoneNumberShares } = await deleteSentProtoRecipient({
           timestamp,
-          recipientUuid: recipientUuid2,
+          recipientServiceId: recipientServiceId2,
           deviceId: 1,
         });
-        assert.deepStrictEqual(successfulPhoneNumberShares, [recipientUuid2]);
+        assert.deepStrictEqual(successfulPhoneNumberShares, [
+          recipientServiceId2,
+        ]);
       }
 
       assert.lengthOf(await getAllSentProtos(), 0);
@@ -521,8 +525,8 @@ describe('sql/sendLog', () => {
     it('deletes multiple recipients in a single transaction', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid1 = getUuid();
-      const recipientUuid2 = getUuid();
+      const recipientServiceId1 = generateAci();
+      const recipientServiceId2 = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -531,10 +535,10 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid1]: [1, 2],
-          [recipientUuid2]: [1],
+          [recipientServiceId1]: [1, 2],
+          [recipientServiceId2]: [1],
         },
       });
 
@@ -544,17 +548,17 @@ describe('sql/sendLog', () => {
       const { successfulPhoneNumberShares } = await deleteSentProtoRecipient([
         {
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 1,
         },
         {
           timestamp,
-          recipientUuid: recipientUuid1,
+          recipientServiceId: recipientServiceId1,
           deviceId: 2,
         },
         {
           timestamp,
-          recipientUuid: recipientUuid2,
+          recipientServiceId: recipientServiceId2,
           deviceId: 1,
         },
       ]);
@@ -569,8 +573,8 @@ describe('sql/sendLog', () => {
     it('returns matching payload', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid = getUuid();
-      const messageIds = [getUuid(), getUuid()];
+      const recipientServiceId = generateAci();
+      const messageIds = [generateUuid(), generateUuid()];
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -581,7 +585,7 @@ describe('sql/sendLog', () => {
       await insertSentProto(proto, {
         messageIds,
         recipients: {
-          [recipientUuid]: [1, 2],
+          [recipientServiceId]: [1, 2],
         },
       });
 
@@ -592,7 +596,7 @@ describe('sql/sendLog', () => {
       const actual = await getSentProtoByRecipient({
         now: timestamp,
         timestamp,
-        recipientUuid,
+        recipientServiceId,
       });
 
       if (!actual) {
@@ -607,7 +611,7 @@ describe('sql/sendLog', () => {
     it('returns matching payload with no messageIds', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid = getUuid();
+      const recipientServiceId = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -618,7 +622,7 @@ describe('sql/sendLog', () => {
       await insertSentProto(proto, {
         messageIds: [],
         recipients: {
-          [recipientUuid]: [1, 2],
+          [recipientServiceId]: [1, 2],
         },
       });
 
@@ -629,7 +633,7 @@ describe('sql/sendLog', () => {
       const actual = await getSentProtoByRecipient({
         now: timestamp,
         timestamp,
-        recipientUuid,
+        recipientServiceId,
       });
 
       if (!actual) {
@@ -644,7 +648,7 @@ describe('sql/sendLog', () => {
     it('returns nothing if payload does not have recipient', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid = getUuid();
+      const recipientServiceId = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -653,9 +657,9 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid]: [1, 2],
+          [recipientServiceId]: [1, 2],
         },
       });
 
@@ -665,7 +669,7 @@ describe('sql/sendLog', () => {
       const actual = await getSentProtoByRecipient({
         now: timestamp,
         timestamp,
-        recipientUuid: getUuid(),
+        recipientServiceId: generateAci(),
       });
 
       assert.isUndefined(actual);
@@ -674,7 +678,7 @@ describe('sql/sendLog', () => {
     it('returns nothing if timestamp does not match', async () => {
       const timestamp = Date.now();
 
-      const recipientUuid = getUuid();
+      const recipientServiceId = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -683,9 +687,9 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid]: [1, 2],
+          [recipientServiceId]: [1, 2],
         },
       });
 
@@ -695,7 +699,7 @@ describe('sql/sendLog', () => {
       const actual = await getSentProtoByRecipient({
         now: timestamp,
         timestamp: timestamp + 1,
-        recipientUuid,
+        recipientServiceId,
       });
 
       assert.isUndefined(actual);
@@ -705,7 +709,7 @@ describe('sql/sendLog', () => {
       const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
       const timestamp = Date.now();
 
-      const recipientUuid = getUuid();
+      const recipientServiceId = generateAci();
       const proto = {
         contentHint: 1,
         proto: getRandomBytes(128),
@@ -714,9 +718,9 @@ describe('sql/sendLog', () => {
         hasPniSignatureMessage: false,
       };
       await insertSentProto(proto, {
-        messageIds: [getUuid()],
+        messageIds: [generateUuid()],
         recipients: {
-          [recipientUuid]: [1, 2],
+          [recipientServiceId]: [1, 2],
         },
       });
 
@@ -726,7 +730,7 @@ describe('sql/sendLog', () => {
       const actual = await getSentProtoByRecipient({
         now: timestamp + TWO_DAYS,
         timestamp,
-        recipientUuid,
+        recipientServiceId,
       });
 
       assert.isUndefined(actual);

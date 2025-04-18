@@ -12,6 +12,16 @@ export enum UsernameEditState {
 }
 
 //
+// UsernameLinkModalBody
+//
+
+export enum UsernameLinkState {
+  Ready = 'Ready',
+  Updating = 'Updating',
+  Error = 'Error',
+}
+
+//
 // EditUsernameModalBody
 //
 
@@ -29,4 +39,9 @@ export enum UsernameReservationError {
   CheckCharacters = 'CheckCharacters',
   UsernameNotAvailable = 'UsernameNotAvailable',
   General = 'General',
+  ConflictOrGone = 'ConflictOrGone',
+  NotEnoughDiscriminator = 'NotEnoughDiscriminator',
+  AllZeroDiscriminator = 'AllZeroDiscriminator',
+  LeadingZeroDiscriminator = 'LeadingZeroDiscriminator',
+  TooManyAttempts = 'TooManyAttempts',
 }

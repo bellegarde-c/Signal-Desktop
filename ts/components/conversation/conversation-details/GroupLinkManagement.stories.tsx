@@ -2,22 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../../util/setupI18n';
-import enMessages from '../../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './GroupLinkManagement';
 import { GroupLinkManagement } from './GroupLinkManagement';
 import { SignalService as Proto } from '../../../protobuf';
 import type { ConversationType } from '../../../state/ducks/conversations';
 import { getDefaultConversation } from '../../../test-both/helpers/getDefaultConversation';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/ConversationDetails/GroupLinkManagement',
-};
+} satisfies Meta<PropsType>;
 
 const AccessControlEnum = Proto.AccessControl.AccessRequired;
 
@@ -55,60 +52,40 @@ const createProps = (
   ),
 });
 
-export const OffAdmin = (): JSX.Element => {
+export function OffAdmin(): JSX.Element {
   const props = createProps(undefined, true);
 
   return <GroupLinkManagement {...props} />;
-};
+}
 
-OffAdmin.story = {
-  name: 'Off (Admin)',
-};
-
-export const OnAdmin = (): JSX.Element => {
+export function OnAdmin(): JSX.Element {
   const props = createProps(
     getConversation('https://signal.group/1', AccessControlEnum.ANY),
     true
   );
 
   return <GroupLinkManagement {...props} />;
-};
+}
 
-OnAdmin.story = {
-  name: 'On (Admin)',
-};
-
-export const OnAdminAdminApprovalNeeded = (): JSX.Element => {
+export function OnAdminAdminApprovalNeeded(): JSX.Element {
   const props = createProps(
     getConversation('https://signal.group/1', AccessControlEnum.ADMINISTRATOR),
     true
   );
 
   return <GroupLinkManagement {...props} />;
-};
+}
 
-OnAdminAdminApprovalNeeded.story = {
-  name: 'On (Admin + Admin Approval Needed)',
-};
-
-export const OnNonAdmin = (): JSX.Element => {
+export function OnNonAdmin(): JSX.Element {
   const props = createProps(
     getConversation('https://signal.group/1', AccessControlEnum.ANY)
   );
 
   return <GroupLinkManagement {...props} />;
-};
+}
 
-OnNonAdmin.story = {
-  name: 'On (Non-admin)',
-};
-
-export const OffNonAdminUserCannotGetHere = (): JSX.Element => {
+export function OffNonAdminUserCannotGetHere(): JSX.Element {
   const props = createProps(undefined, false);
 
   return <GroupLinkManagement {...props} />;
-};
-
-OffNonAdminUserCannotGetHere.story = {
-  name: 'Off (Non-admin) - user cannot get here',
-};
+}

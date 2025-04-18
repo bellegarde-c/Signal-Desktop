@@ -1,32 +1,34 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// This has to be the first import because of monkey-patching
-import '../shims';
-
-import React from 'react';
-import ReactDOM from 'react-dom';
 import { contextBridge, ipcRenderer } from 'electron';
+import { ScreenShareStatus } from '../../types/Calling';
+import { MinimalSignalContext } from '../minimalContext';
 
-import { SignalContext } from '../context';
-import { CallingScreenSharingController } from '../../components/CallingScreenSharingController';
+const params = new URLSearchParams(document.location.search);
 
-contextBridge.exposeInMainWorld('SignalContext', SignalContext);
+let renderCallback: undefined | (() => undefined);
 
-function renderScreenSharingController(presentedSourceName: string): void {
-  ReactDOM.render(
-    React.createElement(CallingScreenSharingController, {
-      platform: process.platform,
-      executeMenuRole: SignalContext.executeMenuRole,
-      i18n: SignalContext.i18n,
-      onCloseController: () => SignalContext.executeMenuRole('close'),
-      onStopSharing: () => ipcRenderer.send('stop-screen-share'),
-      presentedSourceName,
-    }),
-    document.getElementById('app')
-  );
-}
+let status = ScreenShareStatus.Connected;
 
-ipcRenderer.once('render-screen-sharing-controller', (_, name: string) => {
-  renderScreenSharingController(name);
+const Signal = {
+  ScreenShareWindowProps: {
+    onStopSharing: () => {
+      ipcRenderer.send('stop-screen-share');
+    },
+    presentedSourceName: params.get('sourceName'),
+    getStatus() {
+      return status;
+    },
+    setRenderCallback(callback: () => undefined) {
+      renderCallback = callback;
+    },
+  },
+};
+contextBridge.exposeInMainWorld('Signal', Signal);
+contextBridge.exposeInMainWorld('SignalContext', MinimalSignalContext);
+
+ipcRenderer.on('status-change', (_, newStatus: ScreenShareStatus) => {
+  status = newStatus;
+  renderCallback?.();
 });

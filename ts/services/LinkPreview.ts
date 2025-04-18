@@ -3,7 +3,8 @@
 
 import { debounce, omit } from 'lodash';
 
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
+import { CallLinkRootKey } from '@signalapp/ringrtc';
+import type { LinkPreviewWithHydratedData } from '../types/message/LinkPreviews';
 import type {
   LinkPreviewImage,
   LinkPreviewResult,
@@ -11,9 +12,11 @@ import type {
   MaybeGrabLinkPreviewOptionsType,
   AddLinkPreviewOptionsType,
 } from '../types/LinkPreview';
+import * as Errors from '../types/errors';
 import type { StickerPackType as StickerPackDBType } from '../sql/Interface';
 import type { MIMEType } from '../types/MIME';
 import * as Bytes from '../Bytes';
+import { sha256 } from '../Crypto';
 import * as LinkPreview from '../types/LinkPreview';
 import * as Stickers from '../types/Stickers';
 import * as VisualAttachment from '../types/VisualAttachment';
@@ -23,8 +26,13 @@ import { SECOND } from '../util/durations';
 import { autoScale } from '../util/handleImageAttachment';
 import { dropNull } from '../util/dropNull';
 import { fileToBytes } from '../util/fileToBytes';
+import { imageToBlurHash } from '../util/imageToBlurHash';
 import { maybeParseUrl } from '../util/url';
 import { sniffImageMimeType } from '../util/sniffImageMimeType';
+import { drop } from '../util/drop';
+import { calling } from './calling';
+import { getKeyFromCallLink } from '../util/callLinks';
+import { getRoomIdFromCallLink } from '../util/callLinksRingrtc';
 
 const LINK_PREVIEW_TIMEOUT = 60 * SECOND;
 
@@ -47,7 +55,11 @@ export const maybeGrabLinkPreview = debounce(_maybeGrabLinkPreview, 200);
 function _maybeGrabLinkPreview(
   message: string,
   source: LinkPreviewSourceType,
-  { caretLocation, mode = 'conversation' }: MaybeGrabLinkPreviewOptionsType = {}
+  {
+    caretLocation,
+    conversationId,
+    mode = 'conversation',
+  }: MaybeGrabLinkPreviewOptionsType = {}
 ): void {
   // Don't generate link previews if user has turned them off. When posting a
   // story we should return minimal (url-only) link previews.
@@ -60,13 +72,9 @@ function _maybeGrabLinkPreview(
   if (!messaging) {
     return;
   }
-  // If we're behind a user-configured proxy, we don't support link previews
-  if (window.isBehindProxy()) {
-    return;
-  }
 
   if (!message) {
-    resetLinkPreview();
+    resetLinkPreview(conversationId);
     return;
   }
 
@@ -87,22 +95,25 @@ function _maybeGrabLinkPreview(
       LinkPreview.shouldPreviewHref(item) && !excludedPreviewUrls.includes(item)
   );
   if (!link) {
-    removeLinkPreview();
+    removeLinkPreview(conversationId);
     return;
   }
 
-  addLinkPreview(link, source, {
-    disableFetch: !window.Events.getLinkPreviewSetting(),
-  });
+  drop(
+    addLinkPreview(link, source, {
+      conversationId,
+      disableFetch: !window.Events.getLinkPreviewSetting(),
+    })
+  );
 }
 
-export function resetLinkPreview(): void {
+export function resetLinkPreview(conversationId?: string): void {
   disableLinkPreviews = false;
   excludedPreviewUrls = [];
-  removeLinkPreview();
+  removeLinkPreview(conversationId);
 }
 
-export function removeLinkPreview(): void {
+export function removeLinkPreview(conversationId?: string): void {
   (linkPreviewResult || []).forEach((item: LinkPreviewResult) => {
     if (item.url) {
       URL.revokeObjectURL(item.url);
@@ -113,13 +124,13 @@ export function removeLinkPreview(): void {
   linkPreviewAbortController?.abort();
   linkPreviewAbortController = undefined;
 
-  window.reduxActions.linkPreviews.removeLinkPreview();
+  window.reduxActions.linkPreviews.removeLinkPreview(conversationId);
 }
 
 export async function addLinkPreview(
   url: string,
   source: LinkPreviewSourceType,
-  { disableFetch }: AddLinkPreviewOptionsType = {}
+  { conversationId, disableFetch }: AddLinkPreviewOptionsType = {}
 ): Promise<void> {
   if (currentlyMatchedLink === url) {
     log.warn('addLinkPreview should not be called with the same URL like this');
@@ -131,7 +142,7 @@ export async function addLinkPreview(
       URL.revokeObjectURL(item.url);
     }
   });
-  window.reduxActions.linkPreviews.removeLinkPreview();
+  window.reduxActions.linkPreviews.removeLinkPreview(conversationId);
   linkPreviewResult = undefined;
 
   // Cancel other in-flight link preview requests.
@@ -154,8 +165,10 @@ export async function addLinkPreview(
   window.reduxActions.linkPreviews.addLinkPreview(
     {
       url,
+      isCallLink: false,
     },
-    source
+    source,
+    conversationId
   );
 
   try {
@@ -185,7 +198,7 @@ export async function addLinkPreview(
       const failedToFetch = currentlyMatchedLink === url;
       if (failedToFetch) {
         excludedPreviewUrls.push(url);
-        removeLinkPreview();
+        removeLinkPreview(conversationId);
       }
       return;
     }
@@ -197,7 +210,7 @@ export async function addLinkPreview(
       result.image.url = URL.createObjectURL(blob);
     } else if (!result.title && !disableFetch) {
       // A link preview isn't worth showing unless we have either a title or an image
-      removeLinkPreview();
+      removeLinkPreview(conversationId);
       return;
     }
 
@@ -209,23 +222,27 @@ export async function addLinkPreview(
         date: dropNull(result.date),
         domain: LinkPreview.getDomain(result.url),
         isStickerPack: LinkPreview.isStickerPack(result.url),
+        isCallLink: LinkPreview.isCallLink(result.url),
       },
-      source
+      source,
+      conversationId
     );
     linkPreviewResult = [result];
   } catch (error) {
     log.error(
       'Problem loading link preview, disabling.',
-      error && error.stack ? error.stack : error
+      Errors.toLogFormat(error)
     );
     disableLinkPreviews = true;
-    removeLinkPreview();
+    removeLinkPreview(conversationId);
   } finally {
     clearTimeout(timeout);
   }
 }
 
-export function getLinkPreviewForSend(message: string): Array<LinkPreviewType> {
+export function getLinkPreviewForSend(
+  message: string
+): Array<LinkPreviewWithHydratedData> {
   // Don't generate link previews if user has turned them off
   if (!window.storage.get('linkPreviews', false)) {
     return [];
@@ -243,30 +260,34 @@ export function getLinkPreviewForSend(message: string): Array<LinkPreviewType> {
       //   the message. This can happen if you have a link preview, then quickly delete
       //   the link and send the message.
       .filter(({ url }: Readonly<{ url: string }>) => urlsInMessage.has(url))
-      .map((item: LinkPreviewResult) => {
-        if (item.image) {
-          // We eliminate the ObjectURL here, unneeded for send or save
-          return {
-            ...item,
-            image: omit(item.image, 'url'),
-            title: dropNull(item.title),
-            description: dropNull(item.description),
-            date: dropNull(item.date),
-            domain: LinkPreview.getDomain(item.url),
-            isStickerPack: LinkPreview.isStickerPack(item.url),
-          };
-        }
-
-        return {
-          ...item,
-          title: dropNull(item.title),
-          description: dropNull(item.description),
-          date: dropNull(item.date),
-          domain: LinkPreview.getDomain(item.url),
-          isStickerPack: LinkPreview.isStickerPack(item.url),
-        };
-      })
+      .map(sanitizeLinkPreview)
   );
+}
+
+export function sanitizeLinkPreview(
+  item: LinkPreviewResult | LinkPreviewWithHydratedData
+): LinkPreviewWithHydratedData {
+  const isCallLink = LinkPreview.isCallLink(item.url);
+  const base: LinkPreviewWithHydratedData = {
+    ...item,
+    title: dropNull(item.title),
+    description: dropNull(item.description),
+    date: dropNull(item.date),
+    domain: LinkPreview.getDomain(item.url),
+    isStickerPack: LinkPreview.isStickerPack(item.url),
+    isCallLink,
+    callLinkRoomId: isCallLink ? getRoomIdFromCallLink(item.url) : undefined,
+  };
+
+  if (item.image) {
+    // We eliminate the ObjectURL here, unneeded for send or save
+    return {
+      ...base,
+      image: omit(item.image, 'url'),
+    };
+  }
+
+  return base;
 }
 
 async function getPreview(
@@ -285,6 +306,9 @@ async function getPreview(
   if (LinkPreview.isGroupLink(url)) {
     return getGroupPreview(url, abortSignal);
   }
+  if (LinkPreview.isCallLink(url)) {
+    return getCallLinkPreview(url, abortSignal);
+  }
 
   // This is already checked elsewhere, but we want to be extra-careful.
   if (!LinkPreview.shouldPreviewHref(url)) {
@@ -302,7 +326,7 @@ async function getPreview(
 
   let image;
   if (imageHref && LinkPreview.shouldPreviewHref(imageHref)) {
-    let objectUrl: void | string;
+    let objectUrl: undefined | string;
     try {
       const fullSizeImage = await messaging.fetchLinkPreviewImage(
         imageHref,
@@ -323,12 +347,13 @@ async function getPreview(
           type: fullSizeImage.contentType,
         }),
         fileName: title,
+        highQuality: true,
       });
 
       const data = await fileToBytes(withBlob.file);
       objectUrl = URL.createObjectURL(withBlob.file);
 
-      const blurHash = await window.imageToBlurHash(withBlob.file);
+      const blurHash = await imageToBlurHash(withBlob.file);
 
       const dimensions = await VisualAttachment.getImageDimensions({
         objectUrl,
@@ -339,6 +364,7 @@ async function getPreview(
         data,
         size: data.byteLength,
         ...dimensions,
+        plaintextHash: Bytes.toHex(sha256(data)),
         contentType: stringToMIMEType(withBlob.file.type),
         blurHash,
       };
@@ -424,8 +450,8 @@ async function getStickerPackPreview(
     const sticker = pack.stickers[coverStickerId];
     const data =
       pack.status === 'ephemeral'
-        ? await window.Signal.Migrations.readTempData(sticker.path)
-        : await window.Signal.Migrations.readStickerData(sticker.path);
+        ? await window.Signal.Migrations.readTempData(sticker)
+        : await window.Signal.Migrations.readStickerData(sticker);
 
     if (abortSignal.aborted) {
       return null;
@@ -455,10 +481,7 @@ async function getStickerPackPreview(
       url,
     };
   } catch (error) {
-    log.error(
-      'getStickerPackPreview error:',
-      error && error.stack ? error.stack : error
-    );
+    log.error('getStickerPackPreview error:', Errors.toLogFormat(error));
     return null;
   } finally {
     if (id) {
@@ -503,14 +526,13 @@ async function getGroupPreview(
   }
 
   const title =
-    window.Signal.Groups.decryptGroupTitle(result.title, secretParams) ||
-    window.i18n('unknownGroup');
-  const description =
-    result.memberCount === 1 || result.memberCount === undefined
-      ? window.i18n('GroupV2--join--member-count--single')
-      : window.i18n('GroupV2--join--member-count--multiple', {
-          count: result.memberCount.toString(),
-        });
+    window.Signal.Groups.decryptGroupTitle(
+      dropNull(result.title),
+      secretParams
+    ) || window.i18n('icu:unknownGroup');
+  const description = window.i18n('icu:GroupV2--join--group-metadata--full', {
+    memberCount: result?.memberCount ?? 0,
+  });
   let image: undefined | LinkPreviewImage;
 
   if (result.avatar) {
@@ -523,14 +545,14 @@ async function getGroupPreview(
         data,
         size: data.byteLength,
         contentType: IMAGE_JPEG,
-        blurHash: await window.imageToBlurHash(
+        blurHash: await imageToBlurHash(
           new Blob([data], {
             type: IMAGE_JPEG,
           })
         ),
       };
     } catch (error) {
-      const errorString = error && error.stack ? error.stack : error;
+      const errorString = Errors.toLogFormat(error);
       log.error(
         `getGroupPreview/${logId}: Failed to fetch avatar ${errorString}`
       );
@@ -547,5 +569,28 @@ async function getGroupPreview(
     image,
     title,
     url,
+  };
+}
+
+async function getCallLinkPreview(
+  url: string,
+  _abortSignal: Readonly<AbortSignal>
+): Promise<null | LinkPreviewResult> {
+  const keyString = getKeyFromCallLink(url);
+  const callLinkRootKey = CallLinkRootKey.parse(keyString);
+  const callLinkState = await calling.readCallLink(callLinkRootKey);
+  if (callLinkState == null || callLinkState.revoked) {
+    return null;
+  }
+
+  return {
+    url,
+    title:
+      callLinkState.name === ''
+        ? window.i18n('icu:calling__call-link-default-title')
+        : callLinkState.name,
+    description: window.i18n('icu:message--call-link-description'),
+    image: undefined,
+    date: null,
   };
 }

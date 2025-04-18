@@ -1,105 +1,151 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
-import React from 'react';
-import { connect } from 'react-redux';
-import type { MenuItemConstructorOptions } from 'electron';
-
-import type { MenuActionType } from '../../types/menu';
+import React, { memo } from 'react';
+import { useSelector } from 'react-redux';
+import type { VerificationTransport } from '../../types/VerificationTransport';
+import { DataWriter } from '../../sql/Client';
 import { App } from '../../components/App';
+import OS from '../../util/os/osMain';
+import { getConversation } from '../../util/getConversation';
+import { getChallengeURL } from '../../challenge';
+import { writeProfile } from '../../services/writeProfile';
+import { strictAssert } from '../../util/assert';
 import { SmartCallManager } from './CallManager';
-import { SmartCustomizingPreferredReactionsModal } from './CustomizingPreferredReactionsModal';
 import { SmartGlobalModalContainer } from './GlobalModalContainer';
-import { SmartLeftPane } from './LeftPane';
-import { SmartStories } from './Stories';
+import { SmartLightbox } from './Lightbox';
 import { SmartStoryViewer } from './StoryViewer';
-import type { StateType } from '../reducer';
 import {
-  getIntl,
-  getLocaleMessages,
-  getTheme,
   getIsMainWindowMaximized,
   getIsMainWindowFullScreen,
-  getMenuOptions,
+  getTheme,
 } from '../selectors/user';
-import {
-  hasSelectedStoryData,
-  shouldShowStoriesView,
-} from '../selectors/stories';
-import { getHideMenuBar } from '../selectors/items';
-import { getIsCustomizingPreferredReactions } from '../selectors/preferredReactions';
-import { mapDispatchToProps } from '../actions';
+import { hasSelectedStoryData as getHasSelectedStoryData } from '../selectors/stories';
+import { useAppActions } from '../ducks/app';
+import { useConversationsActions } from '../ducks/conversations';
+import { useStoriesActions } from '../ducks/stories';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { ModalContainer } from '../../components/ModalContainer';
+import { SmartInbox } from './Inbox';
+import { getApp } from '../selectors/app';
+import { SmartFunProvider } from './FunProvider';
 
-const mapStateToProps = (state: StateType) => {
-  const i18n = getIntl(state);
+function renderInbox(): JSX.Element {
+  return <SmartInbox />;
+}
 
-  return {
-    ...state.app,
-    i18n,
-    localeMessages: getLocaleMessages(state),
-    isCustomizingPreferredReactions: getIsCustomizingPreferredReactions(state),
-    isMaximized: getIsMainWindowMaximized(state),
-    isFullScreen: getIsMainWindowFullScreen(state),
-    menuOptions: getMenuOptions(state),
-    hasCustomTitleBar: window.SignalContext.OS.hasCustomTitleBar(),
-    hideMenuBar: getHideMenuBar(state),
-    renderCallManager: () => (
-      <ModalContainer className="module-calling__modal-container">
-        <SmartCallManager />
-      </ModalContainer>
-    ),
-    renderCustomizingPreferredReactionsModal: () => (
-      <SmartCustomizingPreferredReactionsModal />
-    ),
-    renderGlobalModalContainer: () => <SmartGlobalModalContainer />,
-    renderLeftPane: () => <SmartLeftPane />,
-    isShowingStoriesView: shouldShowStoriesView(state),
-    renderStories: (closeView: () => unknown) => (
-      <ErrorBoundary name="App/renderStories" closeView={closeView}>
-        <SmartStories />
-      </ErrorBoundary>
-    ),
-    hasSelectedStoryData: hasSelectedStoryData(state),
-    renderStoryViewer: (closeView: () => unknown) => (
-      <ErrorBoundary name="App/renderStoryViewer" closeView={closeView}>
-        <SmartStoryViewer />
-      </ErrorBoundary>
-    ),
-    requestVerification: (
-      type: 'sms' | 'voice',
-      number: string,
-      token: string
-    ): Promise<void> => {
-      const accountManager = window.getAccountManager();
+function renderCallManager(): JSX.Element {
+  return (
+    <ModalContainer className="module-calling__modal-container">
+      <SmartCallManager />
+    </ModalContainer>
+  );
+}
 
-      if (type === 'sms') {
-        return accountManager.requestSMSVerification(number, token);
-      }
+function renderGlobalModalContainer(): JSX.Element {
+  return <SmartGlobalModalContainer />;
+}
 
-      return accountManager.requestVoiceVerification(number, token);
-    },
-    registerSingleDevice: (number: string, code: string): Promise<void> => {
-      return window.getAccountManager().registerSingleDevice(number, code);
-    },
-    selectedConversationId: state.conversations.selectedConversationId,
-    selectedMessage: state.conversations.selectedMessage,
-    theme: getTheme(state),
+function renderLightbox(): JSX.Element {
+  return <SmartLightbox />;
+}
 
-    executeMenuRole: (role: MenuItemConstructorOptions['role']): void => {
-      window.SignalContext.executeMenuRole(role);
-    },
-    executeMenuAction: (action: MenuActionType): void => {
-      window.SignalContext.executeMenuAction(action);
-    },
-    titleBarDoubleClick: (): void => {
-      window.titleBarDoubleClick();
-    },
-    toast: state.toast.toast,
-  };
-};
+function renderStoryViewer(closeView: () => unknown): JSX.Element {
+  return (
+    <ErrorBoundary name="App/renderStoryViewer" closeView={closeView}>
+      <SmartStoryViewer />
+    </ErrorBoundary>
+  );
+}
 
-const smart = connect(mapStateToProps, mapDispatchToProps);
+async function getCaptchaToken(): Promise<string> {
+  const url = getChallengeURL('registration');
+  document.location.href = url;
+  if (!window.Signal.challengeHandler) {
+    throw new Error('Captcha handler is not ready!');
+  }
+  return window.Signal.challengeHandler.requestCaptcha({
+    reason: 'standalone registration',
+  });
+}
 
-export const SmartApp = smart(App);
+function requestVerification(
+  number: string,
+  captcha: string,
+  transport: VerificationTransport
+): Promise<{ sessionId: string }> {
+  const { server } = window.textsecure;
+  strictAssert(server !== undefined, 'WebAPI not available');
+  return server.requestVerification(number, captcha, transport);
+}
+
+function registerSingleDevice(
+  number: string,
+  code: string,
+  sessionId: string
+): Promise<void> {
+  return window
+    .getAccountManager()
+    .registerSingleDevice(number, code, sessionId);
+}
+
+function readyForUpdates(): void {
+  window.IPC.readyForUpdates();
+}
+
+async function uploadProfile({
+  firstName,
+  lastName,
+}: {
+  firstName: string;
+  lastName: string;
+}): Promise<void> {
+  const us = window.ConversationController.getOurConversationOrThrow();
+  us.set('profileName', firstName);
+  us.set('profileFamilyName', lastName);
+  us.captureChange('standaloneProfile');
+  await DataWriter.updateConversation(us.attributes);
+
+  await writeProfile(getConversation(us), {
+    keepAvatar: true,
+  });
+}
+
+export const SmartApp = memo(function SmartApp() {
+  const state = useSelector(getApp);
+  const isMaximized = useSelector(getIsMainWindowMaximized);
+  const isFullScreen = useSelector(getIsMainWindowFullScreen);
+  const hasSelectedStoryData = useSelector(getHasSelectedStoryData);
+  const theme = useSelector(getTheme);
+
+  const { openInbox } = useAppActions();
+  const { scrollToMessage } = useConversationsActions();
+  const { viewStory } = useStoriesActions();
+
+  const osClassName = OS.getClassName();
+
+  return (
+    <SmartFunProvider>
+      <App
+        state={state}
+        isMaximized={isMaximized}
+        isFullScreen={isFullScreen}
+        getCaptchaToken={getCaptchaToken}
+        osClassName={osClassName}
+        renderCallManager={renderCallManager}
+        renderGlobalModalContainer={renderGlobalModalContainer}
+        renderLightbox={renderLightbox}
+        hasSelectedStoryData={hasSelectedStoryData}
+        readyForUpdates={readyForUpdates}
+        renderStoryViewer={renderStoryViewer}
+        renderInbox={renderInbox}
+        requestVerification={requestVerification}
+        registerSingleDevice={registerSingleDevice}
+        uploadProfile={uploadProfile}
+        theme={theme}
+        openInbox={openInbox}
+        scrollToMessage={scrollToMessage}
+        viewStory={viewStory}
+      />
+    </SmartFunProvider>
+  );
+});

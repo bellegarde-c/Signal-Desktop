@@ -1,4 +1,4 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
@@ -6,7 +6,6 @@ import { Response } from 'node-fetch';
 import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as path from 'path';
-import AbortController from 'abort-controller';
 import { IMAGE_JPEG, stringToMIMEType } from '../../types/MIME';
 import type { LoggerType } from '../../types/Logging';
 
@@ -842,12 +841,12 @@ describe('link preview fetching', () => {
       sinon.assert.notCalled(shouldNeverBeCalled);
     });
 
-    it('stops reading bodies after 1000 kilobytes', async function test() {
+    it('stops reading bodies after 1000 kilobytes', async () => {
       const shouldNeverBeCalled = sinon.stub();
 
       const fakeFetch = stub().resolves(
         makeResponse({
-          body: (async function* body() {
+          body: (async function* () {
             yield new TextEncoder().encode(
               '<!doctype html><head><title>foo bar</title>'
             );

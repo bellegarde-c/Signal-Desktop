@@ -1,85 +1,77 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useBoundActions } from '../../hooks/useBoundActions';
-import type { ReplacementValuesType } from '../../types/Util';
+import { ipcRenderer } from 'electron';
 
-export enum ToastType {
-  Error = 'Error',
-  MessageBodyTooLong = 'MessageBodyTooLong',
-  StoryMuted = 'StoryMuted',
-  StoryReact = 'StoryReact',
-  StoryReply = 'StoryReply',
-  StoryVideoError = 'StoryVideoError',
-  StoryVideoTooLong = 'StoryVideoTooLong',
-  StoryVideoUnsupported = 'StoryVideoUnsupported',
-  AddingUserToGroup = 'AddingUserToGroup',
-  UserAddedToGroup = 'UserAddedToGroup',
-  FailedToDeleteUsername = 'FailedToDeleteUsername',
-  CopiedUsername = 'CopiedUsername',
-  CopiedUsernameLink = 'CopiedUsernameLink',
-}
+import type { ReadonlyDeep } from 'type-fest';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
+import type { NoopActionType } from './noop';
+import { useBoundActions } from '../../hooks/useBoundActions';
+import type { AnyToast } from '../../types/Toast';
 
 // State
 
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
 export type ToastStateType = {
-  toast?: {
-    toastType: ToastType;
-    parameters?: ReplacementValuesType;
-  };
+  toast?: AnyToast;
 };
 
 // Actions
 
 const HIDE_TOAST = 'toast/HIDE_TOAST';
-const SHOW_TOAST = 'toast/SHOW_TOAST';
+export const SHOW_TOAST = 'toast/SHOW_TOAST';
 
-type HideToastActionType = {
+type HideToastActionType = ReadonlyDeep<{
   type: typeof HIDE_TOAST;
-};
+  payload: AnyToast | undefined;
+}>;
 
-type ShowToastActionType = {
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
+export type ShowToastActionType = {
   type: typeof SHOW_TOAST;
-  payload: {
-    toastType: ToastType;
-    parameters?: ReplacementValuesType;
-  };
+  payload: AnyToast;
 };
 
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
 export type ToastActionType = HideToastActionType | ShowToastActionType;
 
 // Action Creators
 
-function hideToast(): HideToastActionType {
+export type HideToastAction = ReadonlyDeep<(toast?: AnyToast) => void>;
+
+function hideToast(toast?: AnyToast): HideToastActionType {
   return {
     type: HIDE_TOAST,
+    payload: toast,
   };
 }
 
-export type ShowToastActionCreatorType = (
-  toastType: ToastType,
-  parameters?: ReplacementValuesType
-) => ShowToastActionType;
+function openFileInFolder(target: string): NoopActionType {
+  ipcRenderer.send('show-item-in-folder', target);
+  return {
+    type: 'NOOP',
+    payload: null,
+  };
+}
 
-export const showToast: ShowToastActionCreatorType = (
-  toastType,
-  parameters
-) => {
+export type ShowToastAction = ReadonlyDeep<(toast: AnyToast) => void>;
+
+export function showToast(toast: AnyToast): ShowToastActionType {
   return {
     type: SHOW_TOAST,
-    payload: {
-      toastType,
-      parameters,
-    },
+    payload: toast,
   };
-};
+}
 
 export const actions = {
   hideToast,
+  openFileInFolder,
   showToast,
 };
 
-export const useToastActions = (): typeof actions => useBoundActions(actions);
+export const useToastActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 // Reducer
 
@@ -92,6 +84,10 @@ export function reducer(
   action: Readonly<ToastActionType>
 ): ToastStateType {
   if (action.type === HIDE_TOAST) {
+    if (action.payload != null && state.toast !== action.payload) {
+      return state;
+    }
+
     return {
       ...state,
       toast: undefined,

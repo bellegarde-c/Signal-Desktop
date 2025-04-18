@@ -4,13 +4,12 @@
 import React from 'react';
 import { action } from '@storybook/addon-actions';
 
-import enMessages from '../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './DebugLogWindow';
 import { DebugLogWindow } from './DebugLogWindow';
-import { setupI18n } from '../util/setupI18n';
 import { sleep } from '../util/sleep';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (): PropsType => ({
   closeWindow: action('closeWindow'),
@@ -25,18 +24,12 @@ const createProps = (): PropsType => ({
     await sleep(5000);
     return 'https://picsum.photos/1800/900';
   },
-  executeMenuRole: action('executeMenuRole'),
-  hasCustomTitleBar: true,
 });
 
 export default {
   title: 'Components/DebugLogWindow',
-};
+} satisfies Meta<PropsType>;
 
-export const _DebugLogWindow = (): JSX.Element => (
-  <DebugLogWindow {...createProps()} />
-);
-
-_DebugLogWindow.story = {
-  name: 'DebugLogWindow',
-};
+export function Basic(): JSX.Element {
+  return <DebugLogWindow {...createProps()} />;
+}

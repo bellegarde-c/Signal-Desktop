@@ -1,60 +1,62 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { noop, pick } from 'lodash';
-import React from 'react';
-import type { MeasuredComponentProps } from 'react-measure';
-import Measure from 'react-measure';
+import { pick } from 'lodash';
+import React, { useCallback } from 'react';
+import type { ListRowProps } from 'react-virtualized';
 
 import type { ConversationType } from '../state/ducks/conversations';
-import type {
-  LocalizerType,
-  ReplacementValuesType,
-  ThemeType,
-} from '../types/Util';
-import { ToastType } from '../state/ducks/toast';
-import { filterAndSortConversationsByRecent } from '../util/filterAndSortConversations';
+import type { LocalizerType } from '../types/Util';
+import { ToastType } from '../types/Toast';
+import { filterAndSortConversations } from '../util/filterAndSortConversations';
 import { ConfirmationDialog } from './ConfirmationDialog';
-import type { Row } from './ConversationList';
-import { ConversationList, RowType } from './ConversationList';
-import { DisabledReason } from './conversationList/GroupListItem';
+import type { GroupListItemConversationType } from './conversationList/GroupListItem';
+import {
+  DisabledReason,
+  GroupListItem,
+} from './conversationList/GroupListItem';
 import { Modal } from './Modal';
 import { SearchInput } from './SearchInput';
 import { useRestoreFocus } from '../hooks/useRestoreFocus';
+import { ListView } from './ListView';
+import { ListTile } from './ListTile';
+import type { ShowToastAction } from '../state/ducks/toast';
+import { SizeObserver } from '../hooks/useSizeObserver';
 
 type OwnProps = {
   i18n: LocalizerType;
-  theme: ThemeType;
-  contact: Pick<ConversationType, 'id' | 'title' | 'uuid'>;
+  contact: Pick<ConversationType, 'id' | 'title' | 'serviceId' | 'pni'>;
   candidateConversations: ReadonlyArray<ConversationType>;
   regionCode: string | undefined;
 };
 
 type DispatchProps = {
   toggleAddUserToAnotherGroupModal: (contactId?: string) => void;
-  addMemberToGroup: (
+  addMembersToGroup: (
     conversationId: string,
-    contactId: string,
-    onComplete: () => void
+    contactIds: Array<string>,
+    opts: {
+      onSuccess?: () => unknown;
+      onFailure?: () => unknown;
+    }
   ) => void;
-  showToast: (toastType: ToastType, parameters?: ReplacementValuesType) => void;
+  showToast: ShowToastAction;
 };
 
 export type Props = OwnProps & DispatchProps;
 
-export const AddUserToAnotherGroupModal = ({
+export function AddUserToAnotherGroupModal({
   i18n,
-  theme,
   contact,
   toggleAddUserToAnotherGroupModal,
-  addMemberToGroup,
+  addMembersToGroup,
   showToast,
   candidateConversations,
   regionCode,
-}: Props): JSX.Element | null => {
+}: Props): JSX.Element | null {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filteredConversations, setFilteredConversations] = React.useState(
-    filterAndSortConversationsByRecent(candidateConversations, '', undefined)
+    filterAndSortConversations(candidateConversations, '', undefined)
   );
 
   const [selectedGroupId, setSelectedGroupId] = React.useState<
@@ -76,7 +78,7 @@ export const AddUserToAnotherGroupModal = ({
   React.useEffect(() => {
     const timeout = setTimeout(() => {
       setFilteredConversations(
-        filterAndSortConversationsByRecent(
+        filterAndSortConversations(
           candidateConversations,
           normalizedSearchTerm,
           regionCode
@@ -105,7 +107,7 @@ export const AddUserToAnotherGroupModal = ({
   );
 
   const handleGetRow = React.useCallback(
-    (idx: number): Row | undefined => {
+    (idx: number): GroupListItemConversationType => {
       const convo = filteredConversations[idx];
 
       // these are always populated in the case of a group
@@ -116,26 +118,45 @@ export const AddUserToAnotherGroupModal = ({
 
       let disabledReason;
 
-      if (memberships.some(c => c.uuid === contact.uuid)) {
+      if (memberships.some(c => c.aci === contact.serviceId)) {
         disabledReason = DisabledReason.AlreadyMember;
       } else if (
-        pendingApprovalMemberships.some(c => c.uuid === contact.uuid) ||
-        pendingMemberships.some(c => c.uuid === contact.uuid)
+        pendingApprovalMemberships.some(c => c.aci === contact.serviceId) ||
+        pendingMemberships.some(c => c.serviceId === contact.serviceId) ||
+        pendingMemberships.some(c => c.serviceId === contact.pni)
       ) {
         disabledReason = DisabledReason.Pending;
       }
 
       return {
-        type: RowType.SelectSingleGroup,
-        group: {
-          ...pick(convo, 'id', 'avatarPath', 'title', 'unblurredAvatarPath'),
-          memberships,
-          membersCount,
-          disabledReason,
-        },
+        ...pick(convo, 'id', 'avatarUrl', 'title', 'hasAvatar', 'color'),
+        memberships,
+        membersCount,
+        disabledReason,
       };
     },
     [filteredConversations, contact]
+  );
+
+  const renderGroupListItem = useCallback(
+    ({ key, index, style }: ListRowProps) => {
+      const group = handleGetRow(index);
+      return (
+        <div key={key} style={style}>
+          <GroupListItem
+            i18n={i18n}
+            group={group}
+            onSelectGroup={setSelectedGroupId}
+          />
+        </div>
+      );
+    },
+    [i18n, handleGetRow]
+  );
+
+  const handleCalculateRowHeight = useCallback(
+    () => ListTile.heightCompact,
+    []
   );
 
   return (
@@ -146,46 +167,40 @@ export const AddUserToAnotherGroupModal = ({
           hasXButton
           i18n={i18n}
           onClose={toggleAddUserToAnotherGroupModal}
-          title={i18n('AddUserToAnotherGroupModal__title')}
+          title={i18n('icu:AddUserToAnotherGroupModal__title')}
           moduleClassName="AddUserToAnotherGroupModal"
           padded={false}
         >
           <div className="AddUserToAnotherGroupModal__main-body">
             <SearchInput
               i18n={i18n}
-              placeholder={i18n('contactSearchPlaceholder')}
+              placeholder={i18n(
+                'icu:AddUserToAnotherGroupModal__search-placeholder'
+              )}
               onChange={handleSearchInputChange}
               ref={inputRef}
               value={searchTerm}
             />
-
-            <Measure bounds>
-              {({ contentRect, measureRef }: MeasuredComponentProps) => (
-                <div
-                  className="AddUserToAnotherGroupModal__list-wrapper"
-                  ref={measureRef}
-                >
-                  <ConversationList
-                    dimensions={contentRect.bounds}
-                    rowCount={filteredConversations.length}
-                    getRow={handleGetRow}
-                    shouldRecomputeRowHeights={false}
-                    showConversation={noop}
-                    getPreferredBadge={() => undefined}
-                    i18n={i18n}
-                    theme={theme}
-                    onClickArchiveButton={noop}
-                    onClickContactCheckbox={noop}
-                    onSelectConversation={setSelectedGroupId}
-                    renderMessageSearchResult={_ => <></>}
-                    showChooseGroupMembers={noop}
-                    lookupConversationWithoutUuid={async _ => undefined}
-                    showUserNotFoundModal={noop}
-                    setIsFetchingUUID={noop}
-                  />
-                </div>
-              )}
-            </Measure>
+            <SizeObserver>
+              {(ref, size) => {
+                return (
+                  <div
+                    className="AddUserToAnotherGroupModal__list-wrapper"
+                    ref={ref}
+                  >
+                    {size != null && (
+                      <ListView
+                        width={size.width}
+                        height={size.height}
+                        rowCount={filteredConversations.length}
+                        calculateRowHeight={handleCalculateRowHeight}
+                        rowRenderer={renderGroupListItem}
+                      />
+                    )}
+                  </div>
+                );
+              }}
+            </SizeObserver>
           </div>
         </Modal>
       )}
@@ -193,29 +208,36 @@ export const AddUserToAnotherGroupModal = ({
       {selectedGroupId && selectedGroup && (
         <ConfirmationDialog
           dialogName="AddUserToAnotherGroupModal__confirm"
-          title={i18n('AddUserToAnotherGroupModal__confirm-title')}
+          title={i18n('icu:AddUserToAnotherGroupModal__confirm-title')}
           i18n={i18n}
           onClose={() => setSelectedGroupId(undefined)}
           actions={[
             {
-              text: i18n('AddUserToAnotherGroupModal__confirm-add'),
+              text: i18n('icu:AddUserToAnotherGroupModal__confirm-add'),
               style: 'affirmative',
               action: () => {
-                showToast(ToastType.AddingUserToGroup, {
-                  contact: contact.title,
-                });
-                addMemberToGroup(selectedGroupId, contact.id, () =>
-                  showToast(ToastType.UserAddedToGroup, {
+                showToast({
+                  toastType: ToastType.AddingUserToGroup,
+                  parameters: {
                     contact: contact.title,
-                    group: selectedGroup.title,
-                  })
-                );
+                  },
+                });
+                addMembersToGroup(selectedGroupId, [contact.id], {
+                  onSuccess: () =>
+                    showToast({
+                      toastType: ToastType.UserAddedToGroup,
+                      parameters: {
+                        contact: contact.title,
+                        group: selectedGroup.title,
+                      },
+                    }),
+                });
                 toggleAddUserToAnotherGroupModal(undefined);
               },
             },
           ]}
         >
-          {i18n('AddUserToAnotherGroupModal__confirm-message', {
+          {i18n('icu:AddUserToAnotherGroupModal__confirm-message', {
             contact: contact.title,
             group: selectedGroup.title,
           })}
@@ -223,4 +245,4 @@ export const AddUserToAnotherGroupModal = ({
       )}
     </>
   );
-};
+}

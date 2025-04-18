@@ -4,9 +4,8 @@
 import type { ConversationAttributesType } from '../model-types.d';
 import type { ConversationQueueJobData } from '../jobs/conversationJobQueue';
 import * as Errors from '../types/errors';
-import * as durations from './durations';
+import { DAY } from './durations';
 import * as log from '../logging/log';
-import { DeleteModel } from '../messageModifiers/Deletes';
 import {
   conversationJobQueue,
   conversationQueueJobEnum,
@@ -20,8 +19,7 @@ import { getMessageById } from '../messages/getMessageById';
 import { getRecipientConversationIds } from './getRecipientConversationIds';
 import { getRecipients } from './getRecipients';
 import { repeat, zipObject } from './iterables';
-
-const THREE_HOURS = durations.HOUR * 3;
+import { isMe } from './whatTypeOfConversation';
 
 export async function sendDeleteForEveryoneMessage(
   conversationAttributes: ConversationAttributesType,
@@ -40,21 +38,34 @@ export async function sendDeleteForEveryoneMessage(
   if (!message) {
     throw new Error('sendDeleteForEveryoneMessage: Cannot find message!');
   }
-  const messageModel = window.MessageController.register(messageId, message);
-  const idForLogging = getMessageIdForLogging(messageModel.attributes);
+  const idForLogging = getMessageIdForLogging(message.attributes);
 
-  const timestamp = Date.now();
-  const maxDuration = deleteForEveryoneDuration || THREE_HOURS;
-  if (timestamp - targetTimestamp > maxDuration) {
-    throw new Error(`Cannot send DOE for a message older than ${maxDuration}`);
+  // If conversation is a Note To Self, no deletion time limits apply.
+  if (!isMe(conversationAttributes)) {
+    const timestamp = Date.now();
+    const maxDuration = deleteForEveryoneDuration || DAY;
+    if (timestamp - targetTimestamp > maxDuration) {
+      throw new Error(
+        `Cannot send DOE for a message older than ${maxDuration}`
+      );
+    }
   }
 
-  messageModel.set({
+  message.set({
     deletedForEveryoneSendStatus: zipObject(
       getRecipientConversationIds(conversationAttributes),
       repeat(false)
     ),
   });
+
+  const conversationIdForLogging = getConversationIdForLogging(
+    conversationAttributes
+  );
+
+  log.info(
+    `sendDeleteForEveryoneMessage: enqueuing DeleteForEveryone: ${idForLogging} ` +
+      `in conversation ${conversationIdForLogging}`
+  );
 
   try {
     const jobData: ConversationQueueJobData = {
@@ -66,16 +77,12 @@ export async function sendDeleteForEveryoneMessage(
       targetTimestamp,
     };
     await conversationJobQueue.add(jobData, async jobToInsert => {
-      const conversationIdForLogging = getConversationIdForLogging(
-        conversationAttributes
-      );
       log.info(
         `sendDeleteForEveryoneMessage: Deleting message ${idForLogging} ` +
           `in conversation ${conversationIdForLogging} with job ${jobToInsert.id}`
       );
-      await window.Signal.Data.saveMessage(messageModel.attributes, {
+      await window.MessageCache.saveMessage(message.attributes, {
         jobToInsert,
-        ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
       });
     });
   } catch (error) {
@@ -86,10 +93,9 @@ export async function sendDeleteForEveryoneMessage(
     throw error;
   }
 
-  const deleteModel = new DeleteModel({
+  await deleteForEveryone(message, {
     targetSentTimestamp: targetTimestamp,
     serverTimestamp: Date.now(),
     fromId: window.ConversationController.getOurConversationIdOrThrow(),
   });
-  await deleteForEveryone(messageModel, deleteModel);
 }

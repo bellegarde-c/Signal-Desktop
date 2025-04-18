@@ -1,11 +1,15 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import Fuse from 'fuse.js';
-
+import type Fuse from 'fuse.js';
 import type { ConversationType } from '../state/ducks/conversations';
 import { parseAndFormatPhoneNumber } from './libphonenumberInstance';
 import { WEEK } from './durations';
+import { fuseGetFnRemoveDiacritics, getCachedFuseIndex } from './fuse';
+import { countConversationUnreadStats, hasUnread } from './countUnreadStats';
+import { getE164 } from './getE164';
+import { removeDiacritics } from './removeDiacritics';
+import { isAciString } from './isAciString';
 
 // Fuse.js scores have order of 0.01
 const ACTIVE_AT_SCORE_FACTOR = (1 / WEEK) * 0.01;
@@ -44,12 +48,14 @@ const FUSE_OPTIONS: Fuse.IFuseOptions<ConversationType> = {
       weight: 0.5,
     },
   ],
-};
+  getFn: (convo, path) => {
+    if (path === 'e164' || (path.length === 1 && path[0] === 'e164')) {
+      return getE164(convo) ?? '';
+    }
 
-const cachedIndices = new WeakMap<
-  ReadonlyArray<ConversationType>,
-  Fuse<ConversationType>
->();
+    return fuseGetFnRemoveDiacritics(convo, path);
+  },
+};
 
 type CommandRunnerType = (
   conversations: ReadonlyArray<ConversationType>,
@@ -58,8 +64,29 @@ type CommandRunnerType = (
 
 const COMMANDS = new Map<string, CommandRunnerType>();
 
-COMMANDS.set('uuidEndsWith', (conversations, query) => {
-  return conversations.filter(convo => convo.uuid?.endsWith(query));
+function filterConversationsByUnread(
+  conversations: ReadonlyArray<ConversationType>,
+  includeMuted: boolean
+): Array<ConversationType> {
+  return conversations.filter(conversation => {
+    return hasUnread(
+      countConversationUnreadStats(conversation, { includeMuted })
+    );
+  });
+}
+
+COMMANDS.set('serviceIdEndsWith', (conversations, query) => {
+  return conversations.filter(convo => convo.serviceId?.endsWith(query));
+});
+
+COMMANDS.set('aciEndsWith', (conversations, query) => {
+  return conversations.filter(
+    convo => isAciString(convo.serviceId) && convo.serviceId.endsWith(query)
+  );
+});
+
+COMMANDS.set('pniEndsWith', (conversations, query) => {
+  return conversations.filter(convo => convo.pni?.endsWith(query));
 });
 
 COMMANDS.set('idEndsWith', (conversations, query) => {
@@ -74,6 +101,14 @@ COMMANDS.set('groupIdEndsWith', (conversations, query) => {
   return conversations.filter(convo => convo.groupId?.endsWith(query));
 });
 
+COMMANDS.set('unread', (conversations, query) => {
+  const includeMuted =
+    /^(?:m|muted)$/i.test(query) ||
+    window.storage.get('badge-count-muted-conversations') ||
+    false;
+  return filterConversationsByUnread(conversations, includeMuted);
+});
+
 // See https://fusejs.io/examples.html#extended-search for
 // extended search documentation.
 function searchConversations(
@@ -81,7 +116,7 @@ function searchConversations(
   searchTerm: string,
   regionCode: string | undefined
 ): ReadonlyArray<Pick<Fuse.FuseResult<ConversationType>, 'item' | 'score'>> {
-  const maybeCommand = searchTerm.match(/^!([^\s]+):(.*)$/);
+  const maybeCommand = searchTerm.match(/^!([^\s:]+)(?::(.*))?$/);
   if (maybeCommand) {
     const [, commandName, query] = maybeCommand;
 
@@ -94,33 +129,64 @@ function searchConversations(
   const phoneNumber = parseAndFormatPhoneNumber(searchTerm, regionCode);
 
   // Escape the search term
-  let extendedSearchTerm = searchTerm;
+  let extendedSearchTerm = removeDiacritics(searchTerm);
 
   // OR phoneNumber
   if (phoneNumber) {
     extendedSearchTerm += ` | ${phoneNumber.e164}`;
   }
 
-  let index = cachedIndices.get(conversations);
-  if (!index) {
-    index = new Fuse<ConversationType>(conversations, FUSE_OPTIONS);
-    cachedIndices.set(conversations, index);
-  }
+  const index = getCachedFuseIndex(conversations, FUSE_OPTIONS);
 
   return index.search(extendedSearchTerm);
 }
 
-export function filterAndSortConversationsByRecent(
+function startsWithLetter(title: string) {
+  // Uses \p, the unicode character class escape, to check if a the first character is a
+  // letter
+  return /^\p{Letter}/u.test(title);
+}
+
+function sortAlphabetically(a: ConversationType, b: ConversationType) {
+  // Sort alphabetically with conversations starting with a letter first (and phone
+  // numbers last)
+  const aStartsWithLetter = startsWithLetter(a.title);
+  const bStartsWithLetter = startsWithLetter(b.title);
+  if (aStartsWithLetter && !bStartsWithLetter) {
+    return -1;
+  }
+  if (!aStartsWithLetter && bStartsWithLetter) {
+    return 1;
+  }
+  return a.title.localeCompare(b.title);
+}
+
+export function filterAndSortConversations(
   conversations: ReadonlyArray<ConversationType>,
   searchTerm: string,
-  regionCode: string | undefined
+  regionCode: string | undefined,
+  filterByUnread: boolean = false,
+  conversationToInject?: ConversationType
 ): Array<ConversationType> {
+  let filteredConversations = filterByUnread
+    ? filterConversationsByUnread(conversations, true)
+    : conversations;
+
+  if (conversationToInject) {
+    filteredConversations = [...filteredConversations, conversationToInject];
+  }
+
   if (searchTerm.length) {
     const now = Date.now();
+    const withoutUnknownAndFiltered = filteredConversations.filter(
+      item => item.titleNoDefault
+    );
 
-    const withoutUnknown = conversations.filter(item => item.titleNoDefault);
-
-    return searchConversations(withoutUnknown, searchTerm, regionCode)
+    return searchConversations(
+      withoutUnknownAndFiltered,
+      searchTerm,
+      regionCode
+    )
       .slice()
       .sort((a, b) => {
         const { activeAt: aActiveAt = 0, left: aLeft = false } = a.item;
@@ -137,16 +203,22 @@ export function filterAndSortConversationsByRecent(
           (b.score ?? 0) +
           (bLeft ? LEFT_GROUP_PENALTY : 0);
 
-        return aScore - bScore;
+        const activeScore = aScore - bScore;
+        if (activeScore !== 0) {
+          return activeScore;
+        }
+        return sortAlphabetically(a.item, b.item);
       })
       .map(result => result.item);
   }
 
-  return conversations.concat().sort((a, b) => {
-    if (a.activeAt && b.activeAt) {
-      return a.activeAt > b.activeAt ? -1 : 1;
+  return filteredConversations.concat().sort((a, b) => {
+    const aScore = a.activeAt ?? 0;
+    const bScore = b.activeAt ?? 0;
+    const score = bScore - aScore;
+    if (score !== 0) {
+      return score;
     }
-
-    return a.activeAt && !b.activeAt ? -1 : 1;
+    return sortAlphabetically(a, b);
   });
 }

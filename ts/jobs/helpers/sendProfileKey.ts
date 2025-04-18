@@ -23,7 +23,6 @@ import type {
   ProfileKeyJobData,
 } from '../conversationJobQueue';
 import type { CallbackResultType } from '../../textsecure/Types.d';
-import { isConversationAccepted } from '../../util/isConversationAccepted';
 import { isConversationUnregistered } from '../../util/isConversationUnregistered';
 import type { ConversationAttributesType } from '../../model-types.d';
 import {
@@ -32,6 +31,8 @@ import {
   SendMessageProtoError,
   UnregisteredUserError,
 } from '../../textsecure/Errors';
+import { shouldSendToConversation } from './shouldSendToConversation';
+import { sendToGroup } from '../../util/sendToGroup';
 
 export function canAllErrorsBeIgnored(
   conversation: ConversationAttributesType,
@@ -77,7 +78,7 @@ export async function sendProfileKey(
     return;
   }
 
-  if (!conversation.get('profileSharing')) {
+  if (!data?.isOneTimeSend && !conversation.get('profileSharing')) {
     log.info('No longer sharing profile. Cancelling job.');
     return;
   }
@@ -89,7 +90,7 @@ export async function sendProfileKey(
   }
 
   log.info(
-    `starting profile key share to ${conversation.idForLogging()} with timestamp ${timestamp}`
+    `starting profile key share to ${conversation.idForLogging()} with timestamp ${timestamp} type=${data.type}`
   );
 
   const { revision } = data;
@@ -102,24 +103,14 @@ export async function sendProfileKey(
 
   // Note: flags and the profileKey itself are all that matter in the proto.
 
-  // Note: we don't check for untrusted conversations here; we attempt to send anyway
+  if (!shouldSendToConversation(conversation, log)) {
+    return;
+  }
 
   if (isDirectConversation(conversation.attributes)) {
-    if (!isConversationAccepted(conversation.attributes)) {
-      log.info(
-        `conversation ${conversation.idForLogging()} is not accepted; refusing to send`
-      );
-      return;
-    }
     if (isConversationUnregistered(conversation.attributes)) {
       log.info(
         `conversation ${conversation.idForLogging()} is unregistered; refusing to send`
-      );
-      return;
-    }
-    if (conversation.isBlocked()) {
-      log.info(
-        `conversation ${conversation.idForLogging()} is blocked; refusing to send`
       );
       return;
     }
@@ -128,12 +119,13 @@ export async function sendProfileKey(
       flags: Proto.DataMessage.Flags.PROFILE_KEY_UPDATE,
       profileKey,
       recipients: conversation.getRecipients(),
+      expireTimerVersion: undefined,
       timestamp,
       includePniSignatureMessage: true,
     });
     sendPromise = messaging.sendIndividualProto({
       contentHint,
-      identifier: conversation.getSendTarget(),
+      serviceId: conversation.getSendTarget(),
       options: sendOptions,
       proto,
       timestamp,
@@ -144,16 +136,23 @@ export async function sendProfileKey(
       log.error('No revision provided, but conversation is GroupV2');
     }
 
+    const ourAci = window.textsecure.storage.user.getCheckedAci();
+    if (!conversation.hasMember(ourAci)) {
+      log.info(
+        `We are not part of group ${conversation.idForLogging()}; refusing to send`
+      );
+      return;
+    }
+
     const groupV2Info = conversation.getGroupV2Info();
     if (groupV2Info && isNumber(revision)) {
       groupV2Info.revision = revision;
     }
 
-    sendPromise = window.Signal.Util.sendToGroup({
+    sendPromise = sendToGroup({
       contentHint,
       groupSendOptions: {
         flags: Proto.DataMessage.Flags.PROFILE_KEY_UPDATE,
-        groupV1: conversation.getGroupV1Info(),
         groupV2: groupV2Info,
         profileKey,
         timestamp,
@@ -174,7 +173,7 @@ export async function sendProfileKey(
   } catch (error: unknown) {
     if (canAllErrorsBeIgnored(conversation.attributes, error)) {
       log.info(
-        'Group send failures were all OutgoingIdentityKeyError, SendMessageChallengeError, or UnregisteredUserError. Returning succcessfully.'
+        'Group send failures were all OutgoingIdentityKeyError, SendMessageChallengeError, or UnregisteredUserError. Returning successfully.'
       );
       return;
     }

@@ -1,21 +1,27 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ReactElement, ReactNode } from 'react';
-import React, { useRef, useState } from 'react';
-import type { ContentRect, MeasuredComponentProps } from 'react-measure';
-import Measure from 'react-measure';
+import React, { useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { noop } from 'lodash';
 import { animated } from '@react-spring/web';
 
+import { v4 as uuid } from 'uuid';
 import type { LocalizerType } from '../types/Util';
 import { ModalHost } from './ModalHost';
 import type { Theme } from '../util/theme';
+import { assertDev } from '../util/assert';
 import { getClassNamesFor } from '../util/getClassNamesFor';
 import { useAnimated } from '../hooks/useAnimated';
 import { useHasWrapped } from '../hooks/useHasWrapped';
-import { useRefMerger } from '../hooks/useRefMerger';
+import * as log from '../logging/log';
+import {
+  isScrollOverflowVertical,
+  isScrollAtTop,
+  isScrollAtBottom,
+  useScrollObserver,
+} from '../hooks/useSizeObserver';
 
 type PropsType = {
   children: ReactNode;
@@ -25,15 +31,18 @@ type PropsType = {
   hasFooterDivider?: boolean;
   i18n: LocalizerType;
   modalFooter?: JSX.Element;
+  modalHeaderChildren?: ReactNode;
   moduleClassName?: string;
   onBackButtonClick?: () => unknown;
   onClose?: () => void;
   title?: ReactNode;
-  useFocusTrap?: boolean;
   padded?: boolean;
+  ['aria-describedby']?: string;
 };
 
 export type ModalPropsType = PropsType & {
+  noTransform?: boolean;
+  noEscapeClose?: boolean;
   noMouseClose?: boolean;
   theme?: Theme;
 };
@@ -46,34 +55,71 @@ export function Modal({
   hasXButton,
   i18n,
   modalFooter,
+  modalHeaderChildren,
   moduleClassName,
+  noEscapeClose,
   noMouseClose,
   onBackButtonClick,
   onClose = noop,
   theme,
   title,
-  useFocusTrap,
   hasHeaderDivider = false,
   hasFooterDivider = false,
+  noTransform = false,
   padded = true,
-}: Readonly<ModalPropsType>): ReactElement {
-  const { close, modalStyles, overlayStyles } = useAnimated(onClose, {
-    getFrom: () => ({ opacity: 0, transform: 'translateY(48px)' }),
-    getTo: isOpen =>
-      isOpen
-        ? { opacity: 1, transform: 'translateY(0px)' }
-        : { opacity: 0, transform: 'translateY(48px)' },
-  });
+  'aria-describedby': ariaDescribedBy,
+}: Readonly<ModalPropsType>): JSX.Element | null {
+  const { close, isClosed, modalStyles, overlayStyles } = useAnimated(
+    onClose,
+
+    // `background-position: fixed` cannot properly detect the viewport when
+    // the parent element has `transform: translate*`. Even though it requires
+    // layout recalculation - use `margin-top` if asked by the embedder.
+    noTransform
+      ? {
+          getFrom: () => ({ opacity: 0, marginTop: '48px' }),
+          getTo: isOpen =>
+            isOpen
+              ? { opacity: 1, marginTop: '0px' }
+              : { opacity: 0, marginTop: '48px' },
+        }
+      : {
+          getFrom: () => ({ opacity: 0, transform: 'translateY(48px)' }),
+          getTo: isOpen =>
+            isOpen
+              ? { opacity: 1, transform: 'translateY(0px)' }
+              : { opacity: 0, transform: 'translateY(48px)' },
+        }
+  );
+
+  useEffect(() => {
+    if (!isClosed) {
+      return noop;
+    }
+
+    const timer = setTimeout(() => {
+      log.error(`Modal ${modalName} is closed, but still visible`);
+      assertDev(false, `Invisible modal ${modalName}`);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [modalName, isClosed]);
+
+  if (isClosed) {
+    return null;
+  }
 
   return (
     <ModalHost
       modalName={modalName}
       moduleClassName={moduleClassName}
+      noEscapeClose={noEscapeClose}
       noMouseClose={noMouseClose}
       onClose={close}
+      onEscape={onBackButtonClick}
       overlayStyles={overlayStyles}
       theme={theme}
-      useFocusTrap={useFocusTrap}
     >
       <animated.div style={modalStyles}>
         <ModalPage
@@ -81,6 +127,7 @@ export function Modal({
           hasXButton={hasXButton}
           i18n={i18n}
           modalFooter={modalFooter}
+          modalHeaderChildren={modalHeaderChildren}
           moduleClassName={moduleClassName}
           onBackButtonClick={onBackButtonClick}
           onClose={close}
@@ -88,6 +135,7 @@ export function Modal({
           padded={padded}
           hasHeaderDivider={hasHeaderDivider}
           hasFooterDivider={hasFooterDivider}
+          aria-describedby={ariaDescribedBy}
         >
           {children}
         </ModalPage>
@@ -121,6 +169,8 @@ export function ModalPage({
   hasXButton,
   i18n,
   modalFooter,
+  modalHeaderChildren,
+  modalName,
   moduleClassName,
   onBackButtonClick,
   onClose,
@@ -128,33 +178,35 @@ export function ModalPage({
   padded = true,
   hasHeaderDivider = false,
   hasFooterDivider = false,
+  'aria-describedby': ariaDescribedBy,
 }: ModalPageProps): JSX.Element {
   const modalRef = useRef<HTMLDivElement | null>(null);
 
-  const refMerger = useRefMerger();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const bodyInnerRef = useRef<HTMLDivElement>(null);
 
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  const [hasOverflow, setHasOverflow] = useState(false);
+  const [scrollAtTop, setScrollAtTop] = useState(false);
+  const [scrollAtBottom, setScrollAtBottom] = useState(false);
+  const [scrollVerticalOverflow, setScrollOverflowVertical] = useState(false);
 
-  const hasHeader = Boolean(hasXButton || title || onBackButtonClick);
+  const hasHeader = Boolean(
+    hasXButton || title || modalHeaderChildren || onBackButtonClick
+  );
   const getClassName = getClassNamesFor(BASE_CLASS_NAME, moduleClassName);
 
-  function handleResize({ scroll }: ContentRect) {
-    const modalNode = modalRef?.current;
-    if (!modalNode) {
-      return;
-    }
-    if (scroll) {
-      setHasOverflow(scroll.height > modalNode.clientHeight);
-    }
-  }
+  const [id] = useState(() => uuid());
+
+  useScrollObserver(bodyRef, bodyInnerRef, scroll => {
+    setScrollAtTop(isScrollAtTop(scroll));
+    setScrollAtBottom(isScrollAtBottom(scroll));
+    setScrollOverflowVertical(isScrollOverflowVertical(scroll));
+  });
 
   return (
     <>
       {/* We don't want the click event to propagate to its container node. */}
       {/* eslint-disable-next-line max-len */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className={classNames(
           getClassName(''),
@@ -165,6 +217,11 @@ export function ModalPage({
           hasFooterDivider && getClassName('--footer-divider')
         )}
         ref={modalRef}
+        role="dialog"
+        tabIndex={-1}
+        aria-labelledby={title ? `${id}-title` : undefined}
+        aria-describedby={ariaDescribedBy}
+        data-testid={modalName}
         onClick={event => {
           event.stopPropagation();
         }}
@@ -178,66 +235,65 @@ export function ModalPage({
                 : null
             )}
           >
-            {onBackButtonClick && (
-              <button
-                aria-label={i18n('back')}
-                className={getClassName('__back-button')}
-                onClick={onBackButtonClick}
-                tabIndex={0}
-                type="button"
-              />
-            )}
-            {title && (
-              <h1
-                className={classNames(
-                  getClassName('__title'),
-                  hasXButton ? getClassName('__title--with-x-button') : null
-                )}
-              >
-                {title}
-              </h1>
-            )}
-            {hasXButton && !title && (
-              <div className={getClassName('__title')} />
-            )}
-            {hasXButton && (
-              <button
-                aria-label={i18n('close')}
-                className={getClassName('__close-button')}
-                onClick={onClose}
-                tabIndex={0}
-                type="button"
-              />
-            )}
+            <div className={getClassName('__headerTitle')}>
+              {onBackButtonClick && (
+                <button
+                  aria-label={i18n('icu:back')}
+                  className={getClassName('__back-button')}
+                  onClick={onBackButtonClick}
+                  tabIndex={0}
+                  type="button"
+                />
+              )}
+              {title && (
+                <h1
+                  id={`${id}-title`}
+                  className={classNames(
+                    getClassName('__title'),
+                    hasXButton ? getClassName('__title--with-x-button') : null
+                  )}
+                >
+                  {title}
+                </h1>
+              )}
+              {hasXButton && !title && (
+                <div className={getClassName('__title')} />
+              )}
+              {hasXButton && (
+                <button
+                  aria-label={i18n('icu:close')}
+                  className={getClassName('__close-button')}
+                  onClick={onClose}
+                  tabIndex={0}
+                  type="button"
+                />
+              )}
+            </div>
+            {modalHeaderChildren}
           </div>
         )}
-        <Measure scroll onResize={handleResize}>
-          {({ measureRef }: MeasuredComponentProps) => (
-            <div
-              className={classNames(
-                getClassName('__body'),
-                scrolled ? getClassName('__body--scrolled') : null,
-                hasOverflow || scrolled
-                  ? getClassName('__body--overflow')
-                  : null
-              )}
-              onScroll={() => {
-                const scrollTop = bodyRef.current?.scrollTop || 0;
-                setScrolled(scrollTop > 2);
-              }}
-              ref={refMerger(measureRef, bodyRef)}
-            >
-              {children}
-            </div>
+        <div
+          className={classNames(
+            getClassName('__body'),
+            scrollAtTop ? getClassName('__body--scrollAtTop') : null,
+            scrollAtBottom ? getClassName('__body--scrollAtBottom') : null,
+            scrollVerticalOverflow || scrollAtTop
+              ? getClassName('__body--scrollVerticalOverflow')
+              : null
           )}
-        </Measure>
+          ref={bodyRef}
+        >
+          <div ref={bodyInnerRef} className={getClassName('__body_inner')}>
+            {children}
+          </div>
+        </div>
         {modalFooter && <Modal.ButtonFooter>{modalFooter}</Modal.ButtonFooter>}
       </div>
     </>
   );
 }
 
-Modal.ButtonFooter = function ButtonFooter({
+function ButtonFooter({
   children,
 }: Readonly<{
   children: ReactNode;
@@ -257,14 +313,14 @@ Modal.ButtonFooter = function ButtonFooter({
       {children}
     </div>
   );
-};
+}
+Modal.ButtonFooter = ButtonFooter;
 
 type PagedModalProps = Readonly<{
   modalName: string;
   children: RenderModalPage;
   moduleClassName?: string;
   onClose?: () => void;
-  useFocusTrap?: boolean;
   noMouseClose?: boolean;
   theme?: Theme;
 }>;
@@ -284,15 +340,32 @@ export function PagedModal({
   noMouseClose,
   onClose = noop,
   theme,
-  useFocusTrap,
-}: PagedModalProps): ReactElement {
-  const { close, modalStyles, overlayStyles } = useAnimated(onClose, {
+}: PagedModalProps): JSX.Element | null {
+  const { close, isClosed, modalStyles, overlayStyles } = useAnimated(onClose, {
     getFrom: () => ({ opacity: 0, transform: 'translateY(48px)' }),
     getTo: isOpen =>
       isOpen
         ? { opacity: 1, transform: 'translateY(0px)' }
         : { opacity: 0, transform: 'translateY(48px)' },
   });
+
+  useEffect(() => {
+    if (!isClosed) {
+      return noop;
+    }
+
+    const timer = setTimeout(() => {
+      log.error(`PagedModal ${modalName} is closed, but still visible`);
+      assertDev(false, `Invisible paged modal ${modalName}`);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [modalName, isClosed]);
+
+  if (isClosed) {
+    return null;
+  }
 
   return (
     <ModalHost
@@ -302,7 +375,6 @@ export function PagedModal({
       onClose={close}
       overlayStyles={overlayStyles}
       theme={theme}
-      useFocusTrap={useFocusTrap}
     >
       <animated.div style={modalStyles}>{children(close)}</animated.div>
     </ModalHost>

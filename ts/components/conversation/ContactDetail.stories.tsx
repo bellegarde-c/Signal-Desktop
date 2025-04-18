@@ -2,32 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-import { boolean } from '@storybook/addon-knobs';
-
+import type { Meta } from '@storybook/react';
 import type { Props } from './ContactDetail';
 import { ContactDetail } from './ContactDetail';
 import { AddressType, ContactFormType } from '../../types/EmbeddedContact';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import { IMAGE_GIF } from '../../types/MIME';
-
 import { fakeAttachment } from '../../test-both/helpers/fakeAttachment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/ContactDetail',
-};
+} satisfies Meta<Props>;
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
+  cancelAttachmentDownload: action('cancelAttachmentDownload'),
   contact: overrideProps.contact || {},
-  hasSignalAccount: boolean(
-    'hasSignalAccount',
-    overrideProps.hasSignalAccount || false
-  ),
+  hasSignalAccount: overrideProps.hasSignalAccount || false,
   i18n,
+  kickOffAttachmentDownload: action('kickOffAttachmentDownload'),
+  messageId: 'fake-message-id',
   onSendMessage: action('onSendMessage'),
 });
 
@@ -107,7 +102,6 @@ const fullContact = {
     prefix: 'Dr.',
     suffix: 'Jr.',
     middleName: 'James',
-    displayName: 'Jerry Jordan',
   },
   number: [
     {
@@ -134,15 +128,106 @@ const fullContact = {
   ],
 };
 
-export const FullyFilledOut = (): JSX.Element => {
+export function FullyFilledOut(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
   });
   return <ContactDetail {...props} />;
-};
+}
 
-export const OnlyEmail = (): JSX.Element => {
+export function FullyFilledOutNotDownloaded(): JSX.Element {
+  const props = createProps({
+    contact: fullContact,
+    hasSignalAccount: true,
+  });
+  const propsWithUpdatedAvatar = {
+    ...props,
+    contact: {
+      ...props.contact,
+      avatar: {
+        avatar: fakeAttachment({
+          path: undefined,
+          contentType: IMAGE_GIF,
+        }),
+        isProfile: true,
+      },
+    },
+  };
+  return <ContactDetail {...propsWithUpdatedAvatar} />;
+}
+export function FullyFilledOutDownloading(): JSX.Element {
+  const props = createProps({
+    contact: fullContact,
+    hasSignalAccount: true,
+  });
+  const propsWithUpdatedAvatar = {
+    ...props,
+    contact: {
+      ...props.contact,
+      avatar: {
+        avatar: fakeAttachment({
+          path: undefined,
+          contentType: IMAGE_GIF,
+          pending: true,
+          size: 10000000,
+          totalDownloaded: 500000,
+        }),
+        isProfile: true,
+      },
+    },
+  };
+  return <ContactDetail {...propsWithUpdatedAvatar} />;
+}
+export function FullyFilledOutTransientError(): JSX.Element {
+  const props = createProps({
+    contact: fullContact,
+    hasSignalAccount: true,
+  });
+  const propsWithUpdatedAvatar = {
+    ...props,
+    contact: {
+      ...props.contact,
+      avatar: {
+        avatar: fakeAttachment({
+          error: true,
+          iv: 'something',
+          key: 'something',
+          digest: 'something',
+          cdnKey: 'something',
+          cdnNumber: 2,
+          path: undefined,
+          contentType: IMAGE_GIF,
+        }),
+        isProfile: true,
+      },
+    },
+  };
+  return <ContactDetail {...propsWithUpdatedAvatar} />;
+}
+export function FullyFilledOutPermanentError(): JSX.Element {
+  const props = createProps({
+    contact: fullContact,
+    hasSignalAccount: true,
+  });
+  const propsWithUpdatedAvatar = {
+    ...props,
+    contact: {
+      ...props.contact,
+      avatar: {
+        avatar: fakeAttachment({
+          error: true,
+          path: undefined,
+          contentType: IMAGE_GIF,
+        }),
+        isProfile: true,
+      },
+    },
+  };
+  return <ContactDetail {...propsWithUpdatedAvatar} />;
+}
+
+export function OnlyEmail(): JSX.Element {
   const props = createProps({
     contact: {
       email: [
@@ -156,9 +241,9 @@ export const OnlyEmail = (): JSX.Element => {
   });
 
   return <ContactDetail {...props} />;
-};
+}
 
-export const GivenName = (): JSX.Element => {
+export function GivenName(): JSX.Element {
   const props = createProps({
     contact: {
       name: {
@@ -169,9 +254,9 @@ export const GivenName = (): JSX.Element => {
   });
 
   return <ContactDetail {...props} />;
-};
+}
 
-export const Organization = (): JSX.Element => {
+export function Organization(): JSX.Element {
   const props = createProps({
     contact: {
       organization: 'Company 5',
@@ -180,9 +265,9 @@ export const Organization = (): JSX.Element => {
   });
 
   return <ContactDetail {...props} />;
-};
+}
 
-export const GivenFamilyName = (): JSX.Element => {
+export function GivenFamilyName(): JSX.Element {
   const props = createProps({
     contact: {
       name: {
@@ -194,13 +279,9 @@ export const GivenFamilyName = (): JSX.Element => {
   });
 
   return <ContactDetail {...props} />;
-};
+}
 
-GivenFamilyName.story = {
-  name: 'Given + Family Name',
-};
-
-export const FamilyName = (): JSX.Element => {
+export function FamilyName(): JSX.Element {
   const props = createProps({
     contact: {
       name: {
@@ -211,9 +292,9 @@ export const FamilyName = (): JSX.Element => {
   });
 
   return <ContactDetail {...props} />;
-};
+}
 
-export const LoadingAvatar = (): JSX.Element => {
+export function LoadingAvatar(): JSX.Element {
   const props = createProps({
     contact: {
       avatar: {
@@ -227,26 +308,18 @@ export const LoadingAvatar = (): JSX.Element => {
     hasSignalAccount: true,
   });
   return <ContactDetail {...props} />;
-};
+}
 
-export const EmptyWithAccount = (): JSX.Element => {
+export function EmptyWithAccount(): JSX.Element {
   const props = createProps({
     hasSignalAccount: true,
   });
   return <ContactDetail {...props} />;
-};
+}
 
-EmptyWithAccount.story = {
-  name: 'Empty with Account',
-};
-
-export const EmptyWithoutAccount = (): JSX.Element => {
+export function EmptyWithoutAccount(): JSX.Element {
   const props = createProps({
     hasSignalAccount: false,
   });
   return <ContactDetail {...props} />;
-};
-
-EmptyWithoutAccount.story = {
-  name: 'Empty without Account',
-};
+}

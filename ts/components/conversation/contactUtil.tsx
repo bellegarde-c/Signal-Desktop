@@ -1,61 +1,57 @@
-// Copyright 2019-2021 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
 import classNames from 'classnames';
+import type { ReadonlyDeep } from 'type-fest';
 
 import { Avatar, AvatarBlur } from '../Avatar';
-import { Spinner } from '../Spinner';
+import { AvatarColors } from '../../types/Colors';
+import { getName } from '../../types/EmbeddedContact';
+import { AttachmentStatusIcon } from './AttachmentStatusIcon';
 
 import type { LocalizerType } from '../../types/Util';
-import { AvatarColors } from '../../types/Colors';
-import type { EmbeddedContactType } from '../../types/EmbeddedContact';
-import { getName } from '../../types/EmbeddedContact';
+import type { EmbeddedContactForUIType } from '../../types/EmbeddedContact';
 
 export function renderAvatar({
   contact,
+  direction,
   i18n,
   size,
-  direction,
 }: {
-  contact: EmbeddedContactType;
-  i18n: LocalizerType;
-  size: 28 | 52 | 80;
+  contact: ReadonlyDeep<EmbeddedContactForUIType>;
   direction?: 'outgoing' | 'incoming';
+  i18n: LocalizerType;
+  size: 52 | 80;
 }): JSX.Element {
   const { avatar } = contact;
 
-  const avatarPath = avatar && avatar.avatar && avatar.avatar.path;
-  const pending = avatar && avatar.avatar && avatar.avatar.pending;
+  const avatarUrl = avatar && avatar.avatar && avatar.avatar.path;
   const title = getName(contact) || '';
-  const spinnerSvgSize = size < 50 ? 'small' : 'normal';
-  const spinnerSize = size < 50 ? '24px' : undefined;
+  const isAttachmentNotAvailable = Boolean(
+    avatar?.avatar?.isPermanentlyUndownloadable
+  );
 
-  if (pending) {
-    return (
-      <div className="module-embedded-contact__spinner-container">
-        <Spinner
-          svgSize={spinnerSvgSize}
-          size={spinnerSize}
-          direction={direction}
-        />
-      </div>
-    );
-  }
-
-  return (
+  const renderAttachmentDownloaded = () => (
     <Avatar
-      acceptedMessageRequest={false}
-      avatarPath={avatarPath}
+      avatarUrl={avatarUrl}
       badge={undefined}
       blur={AvatarBlur.NoBlur}
       color={AvatarColors[0]}
       conversationType="direct"
       i18n={i18n}
-      isMe
       title={title}
       sharedGroupNames={[]}
       size={size}
+    />
+  );
+
+  return (
+    <AttachmentStatusIcon
+      attachment={avatar?.avatar}
+      isAttachmentNotAvailable={isAttachmentNotAvailable}
+      isIncoming={direction === 'incoming'}
+      renderAttachmentDownloaded={renderAttachmentDownloaded}
     />
   );
 }
@@ -65,7 +61,7 @@ export function renderName({
   isIncoming,
   module,
 }: {
-  contact: EmbeddedContactType;
+  contact: ReadonlyDeep<EmbeddedContactForUIType>;
   isIncoming: boolean;
   module: string;
 }): JSX.Element {
@@ -86,7 +82,7 @@ export function renderContactShorthand({
   isIncoming,
   module,
 }: {
-  contact: EmbeddedContactType;
+  contact: ReadonlyDeep<EmbeddedContactForUIType>;
   isIncoming: boolean;
   module: string;
 }): JSX.Element {

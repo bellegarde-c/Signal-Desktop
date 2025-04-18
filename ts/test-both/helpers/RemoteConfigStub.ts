@@ -1,18 +1,20 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { refreshRemoteConfig } from '../../RemoteConfig';
-import type { WebAPIType } from '../../textsecure/WebAPI';
-import type { UnwrapPromise } from '../../types/Util';
+import { _refreshRemoteConfig } from '../../RemoteConfig';
+import type {
+  WebAPIType,
+  RemoteConfigResponseType,
+} from '../../textsecure/WebAPI';
 
 export async function updateRemoteConfig(
-  newConfig: UnwrapPromise<ReturnType<WebAPIType['getConfig']>>
+  newConfig: RemoteConfigResponseType['config']
 ): Promise<void> {
   const fakeServer = {
     async getConfig() {
-      return newConfig;
+      return { config: newConfig, serverTimestamp: Date.now() };
     },
   } as Partial<WebAPIType> as unknown as WebAPIType;
 
-  await refreshRemoteConfig(fakeServer);
+  await _refreshRemoteConfig(fakeServer);
 }

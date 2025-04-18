@@ -1,4 +1,4 @@
-<!-- Copyright 2017-2021 Signal Messenger, LLC -->
+<!-- Copyright 2017 Signal Messenger, LLC -->
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
 <html>
@@ -20,16 +20,10 @@
       rel="stylesheet"
       type="text/css"
     />
-    <link
-      href="node_modules/@indutny/frameless-titlebar/dist/styles.css"
-      rel="stylesheet"
-      type="text/css"
-    />
     <link href="stylesheets/manifest.css" rel="stylesheet" type="text/css" />
   </head>
   <body>
     <div id="app"></div>
-    <script type="text/javascript" src="ts/set_os_class.js"></script>
-    <script type="application/javascript" src="ts/windows/init.js"></script>
+    <script type="module" src="bundles/about/app.js"></script>
   </body>
 </html>

@@ -1,66 +1,69 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
 
 import type { LocalizerType } from '../types/Util';
 import { useEscapeHandling } from '../hooks/useEscapeHandling';
-import { useTheme } from '../hooks/useTheme';
-import { TitleBarContainer } from './TitleBarContainer';
-import type { ExecuteMenuRoleType } from './TitleBarContainer';
 
-export type PropsType = {
+export type AboutProps = Readonly<{
   closeAbout: () => unknown;
-  environment: string;
+  appEnv: string;
+  arch: string;
+  platform: string;
   i18n: LocalizerType;
   version: string;
-  hasCustomTitleBar: boolean;
-  executeMenuRole: ExecuteMenuRoleType;
-};
+}>;
 
-export const About = ({
+export function About({
   closeAbout,
+  appEnv,
+  arch,
+  platform,
   i18n,
-  environment,
   version,
-  hasCustomTitleBar,
-  executeMenuRole,
-}: PropsType): JSX.Element => {
+}: AboutProps): JSX.Element {
   useEscapeHandling(closeAbout);
 
-  const theme = useTheme();
+  let env: string;
+
+  if (platform === 'darwin') {
+    if (arch === 'arm64') {
+      env = i18n('icu:About__AppEnvironment--AppleSilicon', { appEnv });
+    } else {
+      env = i18n('icu:About__AppEnvironment--AppleIntel', { appEnv });
+    }
+  } else {
+    env = i18n('icu:About__AppEnvironment', { appEnv });
+  }
 
   return (
-    <TitleBarContainer
-      hasCustomTitleBar={hasCustomTitleBar}
-      theme={theme}
-      executeMenuRole={executeMenuRole}
-    >
-      <div className="About">
-        <div className="module-splash-screen">
-          <div className="module-splash-screen__logo module-img--150" />
+    <div className="About">
+      <div className="module-splash-screen">
+        <div className="module-splash-screen__logo module-splash-screen__logo--128" />
 
-          <div className="version">{version}</div>
-          <div className="environment">{environment}</div>
-          <div>
-            <a href="https://signal.org">signal.org</a>
-          </div>
-          <br />
-          <div>
-            <a
-              className="acknowledgments"
-              href="https://github.com/signalapp/Signal-Desktop/blob/main/ACKNOWLEDGMENTS.md"
-            >
-              {i18n('softwareAcknowledgments')}
-            </a>
-          </div>
-          <div>
-            <a className="privacy" href="https://signal.org/legal">
-              {i18n('privacyPolicy')}
-            </a>
-          </div>
+        <h1 className="About__Title">{i18n('icu:signalDesktop')}</h1>
+        <div className="version">{version}</div>
+        <div className="environment">{env}</div>
+        <br />
+        <div>
+          <a href="https://signal.org">signal.org</a>
+        </div>
+        <br />
+        <div>
+          <a
+            className="acknowledgments"
+            href="https://github.com/signalapp/Signal-Desktop/blob/main/ACKNOWLEDGMENTS.md"
+          >
+            {i18n('icu:softwareAcknowledgments')}
+          </a>
+        </div>
+        <div>
+          <a className="privacy" href="https://signal.org/legal">
+            {i18n('icu:privacyPolicy')}
+          </a>
         </div>
       </div>
-    </TitleBarContainer>
+    </div>
   );
-};
+}

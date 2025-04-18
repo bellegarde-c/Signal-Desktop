@@ -1,4 +1,4 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
@@ -9,8 +9,10 @@ import type { CreateTemplateOptionsType } from '../../../app/menu';
 import { createTemplate } from '../../../app/menu';
 import { load as loadLocale } from '../../../app/locale';
 import type { MenuListType } from '../../types/menu';
+import { HourCyclePreference } from '../../types/I18N';
 
 const forceUpdate = stub();
+const openArtCreator = stub();
 const openContactUs = stub();
 const openForums = stub();
 const openJoinTheBeta = stub();
@@ -20,10 +22,13 @@ const setupAsNewDevice = stub();
 const setupAsStandalone = stub();
 const showAbout = stub();
 const showDebugLog = stub();
+const showCallingDevTools = stub();
 const showKeyboardShortcuts = stub();
 const showSettings = stub();
-const showStickerCreator = stub();
 const showWindow = stub();
+const zoomIn = stub();
+const zoomOut = stub();
+const zoomReset = stub();
 
 const getExpectedEditMenu = (
   includeSpeech: boolean
@@ -57,15 +62,16 @@ const getExpectedEditMenu = (
 const getExpectedViewMenu = (): MenuItemConstructorOptions => ({
   label: '&View',
   submenu: [
-    { label: 'Actual Size', role: 'resetZoom' },
-    { accelerator: 'CmdOrCtrl+=', label: 'Zoom In', role: 'zoomIn' },
-    { label: 'Zoom Out', role: 'zoomOut' },
+    { accelerator: 'CmdOrCtrl+0', label: 'Actual Size', click: zoomReset },
+    { accelerator: 'CmdOrCtrl+=', label: 'Zoom In', click: zoomIn },
+    { accelerator: 'CmdOrCtrl+-', label: 'Zoom Out', click: zoomOut },
     { type: 'separator' },
     { label: 'Toggle Full Screen', role: 'togglefullscreen' },
     { type: 'separator' },
     { label: 'Debug Log', click: showDebugLog },
     { type: 'separator' },
     { label: 'Toggle Developer Tools', role: 'toggleDevTools' },
+    { label: 'Open Calling Developer Tools', click: showCallingDevTools },
     { label: 'Force Update', click: forceUpdate },
   ],
 });
@@ -120,7 +126,7 @@ const EXPECTED_MACOS: MenuListType = [
   {
     label: '&File',
     submenu: [
-      { label: 'Create/upload sticker pack', click: showStickerCreator },
+      { label: 'Create/upload sticker pack', click: openArtCreator },
       { type: 'separator' },
       { accelerator: 'CmdOrCtrl+W', label: 'Close Window', role: 'close' },
     ],
@@ -145,7 +151,7 @@ const EXPECTED_WINDOWS: MenuListType = [
   {
     label: '&File',
     submenu: [
-      { label: 'Create/upload sticker pack', click: showStickerCreator },
+      { label: 'Create/upload sticker pack', click: openArtCreator },
       {
         label: 'Preferences…',
         accelerator: 'CommandOrControl+,',
@@ -197,19 +203,23 @@ const PLATFORMS = [
 
 describe('createTemplate', () => {
   const { i18n } = loadLocale({
-    appLocale: 'en',
+    preferredSystemLocales: ['en'],
+    localeOverride: null,
+    localeDirectionTestingOverride: null,
+    hourCyclePreference: HourCyclePreference.UnknownPreference,
     logger: {
-      error(arg: unknown) {
-        throw new Error(String(arg));
-      },
-      warn(arg: unknown) {
-        throw new Error(String(arg));
-      },
+      fatal: stub().throwsArg(0),
+      error: stub().throwsArg(0),
+      warn: stub().throwsArg(0),
+      info: stub(),
+      debug: stub(),
+      trace: stub(),
     },
   });
 
   const actions = {
     forceUpdate,
+    openArtCreator,
     openContactUs,
     openForums,
     openJoinTheBeta,
@@ -219,10 +229,13 @@ describe('createTemplate', () => {
     setupAsStandalone,
     showAbout,
     showDebugLog,
+    showCallingDevTools,
     showKeyboardShortcuts,
     showSettings,
-    showStickerCreator,
     showWindow,
+    zoomIn,
+    zoomOut,
+    zoomReset,
   };
 
   PLATFORMS.forEach(({ label, platform, expectedDefault }) => {

@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FormEventHandler, FunctionComponent } from 'react';
+import type { FormEventHandler } from 'react';
 import React, { useRef, useState } from 'react';
 
 import type { LocalizerType } from '../../../types/Util';
@@ -23,7 +23,7 @@ import type { AvatarColorType } from '../../../types/Colors';
 
 type PropsType = {
   avatarColor?: AvatarColorType;
-  avatarPath?: string;
+  avatarUrl?: string;
   conversationId: string;
   groupDescription?: string;
   i18n: LocalizerType;
@@ -41,12 +41,12 @@ type PropsType = {
   deleteAvatarFromDisk: DeleteAvatarFromDiskActionType;
   replaceAvatar: ReplaceAvatarActionType;
   saveAvatarToDisk: SaveAvatarToDiskActionType;
-  userAvatarData: Array<AvatarDataType>;
+  userAvatarData: ReadonlyArray<AvatarDataType>;
 };
 
-export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
+export function EditConversationAttributesModal({
   avatarColor,
-  avatarPath: externalAvatarPath,
+  avatarUrl: externalAvatarUrl,
   conversationId,
   groupDescription: externalGroupDescription = '',
   i18n,
@@ -59,14 +59,14 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
   replaceAvatar,
   saveAvatarToDisk,
   userAvatarData,
-}) => {
+}: PropsType): JSX.Element {
   const focusDescriptionRef = useRef<undefined | boolean>(
     initiallyFocusDescription
   );
   const focusDescription = focusDescriptionRef.current;
 
   const startingTitleRef = useRef<string>(externalTitle);
-  const startingAvatarPathRef = useRef<undefined | string>(externalAvatarPath);
+  const startingAvatarUrlRef = useRef<undefined | string>(externalAvatarUrl);
 
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [avatar, setAvatar] = useState<undefined | Uint8Array>();
@@ -87,7 +87,7 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
   };
 
   const hasChangedExternally =
-    startingAvatarPathRef.current !== externalAvatarPath ||
+    startingAvatarUrlRef.current !== externalAvatarUrl ||
     startingTitleRef.current !== externalTitle;
   const hasTitleChanged = trimmedTitle !== externalTitle.trim();
   const hasGroupDescriptionChanged =
@@ -123,16 +123,14 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
     makeRequest(request);
   };
 
-  const avatarPathForPreview = hasAvatarChanged
-    ? undefined
-    : externalAvatarPath;
+  const avatarUrlForPreview = hasAvatarChanged ? undefined : externalAvatarUrl;
 
   let content: JSX.Element;
   if (editingAvatar) {
     content = (
       <AvatarEditor
         avatarColor={avatarColor}
-        avatarPath={avatarPathForPreview}
+        avatarUrl={avatarUrlForPreview}
         avatarValue={avatar}
         conversationId={conversationId}
         deleteAvatarFromDisk={deleteAvatarFromDisk}
@@ -161,7 +159,7 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
       >
         <AvatarPreview
           avatarColor={avatarColor}
-          avatarPath={avatarPathForPreview}
+          avatarUrl={avatarUrlForPreview}
           avatarValue={avatar}
           i18n={i18n}
           isEditable
@@ -192,26 +190,27 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
         />
 
         <div className="module-EditConversationAttributesModal__description-warning">
-          {i18n('EditConversationAttributesModal__description-warning')}
+          {i18n('icu:EditConversationAttributesModal__description-warning')}
         </div>
 
         {requestState === RequestState.InactiveWithError && (
           <div className="module-EditConversationAttributesModal__error-message">
-            {i18n('updateGroupAttributes__error-message')}
+            {i18n('icu:updateGroupAttributes__error-message')}
           </div>
         )}
       </form>
     );
   }
 
-  const modalFooter = (
+  // AvatarEditor brings its own footer with it so no need to duplicate it.
+  const modalFooter = editingAvatar ? undefined : (
     <>
       <Button
         disabled={isRequestActive}
         onClick={onClose}
         variant={ButtonVariant.Secondary}
       >
-        {i18n('cancel')}
+        {i18n('icu:cancel')}
       </Button>
 
       <Button
@@ -223,7 +222,7 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
         {isRequestActive ? (
           <Spinner size="20px" svgSize="small" direction="on-avatar" />
         ) : (
-          i18n('save')
+          i18n('icu:save')
         )}
       </Button>
     </>
@@ -235,10 +234,10 @@ export const EditConversationAttributesModal: FunctionComponent<PropsType> = ({
       hasXButton
       i18n={i18n}
       onClose={onClose}
-      title={i18n('updateGroupAttributes__title')}
+      title={i18n('icu:updateGroupAttributes__title')}
       modalFooter={modalFooter}
     >
       {content}
     </Modal>
   );
-};
+}

@@ -1,12 +1,11 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { isBoolean } from 'lodash';
+import { isBoolean, noop } from 'lodash';
 
 import { action } from '@storybook/addon-actions';
-import { boolean, number, select, text } from '@storybook/addon-knobs';
-import type { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 
 import { SignalService } from '../../protobuf';
 import { ConversationColors } from '../../types/Colors';
@@ -27,14 +26,13 @@ import {
 } from '../../types/MIME';
 import { ReadStatus } from '../../messages/MessageReadStatus';
 import { MessageAudio } from './MessageAudio';
-import { computePeaks } from '../GlobalAudioContext';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import { computePeaks } from '../VoiceNotesPlaybackContext';
 import { pngUrl } from '../../storybook/Fixtures';
 import { getDefaultConversation } from '../../test-both/helpers/getDefaultConversation';
 import { WidthBreakpoint } from '../_util';
 import { DAY, HOUR, MINUTE, SECOND } from '../../util/durations';
 import { ContactFormType } from '../../types/EmbeddedContact';
+import { generateAci } from '../../types/ServiceId';
 
 import {
   fakeAttachment,
@@ -42,10 +40,11 @@ import {
 } from '../../test-both/helpers/fakeAttachment';
 import { getFakeBadge } from '../../test-both/helpers/getFakeBadge';
 import { ThemeType } from '../../types/Util';
-import { UUID } from '../../types/UUID';
 import { BadgeCategory } from '../../badges/BadgeCategory';
+import { PaymentEventKind } from '../../types/Payment';
+import { EmojiSkinTone } from '../fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const quoteOptions = {
   none: undefined,
@@ -67,25 +66,31 @@ export default {
   argTypes: {
     conversationType: {
       control: 'select',
-      defaultValue: 'direct',
       options: ['direct', 'group'],
     },
     quote: {
       control: 'select',
-      defaultValue: undefined,
       mapping: quoteOptions,
       options: Object.keys(quoteOptions),
     },
   },
-} as Meta;
+  args: {
+    conversationType: 'direct',
+    quote: undefined,
+  },
+} satisfies Meta<Props>;
 
-const Template: Story<Partial<Props>> = args => {
+const Template: StoryFn<Partial<Props>> = args => {
   return renderBothDirections({
     ...createProps(),
     conversationType: 'direct',
     quote: undefined,
     ...args,
   });
+};
+
+const messageIdToAudioUrl = {
+  'incompetech-com-Agnus-Dei-X': '/fixtures/incompetech-com-Agnus-Dei-X.mp3',
 };
 
 function getJoyReaction() {
@@ -107,12 +112,15 @@ const renderEmojiPicker: Props['renderEmojiPicker'] = ({
   ref,
 }) => (
   <EmojiPicker
-    i18n={setupI18n('en', enMessages)}
-    skinTone={0}
-    onSetSkinTone={action('EmojiPicker::onSetSkinTone')}
+    i18n={i18n}
+    emojiSkinToneDefault={EmojiSkinTone.None}
+    onEmojiSkinToneDefaultChange={action(
+      'EmojiPicker::onEmojiSkinToneDefaultChange'
+    )}
     ref={ref}
     onClose={onClose}
     onPickEmoji={onPickEmoji}
+    wasInvokedFromKeyboard={false}
   />
 );
 
@@ -122,18 +130,20 @@ const renderReactionPicker: Props['renderReactionPicker'] = () => <div />;
  * It doesn't handle consecutive playback
  * since that logic mostly lives in the audioPlayer duck
  */
-const MessageAudioContainer: React.FC<AudioAttachmentProps> = ({
+function MessageAudioContainer({
   played,
   ...props
-}) => {
+}: AudioAttachmentProps): JSX.Element {
   const [isActive, setIsActive] = React.useState<boolean>(false);
   const [currentTime, setCurrentTime] = React.useState<number>(0);
   const [playbackRate, setPlaybackRate] = React.useState<number>(1);
-  const [playing, setPlaying] = React.useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = React.useState<boolean>(false);
   const [_played, setPlayed] = React.useState<boolean>(played);
 
-  const audio = React.useMemo(() => {
+  const audioPlayer = React.useMemo(() => {
     const a = new Audio();
+
+    let onLoadedData: () => void = noop;
 
     a.addEventListener('timeupdate', () => {
       setCurrentTime(a.currentTime);
@@ -143,76 +153,92 @@ const MessageAudioContainer: React.FC<AudioAttachmentProps> = ({
       setIsActive(false);
     });
 
-    a.addEventListener('loadeddata', () => {
-      a.currentTime = currentTime;
-    });
+    a.addEventListener('loadeddata', () => onLoadedData());
 
-    return a;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    function play(positionAsRatio?: number) {
+      if (positionAsRatio !== undefined) {
+        a.currentTime = positionAsRatio * a.duration;
+      }
+      void a.play();
+    }
+
+    return {
+      loadAndPlay(url: string, positionAsRatio: number) {
+        onLoadedData = () => {
+          play(positionAsRatio);
+        };
+        a.src = url;
+      },
+      play,
+      pause() {
+        a.pause();
+      },
+      set playbackRate(rate: number) {
+        a.playbackRate = rate;
+      },
+      set currentTime(value: number) {
+        a.currentTime = value;
+      },
+      get duration() {
+        return a.duration;
+      },
+    };
   }, []);
 
-  const loadAndPlayMessageAudio = (
-    _id: string,
-    url: string,
-    _context: string,
-    position: number
-  ) => {
+  const handlePlayMessage = (id: string, positionAsRatio: number) => {
     if (!active) {
-      audio.src = url;
+      audioPlayer.loadAndPlay(
+        messageIdToAudioUrl[id as keyof typeof messageIdToAudioUrl],
+        positionAsRatio
+      );
       setIsActive(true);
-    }
-    if (!playing) {
-      audio.play();
-      setPlaying(true);
+      setIsPlaying(true);
       setPlayed(true);
-    }
-
-    if (!Number.isNaN(audio.duration)) {
-      audio.currentTime = audio.duration * position;
-    }
-    if (!Number.isNaN(audio.currentTime)) {
-      setCurrentTime(audio.currentTime);
     }
   };
 
-  const setPlaybackRateAction = (_conversationId: string, rate: number) => {
-    audio.playbackRate = rate;
+  const setPlaybackRateAction = (rate: number) => {
+    audioPlayer.playbackRate = rate;
     setPlaybackRate(rate);
   };
 
   const setIsPlayingAction = (value: boolean) => {
     if (value) {
-      audio.play();
+      audioPlayer.play();
     } else {
-      audio.pause();
+      audioPlayer.pause();
     }
-    setPlaying(value);
+    setIsPlaying(value);
   };
 
-  const setCurrentTimeAction = (value: number) => {
-    audio.currentTime = value;
-    setCurrentTime(currentTime);
+  const setPosition = (value: number) => {
+    audioPlayer.currentTime = value * audioPlayer.duration;
+    setCurrentTime(audioPlayer.currentTime);
   };
 
   const active = isActive
-    ? { playing, playbackRate, currentTime, duration: audio.duration }
+    ? {
+        playing: isPlaying,
+        playbackRate,
+        currentTime,
+        duration: audioPlayer.duration,
+      }
     : undefined;
 
   return (
     <MessageAudio
       {...props}
-      id="storybook"
-      renderingContext="storybook"
-      computePeaks={computePeaks}
       active={active}
+      computePeaks={computePeaks}
+      onPlayMessage={handlePlayMessage}
       played={_played}
-      loadAndPlayMessageAudio={loadAndPlayMessageAudio}
+      pushPanelForConversation={action('pushPanelForConversation')}
+      setPosition={setPosition}
       setIsPlaying={setIsPlayingAction}
       setPlaybackRate={setPlaybackRateAction}
-      setCurrentTime={setCurrentTimeAction}
     />
   );
-};
+}
 
 const renderAudioAttachment: Props['renderAudioAttachment'] = props => (
   <MessageAudioContainer {...props} />
@@ -220,9 +246,11 @@ const renderAudioAttachment: Props['renderAudioAttachment'] = props => (
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   attachments: overrideProps.attachments,
+  attachmentDroppedDueToSize: overrideProps.attachmentDroppedDueToSize || false,
   author: overrideProps.author || getDefaultConversation(),
-  reducedMotion: boolean('reducedMotion', false),
   bodyRanges: overrideProps.bodyRanges,
+  canCopy: true,
+  canEditMessage: true,
   canReact: true,
   canReply: true,
   canDownload: true,
@@ -230,37 +258,27 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   canRetry: overrideProps.canRetry || false,
   canRetryDeleteForEveryone: overrideProps.canRetryDeleteForEveryone || false,
   checkForAccount: action('checkForAccount'),
-  clearSelectedMessage: action('clearSelectedMessage'),
+  clearTargetedMessage: action('clearSelectedMessage'),
   containerElementRef: React.createRef<HTMLElement>(),
   containerWidthBreakpoint: WidthBreakpoint.Wide,
-  conversationColor:
-    overrideProps.conversationColor ||
-    select('conversationColor', ConversationColors, ConversationColors[0]),
-  conversationTitle:
-    overrideProps.conversationTitle ||
-    text('conversationTitle', 'Conversation Title'),
-  conversationId: text('conversationId', overrideProps.conversationId || ''),
+  conversationColor: overrideProps.conversationColor ?? ConversationColors[0],
+  conversationTitle: overrideProps.conversationTitle ?? 'Conversation Title',
+  conversationId: overrideProps.conversationId ?? '',
   conversationType: overrideProps.conversationType || 'direct',
   contact: overrideProps.contact,
   deletedForEveryone: overrideProps.deletedForEveryone,
-  deleteMessage: action('deleteMessage'),
-  deleteMessageForEveryone: action('deleteMessageForEveryone'),
   // disableMenu: overrideProps.disableMenu,
   disableScroll: overrideProps.disableScroll,
   direction: overrideProps.direction || 'incoming',
-  displayTapToViewMessage: action('displayTapToViewMessage'),
+  showLightboxForViewOnceMedia: action('showLightboxForViewOnceMedia'),
   doubleCheckMissingQuoteReference: action('doubleCheckMissingQuoteReference'),
-  downloadAttachment: action('downloadAttachment'),
-  expirationLength:
-    number('expirationLength', overrideProps.expirationLength || 0) ||
-    undefined,
-  expirationTimestamp:
-    number('expirationTimestamp', overrideProps.expirationTimestamp || 0) ||
-    undefined,
+  expirationLength: overrideProps.expirationLength ?? 0,
+  expirationTimestamp: overrideProps.expirationTimestamp ?? 0,
   getPreferredBadge: overrideProps.getPreferredBadge || (() => undefined),
   giftBadge: overrideProps.giftBadge,
   i18n,
-  id: text('id', overrideProps.id || 'random-message-id'),
+  platform: 'darwin',
+  id: overrideProps.id ?? 'random-message-id',
   // renderingContext: 'storybook',
   interactionMode: overrideProps.interactionMode || 'keyboard',
   isSticker: isBoolean(overrideProps.isSticker)
@@ -272,16 +290,23 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   isMessageRequestAccepted: isBoolean(overrideProps.isMessageRequestAccepted)
     ? overrideProps.isMessageRequestAccepted
     : true,
+  isSelected: isBoolean(overrideProps.isSelected)
+    ? overrideProps.isSelected
+    : false,
+  isSelectMode: isBoolean(overrideProps.isSelectMode)
+    ? overrideProps.isSelectMode
+    : false,
+  isSMS: isBoolean(overrideProps.isSMS) ? overrideProps.isSMS : false,
+  isSpoilerExpanded: overrideProps.isSpoilerExpanded || {},
   isTapToView: overrideProps.isTapToView,
   isTapToViewError: overrideProps.isTapToViewError,
   isTapToViewExpired: overrideProps.isTapToViewExpired,
+  cancelAttachmentDownload: action('cancelAttachmentDownload'),
   kickOffAttachmentDownload: action('kickOffAttachmentDownload'),
   markAttachmentAsCorrupted: action('markAttachmentAsCorrupted'),
-  markViewed: action('markViewed'),
   messageExpanded: action('messageExpanded'),
-  openConversation: action('openConversation'),
+  showConversation: action('showConversation'),
   openGiftBadge: action('openGiftBadge'),
-  openLink: action('openLink'),
   previews: overrideProps.previews || [],
   quote: overrideProps.quote || undefined,
   reactions: overrideProps.reactions,
@@ -293,11 +318,19 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   renderEmojiPicker,
   renderReactionPicker,
   renderAudioAttachment,
-  replyToMessage: action('replyToMessage'),
-  retrySend: action('retrySend'),
+  saveAttachment: action('saveAttachment'),
+  saveAttachments: action('saveAttachments'),
+  setQuoteByMessageId: action('setQuoteByMessageId'),
+  retryMessageSend: action('retryMessageSend'),
+  copyMessageText: action('copyMessageText'),
   retryDeleteForEveryone: action('retryDeleteForEveryone'),
   scrollToQuotedMessage: action('scrollToQuotedMessage'),
-  selectMessage: action('selectMessage'),
+  targetMessage: action('targetMessage'),
+  toggleSelectMessage:
+    overrideProps.toggleSelectMessage == null
+      ? action('toggleSelectMessage')
+      : overrideProps.toggleSelectMessage,
+  setMessageToEdit: action('setMessageToEdit'),
   shouldCollapseAbove: isBoolean(overrideProps.shouldCollapseAbove)
     ? overrideProps.shouldCollapseAbove
     : false,
@@ -307,28 +340,36 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   shouldHideMetadata: isBoolean(overrideProps.shouldHideMetadata)
     ? overrideProps.shouldHideMetadata
     : false,
-  showContactDetail: action('showContactDetail'),
+  showSpoiler: action('showSpoiler'),
+  pushPanelForConversation: action('pushPanelForConversation'),
   showContactModal: action('showContactModal'),
+  showAttachmentDownloadStillInProgressToast: action(
+    'showAttachmentDownloadStillInProgressToast'
+  ),
+  showAttachmentNotAvailableModal: action('showAttachmentNotAvailableModal'),
   showExpiredIncomingTapToViewToast: action(
     'showExpiredIncomingTapToViewToast'
   ),
   showExpiredOutgoingTapToViewToast: action(
     'showExpiredOutgoingTapToViewToast'
   ),
-  showForwardMessageModal: action('showForwardMessageModal'),
-  showMessageDetail: action('showMessageDetail'),
-  showVisualAttachment: action('showVisualAttachment'),
+  showMediaNoLongerAvailableToast: action('showMediaNoLongerAvailableToast'),
+  showTapToViewNotAvailableModal: action('showTapToViewNotAvailableModal'),
+  toggleDeleteMessagesModal: action('toggleDeleteMessagesModal'),
+  toggleForwardMessagesModal: action('toggleForwardMessagesModal'),
+  showLightbox: action('showLightbox'),
   startConversation: action('startConversation'),
   status: overrideProps.status || 'sent',
-  text: overrideProps.text || text('text', ''),
+  text: overrideProps.text ?? '',
   textDirection: overrideProps.textDirection || TextDirection.Default,
   textAttachment: overrideProps.textAttachment || {
     contentType: LONG_MESSAGE,
     size: 123,
-    pending: boolean('textPending', false),
+    pending: false,
+    isPermanentlyUndownloadable: false,
   },
   theme: ThemeType.light,
-  timestamp: number('timestamp', overrideProps.timestamp || Date.now()),
+  timestamp: overrideProps.timestamp ?? Date.now(),
   viewStory: action('viewStory'),
 });
 
@@ -336,7 +377,7 @@ const renderMany = (propsArray: ReadonlyArray<Props>) => (
   <>
     {propsArray.map((message, index) => (
       <TimelineMessage
-        key={message.text}
+        key={`${message.text}_${index}_${message.direction}`}
         {...message}
         shouldCollapseAbove={Boolean(propsArray[index - 1])}
         shouldCollapseBelow={Boolean(propsArray[index + 1])}
@@ -345,7 +386,12 @@ const renderMany = (propsArray: ReadonlyArray<Props>) => (
   </>
 );
 
-const renderThree = (props: Props) => renderMany([props, props, props]);
+const renderThree = (props: Props) =>
+  renderMany([
+    { ...props, shouldHideMetadata: true },
+    { ...props, shouldHideMetadata: true },
+    props,
+  ]);
 
 const renderBothDirections = (props: Props) => (
   <>
@@ -368,106 +414,107 @@ PlainRtlMessage.args = {
   text: 'الأسانسير، علشان القطط ماتاكلش منها. وننساها، ونعود الى أوراقنا موصدين الباب بإحكام. نتنحنح، ونقول: البتاع. كلمة تدلّ على لا شيء، وعلى كلّ شيء. وهي مركز أبحاث شعبية كثيرة، تتعجّب من غرابتها والقومية المصرية الخاصة التي تعكسها، الى جانب الشيء الكثير من العفوية وحلاوة الروح. نعم، نحن قرأنا وسمعنا وعرفنا كل هذا. لكنه محلّ اهتمامنا اليوم لأسباب غير تلك الأسباب. كذلك، فإننا لعاقدون عزمنا على أن نتجاوز قضية الفصحى والعامية، وثنائية النخبة والرعاع، التي كثيراً ما ينحو نحوها الحديث عن الكلمة المذكورة. وفوق هذا كله، لسنا بصدد تفسير معاني "البتاع" كما تأتي في قصيدة الحاج أحمد فؤاد نجم، ولا التحذلق والتفذلك في الألغاز والأسرار المكنونة. هذا البتاع - أم هذه البت',
   textDirection: TextDirection.RightToLeft,
 };
-PlainRtlMessage.story = {
-  name: 'Plain RTL Message',
-};
 
-export const EmojiMessages = (): JSX.Element => (
-  <>
-    <TimelineMessage {...createProps({ text: '😀' })} />
-    <br />
-    <TimelineMessage {...createProps({ text: '😀😀' })} />
-    <br />
-    <TimelineMessage {...createProps({ text: '😀😀😀' })} />
-    <br />
-    <TimelineMessage {...createProps({ text: '😀😀😀😀' })} />
-    <br />
-    <TimelineMessage {...createProps({ text: '😀😀😀😀😀' })} />
-    <br />
-    <TimelineMessage {...createProps({ text: '😀😀😀😀😀😀😀' })} />
-    <br />
-    <TimelineMessage
-      {...createProps({
-        previews: [
-          {
-            domain: 'signal.org',
-            image: fakeAttachment({
-              contentType: IMAGE_PNG,
-              fileName: 'the-sax.png',
-              height: 240,
-              url: pngUrl,
-              width: 320,
+export function EmojiMessages(): JSX.Element {
+  return (
+    <>
+      <TimelineMessage {...createProps({ text: '😀' })} />
+      <br />
+      <TimelineMessage {...createProps({ text: '😀😀' })} />
+      <br />
+      <TimelineMessage {...createProps({ text: '😀😀😀' })} />
+      <br />
+      <TimelineMessage {...createProps({ text: '😀😀😀😀' })} />
+      <br />
+      <TimelineMessage {...createProps({ text: '😀😀😀😀😀' })} />
+      <br />
+      <TimelineMessage {...createProps({ text: '😀😀😀😀😀😀😀' })} />
+      <br />
+      <TimelineMessage
+        {...createProps({
+          previews: [
+            {
+              domain: 'signal.org',
+              image: fakeAttachment({
+                contentType: IMAGE_PNG,
+                fileName: 'the-sax.png',
+                height: 240,
+                url: pngUrl,
+                width: 320,
+              }),
+              isStickerPack: false,
+              isCallLink: false,
+              title: 'Signal',
+              description:
+                'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
+              url: 'https://www.signal.org',
+              date: new Date(2020, 2, 10).valueOf(),
+            },
+          ],
+          text: '😀',
+        })}
+      />
+      <br />
+      <TimelineMessage
+        {...createProps({
+          attachments: [
+            fakeAttachment({
+              url: '/fixtures/tina-rolf-269345-unsplash.jpg',
+              fileName: 'tina-rolf-269345-unsplash.jpg',
+              contentType: IMAGE_JPEG,
+              width: 128,
+              height: 128,
             }),
-            isStickerPack: false,
-            title: 'Signal',
-            description:
-              'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
-            url: 'https://www.signal.org',
-            date: new Date(2020, 2, 10).valueOf(),
-          },
-        ],
-        text: '😀',
-      })}
-    />
-    <br />
-    <TimelineMessage
-      {...createProps({
-        attachments: [
-          fakeAttachment({
-            url: '/fixtures/tina-rolf-269345-unsplash.jpg',
-            fileName: 'tina-rolf-269345-unsplash.jpg',
-            contentType: IMAGE_JPEG,
-            width: 128,
-            height: 128,
-          }),
-        ],
-        text: '😀',
-      })}
-    />
-    <br />
-    <TimelineMessage
-      {...createProps({
-        attachments: [
-          fakeAttachment({
-            contentType: AUDIO_MP3,
-            fileName: 'incompetech-com-Agnus-Dei-X.mp3',
-            url: '/fixtures/incompetech-com-Agnus-Dei-X.mp3',
-          }),
-        ],
-        text: '😀',
-      })}
-    />
-    <br />
-    <TimelineMessage
-      {...createProps({
-        attachments: [
-          fakeAttachment({
-            contentType: stringToMIMEType('text/plain'),
-            fileName: 'my-resume.txt',
-            url: 'my-resume.txt',
-          }),
-        ],
-        text: '😀',
-      })}
-    />
-    <br />
-    <TimelineMessage
-      {...createProps({
-        attachments: [
-          fakeAttachment({
-            contentType: VIDEO_MP4,
-            flags: SignalService.AttachmentPointer.Flags.GIF,
-            fileName: 'cat-gif.mp4',
-            url: '/fixtures/cat-gif.mp4',
-            width: 400,
-            height: 332,
-          }),
-        ],
-        text: '😀',
-      })}
-    />
-  </>
-);
+          ],
+          text: '😀',
+        })}
+      />
+      <br />
+      <TimelineMessage
+        {...createProps({
+          id: 'incompetech-com-Agnus-Dei-X',
+          attachments: [
+            fakeAttachment({
+              contentType: AUDIO_MP3,
+              fileName: 'incompetech-com-Agnus-Dei-X.mp3',
+              url: messageIdToAudioUrl['incompetech-com-Agnus-Dei-X'],
+            }),
+          ],
+          text: '😀',
+        })}
+      />
+      <br />
+      <TimelineMessage
+        {...createProps({
+          attachments: [
+            fakeAttachment({
+              contentType: stringToMIMEType('text/plain'),
+              fileName: 'my-resume.txt',
+              url: 'my-resume.txt',
+            }),
+          ],
+          text: '😀',
+        })}
+      />
+      <br />
+      <TimelineMessage
+        {...createProps({
+          attachments: [
+            fakeAttachment({
+              contentType: VIDEO_MP4,
+              flags: SignalService.AttachmentPointer.Flags.GIF,
+              fileName: 'cat-gif.mp4',
+              url: '/fixtures/cat-gif.mp4',
+              width: 400,
+              height: 332,
+            }),
+          ],
+          text: '😀',
+        })}
+      />
+    </>
+  );
+}
 
 export const Delivered = Template.bind({});
 Delivered.args = {
@@ -500,9 +547,6 @@ WillExpireButStillSending.args = {
   expirationLength: 30 * 1000,
   text: 'We always show the timer if a message has an expiration length, even if unread or still sending.',
 };
-WillExpireButStillSending.story = {
-  name: 'Will expire but still sending',
-};
 
 export const Pending = Template.bind({});
 Pending.args = {
@@ -511,6 +555,7 @@ Pending.args = {
     contentType: LONG_MESSAGE,
     size: 123,
     pending: true,
+    isPermanentlyUndownloadable: false,
   },
 };
 
@@ -524,10 +569,8 @@ LongBodyCanBeDownloaded.args = {
     error: true,
     digest: 'abc',
     key: 'def',
+    isPermanentlyUndownloadable: false,
   },
-};
-LongBodyCanBeDownloaded.story = {
-  name: 'Long body can be downloaded',
 };
 
 export const Recent = Template.bind({});
@@ -620,9 +663,6 @@ ReactionsWiderMessage.args = {
     },
   ],
 };
-ReactionsWiderMessage.story = {
-  name: 'Reactions (wider message)',
-};
 
 const joyReactions = Array.from({ length: 52 }, () => getJoyReaction());
 
@@ -696,19 +736,12 @@ ReactionsShortMessage.args = {
   ],
 };
 
-ReactionsShortMessage.story = {
-  name: 'Reactions (short message)',
-};
-
 export const AvatarInGroup = Template.bind({});
 AvatarInGroup.args = {
-  author: getDefaultConversation({ avatarPath: pngUrl }),
+  author: getDefaultConversation({ avatarUrl: pngUrl }),
   conversationType: 'group',
   status: 'sent',
   text: 'Hello it is me, the saxophone.',
-};
-AvatarInGroup.story = {
-  name: 'Avatar in Group',
 };
 
 export const BadgeInGroup = Template.bind({});
@@ -717,9 +750,6 @@ BadgeInGroup.args = {
   getPreferredBadge: () => getFakeBadge(),
   status: 'sent',
   text: 'Hello it is me, the saxophone.',
-};
-BadgeInGroup.story = {
-  name: 'Badge in Group',
 };
 
 export const Sticker = Template.bind({});
@@ -737,7 +767,32 @@ Sticker.args = {
   status: 'sent',
 };
 
-export const Deleted = (): JSX.Element => {
+export const Quote = Template.bind({});
+Quote.args = {
+  quote: {
+    text: 'hello my good friend',
+    conversationColor: 'ultramarine',
+    conversationTitle: 'Convo',
+    isFromMe: false,
+    sentAt: 0,
+    authorId: '',
+    authorTitle: 'Author',
+    referencedMessageNotFound: false,
+    isViewOnce: false,
+    isGiftBadge: false,
+  },
+  author: {
+    id: '',
+    isMe: false,
+    title: 'Quoter Dude',
+    sharedGroupNames: [],
+    acceptedMessageRequest: true,
+    badges: [],
+  },
+  conversationType: 'group',
+};
+
+export function Deleted(): JSX.Element {
   const propsSent = createProps({
     conversationType: 'direct',
     deletedForEveryone: true,
@@ -755,7 +810,7 @@ export const Deleted = (): JSX.Element => {
       {renderBothDirections(propsSending)}
     </>
   );
-};
+}
 
 export const DeletedWithExpireTimer = Template.bind({});
 DeletedWithExpireTimer.args = {
@@ -766,11 +821,8 @@ DeletedWithExpireTimer.args = {
   expirationTimestamp: Date.now() + 3 * 60 * 1000,
   status: 'sent',
 };
-DeletedWithExpireTimer.story = {
-  name: 'Deleted with expireTimer',
-};
 
-export const DeletedWithError = (): JSX.Element => {
+export function DeletedWithError(): JSX.Element {
   const propsPartialError = createProps({
     timestamp: Date.now() - 60 * 1000,
     // canDeleteForEveryone: true,
@@ -794,10 +846,7 @@ export const DeletedWithError = (): JSX.Element => {
       {renderThree(propsError)}
     </>
   );
-};
-DeletedWithError.story = {
-  name: 'Deleted with error',
-};
+}
 
 export const CanDeleteForEveryone = Template.bind({});
 CanDeleteForEveryone.args = {
@@ -806,14 +855,83 @@ CanDeleteForEveryone.args = {
   // canDeleteForEveryone: true,
   direction: 'outgoing',
 };
-CanDeleteForEveryone.story = {
-  name: 'Can delete for everyone',
+
+const bigAttachment = {
+  contentType: stringToMIMEType('text/plain'),
+  fileName: 'why-i-love-birds.txt',
+  size: 100000000000,
+  width: undefined,
+  height: undefined,
+  path: undefined,
+  key: undefined,
+  id: undefined,
+  error: true,
+  wasTooBig: true,
+  isPermanentlyUndownloadable: true,
 };
+
+export function AttachmentTooBig(): JSX.Element {
+  const propsSent = createProps({
+    conversationType: 'direct',
+    attachmentDroppedDueToSize: true,
+    attachments: [bigAttachment],
+  });
+
+  return <>{renderBothDirections(propsSent)}</>;
+}
+
+export function AttachmentTooBigWithText(): JSX.Element {
+  const propsSent = createProps({
+    conversationType: 'direct',
+    attachmentDroppedDueToSize: true,
+    attachments: [bigAttachment],
+    text: 'Check out this file!',
+  });
+
+  return <>{renderBothDirections(propsSent)}</>;
+}
+
+const bigImageAttachment = {
+  ...bigAttachment,
+  contentType: IMAGE_JPEG,
+  fileName: 'bird.jpg',
+  blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+  width: 1000,
+  height: 1000,
+};
+
+export function AttachmentTooBigImage(): JSX.Element {
+  const propsSent = createProps({
+    conversationType: 'direct',
+    attachmentDroppedDueToSize: true,
+    attachments: [bigImageAttachment],
+  });
+
+  return <>{renderBothDirections(propsSent)}</>;
+}
+
+export function AttachmentTooBigImageWithText(): JSX.Element {
+  const propsSent = createProps({
+    conversationType: 'direct',
+    attachmentDroppedDueToSize: true,
+    attachments: [bigImageAttachment],
+    text: 'Check out this file!',
+  });
+
+  return <>{renderBothDirections(propsSent)}</>;
+}
 
 export const Error = Template.bind({});
 Error.args = {
   status: 'error',
   // canRetry: true,
+  text: 'I hope you get this.',
+};
+
+export const EditError = Template.bind({});
+EditError.args = {
+  status: 'error',
+  isEditedMessage: true,
   text: 'I hope you get this.',
 };
 
@@ -842,6 +960,7 @@ LinkPreviewInGroup.args = {
         width: 320,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -853,14 +972,37 @@ LinkPreviewInGroup.args = {
   text: 'Be sure to look at https://www.signal.org',
   conversationType: 'group',
 };
-LinkPreviewInGroup.story = {
-  name: 'Link Preview in Group',
+
+export const LinkPreviewWithLongWord = Template.bind({});
+LinkPreviewWithLongWord.args = {
+  previews: [
+    {
+      domain: 'signal.org',
+      image: fakeAttachment({
+        contentType: IMAGE_PNG,
+        fileName: 'the-sax.png',
+        height: 240,
+        url: pngUrl,
+        width: 320,
+      }),
+      isStickerPack: false,
+      isCallLink: false,
+      title: 'Signal',
+      description: `Say "hello" to a ${'Different'.repeat(10)} messaging experience.`,
+      url: 'https://www.signal.org',
+      date: new Date(2020, 2, 10).valueOf(),
+    },
+  ],
+  status: 'sent',
+  text: 'Be sure to look at https://www.signal.org',
+  conversationType: 'group',
 };
 
 export const LinkPreviewWithQuote = Template.bind({});
 LinkPreviewWithQuote.args = {
   quote: {
     conversationColor: ConversationColors[2],
+    conversationTitle: getDefaultConversation().title,
     text: 'The quoted message',
     isFromMe: false,
     sentAt: Date.now(),
@@ -881,6 +1023,7 @@ LinkPreviewWithQuote.args = {
         width: 320,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -891,9 +1034,6 @@ LinkPreviewWithQuote.args = {
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
   conversationType: 'group',
-};
-LinkPreviewWithQuote.story = {
-  name: 'Link Preview with Quote',
 };
 
 export const LinkPreviewWithSmallImage = Template.bind({});
@@ -909,6 +1049,7 @@ LinkPreviewWithSmallImage.args = {
         width: 50,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -919,8 +1060,109 @@ LinkPreviewWithSmallImage.args = {
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
 };
-LinkPreviewWithSmallImage.story = {
-  name: 'Link Preview with Small Image',
+
+export const LinkPreviewWithUndownloadedImage = Template.bind({});
+LinkPreviewWithUndownloadedImage.args = {
+  previews: [
+    {
+      domain: 'signal.org',
+      image: fakeAttachment({
+        contentType: IMAGE_PNG,
+        fileName: 'sax.png',
+        path: undefined,
+        size: 5300000,
+      }),
+      isStickerPack: false,
+      isCallLink: false,
+      title: 'Signal',
+      description:
+        'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
+      url: 'https://www.signal.org',
+      date: new Date(2020, 2, 10).valueOf(),
+    },
+  ],
+  status: 'sent',
+  text: 'Be sure to look at https://www.signal.org',
+};
+
+export const LinkPreviewWithDownloadingImage = Template.bind({});
+LinkPreviewWithDownloadingImage.args = {
+  previews: [
+    {
+      domain: 'signal.org',
+      image: fakeAttachment({
+        contentType: IMAGE_PNG,
+        fileName: 'sax.png',
+        path: undefined,
+        pending: true,
+        size: 5300000,
+        totalDownloaded: 1230000,
+      }),
+      isStickerPack: false,
+      isCallLink: false,
+      title: 'Signal',
+      description:
+        'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
+      url: 'https://www.signal.org',
+      date: new Date(2020, 2, 10).valueOf(),
+    },
+  ],
+  status: 'sent',
+  text: 'Be sure to look at https://www.signal.org',
+};
+
+export const LinkPreviewWithUndownloadedSmallImage = Template.bind({});
+LinkPreviewWithUndownloadedSmallImage.args = {
+  previews: [
+    {
+      domain: 'signal.org',
+      image: fakeAttachment({
+        contentType: IMAGE_PNG,
+        fileName: 'the-sax.png',
+        height: 50,
+        width: 50,
+        path: undefined,
+        size: 5300000,
+      }),
+      isStickerPack: false,
+      isCallLink: false,
+      title: 'Signal',
+      description:
+        'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
+      url: 'https://www.signal.org',
+      date: new Date(2020, 2, 10).valueOf(),
+    },
+  ],
+  status: 'sent',
+  text: 'Be sure to look at https://www.signal.org',
+};
+
+export const LinkPreviewWithDownloadingSmallImage = Template.bind({});
+LinkPreviewWithDownloadingSmallImage.args = {
+  previews: [
+    {
+      domain: 'signal.org',
+      image: fakeAttachment({
+        contentType: IMAGE_PNG,
+        fileName: 'the-sax.png',
+        height: 50,
+        width: 50,
+        path: undefined,
+        pending: true,
+        size: 5300000,
+        totalDownloaded: 1230000,
+      }),
+      isStickerPack: false,
+      isCallLink: false,
+      title: 'Signal',
+      description:
+        'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
+      url: 'https://www.signal.org',
+      date: new Date(2020, 2, 10).valueOf(),
+    },
+  ],
+  status: 'sent',
+  text: 'Be sure to look at https://www.signal.org',
 };
 
 export const LinkPreviewWithoutImage = Template.bind({});
@@ -929,6 +1171,7 @@ LinkPreviewWithoutImage.args = {
     {
       domain: 'signal.org',
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -939,9 +1182,6 @@ LinkPreviewWithoutImage.args = {
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
 };
-LinkPreviewWithoutImage.story = {
-  name: 'Link Preview without Image',
-};
 
 export const LinkPreviewWithNoDescription = Template.bind({});
 LinkPreviewWithNoDescription.args = {
@@ -949,6 +1189,7 @@ LinkPreviewWithNoDescription.args = {
     {
       domain: 'signal.org',
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       url: 'https://www.signal.org',
       date: Date.now(),
@@ -957,9 +1198,6 @@ LinkPreviewWithNoDescription.args = {
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
 };
-LinkPreviewWithNoDescription.story = {
-  name: 'Link Preview with no description',
-};
 
 export const LinkPreviewWithLongDescription = Template.bind({});
 LinkPreviewWithLongDescription.args = {
@@ -967,6 +1205,7 @@ LinkPreviewWithLongDescription.args = {
     {
       domain: 'signal.org',
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description: Array(10)
         .fill(
@@ -979,9 +1218,6 @@ LinkPreviewWithLongDescription.args = {
   ],
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
-};
-LinkPreviewWithLongDescription.story = {
-  name: 'Link Preview with long description',
 };
 
 export const LinkPreviewWithSmallImageLongDescription = Template.bind({});
@@ -997,6 +1233,7 @@ LinkPreviewWithSmallImageLongDescription.args = {
         width: 50,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description: Array(10)
         .fill(
@@ -1009,9 +1246,6 @@ LinkPreviewWithSmallImageLongDescription.args = {
   ],
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
-};
-LinkPreviewWithSmallImageLongDescription.story = {
-  name: 'Link Preview with small image, long description',
 };
 
 export const LinkPreviewWithNoDate = Template.bind({});
@@ -1027,6 +1261,7 @@ LinkPreviewWithNoDate.args = {
         width: 320,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -1035,9 +1270,6 @@ LinkPreviewWithNoDate.args = {
   ],
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
-};
-LinkPreviewWithNoDate.story = {
-  name: 'Link Preview with no date',
 };
 
 export const LinkPreviewWithTooNewADate = Template.bind({});
@@ -1053,6 +1285,7 @@ LinkPreviewWithTooNewADate.args = {
         width: 320,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -1063,11 +1296,64 @@ LinkPreviewWithTooNewADate.args = {
   status: 'sent',
   text: 'Be sure to look at https://www.signal.org',
 };
-LinkPreviewWithTooNewADate.story = {
-  name: 'Link Preview with too new a date',
+
+export const LinkPreviewWithCallLink = Template.bind({});
+LinkPreviewWithCallLink.args = {
+  previews: [
+    {
+      url: 'https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
+      title: 'Camping Prep',
+      description: 'Use this link to join a Signal call',
+      image: undefined,
+      date: undefined,
+      isCallLink: true,
+      isStickerPack: false,
+    },
+  ],
+  status: 'sent',
+  text: 'Use this link to join a Signal call: https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
 };
 
-export const Image = (): JSX.Element => {
+export const LinkPreviewWithCallLinkInAnotherCall = Template.bind({});
+LinkPreviewWithCallLinkInAnotherCall.args = {
+  previews: [
+    {
+      url: 'https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
+      title: 'Camping Prep',
+      description: 'Use this link to join a Signal call',
+      image: undefined,
+      date: undefined,
+      isCallLink: true,
+      isStickerPack: false,
+    },
+  ],
+  status: 'sent',
+  activeCallConversationId: 'some-other-conversation',
+  text: 'Use this link to join a Signal call: https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
+};
+
+export const LinkPreviewWithCallLinkInCurrentCall = Template.bind({});
+LinkPreviewWithCallLinkInCurrentCall.args = {
+  previews: [
+    {
+      url: 'https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
+      domain: 'signal.link',
+      title: 'Camping Prep',
+      description: 'Use this link to join a Signal call',
+      image: undefined,
+      date: undefined,
+      isCallLink: true,
+      callLinkRoomId: 'room-id',
+      isStickerPack: false,
+    },
+  ],
+  conversationType: 'group',
+  status: 'sent',
+  activeCallConversationId: 'room-id',
+  text: 'Use this link to join a Signal call: https://signal.link/call/#key=hzcn-pcff-ctsc-bdbf-stcr-tzpc-bhqx-kghh',
+};
+
+export function Image(): JSX.Element {
   const darkImageProps = createProps({
     attachments: [
       fakeAttachment({
@@ -1099,7 +1385,7 @@ export const Image = (): JSX.Element => {
       {renderBothDirections(lightImageProps)}
     </>
   );
-};
+}
 
 export const MultipleImages2 = Template.bind({});
 MultipleImages2.args = {
@@ -1227,6 +1513,51 @@ MultipleImages5.args = {
   status: 'sent',
 };
 
+export const MultipleImagesWithOneTooBig = Template.bind({});
+MultipleImagesWithOneTooBig.args = {
+  attachments: [
+    fakeAttachment({
+      url: pngUrl,
+      fileName: 'the-sax.png',
+      contentType: IMAGE_PNG,
+      height: 240,
+      width: 320,
+    }),
+    fakeAttachment({
+      url: pngUrl,
+      fileName: 'the-sax.png',
+      contentType: IMAGE_PNG,
+      height: 240,
+      width: 320,
+    }),
+  ],
+  attachmentDroppedDueToSize: true,
+  status: 'sent',
+};
+
+export const MultipleImagesWithBodyTextOneTooBig = Template.bind({});
+MultipleImagesWithBodyTextOneTooBig.args = {
+  attachments: [
+    fakeAttachment({
+      url: pngUrl,
+      fileName: 'the-sax.png',
+      contentType: IMAGE_PNG,
+      height: 240,
+      width: 320,
+    }),
+    fakeAttachment({
+      url: pngUrl,
+      fileName: 'the-sax.png',
+      contentType: IMAGE_PNG,
+      height: 240,
+      width: 320,
+    }),
+  ],
+  attachmentDroppedDueToSize: true,
+  text: 'Hey, check out these images!',
+  status: 'sent',
+};
+
 export const ImageWithCaption = Template.bind({});
 ImageWithCaption.args = {
   attachments: [
@@ -1240,9 +1571,6 @@ ImageWithCaption.args = {
   ],
   status: 'sent',
   text: 'This is my home.',
-};
-ImageWithCaption.story = {
-  name: 'Image with Caption',
 };
 
 export const Gif = Template.bind({});
@@ -1259,8 +1587,21 @@ Gif.args = {
   ],
   status: 'sent',
 };
-Gif.story = {
-  name: 'GIF',
+
+export const GifReducedMotion = Template.bind({});
+GifReducedMotion.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: VIDEO_MP4,
+      flags: SignalService.AttachmentPointer.Flags.GIF,
+      fileName: 'cat-gif.mp4',
+      url: '/fixtures/cat-gif.mp4',
+      width: 400,
+      height: 332,
+    }),
+  ],
+  status: 'sent',
+  _forceTapToPlay: true,
 };
 
 export const GifInAGroup = Template.bind({});
@@ -1278,9 +1619,6 @@ GifInAGroup.args = {
   conversationType: 'group',
   status: 'sent',
 };
-GifInAGroup.story = {
-  name: 'GIF in a group',
-};
 
 export const NotDownloadedGif = Template.bind({});
 NotDownloadedGif.args = {
@@ -1289,16 +1627,13 @@ NotDownloadedGif.args = {
       contentType: VIDEO_MP4,
       flags: SignalService.AttachmentPointer.Flags.GIF,
       fileName: 'cat-gif.mp4',
-      fileSize: '188.61 KB',
       blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
       width: 400,
       height: 332,
+      path: undefined,
     }),
   ],
   status: 'sent',
-};
-NotDownloadedGif.story = {
-  name: 'Not Downloaded GIF',
 };
 
 export const PendingGif = Template.bind({});
@@ -1309,62 +1644,79 @@ PendingGif.args = {
       contentType: VIDEO_MP4,
       flags: SignalService.AttachmentPointer.Flags.GIF,
       fileName: 'cat-gif.mp4',
-      fileSize: '188.61 KB',
+      size: 188610,
       blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
       width: 400,
       height: 332,
+      path: undefined,
     }),
   ],
   status: 'sent',
 };
-PendingGif.story = {
-  name: 'Pending GIF',
+
+export const DownloadingGif = Template.bind({});
+DownloadingGif.args = {
+  attachments: [
+    fakeAttachment({
+      pending: true,
+      contentType: VIDEO_MP4,
+      flags: SignalService.AttachmentPointer.Flags.GIF,
+      fileName: 'cat-gif.mp4',
+      size: 188610,
+      totalDownloaded: 101010,
+      blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+      width: 400,
+      height: 332,
+      path: undefined,
+    }),
+  ],
+  status: 'sent',
 };
 
-export const _Audio = (): JSX.Element => {
-  const Wrapper = () => {
-    const [isPlayed, setIsPlayed] = React.useState(false);
+export const PartialDownloadNotPendingGif = Template.bind({});
+PartialDownloadNotPendingGif.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: VIDEO_MP4,
+      flags: SignalService.AttachmentPointer.Flags.GIF,
+      fileName: 'cat-gif.mp4',
+      size: 188610,
+      totalDownloaded: 101010,
+      blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+      width: 400,
+      height: 332,
+      path: undefined,
+    }),
+  ],
+  status: 'sent',
+};
 
-    const messageProps = createProps({
-      attachments: [
-        fakeAttachment({
-          contentType: AUDIO_MP3,
-          fileName: 'incompetech-com-Agnus-Dei-X.mp3',
-          url: '/fixtures/incompetech-com-Agnus-Dei-X.mp3',
-          path: 'somepath',
-        }),
-      ],
-      ...(isPlayed
-        ? {
-            status: 'viewed',
-            readStatus: ReadStatus.Viewed,
-          }
-        : {
-            status: 'read',
-            readStatus: ReadStatus.Read,
-          }),
-    });
+export const _Audio = Template.bind({});
+_Audio.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: AUDIO_MP3,
+      fileName: 'incompetech-com-Agnus-Dei-X.mp3',
+      url: messageIdToAudioUrl['incompetech-com-Agnus-Dei-X'],
+      path: 'somepath',
+    }),
+  ],
+  status: 'read',
+  readStatus: ReadStatus.Read,
+};
 
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => {
-            setIsPlayed(old => !old);
-          }}
-          style={{
-            display: 'block',
-            marginBottom: '2em',
-          }}
-        >
-          Toggle played
-        </button>
-        {renderBothDirections(messageProps)}
-      </>
-    );
-  };
-
-  return <Wrapper />;
+export const AudioViewed = Template.bind({});
+AudioViewed.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: AUDIO_MP3,
+      fileName: 'incompetech-com-Agnus-Dei-X.mp3',
+      url: messageIdToAudioUrl['incompetech-com-Agnus-Dei-X'],
+      path: 'somepath',
+    }),
+  ],
+  status: 'viewed',
+  readStatus: ReadStatus.Viewed,
 };
 
 export const LongAudio = Template.bind({});
@@ -1393,9 +1745,6 @@ AudioWithCaption.args = {
   status: 'sent',
   text: 'This is what I sound like.',
 };
-AudioWithCaption.story = {
-  name: 'Audio with Caption',
-};
 
 export const AudioWithNotDownloadedAttachment = Template.bind({});
 AudioWithNotDownloadedAttachment.args = {
@@ -1403,12 +1752,10 @@ AudioWithNotDownloadedAttachment.args = {
     fakeAttachment({
       contentType: AUDIO_MP3,
       fileName: 'incompetech-com-Agnus-Dei-X.mp3',
+      path: undefined,
     }),
   ],
   status: 'sent',
-};
-AudioWithNotDownloadedAttachment.story = {
-  name: 'Audio with Not Downloaded Attachment',
 };
 
 export const AudioWithPendingAttachment = Template.bind({});
@@ -1418,12 +1765,11 @@ AudioWithPendingAttachment.args = {
       contentType: AUDIO_MP3,
       fileName: 'incompetech-com-Agnus-Dei-X.mp3',
       pending: true,
+      size: 1000000,
+      totalDownloaded: 570000,
     }),
   ],
   status: 'sent',
-};
-AudioWithPendingAttachment.story = {
-  name: 'Audio with Pending Attachment',
 };
 
 export const OtherFileType = Template.bind({});
@@ -1431,9 +1777,65 @@ OtherFileType.args = {
   attachments: [
     fakeAttachment({
       contentType: stringToMIMEType('text/plain'),
-      fileName: 'my-resume.txt',
-      url: 'my-resume.txt',
-      fileSize: '10MB',
+      fileName: 'things.zip',
+      url: 'things.zip',
+      size: 10200000,
+    }),
+  ],
+  status: 'sent',
+};
+
+export const OtherFileTypeFourChar = Template.bind({});
+OtherFileTypeFourChar.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType('text/plain'),
+      fileName: 'things.four',
+      url: 'things.four',
+      size: 10200000,
+    }),
+  ],
+  status: 'sent',
+};
+
+export const OtherFileTypeFiveChar = Template.bind({});
+OtherFileTypeFiveChar.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType('text/plain'),
+      fileName: 'things.cinco',
+      url: 'things.cinco',
+      size: 10200000,
+    }),
+  ],
+  status: 'sent',
+};
+
+export const OtherFileTypeUndownloaded = Template.bind({});
+OtherFileTypeUndownloaded.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType('text/plain'),
+      fileName: 'things.zip',
+      url: 'things.zip',
+      size: 10200000,
+      path: undefined,
+    }),
+  ],
+  status: 'sent',
+};
+
+export const OtherFileTypeDownloading = Template.bind({});
+OtherFileTypeDownloading.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType('text/plain'),
+      fileName: 'things.zip',
+      url: 'things.zip',
+      size: 10200000,
+      path: undefined,
+      pending: true,
+      totalDownloaded: 7500000,
     }),
   ],
   status: 'sent',
@@ -1446,14 +1848,10 @@ OtherFileTypeWithCaption.args = {
       contentType: stringToMIMEType('text/plain'),
       fileName: 'my-resume.txt',
       url: 'my-resume.txt',
-      fileSize: '10MB',
     }),
   ],
   status: 'sent',
   text: 'This is what I have done.',
-};
-OtherFileTypeWithCaption.story = {
-  name: 'Other File Type with Caption',
 };
 
 export const OtherFileTypeWithLongFilename = Template.bind({});
@@ -1464,14 +1862,37 @@ OtherFileTypeWithLongFilename.args = {
       fileName:
         'INSERT-APP-NAME_INSERT-APP-APPLE-ID_AppStore_AppsGamesWatch.psd.zip',
       url: 'a2/a2334324darewer4234',
-      fileSize: '10MB',
+    }),
+  ],
+  status: 'sent',
+};
+
+export const OtherFileTypeWithLongFilenameAndCaption = Template.bind({});
+OtherFileTypeWithLongFilenameAndCaption.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType('text/plain'),
+      fileName:
+        'INSERT-APP-NAME_INSERT-APP-APPLE-ID_AppStore_AppsGamesWatch.psd.zip',
+      url: 'a2/a2334324darewer4234',
     }),
   ],
   status: 'sent',
   text: 'This is what I have done.',
 };
-OtherFileTypeWithLongFilename.story = {
-  name: 'Other File Type with Long Filename',
+
+export const DangerousFileType = Template.bind({});
+DangerousFileType.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: stringToMIMEType(
+        'application/vnd.microsoft.portable-executable'
+      ),
+      fileName: 'terrible.exe',
+      url: 'terrible.exe',
+    }),
+  ],
+  status: 'sent',
 };
 
 export const TapToViewImage = Template.bind({});
@@ -1488,8 +1909,21 @@ TapToViewImage.args = {
   isTapToView: true,
   status: 'sent',
 };
-TapToViewImage.story = {
-  name: 'TapToView Image',
+
+export const TapToViewImageInGroup = Template.bind({});
+TapToViewImageInGroup.args = {
+  attachments: [
+    fakeAttachment({
+      url: '/fixtures/tina-rolf-269345-unsplash.jpg',
+      fileName: 'tina-rolf-269345-unsplash.jpg',
+      contentType: IMAGE_JPEG,
+      width: 128,
+      height: 128,
+    }),
+  ],
+  isTapToView: true,
+  status: 'sent',
+  conversationType: 'group',
 };
 
 export const TapToViewVideo = Template.bind({});
@@ -1505,9 +1939,6 @@ TapToViewVideo.args = {
   ],
   isTapToView: true,
   status: 'sent',
-};
-TapToViewVideo.story = {
-  name: 'TapToView Video',
 };
 
 export const TapToViewGif = Template.bind({});
@@ -1525,63 +1956,64 @@ TapToViewGif.args = {
   isTapToView: true,
   status: 'sent',
 };
-TapToViewGif.story = {
-  name: 'TapToView GIF',
-};
 
-export const TapToViewExpired = Template.bind({});
-TapToViewExpired.args = {
+export const TapToViewImageUndownloaded = Template.bind({});
+TapToViewImageUndownloaded.args = {
   attachments: [
     fakeAttachment({
-      url: '/fixtures/tina-rolf-269345-unsplash.jpg',
       fileName: 'tina-rolf-269345-unsplash.jpg',
       contentType: IMAGE_JPEG,
       width: 128,
       height: 128,
+      path: undefined,
+      size: 1800000,
     }),
   ],
+  isTapToView: true,
+  status: 'sent',
+};
+
+export const TapToViewImageDownloading = Template.bind({});
+TapToViewImageDownloading.args = {
+  attachments: [
+    fakeAttachment({
+      fileName: 'tina-rolf-269345-unsplash.jpg',
+      contentType: IMAGE_JPEG,
+      width: 128,
+      height: 128,
+      path: undefined,
+      pending: true,
+      size: 1800000,
+      totalDownloaded: 500000,
+    }),
+  ],
+  isTapToView: true,
+  status: 'sent',
+};
+
+export const TapToViewViewed = Template.bind({});
+TapToViewViewed.args = {
+  readStatus: ReadStatus.Viewed,
   isTapToView: true,
   isTapToViewExpired: true,
   status: 'sent',
 };
-TapToViewExpired.story = {
-  name: 'TapToView Expired',
+
+export const TapToViewExpired = Template.bind({});
+TapToViewExpired.args = {
+  isTapToView: true,
+  isTapToViewExpired: true,
+  status: 'sent',
 };
 
 export const TapToViewError = Template.bind({});
 TapToViewError.args = {
-  attachments: [
-    fakeAttachment({
-      url: '/fixtures/tina-rolf-269345-unsplash.jpg',
-      fileName: 'tina-rolf-269345-unsplash.jpg',
-      contentType: IMAGE_JPEG,
-      width: 128,
-      height: 128,
-    }),
-  ],
   isTapToView: true,
   isTapToViewError: true,
   status: 'sent',
 };
-TapToViewError.story = {
-  name: 'TapToView Error',
-};
 
-export const DangerousFileType = Template.bind({});
-DangerousFileType.args = {
-  attachments: [
-    fakeAttachment({
-      contentType: stringToMIMEType(
-        'application/vnd.microsoft.portable-executable'
-      ),
-      fileName: 'terrible.exe',
-      url: 'terrible.exe',
-    }),
-  ],
-  status: 'sent',
-};
-
-export const Colors = (): JSX.Element => {
+export function Colors(): JSX.Element {
   return (
     <>
       {ConversationColors.map(color => (
@@ -1596,7 +2028,7 @@ export const Colors = (): JSX.Element => {
       ))}
     </>
   );
-};
+}
 
 export const Mentions = Template.bind({});
 Mentions.args = {
@@ -1604,17 +2036,15 @@ Mentions.args = {
     {
       start: 0,
       length: 1,
-      mentionUuid: 'zap',
+      mentionAci: generateAci(),
       replacementText: 'Zapp Brannigan',
+      conversationID: 'x',
     },
   ],
   text: '\uFFFC This Is It. The Moment We Should Have Trained For.',
 };
-Mentions.story = {
-  name: '@Mentions',
-};
 
-export const AllTheContextMenus = (): JSX.Element => {
+export function AllTheContextMenus(): JSX.Element {
   const props = createProps({
     attachments: [
       fakeAttachment({
@@ -1632,10 +2062,7 @@ export const AllTheContextMenus = (): JSX.Element => {
   });
 
   return <TimelineMessage {...props} direction="outgoing" />;
-};
-AllTheContextMenus.story = {
-  name: 'All the context menus',
-};
+}
 
 export const NotApprovedWithLinkPreview = Template.bind({});
 NotApprovedWithLinkPreview.args = {
@@ -1650,6 +2077,7 @@ NotApprovedWithLinkPreview.args = {
         width: 320,
       }),
       isStickerPack: false,
+      isCallLink: false,
       title: 'Signal',
       description:
         'Say "hello" to a different messaging experience. An unexpected focus on privacy, combined with all of the features you expect.',
@@ -1661,31 +2089,30 @@ NotApprovedWithLinkPreview.args = {
   text: 'Be sure to look at https://www.signal.org',
   isMessageRequestAccepted: false,
 };
-NotApprovedWithLinkPreview.story = {
-  name: 'Not approved, with link preview',
-};
 
-export const CustomColor = (): JSX.Element => (
-  <>
-    {renderThree({
-      ...createProps({ text: 'Solid.' }),
-      direction: 'outgoing',
-      customColor: {
-        start: { hue: 82, saturation: 35 },
-      },
-    })}
-    <br style={{ clear: 'both' }} />
-    {renderThree({
-      ...createProps({ text: 'Gradient.' }),
-      direction: 'outgoing',
-      customColor: {
-        deg: 192,
-        start: { hue: 304, saturation: 85 },
-        end: { hue: 231, saturation: 76 },
-      },
-    })}
-  </>
-);
+export function CustomColor(): JSX.Element {
+  return (
+    <>
+      {renderThree({
+        ...createProps({ text: 'Solid.' }),
+        direction: 'outgoing',
+        customColor: {
+          start: { hue: 82, saturation: 35 },
+        },
+      })}
+      <br style={{ clear: 'both' }} />
+      {renderThree({
+        ...createProps({ text: 'Gradient.' }),
+        direction: 'outgoing',
+        customColor: {
+          deg: 192,
+          start: { hue: 304, saturation: 85 },
+          end: { hue: 231, saturation: 76 },
+        },
+      })}
+    </>
+  );
+}
 
 export const CollapsingTextOnlyDMs = (): JSX.Element => {
   const them = getDefaultConversation();
@@ -1727,10 +2154,6 @@ export const CollapsingTextOnlyDMs = (): JSX.Element => {
   ]);
 };
 
-CollapsingTextOnlyDMs.story = {
-  name: 'Collapsing text-only DMs',
-};
-
 export const CollapsingTextOnlyGroupMessages = (): JSX.Element => {
   const author = getDefaultConversation();
 
@@ -1755,10 +2178,6 @@ export const CollapsingTextOnlyGroupMessages = (): JSX.Element => {
   ]);
 };
 
-CollapsingTextOnlyGroupMessages.story = {
-  name: 'Collapsing text-only group messages',
-};
-
 export const StoryReply = (): JSX.Element => {
   const conversation = getDefaultConversation();
 
@@ -1775,10 +2194,6 @@ export const StoryReply = (): JSX.Element => {
       text: 'Photo',
     },
   });
-};
-
-StoryReply.story = {
-  name: 'Story reply',
 };
 
 export const StoryReplyYours = (): JSX.Element => {
@@ -1799,15 +2214,11 @@ export const StoryReplyYours = (): JSX.Element => {
   });
 };
 
-StoryReplyYours.story = {
-  name: 'Story reply (yours)',
-};
-
 export const StoryReplyEmoji = (): JSX.Element => {
   const conversation = getDefaultConversation();
 
-  return renderThree({
-    ...createProps({ direction: 'outgoing', text: 'Wow!' }),
+  return renderBothDirections({
+    ...createProps({ text: 'Wow!' }),
     storyReplyContext: {
       authorTitle: conversation.firstName || conversation.title,
       conversationColor: ConversationColors[0],
@@ -1820,10 +2231,6 @@ export const StoryReplyEmoji = (): JSX.Element => {
       text: 'Photo',
     },
   });
-};
-
-StoryReplyEmoji.story = {
-  name: 'Story reply (emoji)',
 };
 
 const fullContact = {
@@ -1846,7 +2253,6 @@ const fullContact = {
     prefix: 'Dr.',
     suffix: 'Jr.',
     middleName: 'James',
-    displayName: 'Jerry Jordan',
   },
   number: [
     {
@@ -1860,8 +2266,75 @@ export const EmbeddedContactFullContact = Template.bind({});
 EmbeddedContactFullContact.args = {
   contact: fullContact,
 };
-EmbeddedContactFullContact.story = {
-  name: 'EmbeddedContact: Full Contact',
+
+export const EmbeddedContactAvatarUndownloaded = Template.bind({});
+EmbeddedContactAvatarUndownloaded.args = {
+  contact: {
+    ...fullContact,
+    avatar: {
+      avatar: fakeAttachment({
+        path: undefined,
+        contentType: IMAGE_GIF,
+      }),
+      isProfile: true,
+    },
+  },
+};
+export const EmbeddedContactAvatarDownloading = Template.bind({});
+EmbeddedContactAvatarDownloading.args = {
+  contact: {
+    ...fullContact,
+    avatar: {
+      avatar: fakeAttachment({
+        path: undefined,
+        pending: true,
+        contentType: IMAGE_GIF,
+        size: 1000000,
+        totalDownloaded: 500000,
+      }),
+      isProfile: true,
+    },
+  },
+};
+export const EmbeddedContactAvatarTransientError = Template.bind({});
+EmbeddedContactAvatarTransientError.args = {
+  contact: {
+    ...fullContact,
+    avatar: {
+      avatar: fakeAttachment({
+        iv: 'something',
+        key: 'something',
+        digest: 'something',
+        cdnKey: 'something',
+        cdnNumber: 2,
+        path: undefined,
+        error: true,
+        contentType: IMAGE_GIF,
+        size: 1000000,
+        totalDownloaded: 500000,
+      }),
+      isProfile: true,
+    },
+  },
+};
+export const EmbeddedContactAvatarPermanentError = Template.bind({});
+EmbeddedContactAvatarPermanentError.args = {
+  contact: {
+    ...fullContact,
+    avatar: {
+      avatar: fakeAttachment({
+        id: undefined,
+        key: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+        path: undefined,
+        contentType: IMAGE_GIF,
+        size: 1000000,
+        totalDownloaded: 500000,
+      }),
+      isProfile: true,
+    },
+  },
 };
 
 export const EmbeddedContactWithSendMessage = Template.bind({});
@@ -1869,12 +2342,9 @@ EmbeddedContactWithSendMessage.args = {
   contact: {
     ...fullContact,
     firstNumber: fullContact.number[0].value,
-    uuid: UUID.generate().toString(),
+    serviceId: generateAci(),
   },
   direction: 'incoming',
-};
-EmbeddedContactWithSendMessage.story = {
-  name: 'EmbeddedContact: with Send Message',
 };
 
 export const EmbeddedContactOnlyEmail = Template.bind({});
@@ -1882,9 +2352,6 @@ EmbeddedContactOnlyEmail.args = {
   contact: {
     email: fullContact.email,
   },
-};
-EmbeddedContactOnlyEmail.story = {
-  name: 'EmbeddedContact: Only Email',
 };
 
 export const EmbeddedContactGivenName = Template.bind({});
@@ -1895,18 +2362,12 @@ EmbeddedContactGivenName.args = {
     },
   },
 };
-EmbeddedContactGivenName.story = {
-  name: 'EmbeddedContact: Given Name',
-};
 
 export const EmbeddedContactOrganization = Template.bind({});
 EmbeddedContactOrganization.args = {
   contact: {
     organization: 'Company 5',
   },
-};
-EmbeddedContactOrganization.story = {
-  name: 'EmbeddedContact: Organization',
 };
 
 export const EmbeddedContactGivenFamilyName = Template.bind({});
@@ -1918,9 +2379,6 @@ EmbeddedContactGivenFamilyName.args = {
     },
   },
 };
-EmbeddedContactGivenFamilyName.story = {
-  name: 'EmbeddedContact: Given + Family Name',
-};
 
 export const EmbeddedContactFamilyName = Template.bind({});
 EmbeddedContactFamilyName.args = {
@@ -1929,28 +2387,6 @@ EmbeddedContactFamilyName.args = {
       familyName: 'FamilyName',
     },
   },
-};
-EmbeddedContactFamilyName.story = {
-  name: 'EmbeddedContact: Family Name',
-};
-
-export const EmbeddedContactLoadingAvatar = Template.bind({});
-EmbeddedContactLoadingAvatar.args = {
-  contact: {
-    name: {
-      displayName: 'Jerry Jordan',
-    },
-    avatar: {
-      avatar: fakeAttachment({
-        pending: true,
-        contentType: IMAGE_GIF,
-      }),
-      isProfile: true,
-    },
-  },
-};
-EmbeddedContactLoadingAvatar.story = {
-  name: 'EmbeddedContact: Loading Avatar',
 };
 
 export const GiftBadgeUnopened = Template.bind({});
@@ -1962,8 +2398,12 @@ GiftBadgeUnopened.args = {
     state: GiftBadgeStates.Unopened,
   },
 };
-GiftBadgeUnopened.story = {
-  name: 'Gift Badge: Unopened',
+
+export const GiftBadgeFailed = Template.bind({});
+GiftBadgeFailed.args = {
+  giftBadge: {
+    state: GiftBadgeStates.Failed,
+  },
 };
 
 const getPreferredBadge = () => ({
@@ -1991,9 +2431,6 @@ GiftBadgeRedeemed30Days.args = {
     state: GiftBadgeStates.Redeemed,
   },
 };
-GiftBadgeRedeemed30Days.story = {
-  name: 'Gift Badge: Redeemed (30 days)',
-};
 
 export const GiftBadgeRedeemed24Hours = Template.bind({});
 GiftBadgeRedeemed24Hours.args = {
@@ -2004,9 +2441,6 @@ GiftBadgeRedeemed24Hours.args = {
     level: 3,
     state: GiftBadgeStates.Redeemed,
   },
-};
-GiftBadgeRedeemed24Hours.story = {
-  name: 'Gift Badge: Redeemed (24 hours)',
 };
 
 export const GiftBadgeOpened60Minutes = Template.bind({});
@@ -2019,9 +2453,6 @@ GiftBadgeOpened60Minutes.args = {
     state: GiftBadgeStates.Opened,
   },
 };
-GiftBadgeOpened60Minutes.story = {
-  name: 'Gift Badge: Opened (60 minutes)',
-};
 
 export const GiftBadgeRedeemed1Minute = Template.bind({});
 GiftBadgeRedeemed1Minute.args = {
@@ -2032,9 +2463,6 @@ GiftBadgeRedeemed1Minute.args = {
     level: 3,
     state: GiftBadgeStates.Redeemed,
   },
-};
-GiftBadgeRedeemed1Minute.story = {
-  name: 'Gift Badge: Redeemed (1 minute)',
 };
 
 export const GiftBadgeOpenedExpired = Template.bind({});
@@ -2047,9 +2475,6 @@ GiftBadgeOpenedExpired.args = {
     state: GiftBadgeStates.Opened,
   },
 };
-GiftBadgeOpenedExpired.story = {
-  name: 'Gift Badge: Opened (expired)',
-};
 
 export const GiftBadgeMissingBadge = Template.bind({});
 GiftBadgeMissingBadge.args = {
@@ -2061,6 +2486,287 @@ GiftBadgeMissingBadge.args = {
     state: GiftBadgeStates.Redeemed,
   },
 };
-GiftBadgeMissingBadge.story = {
-  name: 'Gift Badge: Missing Badge',
+
+export const PaymentNotification = Template.bind({});
+PaymentNotification.args = {
+  canReply: false,
+  canReact: false,
+  payment: {
+    kind: PaymentEventKind.Notification,
+    note: 'Hello there',
+  },
+};
+
+export const SMS = Template.bind({});
+SMS.args = {
+  isSMS: true,
+  text: 'hello',
+};
+
+function MultiSelectMessage() {
+  const [selected, setSelected] = React.useState(false);
+
+  return (
+    <TimelineMessage
+      {...createProps({
+        text: 'Hello',
+        isSelected: selected,
+        isSelectMode: true,
+        toggleSelectMessage(_conversationId, _messageId, _shift, newSelected) {
+          setSelected(newSelected);
+        },
+      })}
+    />
+  );
+}
+
+export function MultiSelect(): JSX.Element {
+  return (
+    <>
+      <MultiSelectMessage />
+      <MultiSelectMessage />
+      <MultiSelectMessage />
+    </>
+  );
+}
+
+MultiSelect.args = {
+  name: 'Multi Select',
+};
+
+export function PermanentlyUndownloadableAttachments(): JSX.Element {
+  const imageProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: IMAGE_JPEG,
+        fileName: 'bird.jpg',
+        blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+        width: 296,
+        height: 394,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+  });
+  const multipleImagesProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: IMAGE_JPEG,
+        fileName: 'bird.jpg',
+        blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+        width: 296,
+        height: 394,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+      fakeAttachment({
+        contentType: IMAGE_JPEG,
+        fileName: 'bird.jpg',
+        blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+        width: 296,
+        height: 394,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+  });
+  const gifProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: VIDEO_MP4,
+        flags: SignalService.AttachmentPointer.Flags.GIF,
+        fileName: 'bird.gif',
+        blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+        width: 296,
+        height: 394,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+    text: 'cool gif',
+  });
+  const videoProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: VIDEO_MP4,
+        fileName: 'bird.mp4',
+        width: 720,
+        height: 480,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+  });
+  const audioProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: AUDIO_MP3,
+        fileName: 'bird.mp3',
+        width: undefined,
+        height: undefined,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+  });
+  const audioWithCaptionProps = {
+    ...audioProps,
+    text: "Here's that file",
+  };
+  const textFileProps = createProps({
+    attachments: [
+      fakeAttachment({
+        contentType: stringToMIMEType('text/plain'),
+        fileName: 'why-i-love-birds.txt',
+        width: undefined,
+        height: undefined,
+        path: undefined,
+        key: undefined,
+        id: undefined,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    status: 'sent',
+  });
+  const textFileWithCaptionProps = {
+    ...textFileProps,
+    text: "Here's that file",
+  };
+  const stickerProps = createProps({
+    attachments: [
+      fakeAttachment({
+        fileName: '512x515-thumbs-up-lincoln.webp',
+        contentType: IMAGE_WEBP,
+        width: 128,
+        height: 128,
+        error: true,
+        isPermanentlyUndownloadable: true,
+      }),
+    ],
+    isSticker: true,
+    status: 'sent',
+  });
+  const longMessageProps = createProps({
+    text: 'Hello there from a pal! I am sending a long message so that it will wrap a bit, since I like that look.',
+    textAttachment: {
+      contentType: LONG_MESSAGE,
+      size: 123,
+      pending: false,
+      key: undefined,
+      error: true,
+      isPermanentlyUndownloadable: true,
+    },
+  });
+
+  const outgoingAuthor = {
+    ...imageProps.author,
+    id: getDefaultConversation().id,
+  };
+
+  return (
+    <>
+      <TimelineMessage {...imageProps} shouldCollapseAbove />
+      <TimelineMessage {...gifProps} />
+      <TimelineMessage {...videoProps} />
+      <TimelineMessage {...multipleImagesProps} />
+      <TimelineMessage {...stickerProps} />
+      <TimelineMessage {...textFileProps} />
+      <TimelineMessage {...textFileWithCaptionProps} />
+      <TimelineMessage {...longMessageProps} />
+      <TimelineMessage {...audioProps} />
+      <TimelineMessage {...audioWithCaptionProps} shouldCollapseBelow />
+      <TimelineMessage
+        {...imageProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+        shouldCollapseAbove
+      />
+      <TimelineMessage
+        {...gifProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...videoProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...multipleImagesProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...textFileProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...stickerProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...textFileWithCaptionProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...longMessageProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...audioProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+      />
+      <TimelineMessage
+        {...audioWithCaptionProps}
+        author={outgoingAuthor}
+        direction="outgoing"
+        shouldCollapseBelow
+      />
+    </>
+  );
+}
+
+export const AttachmentWithError = Template.bind({});
+AttachmentWithError.args = {
+  attachments: [
+    fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'test.png',
+      blurHash: 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+      width: 296,
+      height: 394,
+      path: undefined,
+      error: true,
+    }),
+  ],
+  status: 'sent',
 };

@@ -1,21 +1,17 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
-
 import type { LoggerType } from '../../types/Logging';
-import { isValidUuid } from '../../types/UUID';
-import { assertSync } from '../../util/assert';
+import { isValidUuid } from '../../util/isValidUuid';
 import Helpers from '../../textsecure/Helpers';
 import { createOrUpdate, getById, removeById } from '../util';
-import type { EmptyQuery, Query } from '../util';
-import type { ItemKeyType } from '../Interface';
+import type { ItemKeyType, ReadableDB, WritableDB } from '../Interface';
 
-export function getOurUuid(db: Database): string | undefined {
+export function getOurUuid(db: ReadableDB): string | undefined {
   const UUID_ID: ItemKeyType = 'uuid_id';
 
   const row: { json: string } | undefined = db
-    .prepare<Query>('SELECT json FROM items WHERE id = $id;')
+    .prepare('SELECT json FROM items WHERE id = $id;')
     .get({ id: UUID_ID });
 
   if (!row) {
@@ -30,26 +26,27 @@ export function getOurUuid(db: Database): string | undefined {
 
 export default function updateToSchemaVersion41(
   currentVersion: number,
-  db: Database,
+  db: WritableDB,
   logger: LoggerType
 ): void {
   if (currentVersion >= 41) {
     return;
   }
 
-  const getConversationUuid = db
-    .prepare<Query>(
-      `
-      SELECT uuid
-      FROM
-        conversations
-      WHERE
-        id = $conversationId
-      `
-    )
-    .pluck();
+  const getConversationUuid = db.prepare(
+    `
+  SELECT uuid
+  FROM
+    conversations
+  WHERE
+    id = $conversationId
+  `,
+    {
+      pluck: true,
+    }
+  );
 
-  const getConversationStats = db.prepare<Query>(
+  const getConversationStats = db.prepare(
     `
       SELECT uuid, e164, active_at
       FROM
@@ -59,9 +56,15 @@ export default function updateToSchemaVersion41(
     `
   );
 
+  type StatsType = {
+    uuid: string;
+    e164: string;
+    active_at: number;
+  };
+
   const compareConvoRecency = (a: string, b: string): number => {
-    const aStats = getConversationStats.get({ conversationId: a });
-    const bStats = getConversationStats.get({ conversationId: b });
+    const aStats = getConversationStats.get<StatsType>({ conversationId: a });
+    const bStats = getConversationStats.get<StatsType>({ conversationId: b });
 
     const isAComplete = Boolean(aStats?.uuid && aStats?.e164);
     const isBComplete = Boolean(bStats?.uuid && bStats?.e164);
@@ -76,7 +79,7 @@ export default function updateToSchemaVersion41(
       return 1;
     }
 
-    return aStats.active_at - bStats.active_at;
+    return (aStats?.active_at ?? 0) - (bStats?.active_at ?? 0);
   };
 
   const clearSessionsAndKeys = (): number => {
@@ -92,8 +95,8 @@ export default function updateToSchemaVersion41(
       db.prepare('DELETE FROM preKeys').run().changes,
     ].reduce((a: number, b: number): number => a + b);
 
-    assertSync(removeById<string>(db, 'items', 'identityKey'));
-    assertSync(removeById<string>(db, 'items', 'registrationId'));
+    removeById<string>(db, 'items', 'identityKey');
+    removeById<string>(db, 'items', 'registrationId');
 
     return keyCount;
   };
@@ -104,41 +107,39 @@ export default function updateToSchemaVersion41(
       publicKey: string;
     };
 
-    const identityKey = assertSync(
-      getById<string, { value: IdentityKeyType }>(db, 'items', 'identityKey')
+    const identityKey = getById<string, { value: IdentityKeyType }>(
+      db,
+      'items',
+      'identityKey'
     );
-
     type RegistrationId = number;
 
-    const registrationId = assertSync(
-      getById<string, { value: RegistrationId }>(db, 'items', 'registrationId')
+    const registrationId = getById<string, { value: RegistrationId }>(
+      db,
+      'items',
+      'registrationId'
     );
-
     if (identityKey) {
-      assertSync(
-        createOrUpdate<ItemKeyType>(db, 'items', {
-          id: 'identityKeyMap',
-          value: {
-            [ourUuid]: identityKey.value,
-          },
-        })
-      );
+      createOrUpdate<ItemKeyType>(db, 'items', {
+        id: 'identityKeyMap',
+        value: {
+          [ourUuid]: identityKey.value,
+        },
+      });
     }
 
     if (registrationId) {
-      assertSync(
-        createOrUpdate<ItemKeyType>(db, 'items', {
-          id: 'registrationIdMap',
-          value: {
-            [ourUuid]: registrationId.value,
-          },
-        })
-      );
+      createOrUpdate<ItemKeyType>(db, 'items', {
+        id: 'registrationIdMap',
+        value: {
+          [ourUuid]: registrationId.value,
+        },
+      });
     }
 
     db.exec(
       `
-      DELETE FROM items WHERE id = "identityKey" OR id = "registrationId";
+      DELETE FROM items WHERE id = 'identityKey' OR id = 'registrationId';
       `
     );
   };
@@ -146,7 +147,7 @@ export default function updateToSchemaVersion41(
   const prefixKeys = (ourUuid: string) => {
     for (const table of ['signedPreKeys', 'preKeys']) {
       // Update id to include suffix, add `ourUuid` and `keyId` fields.
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE ${table}
         SET
@@ -171,14 +172,12 @@ export default function updateToSchemaVersion41(
       senderId: string;
       lastUpdatedDate: number;
     }> = db
-      .prepare<EmptyQuery>(
-        'SELECT id, senderId, lastUpdatedDate FROM senderKeys'
-      )
+      .prepare('SELECT id, senderId, lastUpdatedDate FROM senderKeys')
       .all();
 
     logger.info(`Updating ${senderKeys.length} sender keys`);
 
-    const updateSenderKey = db.prepare<Query>(
+    const updateSenderKey = db.prepare(
       `
       UPDATE senderKeys
       SET
@@ -189,9 +188,7 @@ export default function updateToSchemaVersion41(
       `
     );
 
-    const deleteSenderKey = db.prepare<Query>(
-      'DELETE FROM senderKeys WHERE id = $id'
-    );
+    const deleteSenderKey = db.prepare('DELETE FROM senderKeys WHERE id = $id');
 
     const pastKeys = new Map<
       string,
@@ -206,7 +203,7 @@ export default function updateToSchemaVersion41(
     let skipped = 0;
     for (const { id, senderId, lastUpdatedDate } of senderKeys) {
       const [conversationId] = Helpers.unencodeNumber(senderId);
-      const uuid = getConversationUuid.get({ conversationId });
+      const uuid = getConversationUuid.get<string>({ conversationId });
 
       if (!uuid) {
         deleted += 1;
@@ -252,17 +249,17 @@ export default function updateToSchemaVersion41(
   };
 
   const updateSessions = (ourUuid: string) => {
-    // Use uuid instead of conversation id in existing sesions and prefix id
+    // Use uuid instead of conversation id in existing sessions and prefix id
     // with ourUuid.
     //
     // Set ourUuid column and field in json
     const allSessions = db
-      .prepare<EmptyQuery>('SELECT id, conversationId FROM SESSIONS')
-      .all();
+      .prepare('SELECT id, conversationId FROM SESSIONS')
+      .all<{ id: string; conversationId: string }>();
 
     logger.info(`Updating ${allSessions.length} sessions`);
 
-    const updateSession = db.prepare<Query>(
+    const updateSession = db.prepare(
       `
       UPDATE sessions
       SET
@@ -283,9 +280,7 @@ export default function updateToSchemaVersion41(
       `
     );
 
-    const deleteSession = db.prepare<Query>(
-      'DELETE FROM sessions WHERE id = $id'
-    );
+    const deleteSession = db.prepare('DELETE FROM sessions WHERE id = $id');
 
     const pastSessions = new Map<
       string,
@@ -298,7 +293,7 @@ export default function updateToSchemaVersion41(
     let deleted = 0;
     let skipped = 0;
     for (const { id, conversationId } of allSessions) {
-      const uuid = getConversationUuid.get({ conversationId });
+      const uuid = getConversationUuid.get<string>({ conversationId });
       if (!uuid) {
         deleted += 1;
         deleteSession.run({ id });
@@ -343,13 +338,13 @@ export default function updateToSchemaVersion41(
   };
 
   const updateIdentityKeys = () => {
-    const identityKeys: ReadonlyArray<{
-      id: string;
-    }> = db.prepare<EmptyQuery>('SELECT id FROM identityKeys').all();
+    const identityKeys = db
+      .prepare('SELECT id FROM identityKeys')
+      .all<{ id: string }>();
 
     logger.info(`Updating ${identityKeys.length} identity keys`);
 
-    const updateIdentityKey = db.prepare<Query>(
+    const updateIdentityKey = db.prepare(
       `
       UPDATE OR REPLACE identityKeys
       SET
@@ -366,7 +361,7 @@ export default function updateToSchemaVersion41(
 
     let migrated = 0;
     for (const { id } of identityKeys) {
-      const uuid = getConversationUuid.get({ conversationId: id });
+      const uuid = getConversationUuid.get<string>({ conversationId: id });
 
       let newId: string;
       if (uuid) {

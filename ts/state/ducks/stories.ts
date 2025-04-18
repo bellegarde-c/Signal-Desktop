@@ -1,40 +1,47 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ThunkAction, ThunkDispatch } from 'redux-thunk';
 import { isEqual, pick } from 'lodash';
 
+import type { ReadonlyDeep } from 'type-fest';
 import * as Errors from '../../types/errors';
 import type { AttachmentType } from '../../types/Attachment';
-import type { BodyRangeType } from '../../types/Util';
-import type { ConversationModel } from '../../models/conversations';
-import type { MessageAttributesType } from '../../model-types.d';
+import type { DraftBodyRanges } from '../../types/BodyRange';
+import type { ReadonlyMessageAttributesType } from '../../model-types.d';
 import type {
   MessageChangedActionType,
   MessageDeletedActionType,
   MessagesAddedActionType,
+  TargetedConversationChangedActionType,
 } from './conversations';
 import type { NoopActionType } from './noop';
 import type { StateType as RootStateType } from '../reducer';
 import type { StoryViewTargetType, StoryViewType } from '../../types/Stories';
 import type { SyncType } from '../../jobs/helpers/syncHelpers';
-import type { UUIDStringType } from '../../types/UUID';
+import type { StoryDistributionIdString } from '../../types/StoryDistributionId';
+import type { ServiceIdString } from '../../types/ServiceId';
+import { isAciString } from '../../util/isAciString';
 import * as log from '../../logging/log';
-import dataInterface from '../../sql/Client';
+import { TARGETED_CONVERSATION_CHANGED } from './conversations';
+import { SIGNAL_ACI } from '../../types/SignalConversation';
+import { DataReader, DataWriter } from '../../sql/Client';
 import { ReadStatus } from '../../messages/MessageReadStatus';
+import { SendStatus } from '../../messages/MessageSendState';
 import { SafetyNumberChangeSource } from '../../components/SafetyNumberChangeDialog';
 import { StoryViewDirectionType, StoryViewModeType } from '../../types/Stories';
-import { ToastReactionFailed } from '../../components/ToastReactionFailed';
-import { assertDev } from '../../util/assert';
+import { assertDev, strictAssert } from '../../util/assert';
+import { drop } from '../../util/drop';
 import { blockSendUntilConversationsAreVerified } from '../../util/blockSendUntilConversationsAreVerified';
 import { deleteStoryForEveryone as doDeleteStoryForEveryone } from '../../util/deleteStoryForEveryone';
 import { deleteGroupStoryReplyForEveryone as doDeleteGroupStoryReplyForEveryone } from '../../util/deleteGroupStoryReplyForEveryone';
 import { enqueueReactionForSend } from '../../reactions/enqueueReactionForSend';
 import { getMessageById } from '../../messages/getMessageById';
+import { markOnboardingStoryAsRead } from '../../util/markOnboardingStoryAsRead';
 import { markViewed } from '../../services/MessageUpdater';
 import { queueAttachmentDownloads } from '../../util/queueAttachmentDownloads';
 import { replaceIndex } from '../../util/replaceIndex';
-import { showToast } from '../../util/showToast';
+import type { DurationInSeconds } from '../../util/durations';
 import { hasFailed, isDownloaded, isDownloading } from '../../types/Attachment';
 import {
   getConversationSelector,
@@ -49,48 +56,63 @@ import { isGroup } from '../../util/whatTypeOfConversation';
 import { isNotNil } from '../../util/isNotNil';
 import { isStory } from '../../messages/helpers';
 import { sendStoryMessage as doSendStoryMessage } from '../../util/sendStoryMessage';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
 import { useBoundActions } from '../../hooks/useBoundActions';
 import { verifyStoryListMembers as doVerifyStoryListMembers } from '../../util/verifyStoryListMembers';
 import { viewSyncJobQueue } from '../../jobs/viewSyncJobQueue';
-import { viewedReceiptsJobQueue } from '../../jobs/viewedReceiptsJobQueue';
+import { getOwn } from '../../util/getOwn';
+import { SHOW_TOAST } from './toast';
+import { ToastType } from '../../types/Toast';
+import type { ShowToastActionType } from './toast';
+import {
+  conversationJobQueue,
+  conversationQueueJobEnum,
+} from '../../jobs/conversationJobQueue';
+import { ReceiptType } from '../../types/Receipt';
+import { cleanupMessages } from '../../util/cleanup';
+import { AttachmentDownloadUrgency } from '../../types/AttachmentDownload';
 
-export type StoryDataType = {
-  attachment?: AttachmentType;
-  hasReplies?: boolean;
-  hasRepliesFromSelf?: boolean;
-  messageId: string;
-  startedDownload?: boolean;
-} & Pick<
-  MessageAttributesType,
-  | 'canReplyToStory'
-  | 'conversationId'
-  | 'deletedForEveryone'
-  | 'reactions'
-  | 'readAt'
-  | 'readStatus'
-  | 'sendStateByConversationId'
-  | 'source'
-  | 'sourceUuid'
-  | 'sourceDevice'
-  | 'storyDistributionListId'
-  | 'timestamp'
-  | 'type'
-> & {
-    // don't want the fields to be optional as in MessageAttributesType
-    expireTimer: number | undefined;
-    expirationStartTimestamp: number | undefined;
-  };
+export type StoryDataType = ReadonlyDeep<
+  {
+    attachment?: AttachmentType;
+    hasReplies?: boolean;
+    hasRepliesFromSelf?: boolean;
+    messageId: string;
+    startedDownload?: boolean;
+  } & Pick<
+    ReadonlyMessageAttributesType,
+    | 'bodyRanges'
+    | 'canReplyToStory'
+    | 'conversationId'
+    | 'deletedForEveryone'
+    | 'reactions'
+    | 'readAt'
+    | 'readStatus'
+    | 'sendStateByConversationId'
+    | 'source'
+    | 'sourceServiceId'
+    | 'storyDistributionListId'
+    | 'timestamp'
+    | 'type'
+    | 'storyRecipientsVersion'
+  > & {
+      // don't want the fields to be optional as in MessageAttributesType
+      expireTimer: DurationInSeconds | undefined;
+      expirationStartTimestamp: number | undefined;
+      sourceDevice: number;
+    }
+>;
 
-export type SelectedStoryDataType = {
+export type SelectedStoryDataType = ReadonlyDeep<{
   currentIndex: number;
   messageId: string;
   numStories: number;
   storyViewMode: StoryViewModeType;
   unviewedStoryConversationIdsSorted: Array<string>;
   viewTarget?: StoryViewTargetType;
-};
+}>;
 
-export type AddStoryData =
+export type AddStoryData = ReadonlyDeep<
   | {
       type: 'Media';
       file: File;
@@ -100,25 +122,41 @@ export type AddStoryData =
       type: 'Text';
       sending?: boolean;
     }
-  | undefined;
+  | undefined
+>;
+
+export type RecipientEntry = ReadonlyDeep<{
+  serviceIds: Array<ServiceIdString>;
+
+  byDistributionId?: Record<
+    StoryDistributionIdString,
+    {
+      serviceIds: Array<ServiceIdString>;
+    }
+  >;
+}>;
+
+export type RecipientsByConversation = ReadonlyDeep<
+  Record<
+    string, // conversationId
+    RecipientEntry
+  >
+>;
 
 // State
 
-export type StoriesStateType = {
-  readonly lastOpenedAtTimestamp: number | undefined;
-  readonly openedAtTimestamp: number | undefined;
-  readonly replyState?: {
+export type StoriesStateType = ReadonlyDeep<{
+  addStoryData: AddStoryData;
+  hasAllStoriesUnmuted: boolean;
+  lastOpenedAtTimestamp: number | undefined;
+  replyState?: Readonly<{
     messageId: string;
-    replies: Array<MessageAttributesType>;
-  };
-  readonly selectedStoryData?: SelectedStoryDataType;
-  readonly addStoryData: AddStoryData;
-  readonly sendStoryModalData?: {
-    untrustedUuids: Array<string>;
-    verifiedUuids: Array<string>;
-  };
-  readonly stories: Array<StoryDataType>;
-};
+    replies: Array<ReadonlyMessageAttributesType>;
+  }>;
+  selectedStoryData?: SelectedStoryDataType;
+  sendStoryModalData?: RecipientsByConversation;
+  stories: ReadonlyArray<StoryDataType>;
+}>;
 
 // Actions
 
@@ -130,85 +168,98 @@ const QUEUE_STORY_DOWNLOAD = 'stories/QUEUE_STORY_DOWNLOAD';
 const SEND_STORY_MODAL_OPEN_STATE_CHANGED =
   'stories/SEND_STORY_MODAL_OPEN_STATE_CHANGED';
 const STORY_CHANGED = 'stories/STORY_CHANGED';
-const TOGGLE_VIEW = 'stories/TOGGLE_VIEW';
+const CLEAR_STORIES_TAB_STATE = 'stories/CLEAR_STORIES_TAB_STATE';
+const MARK_STORIES_TAB_VIEWED = 'stories/MARK_STORIES_TAB_VIEWED';
 const VIEW_STORY = 'stories/VIEW_STORY';
 const STORY_REPLY_DELETED = 'stories/STORY_REPLY_DELETED';
 const REMOVE_ALL_STORIES = 'stories/REMOVE_ALL_STORIES';
 const SET_ADD_STORY_DATA = 'stories/SET_ADD_STORY_DATA';
 const SET_STORY_SENDING = 'stories/SET_STORY_SENDING';
+const SET_HAS_ALL_STORIES_UNMUTED = 'stories/SET_HAS_ALL_STORIES_UNMUTED';
 
-type DOEStoryActionType = {
+type DOEStoryActionType = ReadonlyDeep<{
   type: typeof DOE_STORY;
   payload: string;
-};
+}>;
 
-type ListMembersVerified = {
+type ListMembersVerified = ReadonlyDeep<{
   type: typeof LIST_MEMBERS_VERIFIED;
   payload: {
-    untrustedUuids: Array<string>;
-    verifiedUuids: Array<string>;
+    conversationId: string;
+    distributionId: StoryDistributionIdString | undefined;
+    serviceIds: Array<ServiceIdString>;
   };
-};
+}>;
 
-type LoadStoryRepliesActionType = {
+type LoadStoryRepliesActionType = ReadonlyDeep<{
   type: typeof LOAD_STORY_REPLIES;
   payload: {
     messageId: string;
-    replies: Array<MessageAttributesType>;
+    replies: Array<ReadonlyMessageAttributesType>;
   };
-};
+}>;
 
-type MarkStoryReadActionType = {
+type MarkStoryReadActionType = ReadonlyDeep<{
   type: typeof MARK_STORY_READ;
   payload: {
     messageId: string;
     readAt: number;
   };
-};
+}>;
 
-type QueueStoryDownloadActionType = {
+type QueueStoryDownloadActionType = ReadonlyDeep<{
   type: typeof QUEUE_STORY_DOWNLOAD;
   payload: string;
-};
+}>;
 
-type SendStoryModalOpenStateChanged = {
+type SendStoryModalOpenStateChanged = ReadonlyDeep<{
   type: typeof SEND_STORY_MODAL_OPEN_STATE_CHANGED;
   payload: number | undefined;
-};
+}>;
 
-type StoryChangedActionType = {
+type StoryChangedActionType = ReadonlyDeep<{
   type: typeof STORY_CHANGED;
   payload: StoryDataType;
-};
+}>;
 
-type ToggleViewActionType = {
-  type: typeof TOGGLE_VIEW;
-};
+type ClearStoriesTabStateActionType = ReadonlyDeep<{
+  type: typeof CLEAR_STORIES_TAB_STATE;
+}>;
 
-type ViewStoryActionType = {
+type MarkStoriesTabViewedActionType = ReadonlyDeep<{
+  type: typeof MARK_STORIES_TAB_VIEWED;
+}>;
+
+type ViewStoryActionType = ReadonlyDeep<{
   type: typeof VIEW_STORY;
   payload: SelectedStoryDataType | undefined;
-};
+}>;
 
-type StoryReplyDeletedActionType = {
+type StoryReplyDeletedActionType = ReadonlyDeep<{
   type: typeof STORY_REPLY_DELETED;
   payload: string;
-};
+}>;
 
-type RemoveAllStoriesActionType = {
+type RemoveAllStoriesActionType = ReadonlyDeep<{
   type: typeof REMOVE_ALL_STORIES;
-};
+}>;
 
-type SetAddStoryDataType = {
+type SetAddStoryDataType = ReadonlyDeep<{
   type: typeof SET_ADD_STORY_DATA;
   payload: AddStoryData;
-};
+}>;
 
-type SetStorySendingType = {
+type SetStorySendingType = ReadonlyDeep<{
   type: typeof SET_STORY_SENDING;
   payload: boolean;
-};
+}>;
 
+type SetHasAllStoriesUnmutedType = ReadonlyDeep<{
+  type: typeof SET_HAS_ALL_STORIES_UNMUTED;
+  payload: boolean;
+}>;
+
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
 export type StoriesActionType =
   | DOEStoryActionType
   | ListMembersVerified
@@ -220,12 +271,15 @@ export type StoriesActionType =
   | QueueStoryDownloadActionType
   | SendStoryModalOpenStateChanged
   | StoryChangedActionType
-  | ToggleViewActionType
+  | ClearStoriesTabStateActionType
+  | MarkStoriesTabViewedActionType
   | ViewStoryActionType
   | StoryReplyDeletedActionType
   | RemoveAllStoriesActionType
+  | TargetedConversationChangedActionType
   | SetAddStoryDataType
-  | SetStorySendingType;
+  | SetStorySendingType
+  | SetHasAllStoriesUnmutedType;
 
 // Action Creators
 
@@ -233,7 +287,7 @@ function deleteGroupStoryReply(
   messageId: string
 ): ThunkAction<void, RootStateType, unknown, StoryReplyDeletedActionType> {
   return async dispatch => {
-    await window.Signal.Data.removeMessage(messageId);
+    await DataWriter.removeMessage(messageId, { cleanupMessages });
     dispatch({
       type: STORY_REPLY_DELETED,
       payload: messageId,
@@ -285,14 +339,12 @@ function loadStoryReplies(
 ): ThunkAction<void, RootStateType, unknown, LoadStoryRepliesActionType> {
   return async (dispatch, getState) => {
     const conversation = getConversationSelector(getState())(conversationId);
-    const replies = await dataInterface.getOlderMessagesByConversation(
+    const replies = await DataReader.getOlderMessagesByConversation({
       conversationId,
-      {
-        limit: 9000,
-        storyId: messageId,
-        includeStoryReplies: !isGroup(conversation),
-      }
-    );
+      limit: 9000,
+      storyId: messageId,
+      includeStoryReplies: !isGroup(conversation),
+    });
 
     dispatch({
       type: LOAD_STORY_REPLIES,
@@ -331,13 +383,6 @@ function markStoryRead(
       return;
     }
 
-    if (matchingStory.readStatus !== ReadStatus.Unread) {
-      log.warn(
-        `markStoryRead: not unread, ${messageId} read status: ${matchingStory.readStatus}`
-      );
-      return;
-    }
-
     const message = await getMessageById(messageId);
 
     if (!message) {
@@ -345,29 +390,75 @@ function markStoryRead(
       return;
     }
 
+    const authorId = message.attributes.sourceServiceId;
+    strictAssert(
+      authorId,
+      'markStoryRead: The message needs a sender to mark it read!'
+    );
+    strictAssert(
+      isAciString(authorId),
+      'markStoryRead: The message needs a sender ACI to mark it read!'
+    );
+
+    const isSignalOnboardingStory = authorId === SIGNAL_ACI;
+
+    if (isSignalOnboardingStory) {
+      const updatedMessages = await markOnboardingStoryAsRead();
+      if (updatedMessages) {
+        return;
+      }
+      log.warn(
+        'markStoryRead: Failed to mark onboarding story read normally; failing over'
+      );
+    }
+
+    if (matchingStory.readStatus !== ReadStatus.Unread) {
+      log.warn(
+        `markStoryRead: not unread, ${messageId} read status: ${matchingStory.readStatus}`
+      );
+      return;
+    }
+
     const storyReadDate = Date.now();
 
     message.set(markViewed(message.attributes, storyReadDate));
+    drop(window.MessageCache.saveMessage(message.attributes));
+
+    const conversationId = message.get('conversationId');
 
     const viewedReceipt = {
       messageId,
+      conversationId,
       senderE164: message.attributes.source,
-      senderUuid: message.attributes.sourceUuid,
+      senderAci: authorId,
       timestamp: message.attributes.sent_at,
       isDirectConversation: false,
     };
     const viewSyncs: Array<SyncType> = [viewedReceipt];
 
-    if (!window.ConversationController.areWePrimaryDevice()) {
-      viewSyncJobQueue.add({ viewSyncs });
+    if (
+      !isSignalOnboardingStory &&
+      !window.ConversationController.areWePrimaryDevice()
+    ) {
+      drop(viewSyncJobQueue.add({ viewSyncs }));
     }
 
-    if (window.Events.getStoryViewReceiptsEnabled()) {
-      viewedReceiptsJobQueue.add({ viewedReceipt });
+    if (
+      !isSignalOnboardingStory &&
+      window.Events.getStoryViewReceiptsEnabled()
+    ) {
+      drop(
+        conversationJobQueue.add({
+          type: conversationQueueJobEnum.enum.Receipts,
+          conversationId,
+          receiptsType: ReceiptType.Viewed,
+          receipts: [viewedReceipt],
+        })
+      );
     }
 
-    await dataInterface.addNewStoryRead({
-      authorId: message.attributes.sourceUuid,
+    await DataWriter.addNewStoryRead({
+      authorId,
       conversationId: message.attributes.conversationId,
       storyId: messageId,
       storyReadDate,
@@ -420,10 +511,9 @@ function queueStoryDownload(
       return;
     }
 
-    // isDownloading checks for the downloadJobId which is set by
-    // queueAttachmentDownloads but we optimistically set story.startedDownload
-    // in redux to prevent race conditions from queuing up multiple attachment
-    // downloads before the attachment save takes place.
+    // isDownloading checks if the download is pending but we optimistically set
+    // story.startedDownload in redux to prevent race conditions from queuing up multiple
+    // attachment downloads before the attachment save takes place.
     if (isDownloading(attachment) || story.startedDownload) {
       return;
     }
@@ -440,10 +530,14 @@ function queueStoryDownload(
         payload: storyId,
       });
 
-      const updatedFields = await queueAttachmentDownloads(message.attributes);
-      if (updatedFields) {
-        message.set(updatedFields);
+      const wasUpdated = await queueAttachmentDownloads(message, {
+        isManualDownload: true,
+        urgency: AttachmentDownloadUrgency.IMMEDIATE,
+      });
+      if (wasUpdated) {
+        await window.MessageCache.saveMessage(message);
       }
+
       return;
     }
 
@@ -457,7 +551,12 @@ function queueStoryDownload(
 function reactToStory(
   nextReaction: string,
   messageId: string
-): ThunkAction<void, RootStateType, unknown, NoopActionType> {
+): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  ShowToastActionType | NoopActionType
+> {
   return async dispatch => {
     try {
       await enqueueReactionForSend({
@@ -465,26 +564,30 @@ function reactToStory(
         emoji: nextReaction,
         remove: false,
       });
+      dispatch({
+        type: 'NOOP',
+        payload: null,
+      });
     } catch (error) {
       log.error('Error enqueuing reaction', error, messageId, nextReaction);
-      showToast(ToastReactionFailed);
+      dispatch({
+        type: SHOW_TOAST,
+        payload: {
+          toastType: ToastType.ReactionFailed,
+        },
+      });
     }
-
-    dispatch({
-      type: 'NOOP',
-      payload: null,
-    });
   };
 }
 
 function replyToStory(
   conversationId: string,
   messageBody: string,
-  mentions: Array<BodyRangeType>,
+  bodyRanges: DraftBodyRanges,
   timestamp: number,
   story: StoryViewType
-): ThunkAction<void, RootStateType, unknown, NoopActionType> {
-  return async dispatch => {
+): ThunkAction<void, RootStateType, unknown, StoryChangedActionType> {
+  return async (dispatch, getState) => {
     const conversation = window.ConversationController.get(conversationId);
 
     if (!conversation) {
@@ -496,7 +599,7 @@ function replyToStory(
       {
         body: messageBody,
         attachments: [],
-        mentions,
+        bodyRanges,
       },
       {
         storyId: story.messageId,
@@ -504,17 +607,31 @@ function replyToStory(
       }
     );
 
-    dispatch({
-      type: 'NOOP',
-      payload: null,
-    });
+    const { stories } = getState().stories;
+
+    const storyData = stories.find(s => s.messageId === story.messageId);
+    if (!storyData) {
+      log.error('replyToStory: story not found', story.messageId);
+      return;
+    }
+
+    // for group stories, this happens automatically through LOAD_STORY_REPLIES
+    // but 1:1 we need to update manually
+    dispatch(
+      storyChanged({
+        ...storyData,
+        hasReplies: true,
+        hasRepliesFromSelf: true,
+      })
+    );
   };
 }
 
 function sendStoryMessage(
-  listIds: Array<UUIDStringType>,
+  listIds: Array<StoryDistributionIdString>,
   conversationIds: Array<string>,
-  attachment: AttachmentType
+  attachment: AttachmentType,
+  bodyRanges: DraftBodyRanges | undefined
 ): ThunkAction<
   void,
   RootStateType,
@@ -523,7 +640,7 @@ function sendStoryMessage(
 > {
   return async (dispatch, getState) => {
     const { stories } = getState();
-    const { openedAtTimestamp, sendStoryModalData } = stories;
+    const { lastOpenedAtTimestamp, sendStoryModalData } = stories;
 
     // Add spinners in the story creator
     dispatch({
@@ -532,56 +649,45 @@ function sendStoryMessage(
     });
 
     assertDev(
-      openedAtTimestamp,
-      'sendStoryMessage: openedAtTimestamp is undefined, cannot send'
+      lastOpenedAtTimestamp,
+      'sendStoryMessage: lastOpenedAtTimestamp is undefined, cannot send'
     );
     assertDev(
       sendStoryModalData,
       'sendStoryMessage: sendStoryModalData is not defined, cannot send'
     );
 
-    if (sendStoryModalData.untrustedUuids.length) {
-      log.info('sendStoryMessage: SN changed for some conversations');
+    log.info('sendStoryMessage: Verifying trust for all recipients');
 
-      const conversationsNeedingVerification: Array<ConversationModel> =
-        sendStoryModalData.untrustedUuids
-          .map(uuid => window.ConversationController.get(uuid))
-          .filter(isNotNil);
+    const result = await blockSendUntilConversationsAreVerified(
+      sendStoryModalData,
+      SafetyNumberChangeSource.Story,
+      Date.now() - lastOpenedAtTimestamp
+    );
 
-      if (!conversationsNeedingVerification.length) {
-        log.warn(
-          'sendStoryMessage: Could not retrieve conversations for untrusted uuids'
-        );
-        return;
-      }
+    if (!result) {
+      log.info('sendStoryMessage: failed to verify untrusted; stopping send');
+      dispatch({
+        type: SET_STORY_SENDING,
+        payload: false,
+      });
+      return;
+    }
 
-      const result = await blockSendUntilConversationsAreVerified(
-        conversationsNeedingVerification,
-        SafetyNumberChangeSource.Story,
-        Date.now() - openedAtTimestamp
+    try {
+      await doSendStoryMessage(
+        listIds,
+        conversationIds,
+        attachment,
+        bodyRanges
       );
 
-      if (!result) {
-        log.info('sendStoryMessage: failed to verify untrusted; stopping send');
-        dispatch({
-          type: SET_STORY_SENDING,
-          payload: false,
-        });
-        return;
-      }
-
-      // Clear all untrusted and verified uuids; we're clear to send!
+      // Note: Only when we've successfully queued the message do we dismiss the story
+      //   composer view.
       dispatch({
         type: SEND_STORY_MODAL_OPEN_STATE_CHANGED,
         payload: undefined,
       });
-    }
-
-    try {
-      await doSendStoryMessage(listIds, conversationIds, attachment);
-
-      // Note: Only when we've successfully queued the message do we dismiss the story
-      //   composer view.
       dispatch({
         type: SET_ADD_STORY_DATA,
         payload: undefined,
@@ -627,15 +733,27 @@ function sendStoryModalOpenStateChanged(
   };
 }
 
-function toggleStoriesView(): ToggleViewActionType {
+function clearStoriesTabState(): ClearStoriesTabStateActionType {
   return {
-    type: TOGGLE_VIEW,
+    type: CLEAR_STORIES_TAB_STATE,
   };
 }
 
-function verifyStoryListMembers(
-  memberUuids: Array<string>
-): ThunkAction<void, RootStateType, unknown, ListMembersVerified> {
+function markStoriesTabViewed(): MarkStoriesTabViewedActionType {
+  return {
+    type: MARK_STORIES_TAB_VIEWED,
+  };
+}
+
+function verifyStoryListMembers({
+  conversationId,
+  distributionId,
+  serviceIds,
+}: {
+  conversationId: string;
+  distributionId: StoryDistributionIdString | undefined;
+  serviceIds: Array<ServiceIdString>;
+}): ThunkAction<void, RootStateType, unknown, ListMembersVerified> {
   return async (dispatch, getState) => {
     const { stories } = getState();
     const { sendStoryModalData } = stories;
@@ -644,25 +762,20 @@ function verifyStoryListMembers(
       return;
     }
 
-    const alreadyVerifiedUuids = new Set([...sendStoryModalData.verifiedUuids]);
-
-    const uuidsNeedingVerification = memberUuids.filter(
-      uuid => !alreadyVerifiedUuids.has(uuid)
-    );
-
-    if (!uuidsNeedingVerification.length) {
+    if (!serviceIds.length) {
       return;
     }
 
-    const { untrustedUuids, verifiedUuids } = await doVerifyStoryListMembers(
-      uuidsNeedingVerification
-    );
+    // This will fetch the latest identity key for these contacts, which will ensure that
+    //   the later verified/trusted checks will flag that change.
+    await doVerifyStoryListMembers(serviceIds);
 
     dispatch({
       type: LIST_MEMBERS_VERIFIED,
       payload: {
-        untrustedUuids: Array.from(untrustedUuids),
-        verifiedUuids: Array.from(verifiedUuids),
+        conversationId,
+        distributionId,
+        serviceIds,
       },
     });
   };
@@ -703,8 +816,15 @@ const getSelectedStoryDataForDistributionListId = (
 const getSelectedStoryDataForConversationId = (
   dispatch: ThunkDispatch<RootStateType, unknown, NoopActionType>,
   getState: () => RootStateType,
-  conversationId: string,
-  selectedStoryId?: string
+  {
+    conversationId,
+    onlyFromSelf,
+    selectedStoryId,
+  }: {
+    conversationId: string;
+    onlyFromSelf: boolean;
+    selectedStoryId?: string;
+  }
 ): {
   currentIndex: number;
   hasUnread: boolean;
@@ -714,8 +834,12 @@ const getSelectedStoryDataForConversationId = (
   const state = getState();
   const { stories } = state.stories;
 
+  const ourAci = window.storage.user.getCheckedAci();
   const storiesByConversationId = stories.filter(
-    item => item.conversationId === conversationId && !item.deletedForEveryone
+    item =>
+      item.conversationId === conversationId &&
+      !item.deletedForEveryone &&
+      (!onlyFromSelf || item.sourceServiceId === ourAci)
   );
 
   // Find the index of the storyId provided, or if none provided then find the
@@ -757,11 +881,13 @@ const getSelectedStoryDataForConversationId = (
   };
 };
 
-export type ViewUserStoriesActionCreatorType = (opts: {
-  conversationId: string;
-  storyViewMode?: StoryViewModeType;
-  viewTarget?: StoryViewTargetType;
-}) => unknown;
+export type ViewUserStoriesActionCreatorType = ReadonlyDeep<
+  (opts: {
+    conversationId: string;
+    storyViewMode?: StoryViewModeType;
+    viewTarget?: StoryViewTargetType;
+  }) => unknown
+>;
 
 const viewUserStories: ViewUserStoriesActionCreatorType = ({
   conversationId,
@@ -770,7 +896,10 @@ const viewUserStories: ViewUserStoriesActionCreatorType = ({
 }): ThunkAction<void, RootStateType, unknown, ViewStoryActionType> => {
   return (dispatch, getState) => {
     const { currentIndex, hasUnread, numStories, storiesByConversationId } =
-      getSelectedStoryDataForConversationId(dispatch, getState, conversationId);
+      getSelectedStoryDataForConversationId(dispatch, getState, {
+        conversationId,
+        onlyFromSelf: false,
+      });
 
     const story = storiesByConversationId[currentIndex];
     const state = getState();
@@ -823,7 +952,7 @@ function removeAllStories(): RemoveAllStoriesActionType {
   };
 }
 
-type ViewStoryOptionsType =
+type ViewStoryOptionsType = ReadonlyDeep<
   | {
       closeViewer: true;
     }
@@ -832,15 +961,18 @@ type ViewStoryOptionsType =
       storyViewMode: StoryViewModeType;
       viewDirection?: StoryViewDirectionType;
       viewTarget?: StoryViewTargetType;
-    };
+    }
+>;
 
-export type ViewStoryActionCreatorType = (
-  opts: ViewStoryOptionsType
-) => unknown;
+export type ViewStoryActionCreatorType = ReadonlyDeep<
+  (opts: ViewStoryOptionsType) => unknown
+>;
 
-export type DispatchableViewStoryType = (
-  opts: ViewStoryOptionsType
-) => ThunkAction<void, RootStateType, unknown, ViewStoryActionType>;
+export type DispatchableViewStoryType = ReadonlyDeep<
+  (
+    opts: ViewStoryOptionsType
+  ) => ThunkAction<void, RootStateType, unknown, ViewStoryActionType>
+>;
 
 const viewStory: ViewStoryActionCreatorType = (
   opts
@@ -889,15 +1021,18 @@ const viewStory: ViewStoryActionCreatorType = (
             story.storyDistributionListId,
             storyId
           )
-        : getSelectedStoryDataForConversationId(
-            dispatch,
-            getState,
-            story.conversationId,
-            storyId
-          );
+        : getSelectedStoryDataForConversationId(dispatch, getState, {
+            conversationId: story.conversationId,
+            onlyFromSelf: storyViewMode === StoryViewModeType.MyStories,
+            selectedStoryId: storyId,
+          });
 
     // Go directly to the storyId selected
     if (!viewDirection) {
+      const hasFailedSend = Object.values(
+        story.sendStateByConversationId || {}
+      ).some(({ status }) => status === SendStatus.Failed);
+
       dispatch({
         type: VIEW_STORY,
         payload: {
@@ -906,7 +1041,7 @@ const viewStory: ViewStoryActionCreatorType = (
           numStories,
           storyViewMode,
           unviewedStoryConversationIdsSorted,
-          viewTarget,
+          viewTarget: hasFailedSend ? undefined : viewTarget,
         },
       });
       return;
@@ -1091,7 +1226,10 @@ const viewStory: ViewStoryActionCreatorType = (
         const nextSelectedStoryData = getSelectedStoryDataForConversationId(
           dispatch,
           getState,
-          nextUnreadConversationId
+          {
+            conversationId: nextUnreadConversationId,
+            onlyFromSelf: false,
+          }
         );
 
         dispatch({
@@ -1150,7 +1288,10 @@ const viewStory: ViewStoryActionCreatorType = (
       const nextSelectedStoryData = getSelectedStoryDataForConversationId(
         dispatch,
         getState,
-        conversationStory.conversationId
+        {
+          conversationId: conversationStory.conversationId,
+          onlyFromSelf: false,
+        }
       );
 
       dispatch({
@@ -1185,7 +1326,10 @@ const viewStory: ViewStoryActionCreatorType = (
       const nextSelectedStoryData = getSelectedStoryDataForConversationId(
         dispatch,
         getState,
-        conversationStory.conversationId
+        {
+          conversationId: conversationStory.conversationId,
+          onlyFromSelf: false,
+        }
       );
 
       dispatch({
@@ -1223,11 +1367,56 @@ function setStorySending(sending: boolean): SetStorySendingType {
   };
 }
 
+function setHasAllStoriesUnmuted(
+  isUnmuted: boolean
+): SetHasAllStoriesUnmutedType {
+  return {
+    type: SET_HAS_ALL_STORIES_UNMUTED,
+    payload: isUnmuted,
+  };
+}
+
 function setStoriesDisabled(
   value: boolean
 ): ThunkAction<void, RootStateType, unknown, never> {
   return async () => {
     await window.Events.setHasStoriesDisabled(value);
+  };
+}
+
+function removeAllContactStories(
+  conversationId: string
+): ThunkAction<void, RootStateType, unknown, NoopActionType> {
+  return async (dispatch, getState) => {
+    const logId = `removeAllContactStories(${conversationId})`;
+    const { stories } = getState().stories;
+    const messageIds = stories
+      .filter(item => item.conversationId === conversationId)
+      .map(({ messageId }) => messageId);
+
+    const messages = (
+      await Promise.all(
+        messageIds.map(async messageId => {
+          const message = await getMessageById(messageId);
+
+          if (!message) {
+            log.warn(`${logId}: no message found ${messageId}`);
+            return;
+          }
+
+          return message;
+        })
+      )
+    ).filter(isNotNil);
+
+    log.info(`${logId}: removing ${messages.length} stories`);
+
+    await DataWriter.removeMessages(messageIds, { cleanupMessages });
+
+    dispatch({
+      type: 'NOOP',
+      payload: null,
+    });
   };
 }
 
@@ -1242,7 +1431,8 @@ export const actions = {
   sendStoryMessage,
   sendStoryModalOpenStateChanged,
   storyChanged,
-  toggleStoriesView,
+  clearStoriesTabState,
+  markStoriesTabViewed,
   verifyStoryListMembers,
   viewUserStories,
   viewStory,
@@ -1250,10 +1440,14 @@ export const actions = {
   deleteGroupStoryReplyForEveryone,
   setAddStoryData,
   setStoriesDisabled,
+  setHasAllStoriesUnmuted,
   setStorySending,
+  removeAllContactStories,
 };
 
-export const useStoriesActions = (): typeof actions => useBoundActions(actions);
+export const useStoriesActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 // Reducer
 
@@ -1262,9 +1456,9 @@ export function getEmptyState(
 ): StoriesStateType {
   return {
     lastOpenedAtTimestamp: undefined,
-    openedAtTimestamp: undefined,
     addStoryData: undefined,
     stories: [],
+    hasAllStoriesUnmuted: false,
     ...overrideState,
   };
 }
@@ -1273,20 +1467,22 @@ export function reducer(
   state: Readonly<StoriesStateType> = getEmptyState(),
   action: Readonly<StoriesActionType>
 ): StoriesStateType {
-  if (action.type === TOGGLE_VIEW) {
-    const isShowingStoriesView = Boolean(state.openedAtTimestamp);
-
+  if (action.type === MARK_STORIES_TAB_VIEWED) {
     return {
       ...state,
-      lastOpenedAtTimestamp: !isShowingStoriesView
-        ? state.openedAtTimestamp || Date.now()
-        : state.lastOpenedAtTimestamp,
-      openedAtTimestamp: isShowingStoriesView ? undefined : Date.now(),
+      lastOpenedAtTimestamp: Date.now(),
       replyState: undefined,
       sendStoryModalData: undefined,
-      selectedStoryData: isShowingStoriesView
-        ? undefined
-        : state.selectedStoryData,
+    };
+  }
+
+  if (action.type === CLEAR_STORIES_TAB_STATE) {
+    return {
+      ...state,
+      replyState: undefined,
+      sendStoryModalData: undefined,
+      selectedStoryData: undefined,
+      addStoryData: undefined,
     };
   }
 
@@ -1322,6 +1518,7 @@ export function reducer(
   if (action.type === STORY_CHANGED) {
     const newStory = pick(action.payload, [
       'attachment',
+      'bodyRanges',
       'canReplyToStory',
       'conversationId',
       'deletedForEveryone',
@@ -1335,7 +1532,8 @@ export function reducer(
       'readStatus',
       'sendStateByConversationId',
       'source',
-      'sourceUuid',
+      'sourceServiceId',
+      'sourceDevice',
       'storyDistributionListId',
       'timestamp',
       'type',
@@ -1347,17 +1545,24 @@ export function reducer(
     if (prevStoryIndex >= 0) {
       const prevStory = state.stories[prevStoryIndex];
 
-      // Stories rarely need to change, here are the following exceptions:
+      // Stories rarely need to change, here are the following exceptions...
+
+      // These only change because of initialization order - these fields are updated
+      //   after the model is created:
+      const bodyRangesChanged =
+        newStory.bodyRanges?.length !== prevStory.bodyRanges?.length;
+      const hasExpirationChanged =
+        (newStory.expirationStartTimestamp &&
+          !prevStory.expirationStartTimestamp) ||
+        (newStory.expireTimer && !prevStory.expireTimer);
+
+      // These reflect changes in status over time:
       const isDownloadingAttachment = isDownloading(newStory.attachment);
       const hasAttachmentDownloaded =
         !isDownloaded(prevStory.attachment) &&
         isDownloaded(newStory.attachment);
       const hasAttachmentFailed =
         hasFailed(newStory.attachment) && !hasFailed(prevStory.attachment);
-      const hasExpirationChanged =
-        (newStory.expirationStartTimestamp &&
-          !prevStory.expirationStartTimestamp) ||
-        (newStory.expireTimer && !prevStory.expireTimer);
       const readStatusChanged = prevStory.readStatus !== newStory.readStatus;
       const reactionsChanged =
         prevStory.reactions?.length !== newStory.reactions?.length;
@@ -1367,8 +1572,12 @@ export function reducer(
         prevStory.sendStateByConversationId,
         newStory.sendStateByConversationId
       );
+      const hasHasRepliesChanged =
+        prevStory.hasReplies !== newStory.hasReplies ||
+        prevStory.hasRepliesFromSelf !== newStory.hasRepliesFromSelf;
 
       const shouldReplace =
+        bodyRangesChanged ||
         isDownloadingAttachment ||
         hasAttachmentDownloaded ||
         hasAttachmentFailed ||
@@ -1376,7 +1585,9 @@ export function reducer(
         hasExpirationChanged ||
         hasSendStateChanged ||
         readStatusChanged ||
-        reactionsChanged;
+        reactionsChanged ||
+        hasHasRepliesChanged;
+
       if (!shouldReplace) {
         return state;
       }
@@ -1522,6 +1733,7 @@ export function reducer(
   if (action.type === DOE_STORY) {
     return {
       ...state,
+      selectedStoryData: undefined,
       stories: state.stories.filter(
         existingStory => existingStory.messageId !== action.payload
       ),
@@ -1563,10 +1775,7 @@ export function reducer(
     if (action.payload) {
       return {
         ...state,
-        sendStoryModalData: {
-          untrustedUuids: [],
-          verifiedUuids: [],
-        },
+        sendStoryModalData: {},
       };
     }
 
@@ -1577,31 +1786,50 @@ export function reducer(
   }
 
   if (action.type === LIST_MEMBERS_VERIFIED) {
-    const sendStoryModalData = {
-      untrustedUuids: [],
-      verifiedUuids: [],
-      ...(state.sendStoryModalData || {}),
-    };
+    const { sendStoryModalData } = state;
+    const { conversationId, distributionId, serviceIds } = action.payload;
 
-    const untrustedUuids = Array.from(
-      new Set([
-        ...sendStoryModalData.untrustedUuids,
-        ...action.payload.untrustedUuids,
-      ])
-    );
-    const verifiedUuids = Array.from(
-      new Set([
-        ...sendStoryModalData.verifiedUuids,
-        ...action.payload.verifiedUuids,
-      ])
+    const existing =
+      sendStoryModalData && getOwn(sendStoryModalData, conversationId);
+
+    if (distributionId) {
+      const existingServiceIds =
+        existing?.byDistributionId?.[distributionId]?.serviceIds;
+
+      const finalServiceIds = Array.from(
+        new Set([...(existingServiceIds || []), ...serviceIds])
+      );
+
+      return {
+        ...state,
+        sendStoryModalData: {
+          ...sendStoryModalData,
+          [conversationId]: {
+            ...existing,
+            serviceIds: existing?.serviceIds || [],
+            byDistributionId: {
+              ...existing?.byDistributionId,
+              [distributionId]: {
+                serviceIds: finalServiceIds,
+              },
+            },
+          },
+        },
+      };
+    }
+
+    const finalServiceIds = Array.from(
+      new Set([...(existing?.serviceIds || []), ...serviceIds])
     );
 
     return {
       ...state,
       sendStoryModalData: {
         ...sendStoryModalData,
-        untrustedUuids,
-        verifiedUuids,
+        [conversationId]: {
+          ...existing,
+          serviceIds: finalServiceIds,
+        },
       },
     };
   }
@@ -1629,6 +1857,22 @@ export function reducer(
         ...existing,
         sending: action.payload,
       },
+    };
+  }
+
+  if (action.type === SET_HAS_ALL_STORIES_UNMUTED) {
+    return {
+      ...state,
+      hasAllStoriesUnmuted: action.payload,
+    };
+  }
+
+  if (action.type === TARGETED_CONVERSATION_CHANGED) {
+    return {
+      ...state,
+      replyState: undefined,
+      sendStoryModalData: undefined,
+      selectedStoryData: undefined,
     };
   }
 

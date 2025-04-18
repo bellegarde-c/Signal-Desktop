@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ThunkAction } from 'redux-thunk';
+import type { ReadonlyDeep } from 'type-fest';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
+import { useBoundActions } from '../../hooks/useBoundActions';
 import * as updateIpc from '../../shims/updateIpc';
 import { DialogType } from '../../types/Dialogs';
 import { DAY } from '../../util/durations';
@@ -9,14 +12,15 @@ import type { StateType as RootStateType } from '../reducer';
 
 // State
 
-export type UpdatesStateType = {
+export type UpdatesStateType = ReadonlyDeep<{
   dialogType: DialogType;
   didSnooze: boolean;
   downloadSize?: number;
   downloadedSize?: number;
   showEventsCount: number;
+  isCheckingForUpdates: boolean;
   version?: string;
-};
+}>;
 
 // Actions
 
@@ -24,45 +28,58 @@ const DISMISS_DIALOG = 'updates/DISMISS_DIALOG';
 const SHOW_UPDATE_DIALOG = 'updates/SHOW_UPDATE_DIALOG';
 const SNOOZE_UPDATE = 'updates/SNOOZE_UPDATE';
 const START_UPDATE = 'updates/START_UPDATE';
+const CHECK_FOR_UPDATES = 'updates/CHECK_FOR_UPDATES';
+const CHECK_FOR_UPDATES_FINISHED = 'updates/CHECK_FOR_UPDATES_FINISHED';
 const UNSNOOZE_UPDATE = 'updates/UNSNOOZE_UPDATE';
 
-export type UpdateDialogOptionsType = {
+export type UpdateDialogOptionsType = ReadonlyDeep<{
   downloadSize?: number;
   downloadedSize?: number;
   version?: string;
-};
+}>;
 
-type DismissDialogActionType = {
+type DismissDialogActionType = ReadonlyDeep<{
   type: typeof DISMISS_DIALOG;
-};
+}>;
 
-export type ShowUpdateDialogActionType = {
+export type ShowUpdateDialogActionType = ReadonlyDeep<{
   type: typeof SHOW_UPDATE_DIALOG;
   payload: {
     dialogType: DialogType;
     otherState: UpdateDialogOptionsType;
   };
-};
+}>;
 
-type SnoozeUpdateActionType = {
+type SnoozeUpdateActionType = ReadonlyDeep<{
   type: typeof SNOOZE_UPDATE;
-};
+}>;
 
-type StartUpdateActionType = {
+type StartUpdateActionType = ReadonlyDeep<{
   type: typeof START_UPDATE;
-};
+}>;
 
-type UnsnoozeUpdateActionType = {
+type CheckForUpdatesActionType = ReadonlyDeep<{
+  type: typeof CHECK_FOR_UPDATES;
+}>;
+
+type CheckForUpdatesFinishedActionType = ReadonlyDeep<{
+  type: typeof CHECK_FOR_UPDATES_FINISHED;
+}>;
+
+type UnsnoozeUpdateActionType = ReadonlyDeep<{
   type: typeof UNSNOOZE_UPDATE;
   payload: DialogType;
-};
+}>;
 
-export type UpdatesActionType =
+export type UpdatesActionType = ReadonlyDeep<
   | DismissDialogActionType
   | ShowUpdateDialogActionType
   | SnoozeUpdateActionType
   | StartUpdateActionType
-  | UnsnoozeUpdateActionType;
+  | CheckForUpdatesActionType
+  | CheckForUpdatesFinishedActionType
+  | UnsnoozeUpdateActionType
+>;
 
 // Action Creators
 
@@ -131,12 +148,48 @@ function startUpdate(): ThunkAction<
   };
 }
 
+function forceUpdate(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  | CheckForUpdatesActionType
+  | CheckForUpdatesFinishedActionType
+  | ShowUpdateDialogActionType
+> {
+  return async dispatch => {
+    dispatch({
+      type: CHECK_FOR_UPDATES,
+    });
+
+    try {
+      await updateIpc.forceUpdate();
+    } catch {
+      dispatch({
+        type: SHOW_UPDATE_DIALOG,
+        payload: {
+          dialogType: DialogType.Cannot_Update,
+          otherState: {},
+        },
+      });
+    } finally {
+      dispatch({
+        type: CHECK_FOR_UPDATES_FINISHED,
+      });
+    }
+  };
+}
+
 export const actions = {
   dismissDialog,
   showUpdateDialog,
   snoozeUpdate,
   startUpdate,
+  forceUpdate,
 };
+
+export const useUpdatesActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 // Reducer
 
@@ -144,6 +197,7 @@ export function getEmptyState(): UpdatesStateType {
   return {
     dialogType: DialogType.None,
     didSnooze: false,
+    isCheckingForUpdates: false,
     showEventsCount: 0,
   };
 }
@@ -175,6 +229,23 @@ export function reducer(
     return {
       ...state,
       dialogType: DialogType.None,
+      didSnooze: false,
+    };
+  }
+
+  if (action.type === CHECK_FOR_UPDATES) {
+    return {
+      ...state,
+      dialogType: DialogType.None,
+      didSnooze: false,
+      isCheckingForUpdates: true,
+    };
+  }
+
+  if (action.type === CHECK_FOR_UPDATES_FINISHED) {
+    return {
+      ...state,
+      isCheckingForUpdates: false,
     };
   }
 

@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { VideoFrameSource } from 'ringrtc';
+import type { VideoFrameSource } from '@signalapp/ringrtc';
 
 const COLORS: Array<[number, number, number]> = [
   [0xff, 0x00, 0x00],
@@ -14,32 +14,35 @@ const COLORS: Array<[number, number, number]> = [
 ];
 
 class FakeGroupCallVideoFrameSource implements VideoFrameSource {
-  private readonly sourceArray: Uint8Array;
-
-  private readonly dimensions: [number, number];
+  readonly #sourceArray: Uint8Array;
+  readonly #dimensions: [number, number];
 
   constructor(width: number, height: number, r: number, g: number, b: number) {
     const length = width * height * 4;
 
-    this.sourceArray = new Uint8Array(length);
+    this.#sourceArray = new Uint8Array(length);
     for (let i = 0; i < length; i += 4) {
-      this.sourceArray[i] = r;
-      this.sourceArray[i + 1] = g;
-      this.sourceArray[i + 2] = b;
-      this.sourceArray[i + 3] = 255;
+      this.#sourceArray[i] = r;
+      this.#sourceArray[i + 1] = g;
+      this.#sourceArray[i + 2] = b;
+      this.#sourceArray[i + 3] = 255;
     }
 
-    this.dimensions = [width, height];
+    this.#dimensions = [width, height];
   }
 
-  receiveVideoFrame(destinationBuffer: Buffer): [number, number] | undefined {
+  receiveVideoFrame(
+    destinationBuffer: Buffer,
+    _maxWidth: number,
+    _maxHeight: number
+  ): [number, number] | undefined {
     // Simulate network jitter. Also improves performance when testing.
     if (Math.random() < 0.5) {
       return undefined;
     }
 
-    destinationBuffer.set(this.sourceArray);
-    return this.dimensions;
+    destinationBuffer.set(this.#sourceArray);
+    return this.#dimensions;
   }
 }
 

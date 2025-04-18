@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { animated, useSpring } from '@react-spring/web';
 
 import type { LocalizerType } from '../../types/Util';
+import { drop } from '../../util/drop';
 import { TimelineDateHeader } from './TimelineDateHeader';
 import { Spinner } from '../Spinner';
 
@@ -18,13 +19,13 @@ export type PropsType = Readonly<{
   visible: boolean;
 }>;
 
-export const TimelineFloatingHeader = ({
+export function TimelineFloatingHeader({
   i18n,
   isLoading,
   style,
   timestamp,
   visible,
-}: PropsType): ReactElement => {
+}: PropsType): ReactElement {
   const [hasRendered, setHasRendered] = useState(false);
   const [showSpinner, setShowSpinner] = useState(isLoading);
 
@@ -46,6 +47,7 @@ export const TimelineFloatingHeader = ({
         },
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- FIXME
     [isLoading]
   );
 
@@ -57,7 +59,7 @@ export const TimelineFloatingHeader = ({
     }
 
     if (!isLoading && showSpinner) {
-      spinnerSpringRef.start();
+      drop(Promise.all(spinnerSpringRef.start()));
     }
 
     if (!isLoading && !showSpinner) {
@@ -67,12 +69,14 @@ export const TimelineFloatingHeader = ({
 
   return (
     <div
+      aria-level={5}
       className={classNames(
         'TimelineFloatingHeader',
         `TimelineFloatingHeader--${
           visible && hasRendered ? 'visible' : 'hidden'
         }`
       )}
+      role="heading"
       style={style}
     >
       <TimelineDateHeader floating i18n={i18n} timestamp={timestamp} />
@@ -86,4 +90,4 @@ export const TimelineFloatingHeader = ({
       )}
     </div>
   );
-};
+}

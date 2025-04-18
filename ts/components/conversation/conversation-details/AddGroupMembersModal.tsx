@@ -1,7 +1,6 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent } from 'react';
 import React, { useReducer } from 'react';
 import { without } from 'lodash';
 
@@ -49,7 +48,7 @@ type StateType = {
   maximumGroupSizeModalState: OneTimeModalState;
   recommendedGroupSizeModalState: OneTimeModalState;
   searchTerm: string;
-  selectedConversationIds: Array<string>;
+  selectedConversationIds: ReadonlyArray<string>;
   stage: Stage;
 };
 
@@ -134,7 +133,7 @@ function reducer(
   }
 }
 
-export const AddGroupMembersModal: FunctionComponent<PropsType> = ({
+export function AddGroupMembersModal({
   clearRequestError,
   conversationIdsAlreadyInGroup,
   groupTitle,
@@ -146,7 +145,7 @@ export const AddGroupMembersModal: FunctionComponent<PropsType> = ({
   requestState,
   renderChooseGroupMembersModal,
   renderConfirmAdditionsModal,
-}) => {
+}: PropsType): JSX.Element {
   const numberOfContactsAlreadyInGroup = conversationIdsAlreadyInGroup.size;
   const isGroupAlreadyFull = numberOfContactsAlreadyInGroup >= maxGroupSize;
   const isGroupAlreadyOverRecommendedMaximum =
@@ -250,7 +249,7 @@ export const AddGroupMembersModal: FunctionComponent<PropsType> = ({
       return renderConfirmAdditionsModal({
         groupTitle,
         makeRequest: () => {
-          makeRequest(selectedConversationIds);
+          void makeRequest(selectedConversationIds);
         },
         onClose: onCloseConfirmationDialog,
         requestState,
@@ -260,4 +259,4 @@ export const AddGroupMembersModal: FunctionComponent<PropsType> = ({
     default:
       throw missingCaseError(stage);
   }
-};
+}

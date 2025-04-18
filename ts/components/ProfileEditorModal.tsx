@@ -7,7 +7,7 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 import type { PropsType as ProfileEditorPropsType } from './ProfileEditor';
 import { ProfileEditor, EditState } from './ProfileEditor';
 import type { ProfileDataType } from '../state/ducks/conversations';
-import type { AvatarUpdateType } from '../types/Avatar';
+import type { AvatarUpdateOptionsType } from '../types/Avatar';
 
 export type PropsDataType = {
   hasError: boolean;
@@ -16,28 +16,59 @@ export type PropsDataType = {
 type PropsType = {
   myProfileChanged: (
     profileData: ProfileDataType,
-    avatar: AvatarUpdateType
+    avatarUpdateOptions: AvatarUpdateOptionsType
   ) => unknown;
   toggleProfileEditor: () => unknown;
   toggleProfileEditorHasError: () => unknown;
 } & PropsDataType &
   Omit<ProfileEditorPropsType, 'onEditStateChanged' | 'onProfileChanged'>;
 
-export const ProfileEditorModal = ({
+export function ProfileEditorModal({
+  aboutEmoji,
+  aboutText,
+  color,
+  conversationId,
+  deleteAvatarFromDisk,
+  deleteUsername,
+  familyName,
+  firstName,
+  hasCompletedUsernameLinkOnboarding,
   hasError,
   i18n,
+  initialEditState,
+  markCompletedUsernameLinkOnboarding,
   myProfileChanged,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
+  openUsernameReservationModal,
+  profileAvatarUrl,
+  recentEmojis,
+  renderEditUsernameModalBody,
+  replaceAvatar,
+  resetUsernameLink,
+  saveAttachment,
+  saveAvatarToDisk,
+  setUsernameEditState,
+  setUsernameLinkColor,
+  showToast,
+  emojiSkinToneDefault,
   toggleProfileEditor,
   toggleProfileEditorHasError,
-  ...restProps
-}: PropsType): JSX.Element => {
-  const MODAL_TITLES_BY_EDIT_STATE: Record<EditState, string> = {
-    [EditState.BetterAvatar]: i18n('ProfileEditorModal--avatar'),
-    [EditState.Bio]: i18n('ProfileEditorModal--about'),
-    [EditState.None]: i18n('ProfileEditorModal--profile'),
-    [EditState.ProfileName]: i18n('ProfileEditorModal--name'),
-    [EditState.Username]: i18n('ProfileEditorModal--username'),
+  userAvatarData,
+  username,
+  usernameCorrupted,
+  usernameEditState,
+  usernameLink,
+  usernameLinkColor,
+  usernameLinkCorrupted,
+  usernameLinkState,
+}: PropsType): JSX.Element {
+  const MODAL_TITLES_BY_EDIT_STATE: Record<EditState, string | undefined> = {
+    [EditState.BetterAvatar]: i18n('icu:ProfileEditorModal--avatar'),
+    [EditState.Bio]: i18n('icu:ProfileEditorModal--about'),
+    [EditState.None]: i18n('icu:ProfileEditorModal--profile'),
+    [EditState.ProfileName]: i18n('icu:ProfileEditorModal--name'),
+    [EditState.Username]: i18n('icu:ProfileEditorModal--username'),
+    [EditState.UsernameLink]: undefined,
   };
 
   const [modalTitle, setModalTitle] = useState(
@@ -48,34 +79,65 @@ export const ProfileEditorModal = ({
     return (
       <ConfirmationDialog
         dialogName="ProfileEditorModal.error"
-        cancelText={i18n('Confirmation--confirm')}
+        cancelText={i18n('icu:Confirmation--confirm')}
         i18n={i18n}
         onClose={toggleProfileEditorHasError}
       >
-        {i18n('ProfileEditorModal--error')}
+        {i18n('icu:ProfileEditorModal--error')}
       </ConfirmationDialog>
     );
   }
 
   return (
-    <>
-      <Modal
-        modalName="ProfileEditorModal"
-        hasXButton
+    <Modal
+      modalName="ProfileEditorModal"
+      hasXButton
+      i18n={i18n}
+      onClose={toggleProfileEditor}
+      title={modalTitle}
+    >
+      <ProfileEditor
+        aboutEmoji={aboutEmoji}
+        aboutText={aboutText}
+        color={color}
+        conversationId={conversationId}
+        deleteAvatarFromDisk={deleteAvatarFromDisk}
+        deleteUsername={deleteUsername}
+        familyName={familyName}
+        firstName={firstName}
+        hasCompletedUsernameLinkOnboarding={hasCompletedUsernameLinkOnboarding}
         i18n={i18n}
-        onClose={toggleProfileEditor}
-        title={modalTitle}
-      >
-        <ProfileEditor
-          {...restProps}
-          i18n={i18n}
-          onEditStateChanged={editState => {
-            setModalTitle(MODAL_TITLES_BY_EDIT_STATE[editState]);
-          }}
-          onProfileChanged={myProfileChanged}
-          onSetSkinTone={onSetSkinTone}
-        />
-      </Modal>
-    </>
+        initialEditState={initialEditState}
+        markCompletedUsernameLinkOnboarding={
+          markCompletedUsernameLinkOnboarding
+        }
+        onEditStateChanged={editState => {
+          setModalTitle(MODAL_TITLES_BY_EDIT_STATE[editState]);
+        }}
+        onProfileChanged={myProfileChanged}
+        onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+        openUsernameReservationModal={openUsernameReservationModal}
+        profileAvatarUrl={profileAvatarUrl}
+        recentEmojis={recentEmojis}
+        renderEditUsernameModalBody={renderEditUsernameModalBody}
+        replaceAvatar={replaceAvatar}
+        resetUsernameLink={resetUsernameLink}
+        saveAttachment={saveAttachment}
+        saveAvatarToDisk={saveAvatarToDisk}
+        setUsernameEditState={setUsernameEditState}
+        setUsernameLinkColor={setUsernameLinkColor}
+        showToast={showToast}
+        emojiSkinToneDefault={emojiSkinToneDefault}
+        toggleProfileEditor={toggleProfileEditor}
+        userAvatarData={userAvatarData}
+        username={username}
+        usernameCorrupted={usernameCorrupted}
+        usernameEditState={usernameEditState}
+        usernameLink={usernameLink}
+        usernameLinkColor={usernameLinkColor}
+        usernameLinkCorrupted={usernameLinkCorrupted}
+        usernameLinkState={usernameLinkState}
+      />
+    </Modal>
   );
-};
+}

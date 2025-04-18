@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import memoizee from 'memoizee';
@@ -26,13 +26,19 @@ import type { GetConversationByIdType } from './conversations';
 import {
   getConversationLookup,
   getConversationSelector,
+  getSelectedConversationId,
 } from './conversations';
 
-import type { BodyRangeType } from '../../types/Util';
+import { hydrateRanges } from '../../types/BodyRange';
 import * as log from '../../logging/log';
 import { getOwn } from '../../util/getOwn';
 
 export const getSearch = (state: StateType): SearchStateType => state.search;
+
+export const getFilterByUnread = createSelector(
+  getSearch,
+  (state: SearchStateType): boolean => state.filterByUnread
+);
 
 export const getQuery = createSelector(
   getSearch,
@@ -41,7 +47,7 @@ export const getQuery = createSelector(
 
 export const getSelectedMessage = createSelector(
   getSearch,
-  (state: SearchStateType): string | undefined => state.selectedMessage
+  (state: SearchStateType): string | undefined => state.targetedMessage
 );
 
 const getSearchConversationId = createSelector(
@@ -52,6 +58,18 @@ const getSearchConversationId = createSelector(
 export const getIsSearchingInAConversation = createSelector(
   getSearchConversationId,
   Boolean
+);
+
+export const getIsSearchingGlobally = createSelector(
+  getSearch,
+  (state: SearchStateType): boolean => Boolean(state.globalSearch)
+);
+
+export const getIsSearching = createSelector(
+  getIsSearchingInAConversation,
+  getIsSearchingGlobally,
+  (isSearchingInAConversation, isSearchingGlobally): boolean =>
+    isSearchingInAConversation || isSearchingGlobally
 );
 
 export const getSearchConversation = createSelector(
@@ -70,7 +88,7 @@ export const getSearchConversationName = createSelector(
     if (!conversation) {
       return undefined;
     }
-    return conversation.isMe ? i18n('noteToSelf') : conversation.title;
+    return conversation.isMe ? i18n('icu:noteToSelf') : conversation.title;
   }
 );
 
@@ -79,9 +97,15 @@ export const getStartSearchCounter = createSelector(
   (state: SearchStateType): number => state.startSearchCounter
 );
 
-export const isSearching = createSelector(
+export const getHasSearchQuery = createSelector(
   getQuery,
   (query: string): boolean => query.trim().length > 0
+);
+
+export const getIsActivelySearching = createSelector(
+  [getFilterByUnread, getHasSearchQuery],
+  (filterByUnread: boolean, hasSearchQuery: boolean): boolean =>
+    filterByUnread || hasSearchQuery
 );
 
 export const getMessageSearchResultLookup = createSelector(
@@ -90,11 +114,17 @@ export const getMessageSearchResultLookup = createSelector(
 );
 
 export const getSearchResults = createSelector(
-  [getSearch, getSearchConversationName, getConversationLookup],
+  [
+    getSearch,
+    getSearchConversationName,
+    getConversationLookup,
+    getSelectedConversationId,
+  ],
   (
     state: SearchStateType,
     searchConversationName,
-    conversationLookup: ConversationLookupType
+    conversationLookup: ConversationLookupType,
+    selectedConversationId: string | undefined
   ): Pick<
     LeftPaneSearchPropsType,
     | 'conversationResults'
@@ -102,6 +132,7 @@ export const getSearchResults = createSelector(
     | 'messageResults'
     | 'searchConversationName'
     | 'searchTerm'
+    | 'filterByUnread'
   > => {
     const {
       contactIds,
@@ -112,7 +143,7 @@ export const getSearchResults = createSelector(
       messagesLoading,
     } = state;
 
-    return {
+    const searchResults: ReturnType<typeof getSearchResults> = {
       conversationResults: discussionsLoading
         ? { isLoading: true }
         : {
@@ -133,7 +164,23 @@ export const getSearchResults = createSelector(
           },
       searchConversationName,
       searchTerm: state.query,
+      filterByUnread: state.filterByUnread,
     };
+
+    if (
+      state.filterByUnread &&
+      searchResults.conversationResults.isLoading === false
+    ) {
+      searchResults.conversationResults.results =
+        searchResults.conversationResults.results.map(conversation => {
+          return {
+            ...conversation,
+            isSelected: selectedConversationId === conversation.id,
+          };
+        });
+    }
+
+    return searchResults;
   }
 );
 
@@ -144,7 +191,7 @@ type CachedMessageSearchResultSelectorType = (
   from: ConversationType,
   to: ConversationType,
   searchConversationId?: string,
-  selectedMessageId?: string
+  targetedMessageId?: string
 ) => MessageSearchResultPropsDataType;
 
 export const getCachedSelectorForMessageSearchResult = createSelector(
@@ -162,9 +209,8 @@ export const getCachedSelectorForMessageSearchResult = createSelector(
         from: ConversationType,
         to: ConversationType,
         searchConversationId?: string,
-        selectedMessageId?: string
+        targetedMessageId?: string
       ) => {
-        const bodyRanges = message.bodyRanges || [];
         return {
           from,
           to,
@@ -173,18 +219,12 @@ export const getCachedSelectorForMessageSearchResult = createSelector(
           conversationId: message.conversationId,
           sentAt: message.sent_at,
           snippet: message.snippet || '',
-          bodyRanges: bodyRanges.map((bodyRange: BodyRangeType) => {
-            const conversation = conversationSelector(bodyRange.mentionUuid);
-
-            return {
-              ...bodyRange,
-              replacementText: conversation.title,
-            };
-          }),
+          bodyRanges:
+            hydrateRanges(message.bodyRanges, conversationSelector) || [],
           body: message.body || '',
 
           isSelected: Boolean(
-            selectedMessageId && message.id === selectedMessageId
+            targetedMessageId && message.id === targetedMessageId
           ),
           isSearchingInConversation: Boolean(searchConversationId),
         };
@@ -208,7 +248,7 @@ export const getMessageSearchResultSelector = createSelector(
   (
     messageSearchResultSelector: CachedMessageSearchResultSelectorType,
     messageSearchResultLookup: MessageSearchResultLookupType,
-    selectedMessageId: string | undefined,
+    targetedMessageId: string | undefined,
     conversationSelector: GetConversationByIdType,
     searchConversationId: string | undefined,
     ourConversationId: string | undefined
@@ -222,12 +262,12 @@ export const getMessageSearchResultSelector = createSelector(
         return undefined;
       }
 
-      const { conversationId, source, sourceUuid, type } = message;
+      const { conversationId, source, sourceServiceId, type } = message;
       let from: ConversationType;
       let to: ConversationType;
 
       if (type === 'incoming') {
-        from = conversationSelector(sourceUuid || source);
+        from = conversationSelector(sourceServiceId || source);
         to = conversationSelector(conversationId);
         if (from === to) {
           to = conversationSelector(ourConversationId);
@@ -245,7 +285,7 @@ export const getMessageSearchResultSelector = createSelector(
         from,
         to,
         searchConversationId,
-        selectedMessageId
+        targetedMessageId
       );
     };
   }

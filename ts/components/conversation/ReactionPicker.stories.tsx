@@ -1,56 +1,54 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { Props as ReactionPickerProps } from './ReactionPicker';
 import { ReactionPicker } from './ReactionPicker';
 import { EmojiPicker } from '../emoji/EmojiPicker';
+import { DEFAULT_PREFERRED_REACTION_EMOJI } from '../../reactions/constants';
+import { EmojiSkinTone } from '../fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
-
-const preferredReactionEmoji = ['❤️', '👍', '👎', '😂', '😮', '😢'];
+const { i18n } = window.SignalContext;
 
 const renderEmojiPicker: ReactionPickerProps['renderEmojiPicker'] = ({
   onClose,
   onPickEmoji,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   ref,
 }) => (
   <EmojiPicker
     i18n={i18n}
-    skinTone={0}
+    emojiSkinToneDefault={EmojiSkinTone.None}
     ref={ref}
     onClose={onClose}
     onPickEmoji={onPickEmoji}
-    onSetSkinTone={onSetSkinTone}
+    onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+    wasInvokedFromKeyboard={false}
   />
 );
 
 export default {
   title: 'Components/Conversation/ReactionPicker',
-};
+} satisfies Meta<ReactionPickerProps>;
 
-export const Base = (): JSX.Element => {
+export function Base(): JSX.Element {
   return (
     <ReactionPicker
       i18n={i18n}
       onPick={action('onPick')}
-      onSetSkinTone={action('onSetSkinTone')}
+      onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
       openCustomizePreferredReactionsModal={action(
         'openCustomizePreferredReactionsModal'
       )}
-      preferredReactionEmoji={preferredReactionEmoji}
+      preferredReactionEmoji={DEFAULT_PREFERRED_REACTION_EMOJI}
       renderEmojiPicker={renderEmojiPicker}
     />
   );
-};
+}
 
-export const SelectedReaction = (): JSX.Element => {
+export function SelectedReaction(): JSX.Element {
   return (
     <>
       {['❤️', '👍', '👎', '😂', '😮', '😢', '😡'].map(e => (
@@ -59,15 +57,17 @@ export const SelectedReaction = (): JSX.Element => {
             i18n={i18n}
             selected={e}
             onPick={action('onPick')}
-            onSetSkinTone={action('onSetSkinTone')}
+            onEmojiSkinToneDefaultChange={action(
+              'onEmojiSkinToneDefaultChange'
+            )}
             openCustomizePreferredReactionsModal={action(
               'openCustomizePreferredReactionsModal'
             )}
-            preferredReactionEmoji={preferredReactionEmoji}
+            preferredReactionEmoji={DEFAULT_PREFERRED_REACTION_EMOJI}
             renderEmojiPicker={renderEmojiPicker}
           />
         </div>
       ))}
     </>
   );
-};
+}

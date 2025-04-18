@@ -1,13 +1,16 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent } from 'react';
 import React from 'react';
+import type { FunctionComponent } from 'react';
 
-import { BaseConversationListItem } from './BaseConversationListItem';
 import type { LocalizerType, ThemeType } from '../../types/Util';
 import { AvatarColors } from '../../types/Colors';
-import type { LookupConversationWithoutUuidActionsType } from '../../util/lookupConversationWithoutUuid';
+import type { LookupConversationWithoutServiceIdActionsType } from '../../util/lookupConversationWithoutServiceId';
+import { ListTile } from '../ListTile';
+import { Avatar, AvatarSize } from '../Avatar';
+import { Spinner } from '../Spinner';
+import { SPINNER_CLASS_NAME } from './BaseConversationListItem';
 
 export type PropsDataType = {
   username: string;
@@ -19,7 +22,7 @@ type PropsHousekeepingType = {
   i18n: LocalizerType;
   theme: ThemeType;
   toggleConversationInChooseMembers: (conversationId: string) => void;
-} & LookupConversationWithoutUuidActionsType;
+} & LookupConversationWithoutServiceIdActionsType;
 
 type PropsType = PropsDataType & PropsHousekeepingType;
 
@@ -28,9 +31,8 @@ export const UsernameCheckbox: FunctionComponent<PropsType> = React.memo(
     username,
     isChecked,
     isFetching,
-    theme,
     i18n,
-    lookupConversationWithoutUuid,
+    lookupConversationWithoutServiceId,
     showUserNotFoundModal,
     setIsFetchingUUID,
     toggleConversationInChooseMembers,
@@ -40,7 +42,7 @@ export const UsernameCheckbox: FunctionComponent<PropsType> = React.memo(
         return;
       }
 
-      const conversationId = await lookupConversationWithoutUuid({
+      const conversationId = await lookupConversationWithoutServiceId({
         showUserNotFoundModal,
         setIsFetchingUUID,
 
@@ -54,30 +56,47 @@ export const UsernameCheckbox: FunctionComponent<PropsType> = React.memo(
     }, [
       isFetching,
       toggleConversationInChooseMembers,
-      lookupConversationWithoutUuid,
+      lookupConversationWithoutServiceId,
       showUserNotFoundModal,
       setIsFetchingUUID,
       username,
     ]);
 
-    const title = i18n('at-username', { username });
+    const title = username;
 
-    return (
-      <BaseConversationListItem
-        acceptedMessageRequest={false}
-        checked={isChecked}
+    const avatar = (
+      <Avatar
         color={AvatarColors[0]}
         conversationType="direct"
-        headerName={title}
+        searchResult
         i18n={i18n}
-        isMe={false}
-        isSelected={false}
-        isUsernameSearchResult
-        onClick={onClickItem}
-        shouldShowSpinner={isFetching}
-        theme={theme}
-        sharedGroupNames={[]}
         title={title}
+        sharedGroupNames={[]}
+        size={AvatarSize.THIRTY_TWO}
+        badge={undefined}
+      />
+    );
+
+    return isFetching ? (
+      <ListTile
+        leading={avatar}
+        title={title}
+        trailing={
+          <Spinner
+            size="20px"
+            svgSize="small"
+            moduleClassName={SPINNER_CLASS_NAME}
+            direction="on-progress-dialog"
+          />
+        }
+      />
+    ) : (
+      <ListTile.checkbox
+        leading={avatar}
+        title={title}
+        isChecked={isChecked}
+        onClick={onClickItem}
+        clickable
       />
     );
   }

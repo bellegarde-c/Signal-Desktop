@@ -1,4 +1,4 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
@@ -25,7 +25,9 @@ describe('getStreamWithTimeout', () => {
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
-    clock = sandbox.useFakeTimers();
+    clock = sandbox.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout'],
+    });
   });
 
   afterEach(() => {

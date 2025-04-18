@@ -1,18 +1,18 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { MeasuredComponentProps } from 'react-measure';
 import type { ReactNode } from 'react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Measure from 'react-measure';
 import { noop } from 'lodash';
 
 import type { ConversationType } from '../state/ducks/conversations';
-import type { LocalizerType } from '../types/Util';
+import type { ConversationWithStoriesType } from '../state/selectors/conversations';
+import type { LocalizerType, ThemeType } from '../types/Util';
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges';
 import type { Row } from './ConversationList';
 import type { StoryDistributionListWithMembersDataType } from '../types/Stories';
-import type { UUIDStringType } from '../types/UUID';
+import type { StoryDistributionIdString } from '../types/StoryDistributionId';
+import type { ServiceIdString } from '../types/ServiceId';
 import type { RenderModalPage, ModalPropsType } from './Modal';
 import { Avatar, AvatarSize } from './Avatar';
 import { Button, ButtonVariant } from './Button';
@@ -22,15 +22,12 @@ import { ContactPills } from './ContactPills';
 import { ContactPill } from './ContactPill';
 import { ConversationList, RowType } from './ConversationList';
 import { Input } from './Input';
-import { Intl } from './Intl';
-import { MY_STORIES_ID, getStoryDistributionListName } from '../types/Stories';
+import { I18n } from './I18n';
+import { MY_STORY_ID, getStoryDistributionListName } from '../types/Stories';
 import { PagedModal, ModalPage } from './Modal';
 import { SearchInput } from './SearchInput';
 import { StoryDistributionListName } from './StoryDistributionListName';
-import { Theme } from '../util/theme';
-import { ThemeType } from '../types/Util';
-import { UUID } from '../types/UUID';
-import { filterAndSortConversationsByRecent } from '../util/filterAndSortConversations';
+import { filterAndSortConversations } from '../util/filterAndSortConversations';
 import { isNotNil } from '../util/isNotNil';
 import {
   shouldNeverBeCalled,
@@ -38,11 +35,14 @@ import {
 } from '../util/shouldNeverBeCalled';
 import { useConfirmDiscard } from '../hooks/useConfirmDiscard';
 import { getGroupMemberships } from '../util/getGroupMemberships';
+import { strictAssert } from '../util/assert';
+import { UserText } from './UserText';
+import { SizeObserver } from '../hooks/useSizeObserver';
 
 export type PropsType = {
   candidateConversations: Array<ConversationType>;
   distributionLists: Array<StoryDistributionListWithMembersDataType>;
-  groupStories: Array<ConversationType>;
+  groupStories: Array<ConversationWithStoriesType>;
   signalConnections: Array<ConversationType>;
   getPreferredBadge: PreferredBadgeSelectorType;
   hideStoriesSettings: () => unknown;
@@ -52,24 +52,29 @@ export type PropsType = {
   toggleGroupsForStorySend: (groupIds: Array<string>) => unknown;
   onDistributionListCreated: (
     name: string,
-    viewerUuids: Array<UUIDStringType>
+    viewerServiceIds: Array<ServiceIdString>
+  ) => Promise<string>;
+  onHideMyStoriesFrom: (viewerServiceIds: Array<ServiceIdString>) => unknown;
+  onRemoveMembers: (
+    listId: string,
+    serviceIds: Array<ServiceIdString>
   ) => unknown;
-  onHideMyStoriesFrom: (viewerUuids: Array<UUIDStringType>) => unknown;
-  onRemoveMember: (listId: string, uuid: UUIDStringType | undefined) => unknown;
   onRepliesNReactionsChanged: (
     listId: string,
     allowsReplies: boolean
   ) => unknown;
   onViewersUpdated: (
     listId: string,
-    viewerUuids: Array<UUIDStringType>
+    viewerServiceIds: Array<ServiceIdString>
   ) => unknown;
   setMyStoriesToAllSignalConnections: () => unknown;
   storyViewReceiptsEnabled: boolean;
+  theme: ThemeType;
   toggleSignalConnectionsModal: () => unknown;
-  toggleStoriesView: () => void;
   setStoriesDisabled: (value: boolean) => void;
-  getConversationByUuid: (uuid: UUIDStringType) => ConversationType | undefined;
+  getConversationByServiceId: (
+    serviceId: ServiceIdString
+  ) => ConversationType | undefined;
 };
 
 export enum Page {
@@ -84,11 +89,11 @@ function filterConversations(
   conversations: ReadonlyArray<ConversationType>,
   searchTerm: string
 ) {
-  return filterAndSortConversationsByRecent(
+  return filterAndSortConversations(
     conversations,
     searchTerm,
     undefined
-  ).filter(conversation => conversation.uuid);
+  ).filter(conversation => conversation.serviceId);
 }
 
 const modalCommonProps: Pick<ModalPropsType, 'hasXButton' | 'moduleClassName'> =
@@ -104,7 +109,7 @@ export function getListViewers(
 ): string {
   let memberCount = list.members.length;
 
-  if (list.id === MY_STORIES_ID && list.isBlockList) {
+  if (list.id === MY_STORY_ID && list.isBlockList) {
     memberCount = list.isBlockList
       ? signalConnections.length - list.members.length
       : signalConnections.length;
@@ -113,12 +118,27 @@ export function getListViewers(
   return i18n('icu:StoriesSettings__viewers', { count: memberCount });
 }
 
+export function getI18nForMyStory(
+  list: StoryDistributionListWithMembersDataType,
+  i18n: LocalizerType
+): string {
+  if (list.members.length === 0) {
+    return i18n('icu:StoriesSettings__mine__all--label');
+  }
+
+  if (!list.isBlockList) {
+    return i18n('icu:SendStoryModal__only-share-with');
+  }
+
+  return i18n('icu:StoriesSettings__mine__all--label');
+}
+
 type DistributionListItemProps = {
   i18n: LocalizerType;
   distributionList: StoryDistributionListWithMembersDataType;
   me: ConversationType;
   signalConnections: Array<ConversationType>;
-  onSelectItemToEdit(id: UUIDStringType): void;
+  onSelectItemToEdit(id: StoryDistributionIdString): void;
 };
 
 function DistributionListItem({
@@ -128,7 +148,7 @@ function DistributionListItem({
   signalConnections,
   onSelectItemToEdit,
 }: DistributionListItemProps) {
-  const isMyStories = distributionList.id === MY_STORIES_ID;
+  const isMyStory = distributionList.id === MY_STORY_ID;
   return (
     <button
       className="StoriesSettingsModal__list"
@@ -138,17 +158,16 @@ function DistributionListItem({
       type="button"
     >
       <span className="StoriesSettingsModal__list__left">
-        {distributionList.id === MY_STORIES_ID ? (
+        {isMyStory ? (
           <Avatar
-            acceptedMessageRequest={me.acceptedMessageRequest}
-            avatarPath={me.avatarPath}
+            avatarPlaceholderGradient={me.avatarPlaceholderGradient}
+            avatarUrl={me.avatarUrl}
             badge={undefined}
             color={me.color}
             conversationType={me.type}
             i18n={i18n}
-            isMe
             sharedGroupNames={me.sharedGroupNames}
-            size={AvatarSize.THIRTY_SIX}
+            size={AvatarSize.THIRTY_TWO}
             title={me.title}
           />
         ) : (
@@ -161,8 +180,8 @@ function DistributionListItem({
             name={distributionList.name}
           />
           <span className="StoriesSettingsModal__list__viewers">
-            {isMyStories
-              ? i18n('icu:StoriesSettings__my-story-subtitle')
+            {isMyStory
+              ? getI18nForMyStory(distributionList, i18n)
               : i18n('icu:StoriesSettings__custom-story-subtitle')}
             &nbsp;&middot;&nbsp;
             {getListViewers(distributionList, i18n, signalConnections)}
@@ -194,24 +213,23 @@ function GroupStoryItem({
     >
       <span className="StoriesSettingsModal__list__left">
         <Avatar
-          acceptedMessageRequest={groupStory.acceptedMessageRequest}
-          avatarPath={groupStory.avatarPath}
+          avatarPlaceholderGradient={groupStory.avatarPlaceholderGradient}
+          avatarUrl={groupStory.avatarUrl}
           badge={undefined}
           color={groupStory.color}
           conversationType={groupStory.type}
           i18n={i18n}
-          isMe={false}
           sharedGroupNames={[]}
-          size={AvatarSize.THIRTY_SIX}
+          size={AvatarSize.THIRTY_TWO}
           title={groupStory.title}
         />
         <span className="StoriesSettingsModal__list__title">
-          {groupStory.title}
+          <UserText text={groupStory.title} />
           <span className="StoriesSettingsModal__list__viewers">
             {i18n('icu:StoriesSettings__group-story-subtitle')}
             &nbsp;&middot;&nbsp;
             {i18n('icu:StoriesSettings__viewers', {
-              count: groupStory.membersCount,
+              count: groupStory.membersCount ?? 0,
             })}
           </span>
         </span>
@@ -220,7 +238,7 @@ function GroupStoryItem({
   );
 }
 
-export const StoriesSettingsModal = ({
+export function StoriesSettingsModal({
   candidateConversations,
   distributionLists,
   groupStories,
@@ -233,16 +251,16 @@ export const StoriesSettingsModal = ({
   toggleGroupsForStorySend,
   onDistributionListCreated,
   onHideMyStoriesFrom,
-  onRemoveMember,
+  onRemoveMembers,
   onRepliesNReactionsChanged,
   onViewersUpdated,
   setMyStoriesToAllSignalConnections,
   storyViewReceiptsEnabled,
   toggleSignalConnectionsModal,
-  toggleStoriesView,
+  theme,
   setStoriesDisabled,
-  getConversationByUuid,
-}: PropsType): JSX.Element => {
+  getConversationByServiceId,
+}: PropsType): JSX.Element {
   const [confirmDiscardModal, confirmDiscardIf] = useConfirmDiscard(i18n);
 
   const [listToEditId, setListToEditId] = useState<string | undefined>(
@@ -294,8 +312,8 @@ export const StoriesSettingsModal = ({
         i18n={i18n}
         page={page}
         onClose={onClose}
-        onCreateList={(name, uuids) => {
-          onDistributionListCreated(name, uuids);
+        onCreateList={(name, serviceIds) => {
+          void onDistributionListCreated(name, serviceIds);
           resetChooseViewersScreen();
         }}
         onBackButtonClick={() =>
@@ -313,9 +331,9 @@ export const StoriesSettingsModal = ({
             }
           })
         }
-        onViewersUpdated={uuids => {
+        onViewersUpdated={serviceIds => {
           if (listToEditId && page === Page.AddViewer) {
-            onViewersUpdated(listToEditId, uuids);
+            onViewersUpdated(listToEditId, serviceIds);
             resetChooseViewersScreen();
           }
 
@@ -324,12 +342,13 @@ export const StoriesSettingsModal = ({
           }
 
           if (page === Page.HideStoryFrom) {
-            onHideMyStoriesFrom(uuids);
+            onHideMyStoriesFrom(serviceIds);
             resetChooseViewersScreen();
           }
         }}
         selectedContacts={selectedContacts}
         setSelectedContacts={setSelectedContacts}
+        theme={theme}
       />
     );
   } else if (listToEdit) {
@@ -339,13 +358,15 @@ export const StoriesSettingsModal = ({
         getPreferredBadge={getPreferredBadge}
         i18n={i18n}
         listToEdit={listToEdit}
-        onRemoveMember={onRemoveMember}
+        signalConnectionsCount={signalConnections.length}
+        onRemoveMembers={onRemoveMembers}
         onRepliesNReactionsChanged={onRepliesNReactionsChanged}
         setConfirmDeleteList={setConfirmDeleteList}
         setMyStoriesToAllSignalConnections={setMyStoriesToAllSignalConnections}
         setPage={setPage}
         setSelectedContacts={setSelectedContacts}
         toggleSignalConnectionsModal={toggleSignalConnectionsModal}
+        theme={theme}
         onBackButtonClick={() => setListToEditId(undefined)}
         onClose={handleClose}
       />
@@ -357,7 +378,7 @@ export const StoriesSettingsModal = ({
         group={groupToView}
         onClose={onClose}
         onBackButtonClick={() => setGroupToViewId(null)}
-        getConversationByUuid={getConversationByUuid}
+        getConversationByServiceId={getConversationByServiceId}
         onRemoveGroup={group => {
           setConfirmRemoveGroup({
             id: group.id,
@@ -372,7 +393,7 @@ export const StoriesSettingsModal = ({
         modalName="StoriesSettingsModal__list"
         i18n={i18n}
         onClose={onClose}
-        title={i18n('StoriesSettings__title')}
+        title={i18n('icu:StoriesSettings__title')}
         {...modalCommonProps}
       >
         <p className="StoriesSettingsModal__description">
@@ -395,7 +416,7 @@ export const StoriesSettingsModal = ({
           <span className="StoriesSettingsModal__list__left">
             <span className="StoriesSettingsModal__list__avatar--new" />
             <span className="StoriesSettingsModal__list__title">
-              {i18n('StoriesSettings__new-list')}
+              {i18n('icu:StoriesSettings__new-list')}
             </span>
           </span>
         </button>
@@ -429,8 +450,8 @@ export const StoriesSettingsModal = ({
         <Checkbox
           disabled
           checked={storyViewReceiptsEnabled}
-          description={i18n('StoriesSettings__view-receipts--description')}
-          label={i18n('StoriesSettings__view-receipts--label')}
+          description={i18n('icu:StoriesSettings__view-receipts--description')}
+          label={i18n('icu:StoriesSettings__view-receipts--label')}
           moduleClassName="StoriesSettingsModal__checkbox"
           name="view-receipts"
           onChange={noop}
@@ -438,18 +459,17 @@ export const StoriesSettingsModal = ({
 
         <div className="StoriesSettingsModal__stories-off-container">
           <p className="StoriesSettingsModal__stories-off-text">
-            {i18n('Stories__settings-toggle--description')}
+            {i18n('icu:Stories__settings-toggle--description')}
           </p>
           <Button
             className="Preferences__stories-off"
             variant={ButtonVariant.SecondaryDestructive}
             onClick={async () => {
               setStoriesDisabled(true);
-              toggleStoriesView();
               onClose();
             }}
           >
-            {i18n('Stories__settings-toggle--button')}
+            {i18n('icu:Stories__settings-toggle--button')}
           </Button>
         </div>
       </ModalPage>
@@ -462,7 +482,6 @@ export const StoriesSettingsModal = ({
         <PagedModal
           modalName="StoriesSettingsModal"
           moduleClassName="StoriesSettingsModal"
-          theme={Theme.Dark}
           onClose={() =>
             confirmDiscardIf(selectedContacts.length > 0, hideStoriesSettings)
           }
@@ -480,18 +499,17 @@ export const StoriesSettingsModal = ({
                 setListToEditId(undefined);
               },
               style: 'negative',
-              text: i18n('delete'),
+              text: i18n('icu:delete'),
             },
           ]}
           i18n={i18n}
           onClose={() => {
             setConfirmDeleteList(undefined);
           }}
-          theme={Theme.Dark}
         >
-          {i18n('StoriesSettings__delete-list--confirm', [
-            confirmDeleteList.name,
-          ])}
+          {i18n('icu:StoriesSettings__delete-list--confirm', {
+            name: confirmDeleteList.name,
+          })}
         </ConfirmationDialog>
       )}
       {confirmRemoveGroup != null && (
@@ -505,14 +523,13 @@ export const StoriesSettingsModal = ({
                 setGroupToViewId(null);
               },
               style: 'negative',
-              text: i18n('delete'),
+              text: i18n('icu:delete'),
             },
           ]}
           i18n={i18n}
           onClose={() => {
             setConfirmRemoveGroup(null);
           }}
-          theme={Theme.Dark}
         >
           {i18n('icu:StoriesSettings__remove_group--confirm', {
             groupTitle: confirmRemoveGroup.title,
@@ -522,30 +539,35 @@ export const StoriesSettingsModal = ({
       {confirmDiscardModal}
     </>
   );
-};
+}
 
 type DistributionListSettingsModalPropsType = {
   i18n: LocalizerType;
   listToEdit: StoryDistributionListWithMembersDataType;
-  setConfirmDeleteList: (_: { id: string; name: string }) => unknown;
+  signalConnectionsCount: number;
+  setConfirmDeleteList: (_: {
+    id: StoryDistributionIdString;
+    name: string;
+  }) => unknown;
   setPage: (page: Page) => unknown;
   setSelectedContacts: (contacts: Array<ConversationType>) => unknown;
+  theme: ThemeType;
   onBackButtonClick: (() => void) | undefined;
   onClose: () => void;
 } & Pick<
   PropsType,
   | 'getPreferredBadge'
-  | 'onRemoveMember'
+  | 'onRemoveMembers'
   | 'onRepliesNReactionsChanged'
   | 'setMyStoriesToAllSignalConnections'
   | 'toggleSignalConnectionsModal'
 >;
 
-export const DistributionListSettingsModal = ({
+export function DistributionListSettingsModal({
   getPreferredBadge,
   i18n,
   listToEdit,
-  onRemoveMember,
+  onRemoveMembers,
   onRepliesNReactionsChanged,
   onBackButtonClick,
   onClose,
@@ -553,18 +575,20 @@ export const DistributionListSettingsModal = ({
   setMyStoriesToAllSignalConnections,
   setPage,
   setSelectedContacts,
+  theme,
   toggleSignalConnectionsModal,
-}: DistributionListSettingsModalPropsType): JSX.Element => {
+  signalConnectionsCount,
+}: DistributionListSettingsModalPropsType): JSX.Element {
   const [confirmRemoveMember, setConfirmRemoveMember] = useState<
     | undefined
     | {
         listId: string;
         title: string;
-        uuid: UUIDStringType | undefined;
+        serviceId: ServiceIdString;
       }
   >();
 
-  const isMyStories = listToEdit.id === MY_STORIES_ID;
+  const isMyStory = listToEdit.id === MY_STORY_ID;
 
   const modalTitle = getStoryDistributionListName(
     i18n,
@@ -581,7 +605,7 @@ export const DistributionListSettingsModal = ({
       title={modalTitle}
       {...modalCommonProps}
     >
-      {!isMyStories && (
+      {!isMyStory && (
         <>
           <div className="StoriesSettingsModal__list StoriesSettingsModal__list--no-pointer">
             <span className="StoriesSettingsModal__list__left">
@@ -601,13 +625,13 @@ export const DistributionListSettingsModal = ({
       )}
 
       <div className="StoriesSettingsModal__title">
-        {i18n('StoriesSettings__who-can-see')}
+        {i18n('icu:StoriesSettings__who-can-see')}
       </div>
 
-      {isMyStories && (
-        <EditMyStoriesPrivacy
+      {isMyStory && (
+        <EditMyStoryPrivacy
           i18n={i18n}
-          learnMore="StoriesSettings__mine__disclaimer"
+          kind="mine"
           myStories={listToEdit}
           onClickExclude={() => {
             setPage(Page.HideStoryFrom);
@@ -620,10 +644,11 @@ export const DistributionListSettingsModal = ({
             setMyStoriesToAllSignalConnections
           }
           toggleSignalConnectionsModal={toggleSignalConnectionsModal}
+          signalConnectionsCount={signalConnectionsCount}
         />
       )}
 
-      {!isMyStories && (
+      {!isMyStory && (
         <>
           <button
             className="StoriesSettingsModal__list"
@@ -636,7 +661,7 @@ export const DistributionListSettingsModal = ({
             <span className="StoriesSettingsModal__list__left">
               <span className="StoriesSettingsModal__list__avatar--new" />
               <span className="StoriesSettingsModal__list__title">
-                {i18n('StoriesSettings__add-viewer')}
+                {i18n('icu:StoriesSettings__add-viewer')}
               </span>
             </span>
           </button>
@@ -648,35 +673,38 @@ export const DistributionListSettingsModal = ({
             >
               <span className="StoriesSettingsModal__list__left">
                 <Avatar
-                  acceptedMessageRequest={member.acceptedMessageRequest}
-                  avatarPath={member.avatarPath}
+                  avatarPlaceholderGradient={member.avatarPlaceholderGradient}
+                  avatarUrl={member.avatarUrl}
                   badge={getPreferredBadge(member.badges)}
                   color={member.color}
                   conversationType={member.type}
                   i18n={i18n}
-                  isMe
                   sharedGroupNames={member.sharedGroupNames}
-                  size={AvatarSize.THIRTY_SIX}
-                  theme={ThemeType.dark}
+                  size={AvatarSize.THIRTY_TWO}
+                  theme={theme}
                   title={member.title}
                 />
                 <span className="StoriesSettingsModal__list__title">
-                  {member.title}
+                  <UserText text={member.title} />
                 </span>
               </span>
 
               <button
-                aria-label={i18n('StoriesSettings__remove--title', [
-                  member.title,
-                ])}
+                aria-label={i18n('icu:StoriesSettings__remove--title', {
+                  title: member.title,
+                })}
                 className="StoriesSettingsModal__list__delete"
-                onClick={() =>
+                onClick={() => {
+                  strictAssert(
+                    member.serviceId,
+                    'Story member was missing service id'
+                  );
                   setConfirmRemoveMember({
                     listId: listToEdit.id,
                     title: member.title,
-                    uuid: member.uuid,
-                  })
-                }
+                    serviceId: member.serviceId,
+                  });
+                }}
                 type="button"
               />
             </div>
@@ -687,19 +715,21 @@ export const DistributionListSettingsModal = ({
       <hr className="StoriesSettingsModal__divider" />
 
       <div className="StoriesSettingsModal__title">
-        {i18n('StoriesSettings__replies-reactions--title')}
+        {i18n('icu:StoriesSettings__replies-reactions--title')}
       </div>
 
       <Checkbox
         checked={listToEdit.allowsReplies}
-        description={i18n('StoriesSettings__replies-reactions--description')}
-        label={i18n('StoriesSettings__replies-reactions--label')}
+        description={i18n(
+          'icu:StoriesSettings__replies-reactions--description'
+        )}
+        label={i18n('icu:StoriesSettings__replies-reactions--label')}
         moduleClassName="StoriesSettingsModal__checkbox"
         name="replies-reactions"
         onChange={value => onRepliesNReactionsChanged(listToEdit.id, value)}
       />
 
-      {!isMyStories && (
+      {!isMyStory && (
         <>
           <hr className="StoriesSettingsModal__divider" />
 
@@ -708,7 +738,7 @@ export const DistributionListSettingsModal = ({
             onClick={() => setConfirmDeleteList(listToEdit)}
             type="button"
           >
-            {i18n('StoriesSettings__delete-list')}
+            {i18n('icu:StoriesSettings__delete-list')}
           </button>
         </>
       )}
@@ -719,29 +749,27 @@ export const DistributionListSettingsModal = ({
           actions={[
             {
               action: () =>
-                onRemoveMember(
-                  confirmRemoveMember.listId,
-                  confirmRemoveMember.uuid
-                ),
+                onRemoveMembers(confirmRemoveMember.listId, [
+                  confirmRemoveMember.serviceId,
+                ]),
               style: 'negative',
-              text: i18n('StoriesSettings__remove--action'),
+              text: i18n('icu:StoriesSettings__remove--action'),
             },
           ]}
           i18n={i18n}
           onClose={() => {
             setConfirmRemoveMember(undefined);
           }}
-          theme={Theme.Dark}
-          title={i18n('StoriesSettings__remove--title', [
-            confirmRemoveMember.title,
-          ])}
+          title={i18n('icu:StoriesSettings__remove--title', {
+            title: confirmRemoveMember.title,
+          })}
         >
-          {i18n('StoriesSettings__remove--body')}
+          {i18n('icu:StoriesSettings__remove--body')}
         </ConfirmationDialog>
       )}
     </ModalPage>
   );
-};
+}
 
 type CheckboxRenderProps = {
   checkboxNode: ReactNode;
@@ -767,47 +795,56 @@ function CheckboxRender({
   );
 }
 
-type EditMyStoriesPrivacyPropsType = {
+type EditMyStoryPrivacyPropsType = {
   hasDisclaimerAbove?: boolean;
   i18n: LocalizerType;
-  learnMore: string;
+  kind: 'privacy' | 'mine';
   myStories: StoryDistributionListWithMembersDataType;
   onClickExclude: () => unknown;
   onClickOnlyShareWith: () => unknown;
   setSelectedContacts: (contacts: Array<ConversationType>) => unknown;
+  signalConnectionsCount: number;
 } & Pick<
   PropsType,
   'setMyStoriesToAllSignalConnections' | 'toggleSignalConnectionsModal'
 >;
 
-export const EditMyStoriesPrivacy = ({
+export function EditMyStoryPrivacy({
   hasDisclaimerAbove,
   i18n,
-  learnMore,
+  kind,
   myStories,
   onClickExclude,
   onClickOnlyShareWith,
   setSelectedContacts,
   setMyStoriesToAllSignalConnections,
   toggleSignalConnectionsModal,
-}: EditMyStoriesPrivacyPropsType): JSX.Element => {
+  signalConnectionsCount,
+}: EditMyStoryPrivacyPropsType): JSX.Element {
+  const learnMoreLink = (parts: Array<JSX.Element | string>) => (
+    <button
+      className="StoriesSettingsModal__disclaimer__learn-more"
+      onClick={toggleSignalConnectionsModal}
+      type="button"
+    >
+      {parts}
+    </button>
+  );
   const disclaimerElement = (
     <div className="StoriesSettingsModal__disclaimer">
-      <Intl
-        components={{
-          learnMore: (
-            <button
-              className="StoriesSettingsModal__disclaimer__learn-more"
-              onClick={toggleSignalConnectionsModal}
-              type="button"
-            >
-              {i18n('StoriesSettings__mine__disclaimer--learn-more')}
-            </button>
-          ),
-        }}
-        i18n={i18n}
-        id={learnMore}
-      />
+      {kind === 'mine' ? (
+        <I18n
+          components={{ learnMoreLink }}
+          i18n={i18n}
+          id="icu:StoriesSettings__mine__disclaimer--link"
+        />
+      ) : (
+        <I18n
+          components={{ learnMoreLink }}
+          i18n={i18n}
+          id="icu:SendStoryModal__privacy-disclaimer--link"
+        />
+      )}
     </div>
   );
 
@@ -816,9 +853,9 @@ export const EditMyStoriesPrivacy = ({
       {hasDisclaimerAbove && disclaimerElement}
 
       <Checkbox
-        checked={!myStories.members.length}
+        checked={myStories.isBlockList && !myStories.members.length}
         isRadio
-        label={i18n('StoriesSettings__mine__all--label')}
+        label={i18n('icu:StoriesSettings__mine__all--label')}
         moduleClassName="StoriesSettingsModal__checkbox"
         name="share"
         onChange={() => {
@@ -834,7 +871,7 @@ export const EditMyStoriesPrivacy = ({
                 checked && (
                   <>
                     {i18n('icu:StoriesSettings__viewers', {
-                      count: myStories.members.length,
+                      count: signalConnectionsCount,
                     })}
                   </>
                 )
@@ -847,7 +884,7 @@ export const EditMyStoriesPrivacy = ({
       <Checkbox
         checked={myStories.isBlockList && myStories.members.length > 0}
         isRadio
-        label={i18n('StoriesSettings__mine__exclude--label')}
+        label={i18n('icu:StoriesSettings__mine__exclude--label')}
         moduleClassName="StoriesSettingsModal__checkbox"
         name="share"
         onChange={noop}
@@ -880,7 +917,7 @@ export const EditMyStoriesPrivacy = ({
       <Checkbox
         checked={!myStories.isBlockList && myStories.members.length > 0}
         isRadio
-        label={i18n('StoriesSettings__mine__only--label')}
+        label={i18n('icu:StoriesSettings__mine__only--label')}
         moduleClassName="StoriesSettingsModal__checkbox"
         name="share"
         onChange={noop}
@@ -913,11 +950,14 @@ export const EditMyStoriesPrivacy = ({
       {!hasDisclaimerAbove && disclaimerElement}
     </>
   );
-};
+}
 
 type EditDistributionListModalPropsType = {
-  onCreateList: (name: string, viewerUuids: Array<UUIDStringType>) => unknown;
-  onViewersUpdated: (viewerUuids: Array<UUIDStringType>) => unknown;
+  onCreateList: (
+    name: string,
+    viewerServiceIds: Array<ServiceIdString>
+  ) => unknown;
+  onViewersUpdated: (viewerServiceIds: Array<ServiceIdString>) => unknown;
   page:
     | Page.AddViewer
     | Page.ChooseViewers
@@ -926,15 +966,11 @@ type EditDistributionListModalPropsType = {
   selectedContacts: Array<ConversationType>;
   onClose: () => unknown;
   setSelectedContacts: (contacts: Array<ConversationType>) => unknown;
+  theme: ThemeType;
   onBackButtonClick: () => void;
 } & Pick<PropsType, 'candidateConversations' | 'getPreferredBadge' | 'i18n'>;
 
-/**
- *
- * @param param0
- * @returns
- */
-export const EditDistributionListModal = ({
+export function EditDistributionListModal({
   candidateConversations,
   getPreferredBadge,
   i18n,
@@ -944,8 +980,9 @@ export const EditDistributionListModal = ({
   onClose,
   selectedContacts,
   setSelectedContacts,
+  theme,
   onBackButtonClick,
-}: EditDistributionListModalPropsType): JSX.Element => {
+}: EditDistributionListModalPropsType): JSX.Element {
   const [storyName, setStoryName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -974,9 +1011,11 @@ export const EditDistributionListModal = ({
     return map;
   }, [candidateConversations]);
 
-  const selectedConversationUuids: Set<UUIDStringType> = useMemo(
+  const selectConversationServiceIds: Set<ServiceIdString> = useMemo(
     () =>
-      new Set(selectedContacts.map(contact => contact.uuid).filter(isNotNil)),
+      new Set(
+        selectedContacts.map(contact => contact.serviceId).filter(isNotNil)
+      ),
     [selectedContacts]
   );
 
@@ -1010,19 +1049,19 @@ export const EditDistributionListModal = ({
       <Button
         disabled={!storyName}
         onClick={() => {
-          onCreateList(storyName, Array.from(selectedConversationUuids));
+          onCreateList(storyName, Array.from(selectConversationServiceIds));
           setStoryName('');
         }}
         variant={ButtonVariant.Primary}
       >
-        {i18n('done')}
+        {i18n('icu:done')}
       </Button>
     );
 
     return (
       <ModalPage
         modalName="StoriesSettings__name-story"
-        title={i18n('StoriesSettings__name-story')}
+        title={i18n('icu:StoriesSettings__name-story')}
         modalFooter={footer}
         i18n={i18n}
         onBackButtonClick={onBackButtonClick}
@@ -1032,17 +1071,17 @@ export const EditDistributionListModal = ({
         <Input
           i18n={i18n}
           onChange={setStoryName}
-          placeholder={i18n('StoriesSettings__name-placeholder')}
+          placeholder={i18n('icu:StoriesSettings__name-placeholder')}
           moduleClassName="StoriesSettingsModal__input"
           value={storyName}
         />
 
         <div className="StoriesSettingsModal__visibility">
-          {i18n('SendStoryModal__new-custom--name-visibility')}
+          {i18n('icu:SendStoryModal__new-custom--name-visibility')}
         </div>
 
         <div className="StoriesSettingsModal__title">
-          {i18n('StoriesSettings__who-can-see')}
+          {i18n('icu:StoriesSettings__who-can-see')}
         </div>
 
         {selectedContacts.map(contact => (
@@ -1052,20 +1091,19 @@ export const EditDistributionListModal = ({
           >
             <span className="StoriesSettingsModal__list__left">
               <Avatar
-                acceptedMessageRequest={contact.acceptedMessageRequest}
-                avatarPath={contact.avatarPath}
+                avatarPlaceholderGradient={contact.avatarPlaceholderGradient}
+                avatarUrl={contact.avatarUrl}
                 badge={getPreferredBadge(contact.badges)}
                 color={contact.color}
                 conversationType={contact.type}
                 i18n={i18n}
-                isMe
                 sharedGroupNames={contact.sharedGroupNames}
-                size={AvatarSize.THIRTY_SIX}
-                theme={ThemeType.dark}
+                size={AvatarSize.THIRTY_TWO}
+                theme={theme}
                 title={contact.title}
               />
               <span className="StoriesSettingsModal__list__title">
-                {contact.title}
+                <UserText text={contact.title} />
               </span>
             </span>
           </div>
@@ -1077,11 +1115,11 @@ export const EditDistributionListModal = ({
   const rowCount = filteredConversations.length;
   const getRow = (index: number): undefined | Row => {
     const contact = filteredConversations[index];
-    if (!contact || !contact.uuid) {
+    if (!contact || !contact.serviceId) {
       return undefined;
     }
 
-    const isSelected = selectedConversationUuids.has(UUID.cast(contact.uuid));
+    const isSelected = selectConversationServiceIds.has(contact.serviceId);
 
     return {
       type: RowType.ContactCheckbox,
@@ -1096,11 +1134,11 @@ export const EditDistributionListModal = ({
       <Button
         disabled={selectedContacts.length === 0}
         onClick={() => {
-          onViewersUpdated(Array.from(selectedConversationUuids));
+          onViewersUpdated(Array.from(selectConversationServiceIds));
         }}
         variant={ButtonVariant.Primary}
       >
-        {page === Page.AddViewer ? i18n('done') : i18n('next2')}
+        {page === Page.AddViewer ? i18n('icu:done') : i18n('icu:next2')}
       </Button>
     );
   } else if (page === Page.HideStoryFrom) {
@@ -1108,11 +1146,11 @@ export const EditDistributionListModal = ({
       <Button
         disabled={selectedContacts.length === 0}
         onClick={() => {
-          onViewersUpdated(Array.from(selectedConversationUuids));
+          onViewersUpdated(Array.from(selectConversationServiceIds));
         }}
         variant={ButtonVariant.Primary}
       >
-        {i18n('update')}
+        {i18n('icu:update')}
       </Button>
     );
   }
@@ -1126,8 +1164,8 @@ export const EditDistributionListModal = ({
       onClose={onClose}
       title={
         page === Page.HideStoryFrom
-          ? i18n('StoriesSettings__hide-story')
-          : i18n('StoriesSettings__choose-viewers')
+          ? i18n('icu:StoriesSettings__hide-story')
+          : i18n('icu:StoriesSettings__choose-viewers')
       }
       padded={page !== Page.ChooseViewers && page !== Page.AddViewer}
       {...modalCommonProps}
@@ -1135,7 +1173,7 @@ export const EditDistributionListModal = ({
       <SearchInput
         disabled={candidateConversations.length === 0}
         i18n={i18n}
-        placeholder={i18n('contactSearchPlaceholder')}
+        placeholder={i18n('icu:contactSearchPlaceholder')}
         moduleClassName="StoriesSettingsModal__search"
         onChange={event => {
           setSearchTerm(event.target.value);
@@ -1148,10 +1186,10 @@ export const EditDistributionListModal = ({
           {selectedContacts.map(contact => (
             <ContactPill
               key={contact.id}
-              acceptedMessageRequest={contact.acceptedMessageRequest}
-              avatarPath={contact.avatarPath}
+              avatarUrl={contact.avatarUrl}
               color={contact.color}
               firstName={contact.firstName}
+              hasAvatar={contact.hasAvatar}
               i18n={i18n}
               id={contact.id}
               isMe={contact.isMe}
@@ -1165,65 +1203,75 @@ export const EditDistributionListModal = ({
         </ContactPills>
       ) : undefined}
       {candidateConversations.length ? (
-        <Measure bounds>
-          {({ contentRect, measureRef }: MeasuredComponentProps) => (
-            <div
-              className="StoriesSettingsModal__conversation-list"
-              ref={measureRef}
-            >
+        <SizeObserver>
+          {(ref, size) => (
+            <div className="StoriesSettingsModal__conversation-list" ref={ref}>
               <ConversationList
-                dimensions={contentRect.bounds}
+                dimensions={size ?? undefined}
                 getPreferredBadge={getPreferredBadge}
                 getRow={getRow}
                 i18n={i18n}
+                lookupConversationWithoutServiceId={asyncShouldNeverBeCalled}
                 onClickArchiveButton={shouldNeverBeCalled}
+                onClickClearFilterButton={shouldNeverBeCalled}
                 onClickContactCheckbox={(conversationId: string) => {
                   toggleSelectedConversation(conversationId);
                 }}
-                lookupConversationWithoutUuid={asyncShouldNeverBeCalled}
-                showConversation={shouldNeverBeCalled}
-                showUserNotFoundModal={shouldNeverBeCalled}
-                setIsFetchingUUID={shouldNeverBeCalled}
+                onPreloadConversation={shouldNeverBeCalled}
                 onSelectConversation={shouldNeverBeCalled}
+                blockConversation={shouldNeverBeCalled}
+                removeConversation={shouldNeverBeCalled}
+                onOutgoingAudioCallInConversation={shouldNeverBeCalled}
+                onOutgoingVideoCallInConversation={shouldNeverBeCalled}
                 renderMessageSearchResult={() => {
                   shouldNeverBeCalled();
                   return <div />;
                 }}
                 rowCount={rowCount}
+                setIsFetchingUUID={shouldNeverBeCalled}
                 shouldRecomputeRowHeights={false}
                 showChooseGroupMembers={shouldNeverBeCalled}
-                theme={ThemeType.dark}
+                showFindByUsername={shouldNeverBeCalled}
+                showFindByPhoneNumber={shouldNeverBeCalled}
+                showConversation={shouldNeverBeCalled}
+                showUserNotFoundModal={shouldNeverBeCalled}
+                theme={theme}
               />
             </div>
           )}
-        </Measure>
+        </SizeObserver>
       ) : (
         <div className="module-ForwardMessageModal__no-candidate-contacts">
-          {i18n('noContactsFound')}
+          {i18n('icu:noContactsFound')}
         </div>
       )}
     </ModalPage>
   );
-};
+}
 
 type GroupStorySettingsModalProps = {
   i18n: LocalizerType;
   group: ConversationType;
   onClose(): void;
   onBackButtonClick(): void;
-  getConversationByUuid(uuid: UUIDStringType): ConversationType | undefined;
+  getConversationByServiceId(
+    serviceId: ServiceIdString
+  ): ConversationType | undefined;
   onRemoveGroup(group: ConversationType): void;
 };
 
-export const GroupStorySettingsModal = ({
+export function GroupStorySettingsModal({
   i18n,
   group,
   onClose,
   onBackButtonClick,
-  getConversationByUuid,
+  getConversationByServiceId,
   onRemoveGroup,
-}: GroupStorySettingsModalProps): JSX.Element => {
-  const groupMemberships = getGroupMemberships(group, getConversationByUuid);
+}: GroupStorySettingsModalProps): JSX.Element {
+  const groupMemberships = getGroupMemberships(
+    group,
+    getConversationByServiceId
+  );
   return (
     <ModalPage
       modalName="GroupStorySettingsModal"
@@ -1235,18 +1283,19 @@ export const GroupStorySettingsModal = ({
     >
       <div className="GroupStorySettingsModal__header">
         <Avatar
-          acceptedMessageRequest={group.acceptedMessageRequest}
-          avatarPath={group.avatarPath}
+          avatarPlaceholderGradient={group.avatarPlaceholderGradient}
+          avatarUrl={group.avatarUrl}
           badge={undefined}
           color={group.color}
           conversationType={group.type}
           i18n={i18n}
-          isMe={false}
           sharedGroupNames={[]}
-          size={AvatarSize.THIRTY_SIX}
+          size={AvatarSize.THIRTY_TWO}
           title={group.title}
         />
-        <span className="GroupStorySettingsModal__title">{group.title}</span>
+        <span className="GroupStorySettingsModal__title">
+          <UserText text={group.title} />
+        </span>
       </div>
 
       <hr className="StoriesSettingsModal__divider" />
@@ -1262,19 +1311,18 @@ export const GroupStorySettingsModal = ({
             className="GroupStorySettingsModal__members_item"
           >
             <Avatar
-              acceptedMessageRequest={member.acceptedMessageRequest}
-              avatarPath={member.avatarPath}
+              avatarPlaceholderGradient={member.avatarPlaceholderGradient}
+              avatarUrl={member.avatarUrl}
               badge={undefined}
               color={member.color}
               conversationType={member.type}
               i18n={i18n}
-              isMe={false}
               sharedGroupNames={[]}
-              size={AvatarSize.THIRTY_SIX}
+              size={AvatarSize.THIRTY_TWO}
               title={member.title}
             />
             <p className="GroupStorySettingsModal__members_item__name">
-              {member.title}
+              <UserText text={member.title} />
             </p>
           </div>
         );
@@ -1297,4 +1345,4 @@ export const GroupStorySettingsModal = ({
       </button>
     </ModalPage>
   );
-};
+}

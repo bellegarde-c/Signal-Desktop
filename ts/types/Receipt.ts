@@ -3,10 +3,13 @@
 
 import { z } from 'zod';
 
+import { aciSchema } from './ServiceId';
+
 export const receiptSchema = z.object({
   messageId: z.string(),
+  conversationId: z.string(),
   senderE164: z.string().optional(),
-  senderUuid: z.string().optional(),
+  senderAci: aciSchema.optional(),
   timestamp: z.number(),
   isDirectConversation: z.boolean().optional(),
 });
@@ -18,3 +21,6 @@ export enum ReceiptType {
 }
 
 export type Receipt = z.infer<typeof receiptSchema>;
+
+export const RECEIPT_BATCHER_WAIT_MS = 250;
+export const DELETE_SENT_PROTO_BATCHER_WAIT_MS = 250;

@@ -1,22 +1,19 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
+import type { Meta } from '@storybook/react';
 import type { Props } from './ReactionViewer';
 import { ReactionViewer } from './ReactionViewer';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import { getDefaultConversation } from '../../test-both/helpers/getDefaultConversation';
 import { ThemeType } from '../../types/Util';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/ReactionViewer',
-};
+} satisfies Meta<Props>;
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   getPreferredBadge: () => undefined,
@@ -28,7 +25,7 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   theme: ThemeType.light,
 });
 
-export const AllReactions = (): JSX.Element => {
+export function AllReactions(): JSX.Element {
   const props = createProps({
     reactions: [
       {
@@ -126,9 +123,9 @@ export const AllReactions = (): JSX.Element => {
     ],
   });
   return <ReactionViewer {...props} />;
-};
+}
 
-export const PickedReaction = (): JSX.Element => {
+export function PickedReaction(): JSX.Element {
   const props = createProps({
     pickedReaction: '❤️',
     reactions: [
@@ -155,9 +152,9 @@ export const PickedReaction = (): JSX.Element => {
     ],
   });
   return <ReactionViewer {...props} />;
-};
+}
 
-export const PickedMissingReaction = (): JSX.Element => {
+export function PickedMissingReaction(): JSX.Element {
   const props = createProps({
     pickedReaction: '😡',
     reactions: [
@@ -184,7 +181,7 @@ export const PickedMissingReaction = (): JSX.Element => {
     ],
   });
   return <ReactionViewer {...props} />;
-};
+}
 
 const skinTones = [
   '\u{1F3FB}',
@@ -210,7 +207,7 @@ const createReaction = (
   timestamp,
 });
 
-export const ReactionSkinTones = (): JSX.Element => {
+export function ReactionSkinTones(): JSX.Element {
   const props = createProps({
     pickedReaction: '😡',
     reactions: [
@@ -223,4 +220,4 @@ export const ReactionSkinTones = (): JSX.Element => {
     ],
   });
   return <ReactionViewer {...props} />;
-};
+}

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /* eslint-disable no-bitwise */
@@ -7,13 +7,15 @@
 import { z } from 'zod';
 import Long from 'long';
 import PQueue from 'p-queue';
+import pMap from 'p-map';
 import type { PlaintextContent } from '@signalapp/libsignal-client';
 import {
+  Pni,
   ProtocolAddress,
   SenderKeyDistributionMessage,
 } from '@signalapp/libsignal-client';
 
-import type { QuotedMessageType } from '../model-types.d';
+import { DataWriter } from '../sql/Client';
 import type { ConversationModel } from '../models/conversations';
 import { GLOBAL_ZONE } from '../SignalProtocolStore';
 import { assertDev, strictAssert } from '../util/assert';
@@ -21,20 +23,21 @@ import { parseIntOrThrow } from '../util/parseIntOrThrow';
 import { Address } from '../types/Address';
 import { QualifiedAddress } from '../types/QualifiedAddress';
 import { SenderKeys } from '../LibSignalStores';
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
-import { MIMETypeToString } from '../types/MIME';
-import type * as Attachment from '../types/Attachment';
-import type { UUID } from '../types/UUID';
+import type {
+  TextAttachmentType,
+  UploadedAttachmentType,
+} from '../types/Attachment';
+import type { AciString, ServiceIdString } from '../types/ServiceId';
+import {
+  ServiceIdKind,
+  serviceIdSchema,
+  isPniString,
+} from '../types/ServiceId';
 import type {
   ChallengeType,
   GetGroupLogOptionsType,
-  GetProfileOptionsType,
-  GetProfileUnauthOptionsType,
   GroupCredentialsType,
   GroupLogResponseType,
-  ProfileRequestDataType,
-  ProxiedRequestOptionsType,
-  UploadAvatarHeadersType,
   WebAPIType,
 } from './WebAPI';
 import createTaskWithTimeout from './TaskWithTimeout';
@@ -49,37 +52,70 @@ import type {
 } from './OutgoingMessage';
 import OutgoingMessage from './OutgoingMessage';
 import * as Bytes from '../Bytes';
-import { getRandomBytes, getZeroes, encryptAttachment } from '../Crypto';
+import { getRandomBytes } from '../Crypto';
 import {
   MessageError,
-  SignedPreKeyRotationError,
   SendMessageProtoError,
   HTTPError,
+  NoSenderKeyError,
 } from './Errors';
-import type { BodyRangesType, StoryContextType } from '../types/Util';
+import { BodyRange } from '../types/BodyRange';
+import type { RawBodyRange } from '../types/BodyRange';
+import type { StoryContextType } from '../types/Util';
 import type {
   LinkPreviewImage,
   LinkPreviewMetadata,
 } from '../linkPreviews/linkPreviewFetch';
-import { concat, isEmpty, map } from '../util/iterables';
+import { concat, isEmpty } from '../util/iterables';
 import type { SendTypesType } from '../util/handleMessageSend';
 import { shouldSaveProto, sendTypesEnum } from '../util/handleMessageSend';
-import { uuidToBytes } from '../util/uuidToBytes';
+import type { DurationInSeconds } from '../util/durations';
 import { SignalService as Proto } from '../protobuf';
 import * as log from '../logging/log';
-import type { Avatar, EmbeddedContactType } from '../types/EmbeddedContact';
+import type { EmbeddedContactWithUploadedAvatar } from '../types/EmbeddedContact';
 import {
   numberToPhoneType,
   numberToEmailType,
   numberToAddressType,
 } from '../types/EmbeddedContact';
-import type { StickerWithHydratedData } from '../types/Stickers';
+import { missingCaseError } from '../util/missingCaseError';
+import { drop } from '../util/drop';
+import type {
+  ConversationIdentifier,
+  DeleteForMeSyncEventData,
+  DeleteMessageSyncTarget,
+  AddressableMessage,
+} from './messageReceiverEvents';
+import { getConversationFromTarget } from '../util/syncIdentifiers';
+import type { CallDetails, CallHistoryDetails } from '../types/CallDisposition';
+import {
+  AdhocCallStatus,
+  DirectCallStatus,
+  GroupCallStatus,
+  CallMode,
+} from '../types/CallDisposition';
+import {
+  getBytesForPeerId,
+  getCallIdForProto,
+  getProtoForCallHistory,
+} from '../util/callDisposition';
+import { MAX_MESSAGE_COUNT } from '../util/deleteForMe.types';
+import type { GroupSendToken } from '../types/GroupSendEndorsements';
+
+export type SendIdentifierData =
+  | {
+      accessKey: string;
+      senderCertificate: SerializedCertificateType | null;
+      groupSendToken: null;
+    }
+  | {
+      accessKey: null;
+      senderCertificate: SerializedCertificateType | null;
+      groupSendToken: GroupSendToken;
+    };
 
 export type SendMetadataType = {
-  [identifier: string]: {
-    accessKey: string;
-    senderCertificate?: SerializedCertificateType;
-  };
+  [serviceId: ServiceIdString]: SendIdentifierData;
 };
 
 export type SendOptionsType = {
@@ -87,56 +123,64 @@ export type SendOptionsType = {
   online?: boolean;
 };
 
-type QuoteAttachmentType = {
-  thumbnail?: AttachmentType;
-  attachmentPointer?: Proto.IAttachmentPointer;
+export type OutgoingQuoteAttachmentType = Readonly<{
+  contentType: string;
+  fileName?: string;
+  thumbnail?: UploadedAttachmentType;
+}>;
+
+export type OutgoingQuoteType = Readonly<{
+  isGiftBadge?: boolean;
+  id?: number;
+  authorAci?: AciString;
+  text?: string;
+  attachments: ReadonlyArray<OutgoingQuoteAttachmentType>;
+  bodyRanges?: ReadonlyArray<RawBodyRange>;
+}>;
+
+export type OutgoingLinkPreviewType = Readonly<{
+  title?: string;
+  description?: string;
+  domain?: string;
+  url: string;
+  isStickerPack?: boolean;
+  image?: Readonly<UploadedAttachmentType>;
+  date?: number;
+}>;
+
+export type OutgoingTextAttachmentType = Omit<TextAttachmentType, 'preview'> & {
+  preview?: OutgoingLinkPreviewType;
 };
 
 export type GroupV2InfoType = {
   groupChange?: Uint8Array;
   masterKey: Uint8Array;
   revision: number;
-  members: Array<string>;
-};
-export type GroupV1InfoType = {
-  id: string;
-  members: Array<string>;
+  members: ReadonlyArray<ServiceIdString>;
 };
 
 type GroupCallUpdateType = {
   eraId: string;
 };
 
-export type StickerType = StickerWithHydratedData & {
-  attachmentPointer?: Proto.IAttachmentPointer;
-};
+export type OutgoingStickerType = Readonly<{
+  packId: string;
+  packKey: string;
+  stickerId: number;
+  emoji?: string;
+  data: Readonly<UploadedAttachmentType>;
+}>;
 
 export type ReactionType = {
   emoji?: string;
   remove?: boolean;
-  targetAuthorUuid?: string;
+  targetAuthorAci?: AciString;
   targetTimestamp?: number;
-};
-
-export type AttachmentType = {
-  size: number;
-  data: Uint8Array;
-  contentType: string;
-
-  fileName?: string;
-  flags?: number;
-  width?: number;
-  height?: number;
-  caption?: string;
-
-  attachmentPointer?: Proto.IAttachmentPointer;
-
-  blurHash?: string;
 };
 
 export const singleProtoJobDataSchema = z.object({
   contentHint: z.number(),
-  identifier: z.string(),
+  serviceId: serviceIdSchema,
   isSyncMessage: z.boolean(),
   messageIds: z.array(z.string()).optional(),
   protoBase64: z.string(),
@@ -146,35 +190,13 @@ export const singleProtoJobDataSchema = z.object({
 
 export type SingleProtoJobData = z.infer<typeof singleProtoJobDataSchema>;
 
-function makeAttachmentSendReady(
-  attachment: Attachment.AttachmentType
-): AttachmentType | undefined {
-  const { data } = attachment;
-
-  if (!data) {
-    throw new Error(
-      'makeAttachmentSendReady: Missing data, returning undefined'
-    );
-  }
-
-  return {
-    ...attachment,
-    contentType: MIMETypeToString(attachment.contentType),
-    data,
-  };
-}
-
-export type ContactWithHydratedAvatar = EmbeddedContactType & {
-  avatar?: Avatar & {
-    attachmentPointer?: Proto.IAttachmentPointer;
-  };
-};
-
 export type MessageOptionsType = {
-  attachments?: ReadonlyArray<AttachmentType> | null;
+  attachments?: ReadonlyArray<UploadedAttachmentType>;
   body?: string;
-  contact?: Array<ContactWithHydratedAvatar>;
-  expireTimer?: number;
+  bodyRanges?: ReadonlyArray<RawBodyRange>;
+  contact?: ReadonlyArray<EmbeddedContactWithUploadedAvatar>;
+  expireTimer?: DurationInSeconds;
+  expireTimerVersion: number | undefined;
   flags?: number;
   group?: {
     id: string;
@@ -182,46 +204,50 @@ export type MessageOptionsType = {
   };
   groupV2?: GroupV2InfoType;
   needsSync?: boolean;
-  preview?: ReadonlyArray<LinkPreviewType>;
+  preview?: ReadonlyArray<OutgoingLinkPreviewType>;
   profileKey?: Uint8Array;
-  quote?: QuotedMessageType | null;
-  recipients: ReadonlyArray<string>;
-  sticker?: StickerWithHydratedData;
+  quote?: OutgoingQuoteType;
+  recipients: ReadonlyArray<ServiceIdString>;
+  sticker?: OutgoingStickerType;
   reaction?: ReactionType;
   deletedForEveryoneTimestamp?: number;
+  targetTimestampForEdit?: number;
   timestamp: number;
-  mentions?: BodyRangesType;
   groupCallUpdate?: GroupCallUpdateType;
   storyContext?: StoryContextType;
 };
 export type GroupSendOptionsType = {
-  attachments?: Array<AttachmentType>;
-  contact?: Array<ContactWithHydratedAvatar>;
+  attachments?: ReadonlyArray<UploadedAttachmentType>;
+  bodyRanges?: ReadonlyArray<RawBodyRange>;
+  contact?: ReadonlyArray<EmbeddedContactWithUploadedAvatar>;
   deletedForEveryoneTimestamp?: number;
-  expireTimer?: number;
+  targetTimestampForEdit?: number;
+  expireTimer?: DurationInSeconds;
   flags?: number;
   groupCallUpdate?: GroupCallUpdateType;
-  groupV1?: GroupV1InfoType;
   groupV2?: GroupV2InfoType;
-  mentions?: BodyRangesType;
   messageText?: string;
-  preview?: ReadonlyArray<LinkPreviewType>;
+  preview?: ReadonlyArray<OutgoingLinkPreviewType>;
   profileKey?: Uint8Array;
-  quote?: QuotedMessageType | null;
+  quote?: OutgoingQuoteType;
   reaction?: ReactionType;
-  sticker?: StickerWithHydratedData;
+  sticker?: OutgoingStickerType;
   storyContext?: StoryContextType;
   timestamp: number;
 };
 
 class Message {
-  attachments: ReadonlyArray<AttachmentType>;
+  attachments: ReadonlyArray<UploadedAttachmentType>;
 
   body?: string;
 
-  contact?: Array<ContactWithHydratedAvatar>;
+  bodyRanges?: ReadonlyArray<RawBodyRange>;
 
-  expireTimer?: number;
+  contact?: ReadonlyArray<EmbeddedContactWithUploadedAvatar>;
+
+  expireTimer?: DurationInSeconds;
+
+  expireTimerVersion?: number;
 
   flags?: number;
 
@@ -234,15 +260,15 @@ class Message {
 
   needsSync?: boolean;
 
-  preview?: ReadonlyArray<LinkPreviewType>;
+  preview?: ReadonlyArray<OutgoingLinkPreviewType>;
 
   profileKey?: Uint8Array;
 
-  quote?: QuotedMessageType | null;
+  quote?: OutgoingQuoteType;
 
-  recipients: ReadonlyArray<string>;
+  recipients: ReadonlyArray<ServiceIdString>;
 
-  sticker?: StickerType;
+  sticker?: OutgoingStickerType;
 
   reaction?: ReactionType;
 
@@ -250,11 +276,7 @@ class Message {
 
   dataMessage?: Proto.DataMessage;
 
-  attachmentPointers: Array<Proto.IAttachmentPointer> = [];
-
   deletedForEveryoneTimestamp?: number;
-
-  mentions?: BodyRangesType;
 
   groupCallUpdate?: GroupCallUpdateType;
 
@@ -263,8 +285,10 @@ class Message {
   constructor(options: MessageOptionsType) {
     this.attachments = options.attachments || [];
     this.body = options.body;
+    this.bodyRanges = options.bodyRanges;
     this.contact = options.contact;
     this.expireTimer = options.expireTimer;
+    this.expireTimerVersion = options.expireTimerVersion;
     this.flags = options.flags;
     this.group = options.group;
     this.groupV2 = options.groupV2;
@@ -277,7 +301,6 @@ class Message {
     this.reaction = options.reaction;
     this.timestamp = options.timestamp;
     this.deletedForEveryoneTimestamp = options.deletedForEveryoneTimestamp;
-    this.mentions = options.mentions;
     this.groupCallUpdate = options.groupCallUpdate;
     this.storyContext = options.storyContext;
 
@@ -346,16 +369,26 @@ class Message {
     const proto = new Proto.DataMessage();
 
     proto.timestamp = Long.fromNumber(this.timestamp);
-    proto.attachments = this.attachmentPointers;
+    proto.attachments = this.attachments.slice();
 
     if (this.body) {
       proto.body = this.body;
 
-      const mentionCount = this.mentions ? this.mentions.length : 0;
+      const mentionCount = this.bodyRanges
+        ? this.bodyRanges.filter(BodyRange.isMention).length
+        : 0;
+      const otherRangeCount = this.bodyRanges
+        ? this.bodyRanges.length - mentionCount
+        : 0;
       const placeholders = this.body.match(/\uFFFC/g);
       const placeholderCount = placeholders ? placeholders.length : 0;
+      const storyInfo = this.storyContext
+        ? `, story: ${this.storyContext.timestamp}`
+        : '';
       log.info(
-        `Sending a message with ${mentionCount} mentions and ${placeholderCount} placeholders`
+        `Sending a message with ${mentionCount} mentions, ` +
+          `${placeholderCount} placeholders, ` +
+          `and ${otherRangeCount} other ranges${storyInfo}`
       );
     }
     if (this.flags) {
@@ -366,10 +399,6 @@ class Message {
       proto.groupV2.masterKey = this.groupV2.masterKey;
       proto.groupV2.revision = this.groupV2.revision;
       proto.groupV2.groupChange = this.groupV2.groupChange || null;
-    } else if (this.group) {
-      proto.group = new Proto.GroupContext();
-      proto.group.id = Bytes.fromString(this.group.id);
-      proto.group.type = this.group.type;
     }
     if (this.sticker) {
       proto.sticker = new Proto.DataMessage.Sticker();
@@ -377,17 +406,14 @@ class Message {
       proto.sticker.packKey = Bytes.fromBase64(this.sticker.packKey);
       proto.sticker.stickerId = this.sticker.stickerId;
       proto.sticker.emoji = this.sticker.emoji;
-
-      if (this.sticker.attachmentPointer) {
-        proto.sticker.data = this.sticker.attachmentPointer;
-      }
+      proto.sticker.data = this.sticker.data;
     }
     if (this.reaction) {
       proto.reaction = new Proto.DataMessage.Reaction();
       proto.reaction.emoji = this.reaction.emoji || null;
       proto.reaction.remove = this.reaction.remove || false;
-      proto.reaction.targetAuthorUuid = this.reaction.targetAuthorUuid || null;
-      proto.reaction.targetTimestamp =
+      proto.reaction.targetAuthorAci = this.reaction.targetAuthorAci || null;
+      proto.reaction.targetSentTimestamp =
         this.reaction.targetTimestamp === undefined
           ? null
           : Long.fromNumber(this.reaction.targetTimestamp);
@@ -395,88 +421,90 @@ class Message {
 
     if (Array.isArray(this.preview)) {
       proto.preview = this.preview.map(preview => {
-        const item = new Proto.DataMessage.Preview();
+        const item = new Proto.Preview();
         item.title = preview.title;
         item.url = preview.url;
         item.description = preview.description || null;
         item.date = preview.date || null;
-        if (preview.attachmentPointer) {
-          item.image = preview.attachmentPointer;
+        if (preview.image) {
+          item.image = preview.image;
         }
         return item;
       });
     }
     if (Array.isArray(this.contact)) {
-      proto.contact = this.contact.map(contact => {
-        const contactProto = new Proto.DataMessage.Contact();
-        if (contact.name) {
-          const nameProto: Proto.DataMessage.Contact.IName = {
-            givenName: contact.name.givenName,
-            familyName: contact.name.familyName,
-            prefix: contact.name.prefix,
-            suffix: contact.name.suffix,
-            middleName: contact.name.middleName,
-            displayName: contact.name.displayName,
-          };
-          contactProto.name = new Proto.DataMessage.Contact.Name(nameProto);
-        }
-        if (Array.isArray(contact.number)) {
-          contactProto.number = contact.number.map(number => {
-            const numberProto: Proto.DataMessage.Contact.IPhone = {
-              value: number.value,
-              type: numberToPhoneType(number.type),
-              label: number.label,
+      proto.contact = this.contact.map(
+        (contact: EmbeddedContactWithUploadedAvatar) => {
+          const contactProto = new Proto.DataMessage.Contact();
+          if (contact.name) {
+            const nameProto: Proto.DataMessage.Contact.IName = {
+              givenName: contact.name.givenName,
+              familyName: contact.name.familyName,
+              prefix: contact.name.prefix,
+              suffix: contact.name.suffix,
+              middleName: contact.name.middleName,
+              nickname: contact.name.nickname,
             };
+            contactProto.name = new Proto.DataMessage.Contact.Name(nameProto);
+          }
+          if (Array.isArray(contact.number)) {
+            contactProto.number = contact.number.map(number => {
+              const numberProto: Proto.DataMessage.Contact.IPhone = {
+                value: number.value,
+                type: numberToPhoneType(number.type),
+                label: number.label,
+              };
 
-            return new Proto.DataMessage.Contact.Phone(numberProto);
-          });
-        }
-        if (Array.isArray(contact.email)) {
-          contactProto.email = contact.email.map(email => {
-            const emailProto: Proto.DataMessage.Contact.IEmail = {
-              value: email.value,
-              type: numberToEmailType(email.type),
-              label: email.label,
-            };
+              return new Proto.DataMessage.Contact.Phone(numberProto);
+            });
+          }
+          if (Array.isArray(contact.email)) {
+            contactProto.email = contact.email.map(email => {
+              const emailProto: Proto.DataMessage.Contact.IEmail = {
+                value: email.value,
+                type: numberToEmailType(email.type),
+                label: email.label,
+              };
 
-            return new Proto.DataMessage.Contact.Email(emailProto);
-          });
-        }
-        if (Array.isArray(contact.address)) {
-          contactProto.address = contact.address.map(address => {
-            const addressProto: Proto.DataMessage.Contact.IPostalAddress = {
-              type: numberToAddressType(address.type),
-              label: address.label,
-              street: address.street,
-              pobox: address.pobox,
-              neighborhood: address.neighborhood,
-              city: address.city,
-              region: address.region,
-              postcode: address.postcode,
-              country: address.country,
-            };
+              return new Proto.DataMessage.Contact.Email(emailProto);
+            });
+          }
+          if (Array.isArray(contact.address)) {
+            contactProto.address = contact.address.map(address => {
+              const addressProto: Proto.DataMessage.Contact.IPostalAddress = {
+                type: numberToAddressType(address.type),
+                label: address.label,
+                street: address.street,
+                pobox: address.pobox,
+                neighborhood: address.neighborhood,
+                city: address.city,
+                region: address.region,
+                postcode: address.postcode,
+                country: address.country,
+              };
 
-            return new Proto.DataMessage.Contact.PostalAddress(addressProto);
-          });
-        }
-        if (contact.avatar && contact.avatar.attachmentPointer) {
-          const avatarProto = new Proto.DataMessage.Contact.Avatar();
-          avatarProto.avatar = contact.avatar.attachmentPointer;
-          avatarProto.isProfile = Boolean(contact.avatar.isProfile);
-          contactProto.avatar = avatarProto;
-        }
+              return new Proto.DataMessage.Contact.PostalAddress(addressProto);
+            });
+          }
+          if (contact.avatar?.avatar) {
+            const avatarProto = new Proto.DataMessage.Contact.Avatar();
+            avatarProto.avatar = contact.avatar.avatar;
+            avatarProto.isProfile = Boolean(contact.avatar.isProfile);
+            contactProto.avatar = avatarProto;
+          }
 
-        if (contact.organization) {
-          contactProto.organization = contact.organization;
-        }
+          if (contact.organization) {
+            contactProto.organization = contact.organization;
+          }
 
-        return contactProto;
-      });
+          return contactProto;
+        }
+      );
     }
 
     if (this.quote) {
-      const { QuotedAttachment } = Proto.DataMessage.Quote;
-      const { BodyRange, Quote } = Proto.DataMessage;
+      const ProtoBodyRange = Proto.BodyRange;
+      const { Quote } = Proto.DataMessage;
 
       proto.quote = new Quote();
       const { quote } = proto;
@@ -489,30 +517,20 @@ class Message {
 
       quote.id =
         this.quote.id === undefined ? null : Long.fromNumber(this.quote.id);
-      quote.authorUuid = this.quote.authorUuid || null;
+      quote.authorAci = this.quote.authorAci || null;
       quote.text = this.quote.text || null;
-      quote.attachments = (this.quote.attachments || []).map(
-        (attachment: AttachmentType) => {
-          const quotedAttachment = new QuotedAttachment();
-
-          quotedAttachment.contentType = attachment.contentType;
-          if (attachment.fileName) {
-            quotedAttachment.fileName = attachment.fileName;
-          }
-          if (attachment.attachmentPointer) {
-            quotedAttachment.thumbnail = attachment.attachmentPointer;
-          }
-
-          return quotedAttachment;
-        }
-      );
-      const bodyRanges: BodyRangesType = this.quote.bodyRanges || [];
+      quote.attachments = this.quote.attachments.slice() || [];
+      const bodyRanges = this.quote.bodyRanges || [];
       quote.bodyRanges = bodyRanges.map(range => {
-        const bodyRange = new BodyRange();
+        const bodyRange = new ProtoBodyRange();
         bodyRange.start = range.start;
         bodyRange.length = range.length;
-        if (range.mentionUuid !== undefined) {
-          bodyRange.mentionUuid = range.mentionUuid;
+        if (BodyRange.isMention(range)) {
+          bodyRange.mentionAci = range.mentionAci;
+        } else if (BodyRange.isFormatting(range)) {
+          bodyRange.style = range.style;
+        } else {
+          throw missingCaseError(range);
         }
         return bodyRange;
       });
@@ -529,6 +547,9 @@ class Message {
     if (this.expireTimer) {
       proto.expireTimer = this.expireTimer;
     }
+    if (this.expireTimerVersion) {
+      proto.expireTimerVersion = this.expireTimerVersion;
+    }
     if (this.profileKey) {
       proto.profileKey = this.profileKey;
     }
@@ -537,16 +558,28 @@ class Message {
         targetSentTimestamp: Long.fromNumber(this.deletedForEveryoneTimestamp),
       };
     }
-    if (this.mentions) {
+    if (this.bodyRanges) {
       proto.requiredProtocolVersion =
         Proto.DataMessage.ProtocolVersion.MENTIONS;
-      proto.bodyRanges = this.mentions.map(
-        ({ start, length, mentionUuid }) => ({
-          start,
-          length,
-          mentionUuid,
-        })
-      );
+      proto.bodyRanges = this.bodyRanges.map(bodyRange => {
+        const { start, length } = bodyRange;
+
+        if (BodyRange.isMention(bodyRange)) {
+          return {
+            start,
+            length,
+            mentionAci: bodyRange.mentionAci,
+          };
+        }
+        if (BodyRange.isFormatting(bodyRange)) {
+          return {
+            start,
+            length,
+            style: bodyRange.style,
+          };
+        }
+        throw missingCaseError(bodyRange);
+      });
     }
 
     if (this.groupCallUpdate) {
@@ -562,8 +595,8 @@ class Message {
       const { StoryContext } = Proto.DataMessage;
 
       const storyContext = new StoryContext();
-      if (this.storyContext.authorUuid) {
-        storyContext.authorUuid = this.storyContext.authorUuid;
+      if (this.storyContext.authorAci) {
+        storyContext.authorAci = this.storyContext.authorAci;
       }
       storyContext.sentTimestamp = Long.fromNumber(this.storyContext.timestamp);
 
@@ -572,10 +605,6 @@ class Message {
 
     this.dataMessage = proto;
     return proto;
-  }
-
-  encode(): Uint8Array {
-    return Proto.DataMessage.encode(this.toProto()).finish();
   }
 }
 
@@ -606,7 +635,9 @@ function addPniSignatureMessageToProto({
 
   // eslint-disable-next-line no-param-reassign
   proto.pniSignatureMessage = {
-    pni: uuidToBytes(pniSignatureMessage.pni),
+    pni: Pni.parseFromServiceIdString(
+      pniSignatureMessage.pni
+    ).getRawUuidBytes(),
     signature: pniSignatureMessage.signature,
   };
 }
@@ -620,12 +651,12 @@ export default class MessageSender {
     this.pendingMessages = {};
   }
 
-  async queueJobForIdentifier<T>(
-    identifier: string,
+  async queueJobForServiceId<T>(
+    serviceId: ServiceIdString,
     runJob: () => Promise<T>
   ): Promise<T> {
     const { id } = await window.ConversationController.getOrCreateAndWait(
-      identifier,
+      serviceId,
       'private'
     );
     this.pendingMessages[id] =
@@ -635,20 +666,13 @@ export default class MessageSender {
 
     const taskWithTimeout = createTaskWithTimeout(
       runJob,
-      `queueJobForIdentifier ${identifier} ${id}`
+      `queueJobForServiceId ${serviceId} ${id}`
     );
 
     return queue.add(taskWithTimeout);
   }
 
   // Attachment upload functions
-
-  _getAttachmentSizeBucket(size: number): number {
-    return Math.max(
-      541,
-      Math.floor(1.05 ** Math.ceil(Math.log(size) / Math.log(1.05)))
-    );
-  }
 
   static getRandomPadding(): Uint8Array {
     // Generate a random int from 1 and 512
@@ -659,217 +683,11 @@ export default class MessageSender {
     return getRandomBytes(paddingLength);
   }
 
-  getPaddedAttachment(data: Readonly<Uint8Array>): Uint8Array {
-    const size = data.byteLength;
-    const paddedSize = this._getAttachmentSizeBucket(size);
-    const padding = getZeroes(paddedSize - size);
-
-    return Bytes.concatenate([data, padding]);
-  }
-
-  async makeAttachmentPointer(
-    attachment: Readonly<
-      Partial<AttachmentType> &
-        Pick<AttachmentType, 'data' | 'size' | 'contentType'>
-    >
-  ): Promise<Proto.IAttachmentPointer> {
-    assertDev(
-      typeof attachment === 'object' && attachment != null,
-      'Got null attachment in `makeAttachmentPointer`'
-    );
-
-    const { data, size, contentType } = attachment;
-    if (!(data instanceof Uint8Array)) {
-      throw new Error(
-        `makeAttachmentPointer: data was a '${typeof data}' instead of Uint8Array`
-      );
-    }
-    if (data.byteLength !== size) {
-      throw new Error(
-        `makeAttachmentPointer: Size ${size} did not match data.byteLength ${data.byteLength}`
-      );
-    }
-    if (typeof contentType !== 'string') {
-      throw new Error(
-        `makeAttachmentPointer: contentType ${contentType} was not a string`
-      );
-    }
-
-    const padded = this.getPaddedAttachment(data);
-    const key = getRandomBytes(64);
-    const iv = getRandomBytes(16);
-
-    const result = encryptAttachment(padded, key, iv);
-    const id = await this.server.putAttachment(result.ciphertext);
-
-    const proto = new Proto.AttachmentPointer();
-    proto.cdnId = Long.fromString(id);
-    proto.contentType = attachment.contentType;
-    proto.key = key;
-    proto.size = data.byteLength;
-    proto.digest = result.digest;
-
-    if (attachment.fileName) {
-      proto.fileName = attachment.fileName;
-    }
-    if (attachment.flags) {
-      proto.flags = attachment.flags;
-    }
-    if (attachment.width) {
-      proto.width = attachment.width;
-    }
-    if (attachment.height) {
-      proto.height = attachment.height;
-    }
-    if (attachment.caption) {
-      proto.caption = attachment.caption;
-    }
-    if (attachment.blurHash) {
-      proto.blurHash = attachment.blurHash;
-    }
-
-    return proto;
-  }
-
-  async uploadAttachments(message: Message): Promise<void> {
-    try {
-      // eslint-disable-next-line no-param-reassign
-      message.attachmentPointers = await Promise.all(
-        message.attachments.map(attachment =>
-          this.makeAttachmentPointer(attachment)
-        )
-      );
-    } catch (error) {
-      if (error instanceof HTTPError) {
-        throw new MessageError(message, error);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  async uploadLinkPreviews(message: Message): Promise<void> {
-    try {
-      const preview = await Promise.all(
-        (message.preview || []).map(async (item: Readonly<LinkPreviewType>) => {
-          if (!item.image) {
-            return item;
-          }
-          const attachment = makeAttachmentSendReady(item.image);
-          if (!attachment) {
-            return item;
-          }
-
-          return {
-            ...item,
-            attachmentPointer: await this.makeAttachmentPointer(attachment),
-          };
-        })
-      );
-      // eslint-disable-next-line no-param-reassign
-      message.preview = preview;
-    } catch (error) {
-      if (error instanceof HTTPError) {
-        throw new MessageError(message, error);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  async uploadSticker(message: Message): Promise<void> {
-    try {
-      const { sticker } = message;
-
-      if (!sticker) {
-        return;
-      }
-      if (!sticker.data) {
-        throw new Error('uploadSticker: No sticker data to upload!');
-      }
-
-      // eslint-disable-next-line no-param-reassign
-      message.sticker = {
-        ...sticker,
-        attachmentPointer: await this.makeAttachmentPointer(sticker.data),
-      };
-    } catch (error) {
-      if (error instanceof HTTPError) {
-        throw new MessageError(message, error);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  async uploadContactAvatar(message: Message): Promise<void> {
-    const { contact } = message;
-    if (!contact || contact.length === 0) {
-      return;
-    }
-
-    try {
-      await Promise.all(
-        contact.map(async (item: ContactWithHydratedAvatar) => {
-          const itemAvatar = item?.avatar;
-          const avatar = itemAvatar?.avatar;
-
-          if (!itemAvatar || !avatar || !avatar.data) {
-            return;
-          }
-
-          const attachment = makeAttachmentSendReady(avatar);
-          if (!attachment) {
-            return;
-          }
-
-          itemAvatar.attachmentPointer = await this.makeAttachmentPointer(
-            attachment
-          );
-        })
-      );
-    } catch (error) {
-      if (error instanceof HTTPError) {
-        throw new MessageError(message, error);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  async uploadThumbnails(message: Message): Promise<void> {
-    const { quote } = message;
-    if (!quote || !quote.attachments || quote.attachments.length === 0) {
-      return;
-    }
-
-    try {
-      await Promise.all(
-        quote.attachments.map(async (attachment: QuoteAttachmentType) => {
-          if (!attachment.thumbnail) {
-            return;
-          }
-
-          // eslint-disable-next-line no-param-reassign
-          attachment.attachmentPointer = await this.makeAttachmentPointer(
-            attachment.thumbnail
-          );
-        })
-      );
-    } catch (error) {
-      if (error instanceof HTTPError) {
-        throw new MessageError(message, error);
-      } else {
-        throw error;
-      }
-    }
-  }
-
   // Proto assembly
 
-  async getTextAttachmentProto(
-    attachmentAttrs: Attachment.TextAttachmentType
-  ): Promise<Proto.TextAttachment> {
+  getTextAttachmentProto(
+    attachmentAttrs: OutgoingTextAttachmentType
+  ): Proto.TextAttachment {
     const textAttachment = new Proto.TextAttachment();
 
     if (attachmentAttrs.text) {
@@ -889,22 +707,21 @@ export default class MessageSender {
     }
 
     if (attachmentAttrs.preview) {
-      const previewImage = attachmentAttrs.preview.image;
-      // This cast is OK because we're ensuring that previewImage.data is truthy
-      const image =
-        previewImage && previewImage.data
-          ? await this.makeAttachmentPointer(previewImage as AttachmentType)
-          : undefined;
-
       textAttachment.preview = {
-        image,
+        image: attachmentAttrs.preview.image,
         title: attachmentAttrs.preview.title,
         url: attachmentAttrs.preview.url,
       };
     }
 
     if (attachmentAttrs.gradient) {
-      textAttachment.gradient = attachmentAttrs.gradient;
+      const { colors, positions, ...rest } = attachmentAttrs.gradient;
+
+      textAttachment.gradient = {
+        ...rest,
+        colors: colors?.slice(),
+        positions: positions?.slice(),
+      };
       textAttachment.background = 'gradient';
     } else {
       textAttachment.color = attachmentAttrs.color;
@@ -914,38 +731,51 @@ export default class MessageSender {
     return textAttachment;
   }
 
-  async getDataMessage(
+  async getDataOrEditMessage(
     options: Readonly<MessageOptionsType>
   ): Promise<Uint8Array> {
     const message = await this.getHydratedMessage(options);
-    return message.encode();
+    const dataMessage = message.toProto();
+
+    if (options.targetTimestampForEdit) {
+      const editMessage = new Proto.EditMessage();
+      editMessage.dataMessage = dataMessage;
+      editMessage.targetSentTimestamp = Long.fromNumber(
+        options.targetTimestampForEdit
+      );
+      return Proto.EditMessage.encode(editMessage).finish();
+    }
+    return Proto.DataMessage.encode(dataMessage).finish();
   }
 
   async getStoryMessage({
     allowsReplies,
+    bodyRanges,
     fileAttachment,
     groupV2,
     profileKey,
     textAttachment,
   }: {
     allowsReplies?: boolean;
-    fileAttachment?: AttachmentType;
+    bodyRanges?: Array<RawBodyRange>;
+    fileAttachment?: UploadedAttachmentType;
     groupV2?: GroupV2InfoType;
     profileKey: Uint8Array;
-    textAttachment?: Attachment.TextAttachmentType;
+    textAttachment?: OutgoingTextAttachmentType;
   }): Promise<Proto.StoryMessage> {
     const storyMessage = new Proto.StoryMessage();
+
     storyMessage.profileKey = profileKey;
 
     if (fileAttachment) {
+      if (bodyRanges) {
+        storyMessage.bodyRanges = bodyRanges;
+      }
       try {
-        const attachmentPointer = await this.makeAttachmentPointer(
-          fileAttachment
-        );
-        storyMessage.fileAttachment = attachmentPointer;
+        storyMessage.fileAttachment = fileAttachment;
       } catch (error) {
         if (error instanceof HTTPError) {
-          throw new MessageError(message, error);
+          throw new MessageError(storyMessage, error);
         } else {
           throw error;
         }
@@ -953,9 +783,7 @@ export default class MessageSender {
     }
 
     if (textAttachment) {
-      storyMessage.textAttachment = await this.getTextAttachmentProto(
-        textAttachment
-      );
+      storyMessage.textAttachment = this.getTextAttachmentProto(textAttachment);
     }
 
     if (groupV2) {
@@ -985,7 +813,16 @@ export default class MessageSender {
     const dataMessage = message.toProto();
 
     const contentMessage = new Proto.Content();
-    contentMessage.dataMessage = dataMessage;
+    if (options.targetTimestampForEdit) {
+      const editMessage = new Proto.EditMessage();
+      editMessage.dataMessage = dataMessage;
+      editMessage.targetSentTimestamp = Long.fromNumber(
+        options.targetTimestampForEdit
+      );
+      contentMessage.editMessage = editMessage;
+    } else {
+      contentMessage.dataMessage = dataMessage;
+    }
 
     const { includePniSignatureMessage } = options;
     if (includePniSignatureMessage) {
@@ -1012,22 +849,15 @@ export default class MessageSender {
     attributes: Readonly<MessageOptionsType>
   ): Promise<Message> {
     const message = new Message(attributes);
-    await Promise.all([
-      this.uploadAttachments(message),
-      this.uploadContactAvatar(message),
-      this.uploadThumbnails(message),
-      this.uploadLinkPreviews(message),
-      this.uploadSticker(message),
-    ]);
 
     return message;
   }
 
   getTypingContentMessage(
     options: Readonly<{
-      recipientId?: string;
+      recipientId?: ServiceIdString;
       groupId?: Uint8Array;
-      groupMembers: ReadonlyArray<string>;
+      groupMembers: ReadonlyArray<ServiceIdString>;
       isTyping: boolean;
       timestamp?: number;
     }>
@@ -1070,14 +900,13 @@ export default class MessageSender {
   ): MessageOptionsType {
     const {
       attachments,
+      bodyRanges,
       contact,
       deletedForEveryoneTimestamp,
       expireTimer,
       flags,
       groupCallUpdate,
-      groupV1,
       groupV2,
-      mentions,
       messageText,
       preview,
       profileKey,
@@ -1085,55 +914,42 @@ export default class MessageSender {
       reaction,
       sticker,
       storyContext,
+      targetTimestampForEdit,
       timestamp,
     } = options;
 
-    if (!groupV1 && !groupV2) {
+    if (!groupV2) {
       throw new Error(
-        'getAttrsFromGroupOptions: Neither group1 nor groupv2 information provided!'
+        'getAttrsFromGroupOptions: No groupv2 information provided!'
       );
     }
 
-    const myE164 = window.textsecure.storage.user.getNumber();
-    const myUuid = window.textsecure.storage.user.getUuid()?.toString();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
-    const groupMembers = groupV2?.members || groupV1?.members || [];
-
-    // We should always have a UUID but have this check just in case we don't.
-    let isNotMe: (recipient: string) => boolean;
-    if (myUuid) {
-      isNotMe = r => r !== myE164 && r !== myUuid.toString();
-    } else {
-      isNotMe = r => r !== myE164;
-    }
+    const groupMembers = groupV2?.members || [];
 
     const blockedIdentifiers = new Set(
       concat(
-        window.storage.blocked.getBlockedUuids(),
+        window.storage.blocked.getBlockedServiceIds(),
         window.storage.blocked.getBlockedNumbers()
       )
     );
 
     const recipients = groupMembers.filter(
-      recipient => isNotMe(recipient) && !blockedIdentifiers.has(recipient)
+      recipient => recipient !== myAci && !blockedIdentifiers.has(recipient)
     );
 
     return {
       attachments,
+      bodyRanges,
       body: messageText,
       contact,
       deletedForEveryoneTimestamp,
       expireTimer,
+      expireTimerVersion: undefined,
       flags,
       groupCallUpdate,
       groupV2,
-      group: groupV1
-        ? {
-            id: groupV1.id,
-            type: Proto.GroupContext.Type.DELIVER,
-          }
-        : undefined,
-      mentions,
       preview,
       profileKey,
       quote,
@@ -1141,6 +957,7 @@ export default class MessageSender {
       recipients,
       sticker,
       storyContext,
+      targetTimestampForEdit,
       timestamp,
     };
   }
@@ -1178,27 +995,31 @@ export default class MessageSender {
     });
 
     return new Promise((resolve, reject) => {
-      this.sendMessageProto({
-        callback: (res: CallbackResultType) => {
-          if (res.errors && res.errors.length > 0) {
-            reject(new SendMessageProtoError(res));
-          } else {
-            resolve(res);
-          }
-        },
-        contentHint,
-        groupId,
-        options,
-        proto,
-        recipients: messageOptions.recipients || [],
-        timestamp: messageOptions.timestamp,
-        urgent,
-        story,
-      });
+      drop(
+        this.sendMessageProto({
+          callback: (res: CallbackResultType) => {
+            if (res.errors && res.errors.length > 0) {
+              reject(new SendMessageProtoError(res));
+            } else {
+              resolve(res);
+            }
+          },
+          contentHint,
+          groupId,
+          options,
+          proto,
+          recipients: messageOptions.recipients || [],
+          timestamp: messageOptions.timestamp,
+          urgent,
+          story,
+        })
+      );
     });
   }
 
-  sendMessageProto({
+  // Note: all the other low-level sends call this, so it is a chokepoint for 1:1 sends
+  //   The chokepoint for group sends is sendContentMessageToGroup
+  async sendMessageProto({
     callback,
     contentHint,
     groupId,
@@ -1215,25 +1036,38 @@ export default class MessageSender {
     groupId: string | undefined;
     options?: SendOptionsType;
     proto: Proto.Content | Proto.DataMessage | PlaintextContent;
-    recipients: ReadonlyArray<string>;
+    recipients: ReadonlyArray<ServiceIdString>;
     sendLogCallback?: SendLogCallbackType;
     story?: boolean;
     timestamp: number;
     urgent: boolean;
-  }>): void {
-    const rejections = window.textsecure.storage.get(
-      'signedKeyRotationRejected',
-      0
-    );
-    if (rejections > 5) {
-      throw new SignedPreKeyRotationError();
+  }>): Promise<void> {
+    const accountManager = window.getAccountManager();
+    try {
+      if (accountManager.areKeysOutOfDate(ServiceIdKind.ACI)) {
+        log.warn(
+          `sendMessageProto/${timestamp}: Keys are out of date; updating before send`
+        );
+        await accountManager.maybeUpdateKeys(ServiceIdKind.ACI);
+        if (accountManager.areKeysOutOfDate(ServiceIdKind.ACI)) {
+          throw new Error('Keys still out of date after update');
+        }
+      }
+    } catch (error) {
+      // TODO: DESKTOP-5642
+      callback({
+        dataMessage: undefined,
+        editMessage: undefined,
+        errors: [error],
+      });
+      return;
     }
 
     const outgoing = new OutgoingMessage({
       callback,
       contentHint,
       groupId,
-      identifiers: recipients,
+      serviceIds: recipients,
       message: proto,
       options,
       sendLogCallback,
@@ -1243,9 +1077,11 @@ export default class MessageSender {
       urgent,
     });
 
-    recipients.forEach(identifier => {
-      this.queueJobForIdentifier(identifier, async () =>
-        outgoing.sendToIdentifier(identifier)
+    recipients.forEach(serviceId => {
+      drop(
+        this.queueJobForServiceId(serviceId, async () =>
+          outgoing.sendToServiceId(serviceId)
+        )
       );
     });
   }
@@ -1261,7 +1097,7 @@ export default class MessageSender {
     story,
   }: Readonly<{
     timestamp: number;
-    recipients: Array<string>;
+    recipients: Array<ServiceIdString>;
     proto: Proto.Content | Proto.DataMessage | PlaintextContent;
     contentHint: number;
     groupId: string | undefined;
@@ -1278,24 +1114,26 @@ export default class MessageSender {
         resolve(result);
       };
 
-      this.sendMessageProto({
-        callback,
-        contentHint,
-        groupId,
-        options,
-        proto,
-        recipients,
-        timestamp,
-        urgent,
-        story,
-      });
+      drop(
+        this.sendMessageProto({
+          callback,
+          contentHint,
+          groupId,
+          options,
+          proto,
+          recipients,
+          timestamp,
+          urgent,
+          story,
+        })
+      );
     });
   }
 
   async sendIndividualProto({
     contentHint,
     groupId,
-    identifier,
+    serviceId,
     options,
     proto,
     timestamp,
@@ -1303,13 +1141,13 @@ export default class MessageSender {
   }: Readonly<{
     contentHint: number;
     groupId?: string;
-    identifier: string | undefined;
+    serviceId: ServiceIdString | undefined;
     options?: SendOptionsType;
     proto: Proto.DataMessage | Proto.Content | PlaintextContent;
     timestamp: number;
     urgent: boolean;
   }>): Promise<CallbackResultType> {
-    assertDev(identifier, "Identifier can't be undefined");
+    assertDev(serviceId, "ServiceId can't be undefined");
     return new Promise((resolve, reject) => {
       const callback = (res: CallbackResultType) => {
         if (res && res.errors && res.errors.length > 0) {
@@ -1318,29 +1156,33 @@ export default class MessageSender {
           resolve(res);
         }
       };
-      this.sendMessageProto({
-        callback,
-        contentHint,
-        groupId,
-        options,
-        proto,
-        recipients: [identifier],
-        timestamp,
-        urgent,
-      });
+      drop(
+        this.sendMessageProto({
+          callback,
+          contentHint,
+          groupId,
+          options,
+          proto,
+          recipients: [serviceId],
+          timestamp,
+          urgent,
+        })
+      );
     });
   }
 
   // You might wonder why this takes a groupId. models/messages.resend() can send a group
   //   message to just one person.
-  async sendMessageToIdentifier({
+  async sendMessageToServiceId({
     attachments,
+    bodyRanges,
     contact,
     contentHint,
     deletedForEveryoneTimestamp,
     expireTimer,
+    expireTimerVersion,
     groupId,
-    identifier,
+    serviceId,
     messageText,
     options,
     preview,
@@ -1350,26 +1192,30 @@ export default class MessageSender {
     sticker,
     storyContext,
     story,
+    targetTimestampForEdit,
     timestamp,
     urgent,
     includePniSignatureMessage,
   }: Readonly<{
-    attachments: ReadonlyArray<AttachmentType> | undefined;
-    contact?: Array<ContactWithHydratedAvatar>;
+    attachments: ReadonlyArray<UploadedAttachmentType> | undefined;
+    bodyRanges?: ReadonlyArray<RawBodyRange>;
+    contact?: ReadonlyArray<EmbeddedContactWithUploadedAvatar>;
     contentHint: number;
     deletedForEveryoneTimestamp: number | undefined;
-    expireTimer: number | undefined;
+    expireTimer: DurationInSeconds | undefined;
+    expireTimerVersion: number | undefined;
     groupId: string | undefined;
-    identifier: string;
+    serviceId: ServiceIdString;
     messageText: string | undefined;
     options?: SendOptionsType;
-    preview?: ReadonlyArray<LinkPreviewType> | undefined;
+    preview?: ReadonlyArray<OutgoingLinkPreviewType> | undefined;
     profileKey?: Uint8Array;
-    quote?: QuotedMessageType | null;
+    quote?: OutgoingQuoteType;
     reaction?: ReactionType;
-    sticker?: StickerWithHydratedData;
+    sticker?: OutgoingStickerType;
     storyContext?: StoryContextType;
     story?: boolean;
+    targetTimestampForEdit?: number;
     timestamp: number;
     urgent: boolean;
     includePniSignatureMessage?: boolean;
@@ -1377,17 +1223,20 @@ export default class MessageSender {
     return this.sendMessage({
       messageOptions: {
         attachments,
+        bodyRanges,
         body: messageText,
         contact,
         deletedForEveryoneTimestamp,
         expireTimer,
+        expireTimerVersion,
         preview,
         profileKey,
         quote,
         reaction,
-        recipients: [identifier],
+        recipients: [serviceId],
         sticker,
         storyContext,
+        targetTimestampForEdit,
         timestamp,
       },
       contentHint,
@@ -1405,9 +1254,10 @@ export default class MessageSender {
   //   message to others.
   async sendSyncMessage({
     encodedDataMessage,
+    encodedEditMessage,
     timestamp,
-    destination,
-    destinationUuid,
+    destinationE164,
+    destinationServiceId,
     expirationStartTimestamp,
     conversationIdsSentTo = [],
     conversationIdsWithSealedSender = new Set(),
@@ -1418,9 +1268,10 @@ export default class MessageSender {
     storyMessageRecipients,
   }: Readonly<{
     encodedDataMessage?: Uint8Array;
+    encodedEditMessage?: Uint8Array;
     timestamp: number;
-    destination: string | undefined;
-    destinationUuid: string | null | undefined;
+    destinationE164: string | undefined;
+    destinationServiceId: ServiceIdString | undefined;
     expirationStartTimestamp: number | null;
     conversationIdsSentTo?: Iterable<string>;
     conversationIdsWithSealedSender?: Set<string>;
@@ -1428,26 +1279,25 @@ export default class MessageSender {
     urgent: boolean;
     options?: SendOptionsType;
     storyMessage?: Proto.StoryMessage;
-    storyMessageRecipients?: Array<{
-      destinationUuid: string;
-      distributionListIds: Array<string>;
-      isAllowedToReply: boolean;
-    }>;
+    storyMessageRecipients?: ReadonlyArray<Proto.SyncMessage.Sent.IStoryMessageRecipient>;
   }>): Promise<CallbackResultType> {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const sentMessage = new Proto.SyncMessage.Sent();
     sentMessage.timestamp = Long.fromNumber(timestamp);
 
-    if (encodedDataMessage) {
+    if (encodedEditMessage) {
+      const editMessage = Proto.EditMessage.decode(encodedEditMessage);
+      sentMessage.editMessage = editMessage;
+    } else if (encodedDataMessage) {
       const dataMessage = Proto.DataMessage.decode(encodedDataMessage);
       sentMessage.message = dataMessage;
     }
-    if (destination) {
-      sentMessage.destination = destination;
+    if (destinationE164) {
+      sentMessage.destinationE164 = destinationE164;
     }
-    if (destinationUuid) {
-      sentMessage.destinationUuid = destinationUuid;
+    if (destinationServiceId) {
+      sentMessage.destinationServiceId = destinationServiceId;
     }
     if (expirationStartTimestamp) {
       sentMessage.expirationStartTimestamp = Long.fromNumber(
@@ -1458,17 +1308,7 @@ export default class MessageSender {
       sentMessage.storyMessage = storyMessage;
     }
     if (storyMessageRecipients) {
-      sentMessage.storyMessageRecipients = storyMessageRecipients.map(
-        recipient => {
-          const storyMessageRecipient =
-            new Proto.SyncMessage.Sent.StoryMessageRecipient();
-          storyMessageRecipient.destinationUuid = recipient.destinationUuid;
-          storyMessageRecipient.distributionListIds =
-            recipient.distributionListIds;
-          storyMessageRecipient.isAllowedToReply = recipient.isAllowedToReply;
-          return storyMessageRecipient;
-        }
-      );
+      sentMessage.storyMessageRecipients = storyMessageRecipients.slice();
     }
 
     if (isUpdate) {
@@ -1478,26 +1318,33 @@ export default class MessageSender {
     // Though this field has 'unidentified' in the name, it should have entries for each
     //   number we sent to.
     if (!isEmpty(conversationIdsSentTo)) {
-      sentMessage.unidentifiedStatus = [
-        ...map(conversationIdsSentTo, conversationId => {
+      sentMessage.unidentifiedStatus = await pMap(
+        conversationIdsSentTo,
+        async conversationId => {
           const status =
             new Proto.SyncMessage.Sent.UnidentifiedDeliveryStatus();
           const conv = window.ConversationController.get(conversationId);
           if (conv) {
-            const e164 = conv.get('e164');
-            if (e164) {
-              status.destination = e164;
+            const serviceId = conv.getServiceId();
+            if (serviceId) {
+              status.destinationServiceId = serviceId;
             }
-            const uuid = conv.get('uuid');
-            if (uuid) {
-              status.destinationUuid = uuid;
+            if (isPniString(serviceId)) {
+              const pniIdentityKey =
+                await window.textsecure.storage.protocol.loadIdentityKey(
+                  serviceId
+                );
+              if (pniIdentityKey) {
+                status.destinationPniIdentityKey = pniIdentityKey;
+              }
             }
           }
           status.unidentified =
             conversationIdsWithSealedSender.has(conversationId);
           return status;
-        }),
-      ];
+        },
+        { concurrency: 10 }
+      );
     }
 
     const syncMessage = MessageSender.createSyncMessage();
@@ -1508,7 +1355,7 @@ export default class MessageSender {
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendIndividualProto({
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       proto: contentMessage,
       timestamp,
       contentHint: ContentHint.RESENDABLE,
@@ -1518,7 +1365,7 @@ export default class MessageSender {
   }
 
   static getRequestBlockSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const request = new Proto.SyncMessage.Request();
     request.type = Proto.SyncMessage.Request.Type.BLOCKED;
@@ -1531,7 +1378,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1542,7 +1389,7 @@ export default class MessageSender {
   }
 
   static getRequestConfigurationSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const request = new Proto.SyncMessage.Request();
     request.type = Proto.SyncMessage.Request.Type.CONFIGURATION;
@@ -1555,7 +1402,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1565,32 +1412,8 @@ export default class MessageSender {
     };
   }
 
-  static getRequestGroupSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
-
-    const request = new Proto.SyncMessage.Request();
-    request.type = Proto.SyncMessage.Request.Type.GROUPS;
-    const syncMessage = this.createSyncMessage();
-    syncMessage.request = request;
-    const contentMessage = new Proto.Content();
-    contentMessage.syncMessage = syncMessage;
-
-    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-    return {
-      contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
-      isSyncMessage: true,
-      protoBase64: Bytes.toBase64(
-        Proto.Content.encode(contentMessage).finish()
-      ),
-      type: 'groupSyncRequest',
-      urgent: false,
-    };
-  }
-
   static getRequestContactSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const request = new Proto.SyncMessage.Request();
     request.type = Proto.SyncMessage.Request.Type.CONTACTS;
@@ -1603,7 +1426,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1613,32 +1436,8 @@ export default class MessageSender {
     };
   }
 
-  static getRequestPniIdentitySyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
-
-    const request = new Proto.SyncMessage.Request();
-    request.type = Proto.SyncMessage.Request.Type.PNI_IDENTITY;
-    const syncMessage = this.createSyncMessage();
-    syncMessage.request = request;
-    const contentMessage = new Proto.Content();
-    contentMessage.syncMessage = syncMessage;
-
-    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-    return {
-      contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
-      isSyncMessage: true,
-      protoBase64: Bytes.toBase64(
-        Proto.Content.encode(contentMessage).finish()
-      ),
-      type: 'pniIdentitySyncRequest',
-      urgent: true,
-    };
-  }
-
   static getFetchManifestSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const fetchLatest = new Proto.SyncMessage.FetchLatest();
     fetchLatest.type = Proto.SyncMessage.FetchLatest.Type.STORAGE_MANIFEST;
@@ -1652,7 +1451,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1663,7 +1462,7 @@ export default class MessageSender {
   }
 
   static getFetchLocalProfileSyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const fetchLatest = new Proto.SyncMessage.FetchLatest();
     fetchLatest.type = Proto.SyncMessage.FetchLatest.Type.LOCAL_PROFILE;
@@ -1677,7 +1476,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1688,7 +1487,7 @@ export default class MessageSender {
   }
 
   static getRequestKeySyncMessage(): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const request = new Proto.SyncMessage.Request();
     request.type = Proto.SyncMessage.Request.Type.KEYS;
@@ -1702,7 +1501,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1712,15 +1511,211 @@ export default class MessageSender {
     };
   }
 
+  static getDeleteForMeSyncMessage(
+    data: DeleteForMeSyncEventData
+  ): SingleProtoJobData {
+    const myAci = window.textsecure.storage.user.getCheckedAci();
+
+    const deleteForMe = new Proto.SyncMessage.DeleteForMe();
+    const messageDeletes: Map<
+      string,
+      Array<DeleteMessageSyncTarget>
+    > = new Map();
+
+    data.forEach(item => {
+      if (item.type === 'delete-message') {
+        const conversation = getConversationFromTarget(item.conversation);
+        if (!conversation) {
+          throw new Error(
+            'getDeleteForMeSyncMessage: Failed to find conversation for delete-message'
+          );
+        }
+        const existing = messageDeletes.get(conversation.id);
+        if (existing) {
+          existing.push(item);
+        } else {
+          messageDeletes.set(conversation.id, [item]);
+        }
+      } else if (item.type === 'delete-conversation') {
+        const mostRecentMessages =
+          item.mostRecentMessages.map(toAddressableMessage);
+        const mostRecentNonExpiringMessages =
+          item.mostRecentNonExpiringMessages?.map(toAddressableMessage);
+        const conversation = toConversationIdentifier(item.conversation);
+
+        deleteForMe.conversationDeletes = deleteForMe.conversationDeletes || [];
+        deleteForMe.conversationDeletes.push({
+          conversation,
+          isFullDelete: true,
+          mostRecentMessages,
+          mostRecentNonExpiringMessages,
+        });
+      } else if (item.type === 'delete-local-conversation') {
+        const conversation = toConversationIdentifier(item.conversation);
+
+        deleteForMe.localOnlyConversationDeletes =
+          deleteForMe.localOnlyConversationDeletes || [];
+        deleteForMe.localOnlyConversationDeletes.push({
+          conversation,
+        });
+      } else if (item.type === 'delete-single-attachment') {
+        throw new Error(
+          "getDeleteForMeSyncMessage: Desktop currently does not support sending 'delete-single-attachment' messages"
+        );
+      } else {
+        throw missingCaseError(item);
+      }
+    });
+
+    if (messageDeletes.size > 0) {
+      for (const [conversationId, items] of messageDeletes.entries()) {
+        const first = items[0];
+        if (!first) {
+          throw new Error('Failed to fetch first from items');
+        }
+        const messages = items.map(item => toAddressableMessage(item.message));
+        const conversation = toConversationIdentifier(first.conversation);
+
+        if (items.length > MAX_MESSAGE_COUNT) {
+          log.warn(
+            `getDeleteForMeSyncMessage: Sending ${items.length} message deletes for conversationId ${conversationId}`
+          );
+        }
+
+        deleteForMe.messageDeletes = deleteForMe.messageDeletes || [];
+        deleteForMe.messageDeletes.push({
+          messages,
+          conversation,
+        });
+      }
+    }
+
+    const syncMessage = this.createSyncMessage();
+    syncMessage.deleteForMe = deleteForMe;
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: myAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'deleteForMeSync',
+      urgent: false,
+    };
+  }
+
+  static getAttachmentBackfillSyncMessage(
+    targetConversation: ConversationIdentifier,
+    targetMessage: AddressableMessage
+  ): SingleProtoJobData {
+    const myAci = window.textsecure.storage.user.getCheckedAci();
+
+    const syncMessage = this.createSyncMessage();
+    syncMessage.attachmentBackfillRequest = {
+      targetMessage: toAddressableMessage(targetMessage),
+      targetConversation: toConversationIdentifier(targetConversation),
+    };
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: myAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'attachmentBackfillRequestSync',
+      urgent: false,
+    };
+  }
+
+  static getClearCallHistoryMessage(
+    latestCall: CallHistoryDetails
+  ): SingleProtoJobData {
+    const ourAci = window.textsecure.storage.user.getCheckedAci();
+    const callLogEvent = new Proto.SyncMessage.CallLogEvent({
+      type: Proto.SyncMessage.CallLogEvent.Type.CLEAR,
+      timestamp: Long.fromNumber(latestCall.timestamp),
+      peerId: getBytesForPeerId(latestCall),
+      callId: getCallIdForProto(latestCall),
+    });
+
+    const syncMessage = MessageSender.createSyncMessage();
+    syncMessage.callLogEvent = callLogEvent;
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: ourAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'callLogEventSync',
+      urgent: false,
+    };
+  }
+
+  static getDeleteCallEvent(callDetails: CallDetails): SingleProtoJobData {
+    const ourAci = window.textsecure.storage.user.getCheckedAci();
+    const { mode } = callDetails;
+    let status;
+    if (mode === CallMode.Adhoc) {
+      status = AdhocCallStatus.Deleted;
+    } else if (mode === CallMode.Direct) {
+      status = DirectCallStatus.Deleted;
+    } else if (mode === CallMode.Group) {
+      status = GroupCallStatus.Deleted;
+    } else {
+      throw missingCaseError(mode);
+    }
+    const callEvent = getProtoForCallHistory({
+      ...callDetails,
+      status,
+    });
+
+    const syncMessage = MessageSender.createSyncMessage();
+    syncMessage.callEvent = callEvent;
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: ourAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'callLogEventSync',
+      urgent: false,
+    };
+  }
+
   async syncReadMessages(
     reads: ReadonlyArray<{
-      senderUuid?: string;
+      senderAci?: AciString;
       senderE164?: string;
       timestamp: number;
     }>,
     options?: Readonly<SendOptionsType>
   ): Promise<CallbackResultType> {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const syncMessage = MessageSender.createSyncMessage();
     syncMessage.read = [];
@@ -1738,7 +1733,7 @@ export default class MessageSender {
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendIndividualProto({
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       proto: contentMessage,
       timestamp: Date.now(),
       contentHint: ContentHint.RESENDABLE,
@@ -1749,13 +1744,13 @@ export default class MessageSender {
 
   async syncView(
     views: ReadonlyArray<{
-      senderUuid?: string;
+      senderAci?: AciString;
       senderE164?: string;
       timestamp: number;
     }>,
     options?: SendOptionsType
   ): Promise<CallbackResultType> {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const syncMessage = MessageSender.createSyncMessage();
     syncMessage.viewed = views.map(
@@ -1771,7 +1766,7 @@ export default class MessageSender {
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendIndividualProto({
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       proto: contentMessage,
       timestamp: Date.now(),
       contentHint: ContentHint.RESENDABLE,
@@ -1782,7 +1777,7 @@ export default class MessageSender {
 
   async syncViewOnceOpen(
     viewOnceOpens: ReadonlyArray<{
-      senderUuid?: string;
+      senderAci?: AciString;
       senderE164?: string;
       timestamp: number;
     }>,
@@ -1793,21 +1788,18 @@ export default class MessageSender {
         `syncViewOnceOpen: ${viewOnceOpens.length} opens provided. Can only handle one.`
       );
     }
-    const { senderE164, senderUuid, timestamp } = viewOnceOpens[0];
+    const { senderAci, timestamp } = viewOnceOpens[0];
 
-    if (!senderUuid) {
-      throw new Error('syncViewOnceOpen: Missing senderUuid');
+    if (!senderAci) {
+      throw new Error('syncViewOnceOpen: Missing senderAci');
     }
 
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const syncMessage = MessageSender.createSyncMessage();
 
     const viewOnceOpen = new Proto.SyncMessage.ViewOnceOpen();
-    if (senderE164 !== undefined) {
-      viewOnceOpen.sender = senderE164;
-    }
-    viewOnceOpen.senderUuid = senderUuid;
+    viewOnceOpen.senderAci = senderAci;
     viewOnceOpen.timestamp = Long.fromNumber(timestamp);
     syncMessage.viewOnceOpen = viewOnceOpen;
 
@@ -1817,7 +1809,7 @@ export default class MessageSender {
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendIndividualProto({
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       proto: contentMessage,
       timestamp: Date.now(),
       contentHint: ContentHint.RESENDABLE,
@@ -1826,24 +1818,54 @@ export default class MessageSender {
     });
   }
 
+  static getBlockSync(
+    options: Readonly<{
+      e164s: Array<string>;
+      acis: Array<string>;
+      groupIds: Array<Uint8Array>;
+    }>
+  ): SingleProtoJobData {
+    const myAci = window.textsecure.storage.user.getCheckedAci();
+
+    const syncMessage = MessageSender.createSyncMessage();
+
+    const blocked = new Proto.SyncMessage.Blocked();
+    blocked.numbers = options.e164s;
+    blocked.acis = options.acis;
+    blocked.groupIds = options.groupIds;
+    syncMessage.blocked = blocked;
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: myAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'blockSync',
+      urgent: false,
+    };
+  }
+
   static getMessageRequestResponseSync(
     options: Readonly<{
-      threadE164?: string;
-      threadUuid?: string;
+      threadAci?: AciString;
       groupId?: Uint8Array;
       type: number;
     }>
   ): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
     const syncMessage = MessageSender.createSyncMessage();
 
     const response = new Proto.SyncMessage.MessageRequestResponse();
-    if (options.threadE164 !== undefined) {
-      response.threadE164 = options.threadE164;
-    }
-    if (options.threadUuid !== undefined) {
-      response.threadUuid = options.threadUuid;
+    if (options.threadAci !== undefined) {
+      response.threadAci = options.threadAci;
     }
     if (options.groupId) {
       response.groupId = options.groupId;
@@ -1858,7 +1880,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1875,7 +1897,7 @@ export default class MessageSender {
       installed: boolean;
     }>
   ): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
     const ENUM = Proto.SyncMessage.StickerPackOperation.Type;
 
     const packOperations = operations.map(item => {
@@ -1899,7 +1921,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1911,13 +1933,13 @@ export default class MessageSender {
 
   static getVerificationSync(
     destinationE164: string | undefined,
-    destinationUuid: string | undefined,
+    destinationAci: AciString | undefined,
     state: number,
     identityKey: Readonly<Uint8Array>
   ): SingleProtoJobData {
-    const myUuid = window.textsecure.storage.user.getCheckedUuid();
+    const myAci = window.textsecure.storage.user.getCheckedAci();
 
-    if (!destinationE164 && !destinationUuid) {
+    if (!destinationE164 && !destinationAci) {
       throw new Error('syncVerification: Neither e164 nor UUID were provided');
     }
 
@@ -1925,11 +1947,8 @@ export default class MessageSender {
 
     const verified = new Proto.Verified();
     verified.state = state;
-    if (destinationE164) {
-      verified.destination = destinationE164;
-    }
-    if (destinationUuid) {
-      verified.destinationUuid = destinationUuid;
+    if (destinationAci) {
+      verified.destinationAci = destinationAci;
     }
     verified.identityKey = identityKey;
     verified.nullMessage = padding;
@@ -1944,7 +1963,7 @@ export default class MessageSender {
 
     return {
       contentHint: ContentHint.RESENDABLE,
-      identifier: myUuid.toString(),
+      serviceId: myAci,
       isSyncMessage: true,
       protoBase64: Bytes.toBase64(
         Proto.Content.encode(contentMessage).finish()
@@ -1957,47 +1976,47 @@ export default class MessageSender {
   // Sending messages to contacts
 
   async sendCallingMessage(
-    recipientId: string,
-    callingMessage: Readonly<Proto.ICallingMessage>,
+    serviceId: ServiceIdString,
+    callingMessage: Readonly<Proto.ICallMessage>,
+    timestamp: number,
+    urgent: boolean,
     options?: Readonly<SendOptionsType>
   ): Promise<CallbackResultType> {
-    const recipients = [recipientId];
-    const finalTimestamp = Date.now();
+    const recipients = [serviceId];
 
     const contentMessage = new Proto.Content();
-    contentMessage.callingMessage = callingMessage;
+    contentMessage.callMessage = callingMessage;
 
-    const conversation = window.ConversationController.get(recipientId);
+    const conversation = window.ConversationController.get(serviceId);
 
     addPniSignatureMessageToProto({
       conversation,
       proto: contentMessage,
-      reason: `sendCallingMessage(${finalTimestamp})`,
+      reason: `sendCallingMessage(${timestamp})`,
     });
 
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendMessageProtoAndWait({
-      timestamp: finalTimestamp,
+      timestamp,
       recipients,
       proto: contentMessage,
       contentHint: ContentHint.DEFAULT,
       groupId: undefined,
       options,
-      urgent: true,
+      urgent,
     });
   }
 
   async sendDeliveryReceipt(
     options: Readonly<{
-      senderE164?: string;
-      senderUuid?: string;
+      senderAci: AciString;
       timestamps: Array<number>;
       isDirectConversation: boolean;
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.DELIVERY,
     });
@@ -2005,14 +2024,13 @@ export default class MessageSender {
 
   async sendReadReceipt(
     options: Readonly<{
-      senderE164?: string;
-      senderUuid?: string;
+      senderAci: AciString;
       timestamps: Array<number>;
       isDirectConversation: boolean;
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.READ,
     });
@@ -2020,40 +2038,31 @@ export default class MessageSender {
 
   async sendViewedReceipt(
     options: Readonly<{
-      senderE164?: string;
-      senderUuid?: string;
+      senderAci: AciString;
       timestamps: Array<number>;
       isDirectConversation: boolean;
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.VIEWED,
     });
   }
 
-  private async sendReceiptMessage({
-    senderE164,
-    senderUuid,
+  async #sendReceiptMessage({
+    senderAci,
     timestamps,
     type,
     isDirectConversation,
     options,
   }: Readonly<{
-    senderE164?: string;
-    senderUuid?: string;
+    senderAci: AciString;
     timestamps: Array<number>;
     type: Proto.ReceiptMessage.Type;
     isDirectConversation: boolean;
     options?: Readonly<SendOptionsType>;
   }>): Promise<CallbackResultType> {
-    if (!senderUuid && !senderE164) {
-      throw new Error(
-        'sendReceiptMessage: Neither uuid nor e164 was provided!'
-      );
-    }
-
     const timestamp = Date.now();
 
     const receiptMessage = new Proto.ReceiptMessage();
@@ -2066,9 +2075,7 @@ export default class MessageSender {
     contentMessage.receiptMessage = receiptMessage;
 
     if (isDirectConversation) {
-      const conversation = window.ConversationController.get(
-        senderUuid || senderE164
-      );
+      const conversation = window.ConversationController.get(senderAci);
 
       addPniSignatureMessageToProto({
         conversation,
@@ -2080,7 +2087,7 @@ export default class MessageSender {
     const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
     return this.sendIndividualProto({
-      identifier: senderUuid || senderE164,
+      serviceId: senderAci,
       proto: contentMessage,
       timestamp,
       contentHint: ContentHint.RESENDABLE,
@@ -2089,63 +2096,18 @@ export default class MessageSender {
     });
   }
 
-  static getNullMessage({
-    uuid,
-    e164,
-    padding,
-  }: Readonly<{
-    uuid?: string;
-    e164?: string;
-    padding?: Uint8Array;
-  }>): SingleProtoJobData {
+  static getNullMessage(
+    options: Readonly<{
+      padding?: Uint8Array;
+    }> = {}
+  ): Proto.Content {
     const nullMessage = new Proto.NullMessage();
-
-    const identifier = uuid || e164;
-    if (!identifier) {
-      throw new Error('sendNullMessage: Got neither uuid nor e164!');
-    }
-
-    nullMessage.padding = padding || MessageSender.getRandomPadding();
+    nullMessage.padding = options.padding || MessageSender.getRandomPadding();
 
     const contentMessage = new Proto.Content();
     contentMessage.nullMessage = nullMessage;
 
-    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-    return {
-      contentHint: ContentHint.RESENDABLE,
-      identifier,
-      isSyncMessage: false,
-      protoBase64: Bytes.toBase64(
-        Proto.Content.encode(contentMessage).finish()
-      ),
-      type: 'nullMessage',
-      urgent: false,
-    };
-  }
-
-  async sendRetryRequest({
-    groupId,
-    options,
-    plaintext,
-    uuid,
-  }: Readonly<{
-    groupId?: string;
-    options?: SendOptionsType;
-    plaintext: PlaintextContent;
-    uuid: string;
-  }>): Promise<CallbackResultType> {
-    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-    return this.sendMessageProtoAndWait({
-      timestamp: Date.now(),
-      recipients: [uuid],
-      proto: plaintext,
-      contentHint: ContentHint.DEFAULT,
-      groupId,
-      options,
-      urgent: false,
-    });
+    return contentMessage;
   }
 
   // Group sends
@@ -2173,33 +2135,33 @@ export default class MessageSender {
     let initialSavePromise: Promise<number>;
 
     return async ({
-      identifier,
+      serviceId,
       deviceIds,
     }: {
-      identifier: string;
+      serviceId: ServiceIdString;
       deviceIds: Array<number>;
     }) => {
       if (!shouldSaveProto(sendType)) {
         return;
       }
 
-      const conversation = window.ConversationController.get(identifier);
+      const conversation = window.ConversationController.get(serviceId);
       if (!conversation) {
         log.warn(
-          `makeSendLogCallback: Unable to find conversation for identifier ${identifier}`
+          `makeSendLogCallback: Unable to find conversation for serviceId ${serviceId}`
         );
         return;
       }
-      const recipientUuid = conversation.get('uuid');
-      if (!recipientUuid) {
+      const recipientServiceId = conversation.getServiceId();
+      if (!recipientServiceId) {
         log.warn(
           `makeSendLogCallback: Conversation ${conversation.idForLogging()} had no UUID`
         );
         return;
       }
 
-      if (!initialSavePromise) {
-        initialSavePromise = window.Signal.Data.insertSentProto(
+      if (initialSavePromise === undefined) {
+        initialSavePromise = DataWriter.insertSentProto(
           {
             contentHint,
             proto,
@@ -2208,16 +2170,16 @@ export default class MessageSender {
             hasPniSignatureMessage,
           },
           {
-            recipients: { [recipientUuid]: deviceIds },
+            recipients: { [recipientServiceId]: deviceIds },
             messageIds: messageId ? [messageId] : [],
           }
         );
         await initialSavePromise;
       } else {
         const id = await initialSavePromise;
-        await window.Signal.Data.insertProtoRecipients({
+        await DataWriter.insertProtoRecipients({
           id,
-          recipientUuid,
+          recipientServiceId,
           deviceIds,
         });
       }
@@ -2240,26 +2202,31 @@ export default class MessageSender {
     groupId: string | undefined;
     options?: SendOptionsType;
     proto: Proto.Content;
-    recipients: ReadonlyArray<string>;
+    recipients: ReadonlyArray<ServiceIdString>;
     sendLogCallback?: SendLogCallbackType;
     story?: boolean;
     timestamp: number;
     urgent: boolean;
   }>): Promise<CallbackResultType> {
     const myE164 = window.textsecure.storage.user.getNumber();
-    const myUuid = window.textsecure.storage.user.getUuid()?.toString();
-    const identifiers = recipients.filter(id => id !== myE164 && id !== myUuid);
+    const myAci = window.textsecure.storage.user.getAci();
+    const serviceIds = recipients.filter(id => id !== myE164 && id !== myAci);
 
-    if (identifiers.length === 0) {
+    if (serviceIds.length === 0) {
       const dataMessage = proto.dataMessage
         ? Proto.DataMessage.encode(proto.dataMessage).finish()
         : undefined;
 
+      const editMessage = proto.editMessage
+        ? Proto.EditMessage.encode(proto.editMessage).finish()
+        : undefined;
+
       return Promise.resolve({
         dataMessage,
+        editMessage,
         errors: [],
-        failoverIdentifiers: [],
-        successfulIdentifiers: [],
+        failoverServiceIds: [],
+        successfulServiceIds: [],
         unidentifiedDeliveries: [],
         contentHint,
         urgent,
@@ -2275,18 +2242,20 @@ export default class MessageSender {
         }
       };
 
-      this.sendMessageProto({
-        callback,
-        contentHint,
-        groupId,
-        options,
-        proto,
-        recipients: identifiers,
-        sendLogCallback,
-        story,
-        timestamp,
-        urgent,
-      });
+      drop(
+        this.sendMessageProto({
+          callback,
+          contentHint,
+          groupId,
+          options,
+          proto,
+          recipients: serviceIds,
+          sendLogCallback,
+          story,
+          timestamp,
+          urgent,
+        })
+      );
     });
   }
 
@@ -2297,26 +2266,26 @@ export default class MessageSender {
       timestamp,
     }: { throwIfNotInDatabase?: boolean; timestamp: number }
   ): Promise<Proto.Content> {
-    const ourUuid = window.textsecure.storage.user.getCheckedUuid();
+    const ourAci = window.textsecure.storage.user.getCheckedAci();
     const ourDeviceId = parseIntOrThrow(
       window.textsecure.storage.user.getDeviceId(),
       'getSenderKeyDistributionMessage'
     );
 
-    const protocolAddress = ProtocolAddress.new(
-      ourUuid.toString(),
-      ourDeviceId
-    );
+    const protocolAddress = ProtocolAddress.new(ourAci, ourDeviceId);
     const address = new QualifiedAddress(
-      ourUuid,
-      new Address(ourUuid, ourDeviceId)
+      ourAci,
+      new Address(ourAci, ourDeviceId)
     );
 
     const senderKeyDistributionMessage =
       await window.textsecure.storage.protocol.enqueueSenderKeyJob(
         address,
         async () => {
-          const senderKeyStore = new SenderKeys({ ourUuid, zone: GLOBAL_ZONE });
+          const senderKeyStore = new SenderKeys({
+            ourServiceId: ourAci,
+            zone: GLOBAL_ZONE,
+          });
 
           if (throwIfNotInDatabase) {
             const key = await senderKeyStore.getSenderKey(
@@ -2324,7 +2293,7 @@ export default class MessageSender {
               distributionId
             );
             if (!key) {
-              throw new Error(
+              throw new NoSenderKeyError(
                 `getSenderKeyDistributionMessage: Distribution ${distributionId} was not in database as expected`
               );
             }
@@ -2354,15 +2323,15 @@ export default class MessageSender {
       contentHint,
       distributionId,
       groupId,
-      identifiers,
+      serviceIds,
       throwIfNotInDatabase,
       story,
       urgent,
     }: Readonly<{
-      contentHint: number;
+      contentHint?: number;
       distributionId: string;
       groupId: string | undefined;
-      identifiers: ReadonlyArray<string>;
+      serviceIds: ReadonlyArray<ServiceIdString>;
       throwIfNotInDatabase?: boolean;
       story?: boolean;
       urgent: boolean;
@@ -2370,6 +2339,7 @@ export default class MessageSender {
     options?: Readonly<SendOptionsType>
   ): Promise<CallbackResultType> {
     const timestamp = Date.now();
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
     const contentMessage = await this.getSenderKeyDistributionMessage(
       distributionId,
       {
@@ -2379,9 +2349,9 @@ export default class MessageSender {
     );
 
     const sendLogCallback =
-      identifiers.length > 1
+      serviceIds.length > 1
         ? this.makeSendLogCallback({
-            contentHint,
+            contentHint: contentHint ?? ContentHint.IMPLICIT,
             proto: Buffer.from(Proto.Content.encode(contentMessage).finish()),
             sendType: 'senderKeyDistributionMessage',
             timestamp,
@@ -2391,11 +2361,11 @@ export default class MessageSender {
         : undefined;
 
     return this.sendGroupProto({
-      contentHint,
+      contentHint: contentHint ?? ContentHint.IMPLICIT,
       groupId,
       options,
       proto: contentMessage,
-      recipients: identifiers,
+      recipients: serviceIds,
       sendLogCallback,
       story,
       timestamp,
@@ -2403,65 +2373,10 @@ export default class MessageSender {
     });
   }
 
-  // GroupV1-only functions; not to be used in the future
-
-  async leaveGroup(
-    groupId: string,
-    groupIdentifiers: Array<string>,
-    options?: SendOptionsType
-  ): Promise<CallbackResultType> {
-    const timestamp = Date.now();
-    const proto = new Proto.Content({
-      dataMessage: {
-        group: {
-          id: Bytes.fromString(groupId),
-          type: Proto.GroupContext.Type.QUIT,
-        },
-      },
-    });
-
-    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
-
-    const contentHint = ContentHint.RESENDABLE;
-    const sendLogCallback =
-      groupIdentifiers.length > 1
-        ? this.makeSendLogCallback({
-            contentHint,
-            proto: Buffer.from(Proto.Content.encode(proto).finish()),
-            sendType: 'legacyGroupChange',
-            timestamp,
-            urgent: false,
-            hasPniSignatureMessage: false,
-          })
-        : undefined;
-
-    return this.sendGroupProto({
-      contentHint,
-      groupId: undefined, // only for GV2 ids
-      options,
-      proto,
-      recipients: groupIdentifiers,
-      sendLogCallback,
-      timestamp,
-      urgent: false,
-    });
-  }
-
   // Simple pass-throughs
 
   // Note: instead of updating these functions, or adding new ones, remove these and go
   //   directly to window.textsecure.messaging.server.<function>
-
-  async getProfile(
-    uuid: UUID,
-    options: GetProfileOptionsType | GetProfileUnauthOptionsType
-  ): ReturnType<WebAPIType['getProfile']> {
-    if (options.accessKey !== undefined) {
-      return this.server.getProfileUnauth(uuid.toString(), options);
-    }
-
-    return this.server.getProfile(uuid.toString(), options);
-  }
 
   async getAvatar(path: string): Promise<ReturnType<WebAPIType['getAvatar']>> {
     return this.server.getAvatar(path);
@@ -2483,7 +2398,7 @@ export default class MessageSender {
   async createGroup(
     group: Readonly<Proto.IGroup>,
     options: Readonly<GroupCredentialsType>
-  ): Promise<void> {
+  ): Promise<Proto.IGroupResponse> {
     return this.server.createGroup(group, options);
   }
 
@@ -2496,7 +2411,7 @@ export default class MessageSender {
 
   async getGroup(
     options: Readonly<GroupCredentialsType>
-  ): Promise<Proto.Group> {
+  ): Promise<Proto.IGroupResponse> {
     return this.server.getGroup(options);
   }
 
@@ -2522,7 +2437,7 @@ export default class MessageSender {
     changes: Readonly<Proto.GroupChange.IActions>,
     options: Readonly<GroupCredentialsType>,
     inviteLinkBase64?: string
-  ): Promise<Proto.IGroupChange> {
+  ): Promise<Proto.IGroupChangeResponse> {
     return this.server.modifyGroup(changes, options, inviteLinkBase64);
   }
 
@@ -2538,13 +2453,6 @@ export default class MessageSender {
     abortSignal: AbortSignal
   ): Promise<null | LinkPreviewImage> {
     return this.server.fetchLinkPreviewImage(href, abortSignal);
-  }
-
-  async makeProxiedRequest(
-    url: string,
-    options?: Readonly<ProxiedRequestOptionsType>
-  ): Promise<ReturnType<WebAPIType['makeProxiedRequest']>> {
-    return this.server.makeProxiedRequest(url, options);
   }
 
   async getStorageCredentials(): Promise<StorageServiceCredentials> {
@@ -2573,8 +2481,8 @@ export default class MessageSender {
 
   async getGroupMembershipToken(
     options: Readonly<GroupCredentialsType>
-  ): Promise<Proto.GroupExternalCredential> {
-    return this.server.getGroupExternalCredential(options);
+  ): Promise<Proto.IExternalGroupCredential> {
+    return this.server.getExternalGroupCredential(options);
   }
 
   public async sendChallengeResponse(
@@ -2582,17 +2490,41 @@ export default class MessageSender {
   ): Promise<void> {
     return this.server.sendChallengeResponse(challengeResponse);
   }
+}
 
-  async putProfile(
-    jsonData: Readonly<ProfileRequestDataType>
-  ): Promise<UploadAvatarHeadersType | undefined> {
-    return this.server.putProfile(jsonData);
+// Helpers
+
+function toAddressableMessage(message: AddressableMessage) {
+  const targetMessage = new Proto.AddressableMessage();
+  targetMessage.sentTimestamp = Long.fromNumber(message.sentAt);
+
+  if (message.type === 'aci') {
+    targetMessage.authorServiceId = message.authorAci;
+  } else if (message.type === 'e164') {
+    targetMessage.authorE164 = message.authorE164;
+  } else if (message.type === 'pni') {
+    targetMessage.authorServiceId = message.authorPni;
+  } else {
+    throw missingCaseError(message);
   }
 
-  async uploadAvatar(
-    requestHeaders: Readonly<UploadAvatarHeadersType>,
-    avatarData: Readonly<Uint8Array>
-  ): Promise<string> {
-    return this.server.uploadAvatar(requestHeaders, avatarData);
+  return targetMessage;
+}
+
+function toConversationIdentifier(conversation: ConversationIdentifier) {
+  const targetConversation = new Proto.ConversationIdentifier();
+
+  if (conversation.type === 'aci') {
+    targetConversation.threadServiceId = conversation.aci;
+  } else if (conversation.type === 'pni') {
+    targetConversation.threadServiceId = conversation.pni;
+  } else if (conversation.type === 'group') {
+    targetConversation.threadGroupId = Bytes.fromBase64(conversation.groupId);
+  } else if (conversation.type === 'e164') {
+    targetConversation.threadE164 = conversation.e164;
+  } else {
+    throw missingCaseError(conversation);
   }
+
+  return targetConversation;
 }

@@ -3,13 +3,17 @@
 
 import React from 'react';
 import { times } from 'lodash';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
-
+import type { PropsType } from './CallingPreCallInfo';
 import { CallingPreCallInfo, RingMode } from './CallingPreCallInfo';
+import type { ConversationType } from '../state/ducks/conversations';
+import { getPlaceholderContact } from '../state/selectors/conversations';
+import { generateAci } from '../types/ServiceId';
+import { FAKE_CALL_LINK } from '../test-both/helpers/fakeCallLink';
+import { callLinkToConversation } from '../util/callLinks';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 const getDefaultGroupConversation = () =>
   getDefaultConversation({
     name: 'Tahoe Trip',
@@ -20,234 +24,209 @@ const getDefaultGroupConversation = () =>
   });
 const otherMembers = times(6, () => getDefaultConversation());
 
+const getUnknownContact = (): ConversationType => ({
+  ...getPlaceholderContact(),
+  serviceId: generateAci(),
+});
+
 export default {
   title: 'Components/CallingPreCallInfo',
-};
+} satisfies Meta<PropsType>;
 
-export const DirectConversation = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultConversation()}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function DirectConversation(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultConversation()}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-DirectConversation.story = {
-  name: 'Direct conversation',
-};
+export function Ring0(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 0)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const Ring0 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 0)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function Ring1(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 1)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-Ring0.story = {
-  name: 'Group call: Will ring 0 people',
-};
+export function Ring2(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 2)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const Ring1 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 1)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function Ring3(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 3)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-Ring1.story = {
-  name: 'Group call: Will ring 1 person',
-};
+export function Ring4(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 4)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const Ring2 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 2)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function Notify0(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 0)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-Ring2.story = {
-  name: 'Group call: Will ring 2 people',
-};
+export function Notify1(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 1)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-export const Ring3 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 3)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function Notify2(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 2)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-Ring3.story = {
-  name: 'Group call: Will ring 3 people',
-};
+export function Notify3(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 3)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-export const Ring4 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 4)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function Notify4(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers.slice(0, 4)}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-Ring3.story = {
-  name: 'Group call: Will ring 4 people',
-};
+export function Peek1(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={otherMembers.slice(0, 1)}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const Notify0 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 0)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillNotRing}
-  />
-);
+export function Peek2(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={otherMembers.slice(0, 2)}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-Notify0.story = {
-  name: 'Group call: Will notify 0 people',
-};
+export function Peek3(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={otherMembers.slice(0, 3)}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const Notify1 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 1)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillNotRing}
-  />
-);
+export function Peek4(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={otherMembers.slice(0, 4)}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-Notify1.story = {
-  name: 'Group call: Will notify 1 person',
-};
-
-export const Notify2 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 2)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillNotRing}
-  />
-);
-
-Notify2.story = {
-  name: 'Group call: Will notify 2 people',
-};
-
-export const Notify3 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 3)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillNotRing}
-  />
-);
-
-Notify3.story = {
-  name: 'Group call: Will notify 3 people',
-};
-
-export const Notify4 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers.slice(0, 4)}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={[]}
-    ringMode={RingMode.WillNotRing}
-  />
-);
-
-Notify4.story = {
-  name: 'Group call: Will notify 4 people',
-};
-
-export const Peek1 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={otherMembers.slice(0, 1)}
-    ringMode={RingMode.WillRing}
-  />
-);
-
-Peek1.story = {
-  name: 'Group call: 1 participant peeked',
-};
-
-export const Peek2 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={otherMembers.slice(0, 2)}
-    ringMode={RingMode.WillRing}
-  />
-);
-
-Peek2.story = {
-  name: 'Group call: 2 participants peeked',
-};
-
-export const Peek3 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={otherMembers.slice(0, 3)}
-    ringMode={RingMode.WillRing}
-  />
-);
-
-Peek3.story = {
-  name: 'Group call: 3 participants peeked',
-};
-
-export const Peek4 = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers}
-    i18n={i18n}
-    me={getDefaultConversation()}
-    peekedParticipants={otherMembers.slice(0, 4)}
-    ringMode={RingMode.WillRing}
-  />
-);
-
-Peek4.story = {
-  name: 'Group call: 4 participants peeked',
-};
-
-export const GroupConversationYouOnAnOtherDevice = (): JSX.Element => {
+export function GroupConversationYouOnAnOtherDevice(): JSX.Element {
   const me = getDefaultConversation();
   return (
     <CallingPreCallInfo
@@ -259,24 +238,78 @@ export const GroupConversationYouOnAnOtherDevice = (): JSX.Element => {
       ringMode={RingMode.WillRing}
     />
   );
-};
+}
 
-GroupConversationYouOnAnOtherDevice.story = {
-  name: 'Group conversation, you on an other device',
-};
+export function GroupConversationCallIsFull(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={getDefaultGroupConversation()}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      isCallFull
+      me={getDefaultConversation()}
+      peekedParticipants={otherMembers}
+      ringMode={RingMode.WillRing}
+    />
+  );
+}
 
-export const GroupConversationCallIsFull = (): JSX.Element => (
-  <CallingPreCallInfo
-    conversation={getDefaultGroupConversation()}
-    groupMembers={otherMembers}
-    i18n={i18n}
-    isCallFull
-    me={getDefaultConversation()}
-    peekedParticipants={otherMembers}
-    ringMode={RingMode.WillRing}
-  />
-);
+export function CallLinkUnknownContact(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={callLinkToConversation(FAKE_CALL_LINK, i18n)}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[getUnknownContact()]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
 
-GroupConversationCallIsFull.story = {
-  name: 'Group conversation, call is full',
-};
+export function CallLink3UnknownContacts(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={callLinkToConversation(FAKE_CALL_LINK, i18n)}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[
+        getUnknownContact(),
+        getUnknownContact(),
+        getUnknownContact(),
+      ]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
+
+export function CallLink1Known1UnknownContact(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={callLinkToConversation(FAKE_CALL_LINK, i18n)}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[otherMembers[0], getUnknownContact()]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}
+
+export function CallLink1Known2UnknownContacts(): JSX.Element {
+  return (
+    <CallingPreCallInfo
+      conversation={callLinkToConversation(FAKE_CALL_LINK, i18n)}
+      groupMembers={otherMembers}
+      i18n={i18n}
+      me={getDefaultConversation()}
+      peekedParticipants={[
+        otherMembers[0],
+        getUnknownContact(),
+        getUnknownContact(),
+      ]}
+      ringMode={RingMode.WillNotRing}
+    />
+  );
+}

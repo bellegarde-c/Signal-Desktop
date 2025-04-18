@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import memoizee from 'memoizee';
@@ -70,22 +70,6 @@ export const format = memoizee(_format, {
   normalizer: (...args) => JSON.stringify(args),
   max: 5000,
 });
-
-export function parse(
-  phoneNumber: string,
-  options: {
-    regionCode: string | undefined;
-  }
-): string {
-  const { regionCode } = options;
-  const parsedNumber = instance.parse(phoneNumber, regionCode);
-
-  if (instance.isValidNumber(parsedNumber)) {
-    return instance.format(parsedNumber, PhoneNumberFormat.E164);
-  }
-
-  return phoneNumber;
-}
 
 export function normalize(
   phoneNumber: string,

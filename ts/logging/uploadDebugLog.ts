@@ -1,4 +1,4 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Response } from 'got';
@@ -11,6 +11,7 @@ import { getUserAgent } from '../util/getUserAgent';
 import { maybeParseUrl } from '../util/url';
 import * as durations from '../util/durations';
 import type { LoggerType } from '../types/Logging';
+import { parseUnknown } from '../util/schemas';
 
 const BASE_URL = 'https://debuglogs.org';
 
@@ -26,7 +27,7 @@ const tokenBodySchema = z
 const parseTokenBody = (
   rawBody: unknown
 ): { fields: Record<string, unknown>; url: string } => {
-  const body = tokenBodySchema.parse(rawBody);
+  const body = parseUnknown(tokenBodySchema, rawBody);
 
   const parsedUrl = maybeParseUrl(body.url);
   if (!parsedUrl) {
@@ -108,7 +109,7 @@ export const upload = async ({
   } catch (error) {
     const response = error.response as Response<string>;
     throw new Error(
-      `Got threw on upload to S3, got status ${response?.statusCode}, body '${response?.body}'  `
+      `Got threw on upload to S3: "${error.message}", got status ${response?.statusCode}, body '${response?.body}'  `
     );
   }
   logger.info('Debug log upload complete.');

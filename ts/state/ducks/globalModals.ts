@@ -2,70 +2,233 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ThunkAction } from 'redux-thunk';
+import type { ReadonlyDeep } from 'type-fest';
+import OS from '../../util/os/osMain';
 import type { ExplodePromiseResultType } from '../../util/explodePromise';
-import type { PropsForMessage } from '../selectors/message';
+import type {
+  GroupV2PendingMemberType,
+  ReadonlyMessageAttributesType,
+} from '../../model-types.d';
+import type {
+  MessageChangedActionType,
+  MessageDeletedActionType,
+  MessageExpiredActionType,
+} from './conversations';
+import type { MessagePropsType } from '../selectors/message';
+import type { RecipientsByConversation } from './stories';
 import type { SafetyNumberChangeSource } from '../../components/SafetyNumberChangeDialog';
+import type { EditState as ProfileEditorEditState } from '../../components/ProfileEditor';
 import type { StateType as RootStateType } from '../reducer';
-import type { UUIDStringType } from '../../types/UUID';
 import * as SingleServePromise from '../../services/singleServePromise';
-import { getMessageById } from '../../messages/getMessageById';
-import { getMessagePropsSelector } from '../selectors/message';
+import * as Stickers from '../../types/Stickers';
+import { UsernameOnboardingState } from '../../types/globalModals';
+import * as log from '../../logging/log';
+import {
+  getMessagePropsSelector,
+  getPropsForAttachment,
+} from '../selectors/message';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
+import { longRunningTaskWrapper } from '../../util/longRunningTaskWrapper';
 import { useBoundActions } from '../../hooks/useBoundActions';
+import { isGroupV1 } from '../../util/whatTypeOfConversation';
+import { sleep } from '../../util/sleep';
+import { SECOND } from '../../util/durations';
+import { getGroupMigrationMembers } from '../../groups';
+import {
+  MESSAGE_CHANGED,
+  MESSAGE_DELETED,
+  MESSAGE_EXPIRED,
+  actions as conversationsActions,
+} from './conversations';
+import { isDownloaded } from '../../types/Attachment';
+import { isPermanentlyUndownloadable } from '../../jobs/AttachmentDownloadManager';
+import type { ButtonVariant } from '../../components/Button';
+import type { MessageRequestState } from '../../components/conversation/MessageRequestActionsConfirmation';
+import type { MessageForwardDraft } from '../../types/ForwardDraft';
+import { hydrateRanges } from '../../types/BodyRange';
+import {
+  getConversationSelector,
+  type GetConversationByIdType,
+} from '../selectors/conversations';
+import { missingCaseError } from '../../util/missingCaseError';
+import { ForwardMessagesModalType } from '../../components/ForwardMessagesModal';
+import type { CallLinkType } from '../../types/CallLink';
+import type { LocalizerType } from '../../types/I18N';
+import { linkCallRoute } from '../../util/signalRoutes';
+import type { StartCallData } from '../../components/ConfirmLeaveCallModal';
+import { getMessageById } from '../../messages/getMessageById';
+import type { AttachmentNotAvailableModalType } from '../../components/AttachmentNotAvailableModal';
+import type { DataPropsType as TapToViewNotAvailablePropsType } from '../../components/TapToViewNotAvailableModal';
+import type { DataPropsType as BackfillFailureModalPropsType } from '../../components/BackfillFailureModal';
+import type { SmartDraftGifMessageSendModalProps } from '../smart/DraftGifMessageSendModal';
+import { onCriticalIdlePrimaryDeviceModalDismissed } from '../../util/handleServerAlerts';
 
 // State
 
-export type ForwardMessagePropsType = Omit<
-  PropsForMessage,
-  'renderingContext' | 'menu' | 'contextMenu'
+export type EditHistoryMessagesType = ReadonlyDeep<
+  Array<ReadonlyMessageAttributesType>
 >;
-export type SafetyNumberChangedBlockingDataType = Readonly<{
-  promiseUuid: UUIDStringType;
+export type EditNicknameAndNoteModalPropsType = ReadonlyDeep<{
+  conversationId: string;
+}>;
+export type DeleteMessagesPropsType = ReadonlyDeep<{
+  conversationId: string;
+  messageIds: ReadonlyArray<string>;
+  onDelete?: () => void;
+}>;
+export type ForwardMessagePropsType = ReadonlyDeep<MessagePropsType>;
+export type ForwardMessagesPropsType = ReadonlyDeep<{
+  type: ForwardMessagesModalType;
+  messageDrafts: Array<MessageForwardDraft>;
+  onForward?: () => void;
+}>;
+export type MessageRequestActionsConfirmationPropsType = ReadonlyDeep<{
+  conversationId: string;
+  state: MessageRequestState;
+}>;
+export type NotePreviewModalPropsType = ReadonlyDeep<{
+  conversationId: string;
+}>;
+export type SafetyNumberChangedBlockingDataType = ReadonlyDeep<{
+  promiseUuid: SingleServePromise.SingleServePromiseIdString;
   source?: SafetyNumberChangeSource;
 }>;
 
-export type GlobalModalsStateType = Readonly<{
+type MigrateToGV2PropsType = ReadonlyDeep<{
+  areWeInvited: boolean;
+  conversationId: string;
+  droppedMemberIds: Array<string>;
+  hasMigrated: boolean;
+  invitedMemberIds: Array<string>;
+}>;
+
+export type GlobalModalsStateType = ReadonlyDeep<{
+  addUserToAnotherGroupModalContactId?: string;
+  aboutContactModalContactId?: string;
+  attachmentNotAvailableModalType: AttachmentNotAvailableModalType | undefined;
+  backfillFailureModalProps: BackfillFailureModalPropsType | undefined;
+  callLinkAddNameModalRoomId: string | null;
+  callLinkEditModalRoomId: string | null;
+  callLinkPendingParticipantContactId: string | undefined;
+  confirmLeaveCallModalState: StartCallData | null;
   contactModalState?: ContactModalStateType;
-  forwardMessageProps?: ForwardMessagePropsType;
+  criticalIdlePrimaryDeviceModal: boolean;
+  deleteMessagesProps?: DeleteMessagesPropsType;
+  draftGifMessageSendModalProps: SmartDraftGifMessageSendModalProps | null;
+  editHistoryMessages?: EditHistoryMessagesType;
+  editNicknameAndNoteModalProps: EditNicknameAndNoteModalPropsType | null;
+  errorModalProps?: {
+    buttonVariant?: ButtonVariant;
+    description?: string;
+    title?: string | null;
+  };
+  forwardMessagesProps?: ForwardMessagesPropsType;
+  gv2MigrationProps?: MigrateToGV2PropsType;
+  hasConfirmationModal: boolean;
   isProfileEditorVisible: boolean;
+  isProfileNameWarningModalVisible: boolean;
+  profileNameWarningModalConversationType?: string;
+  isShortcutGuideModalVisible: boolean;
   isSignalConnectionsVisible: boolean;
   isStoriesSettingsVisible: boolean;
   isWhatsNewVisible: boolean;
+  messageRequestActionsConfirmationProps: MessageRequestActionsConfirmationPropsType | null;
+  notePreviewModalProps: NotePreviewModalPropsType | null;
+  usernameOnboardingState: UsernameOnboardingState;
+  mediaPermissionsModalProps?: {
+    mediaType: 'camera' | 'microphone';
+    requestor: 'call' | 'voiceNote';
+    abortController: AbortController;
+  };
   profileEditorHasError: boolean;
+  profileEditorInitialEditState: ProfileEditorEditState | undefined;
   safetyNumberChangedBlockingData?: SafetyNumberChangedBlockingDataType;
   safetyNumberModalContactId?: string;
-  addUserToAnotherGroupModalContactId?: string;
+  stickerPackPreviewId?: string;
+  tapToViewNotAvailableModalProps?: TapToViewNotAvailablePropsType;
   userNotFoundModalState?: UserNotFoundModalStateType;
 }>;
 
 // Actions
 
+const SHOW_ATTACHMENT_NOT_AVAILABLE_MODAL =
+  'globalModals/SHOW_ATTACHMENT_NOT_AVAILABLE_MODAL';
+const HIDE_ATTACHMENT_NOT_AVAILABLE_MODAL =
+  'globalModals/HIDE_ATTACHMENT_NOT_AVAILABLE_MODAL';
+const SHOW_TAP_TO_VIEW_NOT_AVAILABLE_MODAL =
+  'globalModals/SHOW_TAP_TO_VIEW_NOT_AVAILABLE_MODAL';
+const HIDE_TAP_TO_VIEW_NOT_AVAILABLE_MODAL =
+  'globalModals/HIDE_TAP_TO_VIEW_NOT_AVAILABLE_MODAL';
+const SHOW_BACKFILL_FAILURE_MODAL = 'globalModals/SHOW_BACKFILL_FAILURE_MODAL';
+const HIDE_BACKFILL_FAILURE_MODAL = 'globalModals/HIDE_BACKFILL_FAILURE_MODAL';
 const HIDE_CONTACT_MODAL = 'globalModals/HIDE_CONTACT_MODAL';
 const SHOW_CONTACT_MODAL = 'globalModals/SHOW_CONTACT_MODAL';
 const HIDE_WHATS_NEW_MODAL = 'globalModals/HIDE_WHATS_NEW_MODAL_MODAL';
 const SHOW_WHATS_NEW_MODAL = 'globalModals/SHOW_WHATS_NEW_MODAL_MODAL';
-const HIDE_UUID_NOT_FOUND_MODAL = 'globalModals/HIDE_UUID_NOT_FOUND_MODAL';
-const SHOW_UUID_NOT_FOUND_MODAL = 'globalModals/SHOW_UUID_NOT_FOUND_MODAL';
+const HIDE_SERVICE_ID_NOT_FOUND_MODAL =
+  'globalModals/HIDE_SERVICE_ID_NOT_FOUND_MODAL';
+const SHOW_SERVICE_ID_NOT_FOUND_MODAL =
+  'globalModals/SHOW_SERVICE_ID_NOT_FOUND_MODAL';
 const SHOW_STORIES_SETTINGS = 'globalModals/SHOW_STORIES_SETTINGS';
 const HIDE_STORIES_SETTINGS = 'globalModals/HIDE_STORIES_SETTINGS';
-const TOGGLE_FORWARD_MESSAGE_MODAL =
-  'globalModals/TOGGLE_FORWARD_MESSAGE_MODAL';
+const TOGGLE_DELETE_MESSAGES_MODAL =
+  'globalModals/TOGGLE_DELETE_MESSAGES_MODAL';
+const TOGGLE_DRAFT_GIF_MESSAGE_SEND_MODAL =
+  'globalModals/TOGGLE_DRAFT_GIF_MESSAGE_SEND_MODAL';
+const TOGGLE_FORWARD_MESSAGES_MODAL =
+  'globalModals/TOGGLE_FORWARD_MESSAGES_MODAL';
+const TOGGLE_NOTE_PREVIEW_MODAL = 'globalModals/TOGGLE_NOTE_PREVIEW_MODAL';
 const TOGGLE_PROFILE_EDITOR = 'globalModals/TOGGLE_PROFILE_EDITOR';
 export const TOGGLE_PROFILE_EDITOR_ERROR =
   'globalModals/TOGGLE_PROFILE_EDITOR_ERROR';
+const TOGGLE_PROFILE_NAME_WARNING_MODAL =
+  'globalModals/TOGGLE_PROFILE_NAME_WARNING_MODAL';
 const TOGGLE_SAFETY_NUMBER_MODAL = 'globalModals/TOGGLE_SAFETY_NUMBER_MODAL';
 const TOGGLE_ADD_USER_TO_ANOTHER_GROUP_MODAL =
   'globalModals/TOGGLE_ADD_USER_TO_ANOTHER_GROUP_MODAL';
+const TOGGLE_CALL_LINK_ADD_NAME_MODAL =
+  'globalModals/TOGGLE_CALL_LINK_ADD_NAME_MODAL';
+const TOGGLE_CALL_LINK_EDIT_MODAL = 'globalModals/TOGGLE_CALL_LINK_EDIT_MODAL';
+const TOGGLE_CALL_LINK_PENDING_PARTICIPANT_MODAL =
+  'globalModals/TOGGLE_CALL_LINK_PENDING_PARTICIPANT_MODAL';
+const TOGGLE_ABOUT_MODAL = 'globalModals/TOGGLE_ABOUT_MODAL';
 const TOGGLE_SIGNAL_CONNECTIONS_MODAL =
   'globalModals/TOGGLE_SIGNAL_CONNECTIONS_MODAL';
 export const SHOW_SEND_ANYWAY_DIALOG = 'globalModals/SHOW_SEND_ANYWAY_DIALOG';
 const HIDE_SEND_ANYWAY_DIALOG = 'globalModals/HIDE_SEND_ANYWAY_DIALOG';
+const SHOW_GV2_MIGRATION_DIALOG = 'globalModals/SHOW_GV2_MIGRATION_DIALOG';
+const CLOSE_GV2_MIGRATION_DIALOG = 'globalModals/CLOSE_GV2_MIGRATION_DIALOG';
+const SHOW_STICKER_PACK_PREVIEW = 'globalModals/SHOW_STICKER_PACK_PREVIEW';
+const CLOSE_STICKER_PACK_PREVIEW = 'globalModals/CLOSE_STICKER_PACK_PREVIEW';
+const CLOSE_ERROR_MODAL = 'globalModals/CLOSE_ERROR_MODAL';
+export const SHOW_ERROR_MODAL = 'globalModals/SHOW_ERROR_MODAL';
+const TOGGLE_EDIT_NICKNAME_AND_NOTE_MODAL =
+  'globalModals/TOGGLE_EDIT_NICKNAME_AND_NOTE_MODAL';
+const TOGGLE_MESSAGE_REQUEST_ACTIONS_CONFIRMATION =
+  'globalModals/TOGGLE_MESSAGE_REQUEST_ACTIONS_CONFIRMATION';
+const CLOSE_SHORTCUT_GUIDE_MODAL = 'globalModals/CLOSE_SHORTCUT_GUIDE_MODAL';
+const SHOW_SHORTCUT_GUIDE_MODAL = 'globalModals/SHOW_SHORTCUT_GUIDE_MODAL';
+const TOGGLE_CONFIRMATION_MODAL = 'globalModals/TOGGLE_CONFIRMATION_MODAL';
+const SHOW_EDIT_HISTORY_MODAL = 'globalModals/SHOW_EDIT_HISTORY_MODAL';
+const CLOSE_EDIT_HISTORY_MODAL = 'globalModals/CLOSE_EDIT_HISTORY_MODAL';
+const TOGGLE_USERNAME_ONBOARDING = 'globalModals/TOGGLE_USERNAME_ONBOARDING';
+const TOGGLE_CONFIRM_LEAVE_CALL_MODAL =
+  'globalModals/TOGGLE_CONFIRM_LEAVE_CALL_MODAL';
+const CLOSE_MEDIA_PERMISSIONS_MODAL =
+  'globalModals/CLOSE_MEDIA_PERMISSIONS_MODAL';
+const SHOW_MEDIA_PERMISSIONS_MODAL =
+  'globalModals/SHOW_MEDIA_PERMISSIONS_MODAL';
+const SHOW_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL =
+  'globalModals/SHOW_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL';
+const HIDE_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL =
+  'globalModals/HIDE_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL';
 
-export type ContactModalStateType = {
+export type ContactModalStateType = ReadonlyDeep<{
   contactId: string;
   conversationId?: string;
-};
+}>;
 
-export type UserNotFoundModalStateType =
+export type UserNotFoundModalStateType = ReadonlyDeep<
   | {
       type: 'phoneNumber';
       phoneNumber: string;
@@ -73,121 +236,406 @@ export type UserNotFoundModalStateType =
   | {
       type: 'username';
       username: string;
-    };
+    }
+>;
 
-type HideContactModalActionType = {
+type HideAttachmentNotAvailableModalActionType = ReadonlyDeep<{
+  type: typeof HIDE_ATTACHMENT_NOT_AVAILABLE_MODAL;
+}>;
+
+type ShowAttachmentNotAvailableModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_ATTACHMENT_NOT_AVAILABLE_MODAL;
+  payload: AttachmentNotAvailableModalType;
+}>;
+
+type HideTapToViewNotAvailableModalActionType = ReadonlyDeep<{
+  type: typeof HIDE_TAP_TO_VIEW_NOT_AVAILABLE_MODAL;
+}>;
+
+type ShowTapToViewNotAvailableModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_TAP_TO_VIEW_NOT_AVAILABLE_MODAL;
+  payload: TapToViewNotAvailablePropsType;
+}>;
+
+type HideBackfillFailureModalActionType = ReadonlyDeep<{
+  type: typeof HIDE_BACKFILL_FAILURE_MODAL;
+}>;
+
+type ShowBackfillFailureModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_BACKFILL_FAILURE_MODAL;
+  payload: BackfillFailureModalPropsType;
+}>;
+
+type HideContactModalActionType = ReadonlyDeep<{
   type: typeof HIDE_CONTACT_MODAL;
-};
+}>;
 
-type ShowContactModalActionType = {
+type ShowContactModalActionType = ReadonlyDeep<{
   type: typeof SHOW_CONTACT_MODAL;
   payload: ContactModalStateType;
-};
+}>;
 
-type HideWhatsNewModalActionType = {
+type HideWhatsNewModalActionType = ReadonlyDeep<{
   type: typeof HIDE_WHATS_NEW_MODAL;
-};
+}>;
 
-type ShowWhatsNewModalActionType = {
+type ShowWhatsNewModalActionType = ReadonlyDeep<{
   type: typeof SHOW_WHATS_NEW_MODAL;
-};
+}>;
 
-type HideUserNotFoundModalActionType = {
-  type: typeof HIDE_UUID_NOT_FOUND_MODAL;
-};
+type HideUserNotFoundModalActionType = ReadonlyDeep<{
+  type: typeof HIDE_SERVICE_ID_NOT_FOUND_MODAL;
+}>;
 
-export type ShowUserNotFoundModalActionType = {
-  type: typeof SHOW_UUID_NOT_FOUND_MODAL;
+export type ShowUserNotFoundModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_SERVICE_ID_NOT_FOUND_MODAL;
   payload: UserNotFoundModalStateType;
-};
+}>;
 
-type ToggleForwardMessageModalActionType = {
-  type: typeof TOGGLE_FORWARD_MESSAGE_MODAL;
-  payload: ForwardMessagePropsType | undefined;
-};
+type ToggleDeleteMessagesModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_DELETE_MESSAGES_MODAL;
+  payload: DeleteMessagesPropsType | undefined;
+}>;
 
-type ToggleProfileEditorActionType = {
+type ToggleDraftGifMessageSendModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_DRAFT_GIF_MESSAGE_SEND_MODAL;
+  payload: SmartDraftGifMessageSendModalProps | null;
+}>;
+
+type ToggleForwardMessagesModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_FORWARD_MESSAGES_MODAL;
+  payload: ForwardMessagesPropsType | undefined;
+}>;
+
+export type ToggleConfirmLeaveCallModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_CONFIRM_LEAVE_CALL_MODAL;
+  payload: StartCallData | null;
+}>;
+
+type ToggleNotePreviewModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_NOTE_PREVIEW_MODAL;
+  payload: NotePreviewModalPropsType | null;
+}>;
+
+type ToggleProfileEditorActionType = ReadonlyDeep<{
   type: typeof TOGGLE_PROFILE_EDITOR;
-};
+  payload: {
+    initialEditState?: ProfileEditorEditState;
+  };
+}>;
 
-export type ToggleProfileEditorErrorActionType = {
+export type ToggleProfileEditorErrorActionType = ReadonlyDeep<{
   type: typeof TOGGLE_PROFILE_EDITOR_ERROR;
-};
+}>;
 
-type ToggleSafetyNumberModalActionType = {
+export type ToggleProfileNameWarningModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_PROFILE_NAME_WARNING_MODAL;
+  payload?: {
+    conversationType: string;
+  };
+}>;
+
+type ToggleSafetyNumberModalActionType = ReadonlyDeep<{
   type: typeof TOGGLE_SAFETY_NUMBER_MODAL;
   payload: string | undefined;
-};
+}>;
 
-type ToggleAddUserToAnotherGroupModalActionType = {
+type ToggleAddUserToAnotherGroupModalActionType = ReadonlyDeep<{
   type: typeof TOGGLE_ADD_USER_TO_ANOTHER_GROUP_MODAL;
   payload: string | undefined;
-};
+}>;
 
-type ToggleSignalConnectionsModalActionType = {
+type ToggleCallLinkAddNameModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_CALL_LINK_ADD_NAME_MODAL;
+  payload: string | null;
+}>;
+
+type ToggleCallLinkEditModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_CALL_LINK_EDIT_MODAL;
+  payload: string | null;
+}>;
+
+type ToggleCallLinkPendingParticipantModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_CALL_LINK_PENDING_PARTICIPANT_MODAL;
+  payload: string | undefined;
+}>;
+
+type ToggleAboutContactModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_ABOUT_MODAL;
+  payload: string | undefined;
+}>;
+
+type ToggleSignalConnectionsModalActionType = ReadonlyDeep<{
   type: typeof TOGGLE_SIGNAL_CONNECTIONS_MODAL;
-};
+}>;
 
-type ShowStoriesSettingsActionType = {
+type ToggleConfirmationModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_CONFIRMATION_MODAL;
+  payload: boolean;
+}>;
+
+type ToggleUsernameOnboardingActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_USERNAME_ONBOARDING;
+}>;
+
+type ShowStoriesSettingsActionType = ReadonlyDeep<{
   type: typeof SHOW_STORIES_SETTINGS;
-};
+}>;
 
-type HideStoriesSettingsActionType = {
+type HideStoriesSettingsActionType = ReadonlyDeep<{
   type: typeof HIDE_STORIES_SETTINGS;
-};
+}>;
 
-export type ShowSendAnywayDialogActiontype = {
+type StartMigrationToGV2ActionType = ReadonlyDeep<{
+  type: typeof SHOW_GV2_MIGRATION_DIALOG;
+  payload: MigrateToGV2PropsType;
+}>;
+
+type CloseGV2MigrationDialogActionType = ReadonlyDeep<{
+  type: typeof CLOSE_GV2_MIGRATION_DIALOG;
+}>;
+
+export type ShowSendAnywayDialogActionType = ReadonlyDeep<{
   type: typeof SHOW_SEND_ANYWAY_DIALOG;
   payload: SafetyNumberChangedBlockingDataType & {
-    conversationsToPause: Map<string, Set<string>>;
+    untrustedByConversation: RecipientsByConversation;
   };
-};
+}>;
 
-type HideSendAnywayDialogActiontype = {
+type HideSendAnywayDialogActiontype = ReadonlyDeep<{
   type: typeof HIDE_SEND_ANYWAY_DIALOG;
-};
+}>;
 
-export type GlobalModalsActionType =
+export type ShowStickerPackPreviewActionType = ReadonlyDeep<{
+  type: typeof SHOW_STICKER_PACK_PREVIEW;
+  payload: string;
+}>;
+
+type CloseStickerPackPreviewActionType = ReadonlyDeep<{
+  type: typeof CLOSE_STICKER_PACK_PREVIEW;
+}>;
+
+type CloseErrorModalActionType = ReadonlyDeep<{
+  type: typeof CLOSE_ERROR_MODAL;
+}>;
+
+export type ShowErrorModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_ERROR_MODAL;
+  payload: {
+    buttonVariant?: ButtonVariant;
+    description?: string;
+    title?: string | null;
+  };
+}>;
+
+type CloseMediaPermissionsModalActionType = ReadonlyDeep<{
+  type: typeof CLOSE_MEDIA_PERMISSIONS_MODAL;
+}>;
+
+type ShowMediaPermissionsModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_MEDIA_PERMISSIONS_MODAL;
+  payload: {
+    mediaType: 'camera' | 'microphone';
+    requestor: 'call' | 'voiceNote';
+    abortController: AbortController;
+  };
+}>;
+
+type ShowCriticalIdlePrimaryDeviceModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL;
+}>;
+
+type HideCriticalIdlePrimaryDeviceModalActionType = ReadonlyDeep<{
+  type: typeof HIDE_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL;
+}>;
+
+type ToggleEditNicknameAndNoteModalActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_EDIT_NICKNAME_AND_NOTE_MODAL;
+  payload: EditNicknameAndNoteModalPropsType | null;
+}>;
+
+type ToggleMessageRequestActionsConfirmationActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_MESSAGE_REQUEST_ACTIONS_CONFIRMATION;
+  payload: MessageRequestActionsConfirmationPropsType | null;
+}>;
+
+type CloseShortcutGuideModalActionType = ReadonlyDeep<{
+  type: typeof CLOSE_SHORTCUT_GUIDE_MODAL;
+}>;
+
+type ShowShortcutGuideModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_SHORTCUT_GUIDE_MODAL;
+}>;
+
+type ShowEditHistoryModalActionType = ReadonlyDeep<{
+  type: typeof SHOW_EDIT_HISTORY_MODAL;
+  payload: {
+    messages: EditHistoryMessagesType;
+  };
+}>;
+
+type CloseEditHistoryModalActionType = ReadonlyDeep<{
+  type: typeof CLOSE_EDIT_HISTORY_MODAL;
+}>;
+
+export type GlobalModalsActionType = ReadonlyDeep<
+  | CloseEditHistoryModalActionType
+  | CloseErrorModalActionType
+  | CloseMediaPermissionsModalActionType
+  | CloseGV2MigrationDialogActionType
+  | CloseShortcutGuideModalActionType
+  | CloseStickerPackPreviewActionType
+  | HideAttachmentNotAvailableModalActionType
+  | HideBackfillFailureModalActionType
   | HideContactModalActionType
-  | ShowContactModalActionType
-  | HideWhatsNewModalActionType
-  | ShowWhatsNewModalActionType
-  | HideUserNotFoundModalActionType
-  | ShowUserNotFoundModalActionType
-  | HideStoriesSettingsActionType
-  | ShowStoriesSettingsActionType
+  | HideCriticalIdlePrimaryDeviceModalActionType
   | HideSendAnywayDialogActiontype
-  | ShowSendAnywayDialogActiontype
-  | ToggleForwardMessageModalActionType
+  | HideStoriesSettingsActionType
+  | HideTapToViewNotAvailableModalActionType
+  | HideUserNotFoundModalActionType
+  | HideWhatsNewModalActionType
+  | MessageChangedActionType
+  | MessageDeletedActionType
+  | MessageExpiredActionType
+  | ShowAttachmentNotAvailableModalActionType
+  | ShowBackfillFailureModalActionType
+  | ShowCriticalIdlePrimaryDeviceModalActionType
+  | ShowContactModalActionType
+  | ShowEditHistoryModalActionType
+  | ShowErrorModalActionType
+  | ShowMediaPermissionsModalActionType
+  | ShowSendAnywayDialogActionType
+  | ShowShortcutGuideModalActionType
+  | ShowStickerPackPreviewActionType
+  | ShowStoriesSettingsActionType
+  | ShowTapToViewNotAvailableModalActionType
+  | ShowUserNotFoundModalActionType
+  | ShowWhatsNewModalActionType
+  | StartMigrationToGV2ActionType
+  | ToggleAboutContactModalActionType
+  | ToggleAddUserToAnotherGroupModalActionType
+  | ToggleCallLinkAddNameModalActionType
+  | ToggleCallLinkEditModalActionType
+  | ToggleCallLinkPendingParticipantModalActionType
+  | ToggleConfirmationModalActionType
+  | ToggleConfirmLeaveCallModalActionType
+  | ToggleDeleteMessagesModalActionType
+  | ToggleDraftGifMessageSendModalActionType
+  | ToggleEditNicknameAndNoteModalActionType
+  | ToggleForwardMessagesModalActionType
+  | ToggleMessageRequestActionsConfirmationActionType
+  | ToggleNotePreviewModalActionType
   | ToggleProfileEditorActionType
   | ToggleProfileEditorErrorActionType
+  | ToggleProfileNameWarningModalActionType
   | ToggleSafetyNumberModalActionType
-  | ToggleAddUserToAnotherGroupModalActionType
-  | ToggleSignalConnectionsModalActionType;
+  | ToggleSignalConnectionsModalActionType
+  | ToggleUsernameOnboardingActionType
+>;
 
 // Action Creators
 
 export const actions = {
-  hideContactModal,
-  showContactModal,
-  hideWhatsNewModal,
-  showWhatsNewModal,
-  hideUserNotFoundModal,
-  showUserNotFoundModal,
-  hideStoriesSettings,
-  showStoriesSettings,
+  closeEditHistoryModal,
+  closeErrorModal,
+  closeGV2MigrationDialog,
+  closeShortcutGuideModal,
+  closeStickerPackPreview,
+  closeMediaPermissionsModal,
+  ensureSystemMediaPermissions,
+  hideAttachmentNotAvailableModal,
+  hideBackfillFailureModal,
   hideBlockingSafetyNumberChangeDialog,
+  hideContactModal,
+  hideCriticalIdlePrimaryDeviceModal,
+  hideStoriesSettings,
+  hideTapToViewNotAvailableModal,
+  hideUserNotFoundModal,
+  hideWhatsNewModal,
+  showAttachmentNotAvailableModal,
+  showBackfillFailureModal,
   showBlockingSafetyNumberChangeDialog,
-  toggleForwardMessageModal,
+  showContactModal,
+  showCriticalIdlePrimaryDeviceModal,
+  showEditHistoryModal,
+  showErrorModal,
+  showGV2MigrationDialog,
+  showShareCallLinkViaSignal,
+  showShortcutGuideModal,
+  showStickerPackPreview,
+  showStoriesSettings,
+  showTapToViewNotAvailableModal,
+  showUserNotFoundModal,
+  showWhatsNewModal,
+  toggleAboutContactModal,
+  toggleAddUserToAnotherGroupModal,
+  toggleCallLinkAddNameModal,
+  toggleCallLinkEditModal,
+  toggleCallLinkPendingParticipantModal,
+  toggleConfirmationModal,
+  toggleConfirmLeaveCallModal,
+  toggleDeleteMessagesModal,
+  toggleDraftGifMessageSendModal,
+  toggleEditNicknameAndNoteModal,
+  toggleForwardMessagesModal,
+  toggleMessageRequestActionsConfirmation,
+  toggleNotePreviewModal,
   toggleProfileEditor,
   toggleProfileEditorHasError,
+  toggleProfileNameWarningModal,
   toggleSafetyNumberModal,
-  toggleAddUserToAnotherGroupModal,
   toggleSignalConnectionsModal,
+  toggleUsernameOnboarding,
 };
 
-export const useGlobalModalActions = (): typeof actions =>
-  useBoundActions(actions);
+export const useGlobalModalActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
+
+function hideAttachmentNotAvailableModal(): HideAttachmentNotAvailableModalActionType {
+  return {
+    type: HIDE_ATTACHMENT_NOT_AVAILABLE_MODAL,
+  };
+}
+
+function showAttachmentNotAvailableModal(
+  payload: AttachmentNotAvailableModalType
+): ShowAttachmentNotAvailableModalActionType {
+  return {
+    type: SHOW_ATTACHMENT_NOT_AVAILABLE_MODAL,
+    payload,
+  };
+}
+
+function hideTapToViewNotAvailableModal(): HideTapToViewNotAvailableModalActionType {
+  return {
+    type: HIDE_TAP_TO_VIEW_NOT_AVAILABLE_MODAL,
+  };
+}
+
+function showTapToViewNotAvailableModal(
+  payload: TapToViewNotAvailablePropsType
+): ShowTapToViewNotAvailableModalActionType {
+  return {
+    type: SHOW_TAP_TO_VIEW_NOT_AVAILABLE_MODAL,
+    payload,
+  };
+}
+
+function showBackfillFailureModal(
+  payload: BackfillFailureModalPropsType
+): ShowBackfillFailureModalActionType {
+  return {
+    type: SHOW_BACKFILL_FAILURE_MODAL,
+    payload,
+  };
+}
+
+function hideBackfillFailureModal(): HideBackfillFailureModalActionType {
+  return {
+    type: HIDE_BACKFILL_FAILURE_MODAL,
+  };
+}
 
 function hideContactModal(): HideContactModalActionType {
   return {
@@ -222,7 +670,7 @@ function showWhatsNewModal(): ShowWhatsNewModalActionType {
 
 function hideUserNotFoundModal(): HideUserNotFoundModalActionType {
   return {
-    type: HIDE_UUID_NOT_FOUND_MODAL,
+    type: HIDE_SERVICE_ID_NOT_FOUND_MODAL,
   };
 }
 
@@ -230,7 +678,7 @@ function showUserNotFoundModal(
   payload: UserNotFoundModalStateType
 ): ShowUserNotFoundModalActionType {
   return {
-    type: SHOW_UUID_NOT_FOUND_MODAL,
+    type: SHOW_SERVICE_ID_NOT_FOUND_MODAL,
     payload,
   };
 }
@@ -243,47 +691,259 @@ function showStoriesSettings(): ShowStoriesSettingsActionType {
   return { type: SHOW_STORIES_SETTINGS };
 }
 
-function toggleForwardMessageModal(
-  messageId?: string
+function showGV2MigrationDialog(
+  conversationId: string
+): ThunkAction<void, RootStateType, unknown, StartMigrationToGV2ActionType> {
+  return async dispatch => {
+    const conversation = window.ConversationController.get(conversationId);
+    if (!conversation) {
+      throw new Error(
+        'showGV2MigrationDialog: Expected a conversation to be found. Doing nothing'
+      );
+    }
+
+    const idForLogging = conversation.idForLogging();
+
+    if (!isGroupV1(conversation.attributes)) {
+      throw new Error(
+        `showGV2MigrationDialog/${idForLogging}: Cannot start, not a GroupV1 group`
+      );
+    }
+
+    // Note: this call will throw if, after generating member lists, we are no longer a
+    //   member or are in the pending member list.
+    const { droppedGV2MemberIds, pendingMembersV2 } =
+      await longRunningTaskWrapper({
+        idForLogging,
+        name: 'getGroupMigrationMembers',
+        task: () => getGroupMigrationMembers(conversation),
+      });
+
+    const invitedMemberIds = pendingMembersV2.map(
+      (item: GroupV2PendingMemberType) => item.serviceId
+    );
+
+    dispatch({
+      type: SHOW_GV2_MIGRATION_DIALOG,
+      payload: {
+        areWeInvited: false,
+        conversationId,
+        droppedMemberIds: droppedGV2MemberIds,
+        hasMigrated: false,
+        invitedMemberIds,
+      },
+    });
+  };
+}
+
+function closeGV2MigrationDialog(): CloseGV2MigrationDialogActionType {
+  return {
+    type: CLOSE_GV2_MIGRATION_DIALOG,
+  };
+}
+
+function toggleDeleteMessagesModal(
+  props: DeleteMessagesPropsType | undefined
+): ToggleDeleteMessagesModalActionType {
+  return {
+    type: TOGGLE_DELETE_MESSAGES_MODAL,
+    payload: props,
+  };
+}
+
+function toggleDraftGifMessageSendModal(
+  props: SmartDraftGifMessageSendModalProps | null
+): ToggleDraftGifMessageSendModalActionType {
+  return {
+    type: TOGGLE_DRAFT_GIF_MESSAGE_SEND_MODAL,
+    payload: props,
+  };
+}
+
+function toMessageForwardDraft(
+  props: ForwardMessagePropsType,
+  getConversation: GetConversationByIdType
+): MessageForwardDraft {
+  return {
+    attachments: props.attachments ?? [],
+    bodyRanges: hydrateRanges(props.bodyRanges, getConversation),
+    hasContact: Boolean(props.contact),
+    isSticker: Boolean(props.isSticker),
+    messageBody: props.text,
+    originalMessageId: props.id,
+    previews: props.previews ?? [],
+  };
+}
+
+export type ForwardMessagesPayload = ReadonlyDeep<
+  | {
+      type: ForwardMessagesModalType.Forward;
+      messageIds: ReadonlyArray<string>;
+    }
+  | {
+      type: ForwardMessagesModalType.ShareCallLink;
+      draft: MessageForwardDraft;
+    }
+>;
+
+function toggleForwardMessagesModal(
+  payload: ForwardMessagesPayload | null,
+  onForward?: () => void
 ): ThunkAction<
   void,
   RootStateType,
   unknown,
-  ToggleForwardMessageModalActionType
+  ToggleForwardMessagesModalActionType
 > {
   return async (dispatch, getState) => {
-    if (!messageId) {
+    if (payload == null) {
       dispatch({
-        type: TOGGLE_FORWARD_MESSAGE_MODAL,
+        type: TOGGLE_FORWARD_MESSAGES_MODAL,
         payload: undefined,
       });
       return;
     }
 
-    const message = await getMessageById(messageId);
+    let messageDrafts: ReadonlyArray<MessageForwardDraft>;
 
-    if (!message) {
-      throw new Error(
-        `toggleForwardMessageModal: no message found for ${messageId}`
+    if (payload.type === ForwardMessagesModalType.Forward) {
+      messageDrafts = await Promise.all(
+        payload.messageIds.map(async messageId => {
+          const message = await getMessageById(messageId);
+          if (!message) {
+            throw new Error(
+              'toggleForwardMessagesModal: failed to find target message'
+            );
+          }
+          const { attachments = [] } = message.attributes;
+
+          if (
+            !attachments.every(
+              attachment =>
+                isDownloaded(attachment) ||
+                isPermanentlyUndownloadable(
+                  attachment,
+                  'attachment',
+                  message.attributes
+                )
+            )
+          ) {
+            dispatch(
+              conversationsActions.kickOffAttachmentDownload({ messageId })
+            );
+          }
+
+          const state = getState();
+          const messagePropsSelector = getMessagePropsSelector(state);
+          const conversationSelector = getConversationSelector(state);
+
+          const messageProps = messagePropsSelector(message.attributes);
+          const messageDraft = toMessageForwardDraft(
+            {
+              ...messageProps,
+              attachments: (messageProps.attachments ?? []).filter(
+                attachment =>
+                  !isPermanentlyUndownloadable(
+                    attachment,
+                    'attachment',
+                    message.attributes
+                  )
+              ),
+            },
+            conversationSelector
+          );
+
+          return messageDraft;
+        })
       );
+    } else if (payload.type === ForwardMessagesModalType.ShareCallLink) {
+      messageDrafts = [payload.draft];
+    } else {
+      throw missingCaseError(payload);
     }
 
-    const messagePropsSelector = getMessagePropsSelector(getState());
-    const messageProps = messagePropsSelector(message.attributes);
-
     dispatch({
-      type: TOGGLE_FORWARD_MESSAGE_MODAL,
-      payload: messageProps,
+      type: TOGGLE_FORWARD_MESSAGES_MODAL,
+      payload: { type: payload.type, messageDrafts, onForward },
     });
   };
 }
 
-function toggleProfileEditor(): ToggleProfileEditorActionType {
-  return { type: TOGGLE_PROFILE_EDITOR };
+function showShareCallLinkViaSignal(
+  callLink: CallLinkType,
+  i18n: LocalizerType
+): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  ToggleForwardMessagesModalActionType
+> {
+  return dispatch => {
+    const url = linkCallRoute
+      .toWebUrl({
+        key: callLink.rootKey,
+      })
+      .toString();
+    dispatch(
+      toggleForwardMessagesModal({
+        type: ForwardMessagesModalType.ShareCallLink,
+        draft: {
+          originalMessageId: null,
+          hasContact: false,
+          isSticker: false,
+          previews: [
+            {
+              title: callLink.name,
+              url,
+              isCallLink: true,
+            },
+          ],
+          messageBody: i18n(
+            'icu:ShareCallLinkViaSignal__DraftMessageText',
+            { url },
+            { bidi: 'strip' }
+          ),
+        },
+      })
+    );
+  };
+}
+
+export function toggleConfirmLeaveCallModal(
+  payload: StartCallData | null
+): ToggleConfirmLeaveCallModalActionType {
+  return {
+    type: TOGGLE_CONFIRM_LEAVE_CALL_MODAL,
+    payload,
+  };
+}
+
+function toggleNotePreviewModal(
+  payload: NotePreviewModalPropsType | null
+): ToggleNotePreviewModalActionType {
+  return {
+    type: TOGGLE_NOTE_PREVIEW_MODAL,
+    payload,
+  };
+}
+
+function toggleProfileEditor(
+  initialEditState?: ProfileEditorEditState
+): ToggleProfileEditorActionType {
+  return { type: TOGGLE_PROFILE_EDITOR, payload: { initialEditState } };
 }
 
 function toggleProfileEditorHasError(): ToggleProfileEditorErrorActionType {
   return { type: TOGGLE_PROFILE_EDITOR_ERROR };
+}
+
+function toggleProfileNameWarningModal(
+  conversationType?: string
+): ToggleProfileNameWarningModalActionType {
+  return {
+    type: TOGGLE_PROFILE_NAME_WARNING_MODAL,
+    payload: conversationType ? { conversationType } : undefined,
+  };
 }
 
 function toggleSafetyNumberModal(
@@ -304,24 +964,73 @@ function toggleAddUserToAnotherGroupModal(
   };
 }
 
+function toggleCallLinkAddNameModal(
+  roomId: string | null
+): ToggleCallLinkAddNameModalActionType {
+  return {
+    type: TOGGLE_CALL_LINK_ADD_NAME_MODAL,
+    payload: roomId,
+  };
+}
+
+function toggleCallLinkEditModal(
+  roomId: string | null
+): ToggleCallLinkEditModalActionType {
+  return {
+    type: TOGGLE_CALL_LINK_EDIT_MODAL,
+    payload: roomId,
+  };
+}
+
+function toggleCallLinkPendingParticipantModal(
+  contactId?: string
+): ToggleCallLinkPendingParticipantModalActionType {
+  return {
+    type: TOGGLE_CALL_LINK_PENDING_PARTICIPANT_MODAL,
+    payload: contactId,
+  };
+}
+
+function toggleAboutContactModal(
+  contactId?: string
+): ToggleAboutContactModalActionType {
+  return {
+    type: TOGGLE_ABOUT_MODAL,
+    payload: contactId,
+  };
+}
+
 function toggleSignalConnectionsModal(): ToggleSignalConnectionsModalActionType {
   return {
     type: TOGGLE_SIGNAL_CONNECTIONS_MODAL,
   };
 }
 
+function toggleConfirmationModal(
+  isOpen: boolean
+): ToggleConfirmationModalActionType {
+  return {
+    type: TOGGLE_CONFIRMATION_MODAL,
+    payload: isOpen,
+  };
+}
+
+function toggleUsernameOnboarding(): ToggleUsernameOnboardingActionType {
+  return { type: TOGGLE_USERNAME_ONBOARDING };
+}
+
 function showBlockingSafetyNumberChangeDialog(
-  conversationsToPause: Map<string, Set<string>>,
+  untrustedByConversation: RecipientsByConversation,
   explodedPromise: ExplodePromiseResultType<boolean>,
   source?: SafetyNumberChangeSource
-): ThunkAction<void, RootStateType, unknown, ShowSendAnywayDialogActiontype> {
+): ThunkAction<void, RootStateType, unknown, ShowSendAnywayDialogActionType> {
   const promiseUuid = SingleServePromise.set<boolean>(explodedPromise);
 
   return dispatch => {
     dispatch({
       type: SHOW_SEND_ANYWAY_DIALOG,
       payload: {
-        conversationsToPause,
+        untrustedByConversation,
         promiseUuid,
         source,
       },
@@ -335,15 +1044,271 @@ function hideBlockingSafetyNumberChangeDialog(): HideSendAnywayDialogActiontype 
   };
 }
 
+function closeStickerPackPreview(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  CloseStickerPackPreviewActionType
+> {
+  return async (dispatch, getState) => {
+    const packId = getState().globalModals.stickerPackPreviewId;
+
+    if (packId && Stickers.getStickerPack(packId) !== undefined) {
+      await Stickers.removeEphemeralPack(packId);
+    }
+
+    dispatch({
+      type: CLOSE_STICKER_PACK_PREVIEW,
+    });
+  };
+}
+
+export function showStickerPackPreview(
+  packId: string,
+  packKey: string
+): ShowStickerPackPreviewActionType {
+  // Intentionally not awaiting this so that we can show the modal right away.
+  // The modal has a loading spinner on it.
+  void Stickers.downloadEphemeralPack(packId, packKey);
+
+  return {
+    type: SHOW_STICKER_PACK_PREVIEW,
+    payload: packId,
+  };
+}
+
+function closeErrorModal(): CloseErrorModalActionType {
+  return {
+    type: CLOSE_ERROR_MODAL,
+  };
+}
+
+function showErrorModal({
+  buttonVariant,
+  description,
+  title,
+}: {
+  buttonVariant?: ButtonVariant;
+  description?: string;
+  title?: string;
+}): ShowErrorModalActionType {
+  return {
+    type: SHOW_ERROR_MODAL,
+    payload: {
+      buttonVariant,
+      description,
+      title,
+    },
+  };
+}
+
+function closeMediaPermissionsModal(): CloseMediaPermissionsModalActionType {
+  return {
+    type: CLOSE_MEDIA_PERMISSIONS_MODAL,
+  };
+}
+
+const MEDIA_PERMISSIONS_POLL_INTERVAL = SECOND;
+
+export function ensureSystemMediaPermissions(
+  mediaType: 'camera' | 'microphone',
+  requestor: 'call' | 'voiceNote'
+): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  ShowMediaPermissionsModalActionType | CloseMediaPermissionsModalActionType
+> {
+  return async dispatch => {
+    // Only macOS supported at the moment
+    if (!OS.isMacOS()) {
+      return;
+    }
+
+    const status = await window.IPC.getMediaAccessStatus(mediaType);
+    if (status !== 'denied') {
+      return;
+    }
+
+    const logId = `ensureSystemMediaPermissions(${mediaType}, ${requestor})`;
+    log.warn(`${logId}: permission denied, showing UI`);
+
+    const abortController = new AbortController();
+    dispatch({
+      type: SHOW_MEDIA_PERMISSIONS_MODAL,
+      payload: { mediaType, requestor, abortController },
+    });
+
+    const { signal } = abortController;
+    while (!signal.aborted) {
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(MEDIA_PERMISSIONS_POLL_INTERVAL, signal);
+
+      // eslint-disable-next-line no-await-in-loop
+      const updatedStatus = await window.IPC.getMediaAccessStatus(mediaType);
+      if (signal.aborted) {
+        throw new Error('ensureSystemMediaPermissions: modal dismissed');
+      }
+
+      if (updatedStatus !== 'denied') {
+        break;
+      }
+    }
+
+    dispatch({ type: CLOSE_MEDIA_PERMISSIONS_MODAL });
+  };
+}
+
+function showCriticalIdlePrimaryDeviceModal(): ShowCriticalIdlePrimaryDeviceModalActionType {
+  return {
+    type: SHOW_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL,
+  };
+}
+
+function hideCriticalIdlePrimaryDeviceModal(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  HideCriticalIdlePrimaryDeviceModalActionType
+> {
+  return async dispatch => {
+    await onCriticalIdlePrimaryDeviceModalDismissed();
+    dispatch({
+      type: HIDE_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL,
+    });
+  };
+}
+
+function toggleEditNicknameAndNoteModal(
+  payload: EditNicknameAndNoteModalPropsType | null
+): ToggleEditNicknameAndNoteModalActionType {
+  return {
+    type: TOGGLE_EDIT_NICKNAME_AND_NOTE_MODAL,
+    payload,
+  };
+}
+
+function toggleMessageRequestActionsConfirmation(
+  payload: {
+    conversationId: string;
+    state: MessageRequestState;
+  } | null
+): ToggleMessageRequestActionsConfirmationActionType {
+  return {
+    type: TOGGLE_MESSAGE_REQUEST_ACTIONS_CONFIRMATION,
+    payload,
+  };
+}
+
+function closeShortcutGuideModal(): CloseShortcutGuideModalActionType {
+  return {
+    type: CLOSE_SHORTCUT_GUIDE_MODAL,
+  };
+}
+
+function showShortcutGuideModal(): ShowShortcutGuideModalActionType {
+  return {
+    type: SHOW_SHORTCUT_GUIDE_MODAL,
+  };
+}
+
+function copyOverMessageAttributesIntoEditHistory(
+  messageAttributes: ReadonlyDeep<ReadonlyMessageAttributesType>
+): EditHistoryMessagesType | undefined {
+  if (!messageAttributes.editHistory) {
+    return;
+  }
+
+  return messageAttributes.editHistory.map(editedMessageAttributes => ({
+    ...messageAttributes,
+    // Always take attachments from the edited message (they might be absent)
+    attachments: undefined,
+    editMessageTimestamp: undefined,
+    quote: undefined,
+    preview: [],
+    ...editedMessageAttributes,
+    // For timestamp uniqueness of messages
+    sent_at: editedMessageAttributes.timestamp,
+  }));
+}
+
+function showEditHistoryModal(
+  messageId: string
+): ThunkAction<void, RootStateType, unknown, ShowEditHistoryModalActionType> {
+  return async dispatch => {
+    const message = await getMessageById(messageId);
+    if (!message) {
+      throw new Error('showEditHistoryModal: failed to find target message');
+    }
+
+    const nextEditHistoryMessages = copyOverMessageAttributesIntoEditHistory(
+      message.attributes
+    );
+
+    if (!nextEditHistoryMessages) {
+      log.warn('showEditHistoryModal: no edit history for message');
+      return;
+    }
+
+    dispatch({
+      type: SHOW_EDIT_HISTORY_MODAL,
+      payload: {
+        messages: nextEditHistoryMessages,
+      },
+    });
+  };
+}
+
+function closeEditHistoryModal(): CloseEditHistoryModalActionType {
+  return {
+    type: CLOSE_EDIT_HISTORY_MODAL,
+  };
+}
+
+function copyOverMessageAttributesIntoForwardMessages(
+  messageDrafts: ReadonlyArray<MessageForwardDraft>,
+  attributes: ReadonlyDeep<ReadonlyMessageAttributesType>
+): ReadonlyArray<MessageForwardDraft> {
+  return messageDrafts.map(messageDraft => {
+    if (messageDraft.originalMessageId !== attributes.id) {
+      return messageDraft;
+    }
+    return {
+      ...messageDraft,
+      attachments: attributes.attachments?.map(attachment =>
+        getPropsForAttachment(attachment, 'attachment', attributes)
+      ),
+    };
+  });
+}
+
 // Reducer
 
 export function getEmptyState(): GlobalModalsStateType {
   return {
+    attachmentNotAvailableModalType: undefined,
+    backfillFailureModalProps: undefined,
+    hasConfirmationModal: false,
+    callLinkAddNameModalRoomId: null,
+    callLinkEditModalRoomId: null,
+    callLinkPendingParticipantContactId: undefined,
+    confirmLeaveCallModalState: null,
+    criticalIdlePrimaryDeviceModal: false,
+    draftGifMessageSendModalProps: null,
+    editNicknameAndNoteModalProps: null,
     isProfileEditorVisible: false,
+    isProfileNameWarningModalVisible: false,
+    profileNameWarningModalConversationType: undefined,
+    isShortcutGuideModalVisible: false,
     isSignalConnectionsVisible: false,
     isStoriesSettingsVisible: false,
     isWhatsNewVisible: false,
+    usernameOnboardingState: UsernameOnboardingState.NeverShown,
     profileEditorHasError: false,
+    profileEditorInitialEditState: undefined,
+    messageRequestActionsConfirmationProps: null,
+    tapToViewNotAvailableModalProps: undefined,
+    notePreviewModalProps: null,
   };
 }
 
@@ -351,10 +1316,32 @@ export function reducer(
   state: Readonly<GlobalModalsStateType> = getEmptyState(),
   action: Readonly<GlobalModalsActionType>
 ): GlobalModalsStateType {
+  if (action.type === TOGGLE_ABOUT_MODAL) {
+    return {
+      ...state,
+      aboutContactModalContactId: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_CONFIRM_LEAVE_CALL_MODAL) {
+    return {
+      ...state,
+      confirmLeaveCallModalState: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_NOTE_PREVIEW_MODAL) {
+    return {
+      ...state,
+      notePreviewModalProps: action.payload,
+    };
+  }
+
   if (action.type === TOGGLE_PROFILE_EDITOR) {
     return {
       ...state,
       isProfileEditorVisible: !state.isProfileEditorVisible,
+      profileEditorInitialEditState: action.payload.initialEditState,
     };
   }
 
@@ -362,6 +1349,16 @@ export function reducer(
     return {
       ...state,
       profileEditorHasError: !state.profileEditorHasError,
+    };
+  }
+  if (action.type === TOGGLE_PROFILE_NAME_WARNING_MODAL) {
+    return {
+      ...state,
+      isProfileNameWarningModalVisible: !state.isProfileNameWarningModalVisible,
+      profileNameWarningModalConversationType:
+        state.isProfileNameWarningModalVisible
+          ? undefined
+          : action.payload?.conversationType,
     };
   }
 
@@ -379,14 +1376,14 @@ export function reducer(
     };
   }
 
-  if (action.type === HIDE_UUID_NOT_FOUND_MODAL) {
+  if (action.type === HIDE_SERVICE_ID_NOT_FOUND_MODAL) {
     return {
       ...state,
       userNotFoundModalState: undefined,
     };
   }
 
-  if (action.type === SHOW_UUID_NOT_FOUND_MODAL) {
+  if (action.type === SHOW_SERVICE_ID_NOT_FOUND_MODAL) {
     return {
       ...state,
       userNotFoundModalState: {
@@ -395,7 +1392,57 @@ export function reducer(
     };
   }
 
+  if (action.type === HIDE_ATTACHMENT_NOT_AVAILABLE_MODAL) {
+    return {
+      ...state,
+      attachmentNotAvailableModalType: undefined,
+    };
+  }
+
+  if (action.type === SHOW_ATTACHMENT_NOT_AVAILABLE_MODAL) {
+    return {
+      ...state,
+      attachmentNotAvailableModalType: action.payload,
+    };
+  }
+
+  if (action.type === HIDE_TAP_TO_VIEW_NOT_AVAILABLE_MODAL) {
+    return {
+      ...state,
+      tapToViewNotAvailableModalProps: undefined,
+    };
+  }
+
+  if (action.type === SHOW_TAP_TO_VIEW_NOT_AVAILABLE_MODAL) {
+    return {
+      ...state,
+      tapToViewNotAvailableModalProps: action.payload,
+    };
+  }
+
+  if (action.type === SHOW_BACKFILL_FAILURE_MODAL) {
+    return {
+      ...state,
+      backfillFailureModalProps: action.payload,
+    };
+  }
+
+  if (action.type === HIDE_BACKFILL_FAILURE_MODAL) {
+    return {
+      ...state,
+      backfillFailureModalProps: undefined,
+    };
+  }
+
   if (action.type === SHOW_CONTACT_MODAL) {
+    const ourId = window.ConversationController.getOurConversationIdOrThrow();
+    if (action.payload.contactId === ourId) {
+      return {
+        ...state,
+        aboutContactModalContactId: ourId,
+      };
+    }
+
     return {
       ...state,
       contactModalState: action.payload,
@@ -423,10 +1470,45 @@ export function reducer(
     };
   }
 
-  if (action.type === TOGGLE_FORWARD_MESSAGE_MODAL) {
+  if (action.type === TOGGLE_CALL_LINK_ADD_NAME_MODAL) {
     return {
       ...state,
-      forwardMessageProps: action.payload,
+      callLinkAddNameModalRoomId: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_CALL_LINK_EDIT_MODAL) {
+    return {
+      ...state,
+      callLinkEditModalRoomId: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_CALL_LINK_PENDING_PARTICIPANT_MODAL) {
+    return {
+      ...state,
+      callLinkPendingParticipantContactId: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_DELETE_MESSAGES_MODAL) {
+    return {
+      ...state,
+      deleteMessagesProps: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_DRAFT_GIF_MESSAGE_SEND_MODAL) {
+    return {
+      ...state,
+      draftGifMessageSendModalProps: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_FORWARD_MESSAGES_MODAL) {
+    return {
+      ...state,
+      forwardMessagesProps: action.payload,
     };
   }
 
@@ -451,6 +1533,23 @@ export function reducer(
     };
   }
 
+  if (action.type === TOGGLE_CONFIRMATION_MODAL) {
+    return {
+      ...state,
+      hasConfirmationModal: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_USERNAME_ONBOARDING) {
+    return {
+      ...state,
+      usernameOnboardingState:
+        state.usernameOnboardingState === UsernameOnboardingState.Open
+          ? UsernameOnboardingState.Closed
+          : UsernameOnboardingState.Open,
+    };
+  }
+
   if (action.type === SHOW_SEND_ANYWAY_DIALOG) {
     const { promiseUuid, source } = action.payload;
 
@@ -467,6 +1566,177 @@ export function reducer(
     return {
       ...state,
       safetyNumberChangedBlockingData: undefined,
+    };
+  }
+
+  if (action.type === CLOSE_STICKER_PACK_PREVIEW) {
+    return {
+      ...state,
+      stickerPackPreviewId: undefined,
+    };
+  }
+
+  if (action.type === SHOW_STICKER_PACK_PREVIEW) {
+    return {
+      ...state,
+      stickerPackPreviewId: action.payload,
+    };
+  }
+
+  if (action.type === CLOSE_ERROR_MODAL) {
+    return {
+      ...state,
+      errorModalProps: undefined,
+    };
+  }
+
+  if (action.type === SHOW_ERROR_MODAL) {
+    return {
+      ...state,
+      errorModalProps: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_EDIT_NICKNAME_AND_NOTE_MODAL) {
+    return {
+      ...state,
+      editNicknameAndNoteModalProps: action.payload,
+    };
+  }
+
+  if (action.type === TOGGLE_MESSAGE_REQUEST_ACTIONS_CONFIRMATION) {
+    return {
+      ...state,
+      messageRequestActionsConfirmationProps: action.payload,
+    };
+  }
+
+  if (action.type === CLOSE_SHORTCUT_GUIDE_MODAL) {
+    return {
+      ...state,
+      isShortcutGuideModalVisible: false,
+    };
+  }
+
+  if (action.type === SHOW_SHORTCUT_GUIDE_MODAL) {
+    return {
+      ...state,
+      isShortcutGuideModalVisible: true,
+    };
+  }
+
+  if (action.type === SHOW_EDIT_HISTORY_MODAL) {
+    return {
+      ...state,
+      editHistoryMessages: action.payload.messages,
+    };
+  }
+
+  if (action.type === CLOSE_EDIT_HISTORY_MODAL) {
+    return {
+      ...state,
+      editHistoryMessages: undefined,
+    };
+  }
+
+  if (state.forwardMessagesProps != null) {
+    if (action.type === MESSAGE_CHANGED) {
+      if (
+        !state.forwardMessagesProps.messageDrafts.some(message => {
+          return message.originalMessageId === action.payload.id;
+        })
+      ) {
+        return state;
+      }
+
+      return {
+        ...state,
+        forwardMessagesProps: {
+          ...state.forwardMessagesProps,
+          messageDrafts: copyOverMessageAttributesIntoForwardMessages(
+            state.forwardMessagesProps.messageDrafts,
+            action.payload.data
+          ),
+        },
+      };
+    }
+  }
+
+  if (state.editHistoryMessages != null) {
+    if (
+      action.type === MESSAGE_CHANGED ||
+      action.type === MESSAGE_DELETED ||
+      action.type === MESSAGE_EXPIRED
+    ) {
+      if (action.type === MESSAGE_DELETED || action.type === MESSAGE_EXPIRED) {
+        const hasMessageId = state.editHistoryMessages.some(
+          edit => edit.id === action.payload.id
+        );
+
+        if (!hasMessageId) {
+          return state;
+        }
+
+        return {
+          ...state,
+          editHistoryMessages: undefined,
+        };
+      }
+
+      if (action.type === MESSAGE_CHANGED) {
+        if (!action.payload.data.editHistory) {
+          return state;
+        }
+
+        const hasMessageId = state.editHistoryMessages.some(
+          edit => edit.id === action.payload.id
+        );
+
+        if (!hasMessageId) {
+          return state;
+        }
+
+        const nextEditHistoryMessages =
+          copyOverMessageAttributesIntoEditHistory(action.payload.data);
+
+        if (!nextEditHistoryMessages) {
+          return state;
+        }
+
+        return {
+          ...state,
+          editHistoryMessages: nextEditHistoryMessages,
+        };
+      }
+    }
+  }
+
+  if (action.type === CLOSE_MEDIA_PERMISSIONS_MODAL) {
+    state.mediaPermissionsModalProps?.abortController.abort();
+    return {
+      ...state,
+      mediaPermissionsModalProps: undefined,
+    };
+  }
+
+  if (action.type === SHOW_MEDIA_PERMISSIONS_MODAL) {
+    return {
+      ...state,
+      mediaPermissionsModalProps: action.payload,
+    };
+  }
+
+  if (action.type === SHOW_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL) {
+    return {
+      ...state,
+      criticalIdlePrimaryDeviceModal: true,
+    };
+  }
+
+  if (action.type === HIDE_CRITICAL_IDLE_PRIMARY_DEVICE_MODAL) {
+    return {
+      ...state,
+      criticalIdlePrimaryDeviceModal: false,
     };
   }
 

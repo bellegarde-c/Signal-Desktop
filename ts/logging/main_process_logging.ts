@@ -1,29 +1,35 @@
-// Copyright 2017-2021 Signal Messenger, LLC
+// Copyright 2017 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // NOTE: Temporarily allow `then` until we convert the entire file to `async` / `await`:
 /* eslint-disable more/no-then */
 /* eslint-disable no-console */
 
-import { join } from 'path';
-import split2 from 'split2';
-import { readdirSync, createReadStream, unlinkSync, writeFileSync } from 'fs';
+import { CircularBuffer } from 'cirbuf';
 import type { BrowserWindow } from 'electron';
 import { app, ipcMain as ipc } from 'electron';
-import pino from 'pino';
-import type { StreamEntry } from 'pino';
-import * as mkdirp from 'mkdirp';
-import { filter, flatten, map, pick, sortBy } from 'lodash';
 import readFirstLine from 'firstline';
+import { filter, flatten, map, noop, pick, sortBy } from 'lodash';
+import {
+  createReadStream,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { join } from 'path';
+import type { StreamEntry } from 'pino';
+import pino from 'pino';
 import { read as readLastLines } from 'read-last-lines';
-import rimraf from 'rimraf';
+import split2 from 'split2';
 
 import type { LoggerType } from '../types/Logging';
-import * as durations from '../util/durations';
+import * as Errors from '../types/errors';
 import { createRotatingPinoDest } from '../util/rotatingPinoDest';
 
-import * as log from './log';
 import { Environment, getEnvironment } from '../environment';
+import * as log from './log';
 
 import type { FetchLogIpcData, LogEntryType } from './shared';
 import { LogLevel, cleanArgs, getLogLevelString, isLogEntry } from './shared';
@@ -38,7 +44,7 @@ declare global {
   }
 }
 
-const MAX_LOG_LINES = 1000000;
+const MAX_LOG_LINES = 10_000_000;
 
 let globalLogger: undefined | pino.Logger;
 let shouldRestart = false;
@@ -55,22 +61,17 @@ export async function initialize(
 
   const basePath = app.getPath('userData');
   const logPath = join(basePath, 'logs');
-  mkdirp.sync(logPath);
-
-  let appMetrics = app.getAppMetrics();
-
-  setInterval(() => {
-    // CPU stats are computed since the last call to `getAppMetrics`.
-    appMetrics = app.getAppMetrics();
-  }, 30 * durations.SECOND).unref();
+  mkdirSync(logPath, { recursive: true });
 
   try {
     await cleanupLogs(logPath);
   } catch (error) {
-    const errorString = `Failed to clean logs; deleting all. Error: ${error.stack}`;
+    const errorString =
+      'Failed to clean logs; deleting all. ' +
+      `Error: ${Errors.toLogFormat(error)}`;
     console.error(errorString);
     await deleteAllLogs(logPath);
-    mkdirp.sync(logPath);
+    mkdirSync(logPath, { recursive: true });
 
     // If we want this log entry to persist on disk, we need to wait until we've
     //   set up our logging infrastructure.
@@ -88,7 +89,7 @@ export async function initialize(
     globalLogger = undefined;
 
     if (shouldRestart) {
-      initialize(getMainWindow);
+      void initialize(getMainWindow);
     }
   };
 
@@ -99,6 +100,8 @@ export async function initialize(
   streams.push({ stream: rotatingStream });
 
   if (isRunningFromConsole) {
+    process.stdout.on('error', noop);
+
     streams.push({
       level: 'debug' as const,
       stream: process.stdout,
@@ -132,11 +135,10 @@ export async function initialize(
       ]);
       data = {
         logEntries,
-        appMetrics,
         ...rest,
       };
     } catch (error) {
-      logger.error(`Problem loading log data: ${error.stack}`);
+      logger.error(`Problem loading log data: ${Errors.toLogFormat(error)}`);
       return;
     }
 
@@ -151,7 +153,7 @@ export async function initialize(
     try {
       await deleteAllLogs(logPath);
     } catch (error) {
-      logger.error(`Problem deleting all logs: ${error.stack}`);
+      logger.error(`Problem deleting all logs: ${Errors.toLogFormat(error)}`);
     }
   });
 
@@ -161,21 +163,7 @@ export async function initialize(
 }
 
 async function deleteAllLogs(logPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    rimraf(
-      logPath,
-      {
-        disableGlob: true,
-      },
-      error => {
-        if (error) {
-          return reject(error);
-        }
-
-        return resolve();
-      }
-    );
-  });
+  await rm(logPath, { recursive: true, force: true });
 }
 
 async function cleanupLogs(logPath: string) {
@@ -196,12 +184,12 @@ async function cleanupLogs(logPath: string) {
   } catch (error) {
     console.error(
       'Error cleaning logs; deleting and starting over from scratch.',
-      error.stack
+      Errors.toLogFormat(error)
     );
 
     // delete and re-create the log directory
     await deleteAllLogs(logPath);
-    mkdirp.sync(logPath);
+    mkdirSync(logPath, { recursive: true });
   }
 }
 
@@ -215,7 +203,7 @@ export function isLineAfterDate(line: string, date: Readonly<Date>): boolean {
     const data = JSON.parse(line);
     return new Date(data.time).getTime() > date.getTime();
   } catch (e) {
-    console.log('error parsing log line', e.stack, line);
+    console.log('error parsing log line', Errors.toLogFormat(e), line);
     return false;
   }
 }
@@ -279,7 +267,7 @@ export async function eliminateOldEntries(
 
 // Exported for testing only.
 export async function fetchLog(logFile: string): Promise<Array<LogEntryType>> {
-  const results = new Array<LogEntryType>();
+  const results = new CircularBuffer<LogEntryType>(MAX_LOG_LINES);
 
   const rawStream = createReadStream(logFile);
   const jsonStream = rawStream.pipe(
@@ -303,12 +291,9 @@ export async function fetchLog(logFile: string): Promise<Array<LogEntryType>> {
     }
 
     results.push(result);
-    if (results.length > MAX_LOG_LINES) {
-      results.shift();
-    }
   }
 
-  return results;
+  return results.toArray();
 }
 
 // Exported for testing only.
@@ -334,7 +319,7 @@ export function fetchLogs(logPath: string): Promise<Array<LogEntryType>> {
 
 export const fetchAdditionalLogData = (
   mainWindow: BrowserWindow
-): Promise<Omit<FetchLogIpcData, 'logEntries' | 'appMetrics'>> =>
+): Promise<Omit<FetchLogIpcData, 'logEntries'>> =>
   new Promise(resolve => {
     mainWindow.webContents.send('additional-log-data-request');
     ipc.once('additional-log-data-response', (_event, data) => {

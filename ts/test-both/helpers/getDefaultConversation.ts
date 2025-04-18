@@ -1,13 +1,18 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import casual from 'casual';
 import { sample } from 'lodash';
+import { v4 as generateUuid } from 'uuid';
+
 import type { ConversationType } from '../../state/ducks/conversations';
-import { UUID } from '../../types/UUID';
-import type { UUIDStringType } from '../../types/UUID';
+import type { ServiceIdString } from '../../types/ServiceId';
+import { generateAci } from '../../types/ServiceId';
+import type { GroupListItemConversationType } from '../../components/conversationList/GroupListItem';
 import { getRandomColor } from './getRandomColor';
 import { ConversationColors } from '../../types/Colors';
+import { StorySendMode } from '../../types/Stories';
+import { getAvatarPlaceholderGradient } from '../../utils/getAvatarPlaceholderGradient';
 
 export const getAvatarPath = (): string =>
   sample([
@@ -23,22 +28,37 @@ export function getDefaultConversation(
   const lastName = casual.last_name;
 
   return {
+    avatarPlaceholderGradient: getAvatarPlaceholderGradient(0),
     acceptedMessageRequest: true,
-    avatarPath: getAvatarPath(),
+    avatarUrl: getAvatarPath(),
     badges: [],
     e164: `+${casual.phone.replace(/-/g, '')}`,
     conversationColor: ConversationColors[0],
     color: getRandomColor(),
     firstName,
-    id: UUID.generate().toString(),
+    id: generateUuid(),
     isMe: false,
     lastUpdated: casual.unix_time,
     markedUnread: Boolean(overrideProps.markedUnread),
     sharedGroupNames: [],
     title: `${firstName} ${lastName}`,
     titleNoDefault: `${firstName} ${lastName}`,
+    serviceId: generateAci(),
+    ...overrideProps,
     type: 'direct' as const,
-    uuid: UUID.generate().toString(),
+    acknowledgedGroupNameCollisions: undefined,
+    storySendMode: undefined,
+  };
+}
+
+export function getDefaultGroupListItem(
+  overrideProps: Partial<GroupListItemConversationType> = {}
+): GroupListItemConversationType {
+  return {
+    ...getDefaultGroup(),
+    disabledReason: undefined,
+    membersCount: 24,
+    memberships: [],
     ...overrideProps,
   };
 }
@@ -47,22 +67,22 @@ export function getDefaultGroup(
   overrideProps: Partial<ConversationType> = {}
 ): ConversationType {
   const memberships = Array.from(Array(casual.integer(1, 20)), () => ({
-    uuid: UUID.generate().toString(),
+    aci: generateAci(),
     isAdmin: Boolean(casual.coin_flip),
   }));
 
   return {
     acceptedMessageRequest: true,
     announcementsOnly: false,
-    avatarPath: getAvatarPath(),
+    avatarUrl: getAvatarPath(),
     badges: [],
     color: getRandomColor(),
     conversationColor: ConversationColors[0],
     groupDescription: casual.sentence,
-    groupId: UUID.generate().toString(),
+    groupId: generateUuid(),
     groupLink: casual.url,
     groupVersion: 2,
-    id: UUID.generate().toString(),
+    id: generateUuid(),
     isMe: false,
     lastUpdated: casual.unix_time,
     markedUnread: Boolean(overrideProps.markedUnread),
@@ -70,18 +90,20 @@ export function getDefaultGroup(
     memberships,
     sharedGroupNames: [],
     title: casual.title,
-    type: 'group' as const,
-    uuid: UUID.generate().toString(),
+    serviceId: generateAci(),
+    acknowledgedGroupNameCollisions: {},
+    storySendMode: StorySendMode.IfActive,
     ...overrideProps,
+    type: 'group' as const,
   };
 }
 
-export function getDefaultConversationWithUuid(
+export function getDefaultConversationWithServiceId(
   overrideProps: Partial<ConversationType> = {},
-  uuid: UUIDStringType = UUID.generate().toString()
-): ConversationType & { uuid: UUIDStringType } {
+  serviceId: ServiceIdString = generateAci()
+): ConversationType & { serviceId: ServiceIdString } {
   return {
     ...getDefaultConversation(overrideProps),
-    uuid,
+    serviceId,
   };
 }

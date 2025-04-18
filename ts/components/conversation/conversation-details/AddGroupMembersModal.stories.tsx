@@ -4,44 +4,40 @@
 import type { ComponentProps } from 'react';
 import React, { useState } from 'react';
 import { times } from 'lodash';
-
 import { action } from '@storybook/addon-actions';
-
+import type { Meta } from '@storybook/react';
 import { sleep } from '../../../util/sleep';
 import { makeLookup } from '../../../util/makeLookup';
 import { deconstructLookup } from '../../../util/deconstructLookup';
-import { setupI18n } from '../../../util/setupI18n';
 import type { ConversationType } from '../../../state/ducks/conversations';
-import enMessages from '../../../../_locales/en/messages.json';
 import { getDefaultConversation } from '../../../test-both/helpers/getDefaultConversation';
 import { AddGroupMembersModal } from './AddGroupMembersModal';
 import { ChooseGroupMembersModal } from './AddGroupMembersModal/ChooseGroupMembersModal';
 import { ConfirmAdditionsModal } from './AddGroupMembersModal/ConfirmAdditionsModal';
 import { RequestState } from './util';
 import { ThemeType } from '../../../types/Util';
-import { makeFakeLookupConversationWithoutUuid } from '../../../test-both/helpers/fakeLookupConversationWithoutUuid';
+import { makeFakeLookupConversationWithoutServiceId } from '../../../test-both/helpers/fakeLookupConversationWithoutServiceId';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/ConversationDetails/AddGroupMembersModal',
-};
+} satisfies Meta<PropsType>;
 
 const allCandidateContacts = times(50, () => getDefaultConversation());
 let allCandidateContactsLookup = makeLookup(allCandidateContacts, 'id');
 
-const lookupConversationWithoutUuid = makeFakeLookupConversationWithoutUuid(
-  convo => {
+const lookupConversationWithoutServiceId =
+  makeFakeLookupConversationWithoutServiceId(convo => {
     allCandidateContacts.push(convo);
     allCandidateContactsLookup = makeLookup(allCandidateContacts, 'id');
-  }
-);
+  });
 
 type PropsType = ComponentProps<typeof AddGroupMembersModal>;
 
 const createProps = (
   overrideProps: Partial<PropsType> = {},
-  candidateContacts: Array<ConversationType> = []
+  candidateContacts: Array<ConversationType> = allCandidateContacts
 ): PropsType => ({
   clearRequestError: action('clearRequestError'),
   conversationIdsAlreadyInGroup: new Set(),
@@ -65,12 +61,13 @@ const createProps = (
           selectedConversationIds
         )}
         regionCode="US"
-        getPreferredBadge={() => undefined}
+        ourE164={undefined}
+        ourUsername={undefined}
         theme={ThemeType.light}
         i18n={i18n}
-        lookupConversationWithoutUuid={lookupConversationWithoutUuid}
+        lookupConversationWithoutServiceId={lookupConversationWithoutServiceId}
         showUserNotFoundModal={action('showUserNotFoundModal')}
-        isUsernamesEnabled
+        username={undefined}
       />
     );
   },
@@ -90,66 +87,54 @@ const createProps = (
   ...overrideProps,
 });
 
-export const Default = (): JSX.Element => (
-  <AddGroupMembersModal {...createProps()} />
-);
+export function Default(): JSX.Element {
+  return <AddGroupMembersModal {...createProps()} />;
+}
 
-export const Only3Contacts = (): JSX.Element => (
-  <AddGroupMembersModal
-    {...createProps({}, allCandidateContacts.slice(0, 3))}
-  />
-);
+export function Only3Contacts(): JSX.Element {
+  return (
+    <AddGroupMembersModal
+      {...createProps({}, allCandidateContacts.slice(0, 3))}
+    />
+  );
+}
 
-Only3Contacts.story = {
-  name: 'Only 3 contacts',
-};
+export function NoCandidateContacts(): JSX.Element {
+  return <AddGroupMembersModal {...createProps({}, [])} />;
+}
 
-export const NoCandidateContacts = (): JSX.Element => (
-  <AddGroupMembersModal {...createProps({}, [])} />
-);
+export function EveryoneAlreadyAdded(): JSX.Element {
+  return (
+    <AddGroupMembersModal
+      {...createProps({
+        conversationIdsAlreadyInGroup: new Set(
+          allCandidateContacts.map(contact => contact.id)
+        ),
+      })}
+    />
+  );
+}
 
-NoCandidateContacts.story = {
-  name: 'No candidate contacts',
-};
+function RequestFailsAfter1SecondWrapper() {
+  const [requestState, setRequestState] = useState(RequestState.Inactive);
 
-export const EveryoneAlreadyAdded = (): JSX.Element => (
-  <AddGroupMembersModal
-    {...createProps({
-      conversationIdsAlreadyInGroup: new Set(
-        allCandidateContacts.map(contact => contact.id)
-      ),
-    })}
-  />
-);
+  return (
+    <AddGroupMembersModal
+      {...createProps({
+        clearRequestError: () => {
+          setRequestState(RequestState.Inactive);
+        },
+        makeRequest: async () => {
+          setRequestState(RequestState.Active);
+          await sleep(1000);
+          setRequestState(RequestState.InactiveWithError);
+        },
+        requestState,
+      })}
+    />
+  );
+}
 
-EveryoneAlreadyAdded.story = {
-  name: 'Everyone already added',
-};
-
-export const RequestFailsAfter1Second = (): JSX.Element => {
-  const Wrapper = () => {
-    const [requestState, setRequestState] = useState(RequestState.Inactive);
-
-    return (
-      <AddGroupMembersModal
-        {...createProps({
-          clearRequestError: () => {
-            setRequestState(RequestState.Inactive);
-          },
-          makeRequest: async () => {
-            setRequestState(RequestState.Active);
-            await sleep(1000);
-            setRequestState(RequestState.InactiveWithError);
-          },
-          requestState,
-        })}
-      />
-    );
-  };
-
-  return <Wrapper />;
-};
-
-RequestFailsAfter1Second.story = {
-  name: 'Request fails after 1 second',
-};
+export function RequestFailsAfter1Second(): JSX.Element {
+  return <RequestFailsAfter1SecondWrapper />;
+}

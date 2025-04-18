@@ -9,14 +9,16 @@ import type { LocalizerType } from '../types/Util';
 import { Modal } from './Modal';
 import type { PresentedSource, PresentableSource } from '../types/Calling';
 import { Theme } from '../util/theme';
+import { strictAssert } from '../util/assert';
 
 export type PropsType = {
   i18n: LocalizerType;
-  presentingSourcesAvailable: Array<PresentableSource>;
-  setPresenting: (_?: PresentedSource) => void;
+  presentingSourcesAvailable: ReadonlyArray<PresentableSource>;
+  selectPresentingSource: (id: string) => void;
+  cancelPresenting: () => void;
 };
 
-const Source = ({
+function Source({
   onSourceClick,
   source,
   sourceToPresent,
@@ -24,7 +26,7 @@ const Source = ({
   onSourceClick: (source: PresentedSource) => void;
   source: PresentableSource;
   sourceToPresent?: PresentedSource;
-}): JSX.Element => {
+}): JSX.Element {
   return (
     <button
       className={classNames({
@@ -62,13 +64,14 @@ const Source = ({
       </div>
     </button>
   );
-};
+}
 
-export const CallingSelectPresentingSourcesModal = ({
+export function CallingSelectPresentingSourcesModal({
   i18n,
   presentingSourcesAvailable,
-  setPresenting,
-}: PropsType): JSX.Element | null => {
+  selectPresentingSource,
+  cancelPresenting,
+}: PropsType): JSX.Element | null {
   const [sourceToPresent, setSourceToPresent] = useState<
     PresentedSource | undefined
   >(undefined);
@@ -84,14 +87,17 @@ export const CallingSelectPresentingSourcesModal = ({
 
   const footer = (
     <>
-      <Button onClick={() => setPresenting()} variant={ButtonVariant.Secondary}>
-        {i18n('cancel')}
+      <Button onClick={cancelPresenting} variant={ButtonVariant.Secondary}>
+        {i18n('icu:cancel')}
       </Button>
       <Button
         disabled={!sourceToPresent}
-        onClick={() => setPresenting(sourceToPresent)}
+        onClick={() => {
+          strictAssert(sourceToPresent, 'No source to present');
+          selectPresentingSource(sourceToPresent.id);
+        }}
       >
-        {i18n('calling__SelectPresentingSourcesModal--confirm')}
+        {i18n('icu:calling__SelectPresentingSourcesModal--confirm')}
       </Button>
     </>
   );
@@ -102,15 +108,13 @@ export const CallingSelectPresentingSourcesModal = ({
       hasXButton
       i18n={i18n}
       moduleClassName="module-CallingSelectPresentingSourcesModal"
-      onClose={() => {
-        setPresenting();
-      }}
+      onClose={cancelPresenting}
       theme={Theme.Dark}
-      title={i18n('calling__SelectPresentingSourcesModal--title')}
+      title={i18n('icu:calling__SelectPresentingSourcesModal--title')}
       modalFooter={footer}
     >
       <div className="module-CallingSelectPresentingSourcesModal__title">
-        {i18n('calling__SelectPresentingSourcesModal--entireScreen')}
+        {i18n('icu:calling__SelectPresentingSourcesModal--entireScreen')}
       </div>
       <div className="module-CallingSelectPresentingSourcesModal__sources">
         {(sources.true ?? []).map(source => (
@@ -123,7 +127,7 @@ export const CallingSelectPresentingSourcesModal = ({
         ))}
       </div>
       <div className="module-CallingSelectPresentingSourcesModal__title">
-        {i18n('calling__SelectPresentingSourcesModal--window')}
+        {i18n('icu:calling__SelectPresentingSourcesModal--window')}
       </div>
       <div className="module-CallingSelectPresentingSourcesModal__sources">
         {(sources.false ?? []).map(source => (
@@ -137,4 +141,4 @@ export const CallingSelectPresentingSourcesModal = ({
       </div>
     </Modal>
   );
-};
+}

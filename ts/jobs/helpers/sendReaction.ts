@@ -1,4 +1,4 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { isNumber } from 'lodash';
@@ -7,13 +7,14 @@ import * as Errors from '../../types/errors';
 import { strictAssert } from '../../util/assert';
 import { repeat, zipObject } from '../../util/iterables';
 import type { CallbackResultType } from '../../textsecure/Types.d';
-import type { MessageModel } from '../../models/messages';
+import { MessageModel } from '../../models/messages';
 import type { MessageReactionType } from '../../model-types.d';
 import type { ConversationModel } from '../../models/conversations';
 
 import * as reactionUtil from '../../reactions/util';
 import { isSent, SendStatus } from '../../messages/MessageSendState';
 import { getMessageById } from '../../messages/getMessageById';
+import { isIncoming } from '../../messages/helpers';
 import {
   isMe,
   isDirectConversation,
@@ -25,9 +26,11 @@ import { handleMessageSend } from '../../util/handleMessageSend';
 import { ourProfileKeyService } from '../../services/ourProfileKey';
 import { canReact, isStory } from '../../state/selectors/message';
 import { findAndFormatContact } from '../../util/findAndFormatContact';
-import { UUID } from '../../types/UUID';
+import type { AciString, ServiceIdString } from '../../types/ServiceId';
+import { isAciString } from '../../util/isAciString';
 import { handleMultipleSendErrors } from './handleMultipleSendErrors';
 import { incrementMessageCounter } from '../../util/incrementMessageCounter';
+import { generateMessageId } from '../../util/generateMessageId';
 
 import type {
   ConversationQueueJobBundle,
@@ -36,6 +39,9 @@ import type {
 import { isConversationAccepted } from '../../util/isConversationAccepted';
 import { isConversationUnregistered } from '../../util/isConversationUnregistered';
 import type { LoggerType } from '../../types/Logging';
+import { sendToGroup } from '../../util/sendToGroup';
+import { hydrateStoryContext } from '../../util/hydrateStoryContext';
+import { send, sendSyncMessageOnly } from '../../messages/send';
 
 export async function sendReaction(
   conversation: ConversationModel,
@@ -49,7 +55,7 @@ export async function sendReaction(
   data: ReactionJobData
 ): Promise<void> {
   const { messageId, revision } = data;
-  const ourUuid = window.textsecure.storage.user.getCheckedUuid().toString();
+  const ourAci = window.textsecure.storage.user.getCheckedAci();
 
   await window.ConversationController.load();
 
@@ -82,7 +88,7 @@ export async function sendReaction(
   if (!canReact(message.attributes, ourConversationId, findAndFormatContact)) {
     log.info(`could not react to ${messageId}. Removing this pending reaction`);
     markReactionFailed(message, pendingReaction);
-    await window.Signal.Data.saveMessage(message.attributes, { ourUuid });
+    await window.MessageCache.saveMessage(message.attributes);
     return;
   }
 
@@ -91,7 +97,7 @@ export async function sendReaction(
       `reacting to message ${messageId} ran out of time. Giving up on sending it`
     );
     markReactionFailed(message, pendingReaction);
-    await window.Signal.Data.saveMessage(message.attributes, { ourUuid });
+    await window.MessageCache.saveMessage(message.attributes);
     return;
   }
 
@@ -103,7 +109,9 @@ export async function sendReaction(
   let originalError: Error | undefined;
 
   try {
-    const messageConversation = message.getConversation();
+    const messageConversation = window.ConversationController.get(
+      message.get('conversationId')
+    );
     if (messageConversation !== conversation) {
       log.error(
         `message conversation '${messageConversation?.idForLogging()}' does not match job conversation ${conversation.idForLogging()}`
@@ -113,20 +121,20 @@ export async function sendReaction(
 
     const expireTimer = messageConversation.get('expireTimer');
     const {
-      allRecipientIdentifiers,
-      recipientIdentifiersWithoutMe,
-      untrustedUuids,
+      allRecipientServiceIds,
+      recipientServiceIdsWithoutMe,
+      untrustedServiceIds,
     } = getRecipients(log, pendingReaction, conversation);
 
-    if (untrustedUuids.length) {
+    if (untrustedServiceIds.length) {
       window.reduxActions.conversations.conversationStoppedByMissingVerification(
         {
           conversationId: conversation.id,
-          untrustedUuids,
+          untrustedServiceIds,
         }
       );
       throw new Error(
-        `Reaction for message ${messageId} sending blocked because ${untrustedUuids.length} conversation(s) were untrusted. Failing this attempt.`
+        `Reaction for message ${messageId} sending blocked because ${untrustedServiceIds.length} conversation(s) were untrusted. Failing this attempt.`
       );
     }
 
@@ -134,20 +142,30 @@ export async function sendReaction(
       ? await ourProfileKeyService.get()
       : undefined;
 
-    const reactionForSend = pendingReaction.emoji
-      ? pendingReaction
-      : {
-          ...pendingReaction,
-          emoji: emojiToRemove,
-          remove: true,
-        };
+    const { emoji, ...restOfPendingReaction } = pendingReaction;
 
-    const ephemeralMessageForReactionSend = new window.Whisper.Message({
-      id: UUID.generate().toString(),
+    let targetAuthorAci: AciString;
+    if (isIncoming(message.attributes)) {
+      strictAssert(
+        isAciString(message.attributes.sourceServiceId),
+        'incoming message does not have sender ACI'
+      );
+      ({ sourceServiceId: targetAuthorAci } = message.attributes);
+    } else {
+      targetAuthorAci = ourAci;
+    }
+
+    const reactionForSend = {
+      ...restOfPendingReaction,
+      emoji: emoji || emojiToRemove,
+      targetAuthorAci,
+      remove: !emoji,
+    };
+    const ephemeralMessageForReactionSend = new MessageModel({
+      ...generateMessageId(incrementMessageCounter()),
       type: 'outgoing',
       conversationId: conversation.get('id'),
       sent_at: pendingReaction.timestamp,
-      received_at: incrementMessageCounter(),
       received_at_ms: pendingReaction.timestamp,
       timestamp: pendingReaction.timestamp,
       sendStateByConversationId: zipObject(
@@ -161,27 +179,33 @@ export async function sendReaction(
 
     ephemeralMessageForReactionSend.doNotSave = true;
 
+    // Adds the reaction's attributes to the message cache so that we can
+    // safely `set` on it later.
+    window.MessageCache.register(ephemeralMessageForReactionSend);
+
     let didFullySend: boolean;
     const successfulConversationIds = new Set<string>();
 
-    if (recipientIdentifiersWithoutMe.length === 0) {
+    if (recipientServiceIdsWithoutMe.length === 0) {
       log.info('sending sync reaction message only');
-      const dataMessage = await messaging.getDataMessage({
+      const dataMessage = await messaging.getDataOrEditMessage({
         attachments: [],
         expireTimer,
+        expireTimerVersion: conversation.getExpireTimerVersion(),
         groupV2: conversation.getGroupV2Info({
-          members: recipientIdentifiersWithoutMe,
+          members: recipientServiceIdsWithoutMe,
         }),
         preview: [],
         profileKey,
         reaction: reactionForSend,
-        recipients: allRecipientIdentifiers,
+        recipients: allRecipientServiceIds,
         timestamp: pendingReaction.timestamp,
       });
-      await ephemeralMessageForReactionSend.sendSyncMessageOnly(
+      await sendSyncMessageOnly(ephemeralMessageForReactionSend, {
         dataMessage,
-        saveErrors
-      );
+        saveErrors,
+        targetTimestamp: pendingReaction.timestamp,
+      });
 
       didFullySend = true;
       successfulConversationIds.add(ourConversationId);
@@ -214,8 +238,8 @@ export async function sendReaction(
         }
 
         log.info('sending direct reaction message');
-        promise = messaging.sendMessageToIdentifier({
-          identifier: recipientIdentifiersWithoutMe[0],
+        promise = messaging.sendMessageToServiceId({
+          serviceId: recipientServiceIdsWithoutMe[0],
           messageText: undefined,
           attachments: [],
           quote: undefined,
@@ -225,6 +249,7 @@ export async function sendReaction(
           deletedForEveryoneTimestamp: undefined,
           timestamp: pendingReaction.timestamp,
           expireTimer,
+          expireTimerVersion: conversation.getExpireTimerVersion(),
           contentHint: ContentHint.RESENDABLE,
           groupId: undefined,
           profileKey,
@@ -243,19 +268,16 @@ export async function sendReaction(
             }
 
             const groupV2Info = conversation.getGroupV2Info({
-              members: recipientIdentifiersWithoutMe,
+              members: recipientServiceIdsWithoutMe,
             });
             if (groupV2Info && isNumber(revision)) {
               groupV2Info.revision = revision;
             }
 
-            return window.Signal.Util.sendToGroup({
+            return sendToGroup({
               abortSignal,
               contentHint: ContentHint.RESENDABLE,
               groupSendOptions: {
-                groupV1: conversation.getGroupV1Info(
-                  recipientIdentifiersWithoutMe
-                ),
                 groupV2: groupV2Info,
                 reaction: reactionForSend,
                 timestamp: pendingReaction.timestamp,
@@ -272,13 +294,14 @@ export async function sendReaction(
         );
       }
 
-      await ephemeralMessageForReactionSend.send(
-        handleMessageSend(promise, {
+      await send(ephemeralMessageForReactionSend, {
+        promise: handleMessageSend(promise, {
           messageIds: [messageId],
           sendType: 'reaction',
         }),
-        saveErrors
-      );
+        saveErrors,
+        targetTimestamp: pendingReaction.timestamp,
+      });
 
       // Because message.send swallows and processes errors, we'll await the inner promise
       //   to get the SendMessageProtoError, which gives us information upstream
@@ -313,17 +336,15 @@ export async function sendReaction(
       if (!ephemeralMessageForReactionSend.doNotSave) {
         const reactionMessage = ephemeralMessageForReactionSend;
 
-        await Promise.all([
-          await window.Signal.Data.saveMessage(reactionMessage.attributes, {
-            ourUuid,
-            forceSave: true,
-          }),
-          reactionMessage.hydrateStoryContext(message),
-        ]);
+        await hydrateStoryContext(reactionMessage.id, message.attributes, {
+          shouldSave: false,
+        });
+        await window.MessageCache.saveMessage(reactionMessage.attributes, {
+          forceSave: true,
+        });
 
-        conversation.addSingleMessage(
-          window.MessageController.register(reactionMessage.id, reactionMessage)
-        );
+        window.MessageCache.register(reactionMessage);
+        void conversation.addSingleMessage(reactionMessage.attributes);
       }
     }
 
@@ -351,7 +372,7 @@ export async function sendReaction(
       toThrow: originalError || thrownError,
     });
   } finally {
-    await window.Signal.Data.saveMessage(message.attributes, { ourUuid });
+    await window.MessageCache.saveMessage(message.attributes);
   }
 }
 
@@ -364,9 +385,9 @@ const setReactions = (
   reactions: Array<MessageReactionType>
 ): void => {
   if (reactions.length) {
-    message.set('reactions', reactions);
+    message.set({ reactions });
   } else {
-    message.unset('reactions');
+    message.set({ reactions: undefined });
   }
 };
 
@@ -375,13 +396,13 @@ function getRecipients(
   reaction: Readonly<MessageReactionType>,
   conversation: ConversationModel
 ): {
-  allRecipientIdentifiers: Array<string>;
-  recipientIdentifiersWithoutMe: Array<string>;
-  untrustedUuids: Array<string>;
+  allRecipientServiceIds: Array<ServiceIdString>;
+  recipientServiceIdsWithoutMe: Array<ServiceIdString>;
+  untrustedServiceIds: Array<ServiceIdString>;
 } {
-  const allRecipientIdentifiers: Array<string> = [];
-  const recipientIdentifiersWithoutMe: Array<string> = [];
-  const untrustedUuids: Array<string> = [];
+  const allRecipientServiceIds: Array<ServiceIdString> = [];
+  const recipientServiceIdsWithoutMe: Array<ServiceIdString> = [];
+  const untrustedServiceIds: Array<ServiceIdString> = [];
 
   const currentConversationRecipients = conversation.getMemberConversationIds();
 
@@ -402,31 +423,33 @@ function getRecipients(
     }
 
     if (recipient.isUntrusted()) {
-      const uuid = recipient.get('uuid');
-      if (!uuid) {
+      const serviceId = recipient.getServiceId();
+      if (!serviceId) {
         log.error(
-          `sendReaction/getRecipients: Untrusted conversation ${recipient.idForLogging()} missing UUID.`
+          `sendReaction/getRecipients: Untrusted conversation ${recipient.idForLogging()} missing serviceId.`
         );
         continue;
       }
-      untrustedUuids.push(uuid);
+      untrustedServiceIds.push(serviceId);
       continue;
     }
     if (recipient.isUnregistered()) {
-      untrustedUuids.push(recipientIdentifier);
+      continue;
+    }
+    if (recipient.isBlocked()) {
       continue;
     }
 
-    allRecipientIdentifiers.push(recipientIdentifier);
+    allRecipientServiceIds.push(recipientIdentifier);
     if (!isRecipientMe) {
-      recipientIdentifiersWithoutMe.push(recipientIdentifier);
+      recipientServiceIdsWithoutMe.push(recipientIdentifier);
     }
   }
 
   return {
-    allRecipientIdentifiers,
-    recipientIdentifiersWithoutMe,
-    untrustedUuids,
+    allRecipientServiceIds,
+    recipientServiceIdsWithoutMe,
+    untrustedServiceIds,
   };
 }
 

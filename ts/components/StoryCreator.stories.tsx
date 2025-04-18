@@ -1,11 +1,11 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 import React from 'react';
 
+import { action } from '@storybook/addon-actions';
 import type { PropsType } from './StoryCreator';
-import enMessages from '../../_locales/en/messages.json';
 import { StoryCreator } from './StoryCreator';
 import { fakeAttachment } from '../test-both/helpers/fakeAttachment';
 import {
@@ -13,68 +13,53 @@ import {
   getDefaultGroup,
 } from '../test-both/helpers/getDefaultConversation';
 import { getFakeDistributionListsWithMembers } from '../test-both/helpers/getFakeDistributionLists';
-import { setupI18n } from '../util/setupI18n';
+import { EmojiSkinTone } from './fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/StoryCreator',
   component: StoryCreator,
-  argTypes: {
-    candidateConversations: {
-      defaultValue: Array.from(Array(100), getDefaultConversation),
-    },
-    debouncedMaybeGrabLinkPreview: { action: true },
-    distributionLists: { defaultValue: getFakeDistributionListsWithMembers() },
-    getPreferredBadge: { action: true },
-    groupConversations: {
-      defaultValue: Array.from(Array(7), getDefaultGroup),
-    },
-    groupStories: {
-      defaultValue: Array.from(Array(4), getDefaultGroup),
-    },
-    hasFirstStoryPostExperience: {
-      defaultValue: false,
-    },
-    i18n: { defaultValue: i18n },
-    installedPacks: {
-      defaultValue: [],
-    },
-    isSending: {
-      defaultValue: false,
-    },
-    linkPreview: {
-      defaultValue: undefined,
-    },
-    me: {
-      defaultValue: getDefaultConversation(),
-    },
-    onClose: { action: true },
-    onDeleteList: { action: true },
-    onDistributionListCreated: { action: true },
-    onHideMyStoriesFrom: { action: true },
-    onSend: { action: true },
-    onViewersUpdated: { action: true },
-    processAttachment: { action: true },
-    recentStickers: {
-      defaultValue: [],
-    },
-    sendStoryModalOpenStateChanged: { action: true },
-    setMyStoriesToAllSignalConnections: { action: true },
-    signalConnections: {
-      defaultValue: Array.from(Array(42), getDefaultConversation),
-    },
-    toggleSignalConnectionsModal: { action: true },
+  args: {
+    candidateConversations: Array.from(Array(100), getDefaultConversation),
+    debouncedMaybeGrabLinkPreview: action('debouncedMaybeGrabLinkPreview'),
+    distributionLists: getFakeDistributionListsWithMembers(),
+    getPreferredBadge: () => undefined,
+    groupConversations: Array.from(Array(7), getDefaultGroup),
+    groupStories: Array.from(Array(4), getDefaultGroup),
+    hasFirstStoryPostExperience: false,
+    i18n,
+    imageToBlurHash: async () => 'LDA,FDBnm+I=p{tkIUI;~UkpELV]',
+    installedPacks: [],
+    isSending: false,
+    linkPreview: undefined,
+    me: getDefaultConversation(),
+    onClose: action('onClose'),
+    onDeleteList: action('onDeleteList'),
+    onDistributionListCreated: undefined,
+    onHideMyStoriesFrom: action('onHideMyStoriesFrom'),
+    onSend: action('onSend'),
+    onEmojiSkinToneDefaultChange: action('onEmojiSkinToneDefaultChange'),
+    onUseEmoji: action('onUseEmoji'),
+    onViewersUpdated: action('onViewersUpdated'),
+    processAttachment: undefined,
+    recentEmojis: [],
+    recentStickers: [],
+    sendStoryModalOpenStateChanged: action('sendStoryModalOpenStateChanged'),
+    setMyStoriesToAllSignalConnections: action(
+      'setMyStoriesToAllSignalConnections'
+    ),
+    signalConnections: Array.from(Array(42), getDefaultConversation),
+    emojiSkinToneDefault: EmojiSkinTone.None,
+    toggleSignalConnectionsModal: action('toggleSignalConnectionsModal'),
   },
-} as Meta;
+} satisfies Meta<PropsType>;
 
-const Template: Story<PropsType> = args => <StoryCreator {...args} />;
+// eslint-disable-next-line react/function-component-definition
+const Template: StoryFn<PropsType> = args => <StoryCreator {...args} />;
 
 export const Default = Template.bind({});
 Default.args = {};
-Default.story = {
-  name: 'w/o Link Preview available',
-};
 
 export const LinkPreview = Template.bind({});
 LinkPreview.args = {
@@ -85,18 +70,13 @@ LinkPreview.args = {
     }),
     title: 'Cats & Kittens LOL',
     url: 'https://www.catsandkittens.lolcats/kittens/page/1',
+    isCallLink: false,
   },
-};
-LinkPreview.story = {
-  name: 'with Link Preview ready to be applied',
 };
 
 export const FirstTime = Template.bind({});
 FirstTime.args = {
   hasFirstStoryPostExperience: true,
-};
-FirstTime.story = {
-  name: 'First time posting a story',
 };
 
 export const Sending = Template.bind({});

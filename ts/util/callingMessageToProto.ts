@@ -1,8 +1,9 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { CallingMessage } from 'ringrtc';
-import { CallMessageUrgency } from 'ringrtc';
+import type { CallingMessage } from '@signalapp/ringrtc';
+import { CallMessageUrgency } from '@signalapp/ringrtc';
+import Long from 'long';
 import { SignalService as Proto } from '../protobuf';
 import * as log from '../logging/log';
 import { missingCaseError } from './missingCaseError';
@@ -12,16 +13,14 @@ export function callingMessageToProto(
     offer,
     answer,
     iceCandidates,
-    legacyHangup,
     busy,
     hangup,
-    supportsMultiRing,
     destinationDeviceId,
     opaque,
   }: CallingMessage,
   urgency?: CallMessageUrgency
-): Proto.ICallingMessage {
-  let opaqueField: undefined | Proto.CallingMessage.IOpaque;
+): Proto.ICallMessage {
+  let opaqueField: undefined | Proto.CallMessage.IOpaque;
   if (opaque) {
     opaqueField = {
       ...opaque,
@@ -39,6 +38,7 @@ export function callingMessageToProto(
     offer: offer
       ? {
           ...offer,
+          id: Long.fromValue(offer.callId),
           type: offer.type as number,
           opaque: bufferToProto(offer.opaque),
         }
@@ -46,31 +46,32 @@ export function callingMessageToProto(
     answer: answer
       ? {
           ...answer,
+          id: Long.fromValue(answer.callId),
           opaque: bufferToProto(answer.opaque),
         }
       : undefined,
-    iceCandidates: iceCandidates
-      ? iceCandidates.map(candidate => {
+    iceUpdate: iceCandidates
+      ? iceCandidates.map((candidate): Proto.CallMessage.IIceUpdate => {
           return {
             ...candidate,
+            id: Long.fromValue(candidate.callId),
             opaque: bufferToProto(candidate.opaque),
           };
         })
       : undefined,
-    legacyHangup: legacyHangup
+    busy: busy
       ? {
-          ...legacyHangup,
-          type: legacyHangup.type as number,
+          ...busy,
+          id: Long.fromValue(busy.callId),
         }
       : undefined,
-    busy,
     hangup: hangup
       ? {
           ...hangup,
+          id: Long.fromValue(hangup.callId),
           type: hangup.type as number,
         }
       : undefined,
-    supportsMultiRing,
     destinationDeviceId,
     opaque: opaqueField,
   };
@@ -91,14 +92,14 @@ function bufferToProto(
 
 function urgencyToProto(
   urgency: CallMessageUrgency
-): Proto.CallingMessage.Opaque.Urgency {
+): Proto.CallMessage.Opaque.Urgency {
   switch (urgency) {
     case CallMessageUrgency.Droppable:
-      return Proto.CallingMessage.Opaque.Urgency.DROPPABLE;
+      return Proto.CallMessage.Opaque.Urgency.DROPPABLE;
     case CallMessageUrgency.HandleImmediately:
-      return Proto.CallingMessage.Opaque.Urgency.HANDLE_IMMEDIATELY;
+      return Proto.CallMessage.Opaque.Urgency.HANDLE_IMMEDIATELY;
     default:
       log.error(missingCaseError(urgency));
-      return Proto.CallingMessage.Opaque.Urgency.DROPPABLE;
+      return Proto.CallMessage.Opaque.Urgency.DROPPABLE;
   }
 }

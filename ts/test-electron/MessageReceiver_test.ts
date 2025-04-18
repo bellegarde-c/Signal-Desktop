@@ -1,36 +1,36 @@
-// Copyright 2015-2021 Signal Messenger, LLC
+// Copyright 2015 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /* eslint-disable @typescript-eslint/no-empty-function */
 
 import { assert } from 'chai';
-import { v4 as getGuid } from 'uuid';
 import Long from 'long';
 
 import MessageReceiver from '../textsecure/MessageReceiver';
-import { IncomingWebSocketRequest } from '../textsecure/WebsocketResources';
-import type { WebAPIType } from '../textsecure/WebAPI';
+import { IncomingWebSocketRequestLegacy } from '../textsecure/WebsocketResources';
 import type { DecryptionErrorEvent } from '../textsecure/messageReceiverEvents';
+import { generateAci } from '../types/ServiceId';
+import type { AciString } from '../types/ServiceId';
 import { SignalService as Proto } from '../protobuf';
 import * as Crypto from '../Crypto';
 
 describe('MessageReceiver', () => {
-  const uuid = 'aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee';
+  const someAci = generateAci();
   const deviceId = 1;
 
-  let oldUuid: string | undefined;
+  let oldAci: AciString | undefined;
   let oldDeviceId: number | undefined;
 
   beforeEach(async () => {
-    oldUuid = window.storage.user.getUuid()?.toString();
+    oldAci = window.storage.user.getAci();
     oldDeviceId = window.storage.user.getDeviceId();
-    await window.storage.user.setUuidAndDeviceId(getGuid(), 2);
+    await window.storage.user.setAciAndDeviceId(generateAci(), 2);
     await window.storage.protocol.hydrateCaches();
   });
 
   afterEach(async () => {
-    if (oldUuid !== undefined && oldDeviceId !== undefined) {
-      await window.storage.user.setUuidAndDeviceId(oldUuid, oldDeviceId);
+    if (oldAci !== undefined && oldDeviceId !== undefined) {
+      await window.storage.user.setAciAndDeviceId(oldAci, oldDeviceId);
     }
     await window.storage.protocol.removeAllUnprocessed();
   });
@@ -38,21 +38,20 @@ describe('MessageReceiver', () => {
   describe('connecting', () => {
     it('generates decryption-error event when it cannot decrypt', async () => {
       const messageReceiver = new MessageReceiver({
-        server: {} as WebAPIType,
         storage: window.storage,
         serverTrustRoot: 'AAAAAAAA',
       });
 
       const body = Proto.Envelope.encode({
         type: Proto.Envelope.Type.CIPHERTEXT,
-        sourceUuid: uuid,
+        sourceServiceId: someAci,
         sourceDevice: deviceId,
         timestamp: Long.fromNumber(Date.now()),
         content: Crypto.getRandomBytes(200),
       }).finish();
 
       messageReceiver.handleRequest(
-        new IncomingWebSocketRequest(
+        new IncomingWebSocketRequestLegacy(
           {
             id: Long.fromNumber(1),
             verb: 'PUT',
@@ -68,7 +67,7 @@ describe('MessageReceiver', () => {
         messageReceiver.addEventListener(
           'decryption-error',
           (error: DecryptionErrorEvent) => {
-            assert.strictEqual(error.decryptionError.senderUuid, uuid);
+            assert.strictEqual(error.decryptionError.senderAci, someAci);
             assert.strictEqual(error.decryptionError.senderDevice, deviceId);
             resolve();
           }

@@ -5,15 +5,14 @@ import React from 'react';
 
 import { action } from '@storybook/addon-actions';
 
-import enMessages from '../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import { AvatarColors } from '../types/Colors';
 import { GroupAvatarIcons, PersonalAvatarIcons } from '../types/Avatar';
 import type { PropsType } from './BetterAvatar';
 import { BetterAvatar } from './BetterAvatar';
 import { createAvatarData } from '../util/createAvatarData';
-import { setupI18n } from '../util/setupI18n';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   avatarData:
@@ -28,37 +27,43 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/BetterAvatar',
-};
+} satisfies Meta<PropsType>;
 
-export const Text = (): JSX.Element => (
-  <BetterAvatar
-    {...createProps({
-      avatarData: createAvatarData({
-        color: AvatarColors[0],
-        text: 'AH',
-      }),
-    })}
-  />
-);
+export function Text(): JSX.Element {
+  return (
+    <BetterAvatar
+      {...createProps({
+        avatarData: createAvatarData({
+          color: AvatarColors[0],
+          text: 'AH',
+        }),
+      })}
+    />
+  );
+}
 
-export const PersonalIcon = (): JSX.Element => (
-  <BetterAvatar
-    {...createProps({
-      avatarData: createAvatarData({
-        color: AvatarColors[1],
-        icon: PersonalAvatarIcons[1],
-      }),
-    })}
-  />
-);
+export function PersonalIcon(): JSX.Element {
+  return (
+    <BetterAvatar
+      {...createProps({
+        avatarData: createAvatarData({
+          color: AvatarColors[1],
+          icon: PersonalAvatarIcons[1],
+        }),
+      })}
+    />
+  );
+}
 
-export const GroupIcon = (): JSX.Element => (
-  <BetterAvatar
-    {...createProps({
-      avatarData: createAvatarData({
-        color: AvatarColors[1],
-        icon: GroupAvatarIcons[1],
-      }),
-    })}
-  />
-);
+export function GroupIcon(): JSX.Element {
+  return (
+    <BetterAvatar
+      {...createProps({
+        avatarData: createAvatarData({
+          color: AvatarColors[1],
+          icon: GroupAvatarIcons[1],
+        }),
+      })}
+    />
+  );
+}

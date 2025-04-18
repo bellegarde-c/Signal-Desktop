@@ -19,7 +19,9 @@ import type {
   GroupUpdateJobData,
   ConversationQueueJobBundle,
 } from '../conversationJobQueue';
-import { getUntrustedConversationUuids } from './getUntrustedConversationUuids';
+import { getUntrustedConversationServiceIds } from './getUntrustedConversationServiceIds';
+import { sendToGroup } from '../../util/sendToGroup';
+import { getValidRecipients } from './getValidRecipients';
 
 // Note: because we don't have a recipient map, if some sends fail, we will resend this
 //   message to folks that got it on the first go-round. This is okay, because receivers
@@ -35,32 +37,34 @@ export async function sendGroupUpdate(
   }: ConversationQueueJobBundle,
   data: GroupUpdateJobData
 ): Promise<void> {
+  const logId = `sendGroupUpdate/${conversation.idForLogging()}`;
+
   if (!shouldContinue) {
-    log.info('Ran out of time. Giving up on sending group update');
+    log.info(`${logId}: Ran out of time. Giving up on sending group update`);
     return;
   }
 
   if (!isGroupV2(conversation.attributes)) {
     log.error(
-      `Conversation ${conversation.idForLogging()} is not GroupV2, cannot send group update!`
+      `${logId}: Conversation is not GroupV2, cannot send group update!`
     );
     return;
   }
 
-  log.info(
-    `Starting group update for ${conversation.idForLogging()} with timestamp ${timestamp}`
-  );
+  log.info(`${logId}: starting with timestamp ${timestamp}`);
 
-  const { groupChangeBase64, recipients, revision } = data;
+  const { groupChangeBase64, recipients: jobRecipients, revision } = data;
 
-  const untrustedUuids = getUntrustedConversationUuids(recipients);
-  if (untrustedUuids.length) {
+  const recipients = getValidRecipients(jobRecipients, { log, logId });
+
+  const untrustedServiceIds = getUntrustedConversationServiceIds(recipients);
+  if (untrustedServiceIds.length) {
     window.reduxActions.conversations.conversationStoppedByMissingVerification({
       conversationId: conversation.id,
-      untrustedUuids,
+      untrustedServiceIds,
     });
     throw new Error(
-      `Group update blocked because ${untrustedUuids.length} conversation(s) were untrusted. Failing this attempt.`
+      `Group update blocked because ${untrustedServiceIds.length} conversation(s) were untrusted. Failing this attempt.`
     );
   }
 
@@ -69,7 +73,6 @@ export async function sendGroupUpdate(
   const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
   const contentHint = ContentHint.RESENDABLE;
   const sendType = 'groupChange';
-  const logId = `sendGroupUpdate/${conversation.idForLogging()}`;
 
   const groupChange = groupChangeBase64
     ? Bytes.fromBase64(groupChangeBase64)
@@ -98,7 +101,7 @@ export async function sendGroupUpdate(
           logId,
           messageIds: [],
           send: async () =>
-            window.Signal.Util.sendToGroup({
+            sendToGroup({
               abortSignal,
               groupSendOptions: {
                 groupV2,

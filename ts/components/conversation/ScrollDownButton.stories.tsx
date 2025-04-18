@@ -2,20 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import type { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
 
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
-import type { Props } from './ScrollDownButton';
-import { ScrollDownButton } from './ScrollDownButton';
+import type { ScrollDownButtonPropsType } from './ScrollDownButton';
+import { ScrollDownButton, ScrollDownButtonVariant } from './ScrollDownButton';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
+const createProps = (
+  overrideProps: Partial<ScrollDownButtonPropsType> = {}
+): ScrollDownButtonPropsType => ({
+  variant: ScrollDownButtonVariant.UNREAD_MESSAGES,
   i18n,
-  scrollDown: action('scrollDown'),
-  conversationId: 'fake-conversation-id',
+  onClick: action('scrollDown'),
   ...overrideProps,
 });
 
@@ -23,22 +23,24 @@ export default {
   title: 'Components/Conversation/ScrollDownButton',
   component: ScrollDownButton,
   argTypes: {
-    unreadCount: {
+    count: {
       control: { type: 'radio' },
-      options: {
-        None: undefined,
-        Some: 5,
-        Plenty: 85,
-        'Please Stop': 1000,
-      },
+      options: [undefined, 5, 85, 1000],
     },
   },
-} as Meta;
+} satisfies Meta<ScrollDownButtonPropsType>;
 
-const Template: Story<Props> = args => <ScrollDownButton {...args} />;
+// eslint-disable-next-line react/function-component-definition
+const Template: StoryFn<ScrollDownButtonPropsType> = args => (
+  <ScrollDownButton {...args} />
+);
 
-export const Default = Template.bind({});
-Default.args = createProps({});
-Default.story = {
-  name: 'Default',
-};
+export const UnreadMessages = Template.bind({});
+UnreadMessages.args = createProps({
+  variant: ScrollDownButtonVariant.UNREAD_MESSAGES,
+});
+
+export const UnreadMentions = Template.bind({});
+UnreadMentions.args = createProps({
+  variant: ScrollDownButtonVariant.UNREAD_MENTIONS,
+});

@@ -1,33 +1,49 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { omit } from 'lodash';
+import type { ReadonlyDeep } from 'type-fest';
 
 import { SignalService as Proto } from '../protobuf';
-import type { MessageAttributesType } from '../model-types.d';
+import type { ReadonlyMessageAttributesType } from '../model-types.d';
 
 import { isNotNil } from '../util/isNotNil';
 import {
   format as formatPhoneNumber,
-  parse as parsePhoneNumber,
+  normalize as normalizePhoneNumber,
 } from './PhoneNumber';
-import type { AttachmentType, migrateDataToFileSystem } from './Attachment';
+import type {
+  AttachmentType,
+  AttachmentForUIType,
+  AttachmentWithHydratedData,
+  LocalAttachmentV2Type,
+  UploadedAttachmentType,
+} from './Attachment';
 import { toLogFormat } from './errors';
 import type { LoggerType } from './Logging';
-import type { UUIDStringType } from './UUID';
+import type { ServiceIdString } from './ServiceId';
+import type { migrateDataToFileSystem } from '../util/attachments/migrateDataToFilesystem';
+import { getLocalAttachmentUrl } from '../util/getLocalAttachmentUrl';
 
-export type EmbeddedContactType = {
+type GenericEmbeddedContactType<AvatarType> = {
   name?: Name;
-  number?: Array<Phone>;
-  email?: Array<Email>;
-  address?: Array<PostalAddress>;
-  avatar?: Avatar;
+  number?: ReadonlyArray<Phone>;
+  email?: ReadonlyArray<Email>;
+  address?: ReadonlyArray<PostalAddress>;
+  avatar?: AvatarType;
   organization?: string;
 
   // Populated by selector
   firstNumber?: string;
-  uuid?: UUIDStringType;
+  serviceId?: ServiceIdString;
 };
+
+export type EmbeddedContactType = GenericEmbeddedContactType<Avatar>;
+export type EmbeddedContactForUIType = GenericEmbeddedContactType<AvatarForUI>;
+export type EmbeddedContactWithHydratedAvatar =
+  GenericEmbeddedContactType<AvatarWithHydratedData>;
+export type EmbeddedContactWithUploadedAvatar =
+  GenericEmbeddedContactType<UploadedAvatar>;
 
 type Name = {
   givenName?: string;
@@ -35,7 +51,7 @@ type Name = {
   prefix?: string;
   suffix?: string;
   middleName?: string;
-  displayName?: string;
+  nickname?: string;
 };
 
 export enum ContactFormType {
@@ -75,10 +91,15 @@ export type PostalAddress = {
   country?: string;
 };
 
-export type Avatar = {
-  avatar: AttachmentType;
+type GenericAvatar<Attachment> = {
+  avatar: Attachment;
   isProfile: boolean;
 };
+
+export type Avatar = GenericAvatar<AttachmentType>;
+export type AvatarForUI = GenericAvatar<AttachmentForUIType>;
+export type AvatarWithHydratedData = GenericAvatar<AttachmentWithHydratedData>;
+export type UploadedAvatar = GenericAvatar<UploadedAttachmentType>;
 
 const DEFAULT_PHONE_TYPE = Proto.DataMessage.Contact.Phone.Type.HOME;
 const DEFAULT_EMAIL_TYPE = Proto.DataMessage.Contact.Email.Type.HOME;
@@ -130,28 +151,31 @@ export function numberToAddressType(
 }
 
 export function embeddedContactSelector(
-  contact: EmbeddedContactType,
+  contact: ReadonlyDeep<EmbeddedContactType>,
   options: {
     regionCode?: string;
     firstNumber?: string;
-    uuid?: UUIDStringType;
-    getAbsoluteAttachmentPath: (path: string) => string;
+    serviceId?: ServiceIdString;
   }
-): EmbeddedContactType {
-  const { getAbsoluteAttachmentPath, firstNumber, uuid, regionCode } = options;
+): ReadonlyDeep<EmbeddedContactForUIType> {
+  const { firstNumber, serviceId, regionCode } = options;
 
-  let { avatar } = contact;
+  const { avatar } = contact;
+  let avatarForUI: EmbeddedContactForUIType['avatar'];
   if (avatar && avatar.avatar) {
     if (avatar.avatar.error) {
-      avatar = undefined;
+      avatarForUI = undefined;
     } else {
-      avatar = {
+      avatarForUI = {
         ...avatar,
         avatar: {
           ...avatar.avatar,
           path: avatar.avatar.path
-            ? getAbsoluteAttachmentPath(avatar.avatar.path)
+            ? getLocalAttachmentUrl(avatar.avatar)
             : undefined,
+
+          // `error` case is handled above
+          isPermanentlyUndownloadable: false,
         },
       };
     }
@@ -160,8 +184,8 @@ export function embeddedContactSelector(
   return {
     ...contact,
     firstNumber,
-    uuid,
-    avatar,
+    serviceId,
+    avatar: avatarForUI,
     number:
       contact.number &&
       contact.number.map(item => ({
@@ -173,15 +197,31 @@ export function embeddedContactSelector(
   };
 }
 
-export function getName(contact: EmbeddedContactType): string | undefined {
-  const { name, organization } = contact;
-  const displayName = (name && name.displayName) || undefined;
+export function getDisplayName({
+  name,
+  organization,
+}: ReadonlyDeep<EmbeddedContactType>): string | undefined {
+  // See https://github.com/signalapp/Signal-iOS-Private/blob/210a46037f12cdc6ad97ac6dceb64fbc43469f67/SignalServiceKit/Messages/Interactions/ContactShare/OWSContactName.swift#L87-L104
+  if (name?.nickname) {
+    return name.nickname;
+  }
+  if (name?.givenName && name?.familyName) {
+    return `${name.givenName} ${name.familyName}`;
+  }
+  if (organization) {
+    return organization;
+  }
+  return undefined;
+}
+
+export function getName(
+  contact: ReadonlyDeep<EmbeddedContactType>
+): string | undefined {
+  const { name } = contact;
   const givenName = (name && name.givenName) || undefined;
   const familyName = (name && name.familyName) || undefined;
-  const backupName =
-    (givenName && familyName && `${givenName} ${familyName}`) || undefined;
 
-  return displayName || organization || backupName || givenName || familyName;
+  return getDisplayName(contact) || givenName || familyName;
 }
 
 export function parseAndWriteAvatar(
@@ -190,13 +230,15 @@ export function parseAndWriteAvatar(
   return async (
     contact: EmbeddedContactType,
     context: {
-      message: MessageAttributesType;
       getRegionCode: () => string | undefined;
       logger: LoggerType;
-      writeNewAttachmentData: (data: Uint8Array) => Promise<string>;
-    }
+      writeNewAttachmentData: (
+        data: Uint8Array
+      ) => Promise<LocalAttachmentV2Type>;
+    },
+    message: ReadonlyMessageAttributesType
   ): Promise<EmbeddedContactType> => {
-    const { message, getRegionCode, logger } = context;
+    const { getRegionCode, logger } = context;
     const { avatar } = contact;
 
     const contactWithUpdatedAvatar =
@@ -262,7 +304,7 @@ function parseContact(
   return result;
 }
 
-function idForLogging(message: MessageAttributesType): string {
+function idForLogging(message: ReadonlyMessageAttributesType): string {
   return `${message.source}.${message.sourceDevice} ${message.sent_at}`;
 }
 
@@ -271,28 +313,18 @@ export function _validate(
   contact: EmbeddedContactType,
   { messageId }: { messageId: string }
 ): Error | undefined {
-  const { name, number, email, address, organization } = contact;
+  const { organization } = contact;
 
-  if ((!name || !name.displayName) && !organization) {
+  if (!getDisplayName(contact) && !organization) {
     return new Error(
       `Message ${messageId}: Contact had neither 'displayName' nor 'organization'`
-    );
-  }
-
-  if (
-    (!number || !number.length) &&
-    (!email || !email.length) &&
-    (!address || !address.length)
-  ) {
-    return new Error(
-      `Message ${messageId}: Contact had no included numbers, email or addresses`
     );
   }
 
   return undefined;
 }
 
-function parsePhoneItem(
+export function parsePhoneItem(
   item: Phone,
   { regionCode }: { regionCode: string | undefined }
 ): Phone | undefined {
@@ -300,10 +332,14 @@ function parsePhoneItem(
     return undefined;
   }
 
+  const value = regionCode
+    ? normalizePhoneNumber(item.value, { regionCode })
+    : item.value;
+
   return {
     ...item,
     type: item.type || DEFAULT_PHONE_TYPE,
-    value: parsePhoneNumber(item.value, { regionCode }),
+    value: value ?? item.value,
   };
 }
 

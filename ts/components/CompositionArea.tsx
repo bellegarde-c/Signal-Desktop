@@ -1,19 +1,18 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { MutableRefObject } from 'react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { get } from 'lodash';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
+import type { ReadonlyDeep } from 'type-fest';
 import type {
-  BodyRangeType,
-  BodyRangesType,
-  LocalizerType,
-  ThemeType,
-} from '../types/Util';
-import type { ErrorDialogAudioRecorderType } from '../state/ducks/audioRecorder';
-import { RecordingState } from '../state/ducks/audioRecorder';
-import type { HandleAttachmentsProcessingArgsType } from '../util/handleAttachmentsProcessing';
+  DraftBodyRanges,
+  HydratedBodyRangesType,
+} from '../types/BodyRange';
+import type { LocalizerType, ThemeType } from '../types/Util';
+import type { ErrorDialogAudioRecorderType } from '../types/AudioRecorder';
+import { RecordingState } from '../types/AudioRecorder';
+import type { imageToBlurHash } from '../util/imageToBlurHash';
+import { dropNull } from '../util/dropNull';
 import { Spinner } from './Spinner';
 import type {
   Props as EmojiButtonProps,
@@ -39,112 +38,201 @@ import type {
   AttachmentDraftType,
   InMemoryAttachmentDraftType,
 } from '../types/Attachment';
-import { isImageAttachment } from '../types/Attachment';
+import { isImageAttachment, isVoiceMessage } from '../types/Attachment';
+import type { AciString } from '../types/ServiceId';
 import { AudioCapture } from './conversation/AudioCapture';
 import { CompositionUpload } from './CompositionUpload';
-import type { ConversationType } from '../state/ducks/conversations';
+import type {
+  ConversationRemovalStage,
+  ConversationType,
+  PushPanelForConversationActionType,
+  ShowConversationType,
+} from '../state/ducks/conversations';
 import type { EmojiPickDataType } from './emoji/EmojiPicker';
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews';
+import { isSameLinkPreview } from '../types/message/LinkPreviews';
 
 import { MandatoryProfileSharingActions } from './conversation/MandatoryProfileSharingActions';
 import { MediaQualitySelector } from './MediaQualitySelector';
 import type { Props as QuoteProps } from './conversation/Quote';
 import { Quote } from './conversation/Quote';
-import { StagedLinkPreview } from './conversation/StagedLinkPreview';
 import { countStickers } from './stickers/lib';
 import {
   useAttachFileShortcut,
-  useKeyboardShortcuts,
+  useEditLastMessageSent,
+  useKeyboardShortcutsConditionally,
 } from '../hooks/useKeyboardShortcuts';
 import { MediaEditor } from './MediaEditor';
-import { IMAGE_PNG } from '../types/MIME';
 import { isImageTypeSupported } from '../util/GoogleChrome';
 import * as KeyboardLayout from '../services/keyboardLayout';
-
-export type CompositionAPIType =
-  | {
-      focusInput: () => void;
-      isDirty: () => boolean;
-      setDisabled: (disabled: boolean) => void;
-      reset: InputApi['reset'];
-      resetEmojiResults: InputApi['resetEmojiResults'];
-    }
-  | undefined;
+import { usePrevious } from '../hooks/usePrevious';
+import { PanelType } from '../types/Panels';
+import type { SmartCompositionRecordingDraftProps } from '../state/smart/CompositionRecordingDraft';
+import { useEscapeHandling } from '../hooks/useEscapeHandling';
+import type { SmartCompositionRecordingProps } from '../state/smart/CompositionRecording';
+import SelectModeActions from './conversation/SelectModeActions';
+import type { ShowToastAction } from '../state/ducks/toast';
+import type { DraftEditMessageType } from '../model-types.d';
+import type { ForwardMessagesPayload } from '../state/ducks/globalModals';
+import { ForwardMessagesModalType } from './ForwardMessagesModal';
+import { SignalConversationMuteToggle } from './conversation/SignalConversationMuteToggle';
+import { FunPicker } from './fun/FunPicker';
+import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis';
+import type { FunStickerSelection } from './fun/panels/FunPanelStickers';
+import type { FunGifSelection } from './fun/panels/FunPanelGifs';
+import type { SmartDraftGifMessageSendModalProps } from '../state/smart/DraftGifMessageSendModal';
+import { strictAssert } from '../util/assert';
+import { ConfirmationDialog } from './ConfirmationDialog';
+import type { EmojiSkinTone } from './fun/data/emojis';
+import type { StickerPackType, StickerType } from '../state/ducks/stickers';
+import { FunPickerButton } from './fun/FunButton';
+import { isFunPickerEnabled } from './fun/isFunPickerEnabled';
 
 export type OwnProps = Readonly<{
-  acceptedMessageRequest?: boolean;
+  acceptedMessageRequest: boolean | null;
+  removalStage: ConversationRemovalStage | null;
   addAttachment: (
     conversationId: string,
     attachment: InMemoryAttachmentDraftType
   ) => unknown;
-  addPendingAttachment: (
-    conversationId: string,
-    pendingAttachment: AttachmentDraftType
-  ) => unknown;
-  announcementsOnly?: boolean;
-  areWeAdmin?: boolean;
-  areWePending?: boolean;
-  areWePendingApproval?: boolean;
+  announcementsOnly: boolean | null;
+  areWeAdmin: boolean | null;
+  areWePending: boolean | null;
+  areWePendingApproval: boolean | null;
+  sharedGroupNames?: ReadonlyArray<string>;
   cancelRecording: () => unknown;
   completeRecording: (
     conversationId: string,
-    onSendAudioRecording?: (rec: InMemoryAttachmentDraftType) => unknown
+    onRecordingComplete: (rec: InMemoryAttachmentDraftType) => unknown
   ) => unknown;
-  compositionApi?: MutableRefObject<CompositionAPIType>;
+  convertDraftBodyRangesIntoHydrated: (
+    bodyRanges: DraftBodyRanges | undefined
+  ) => HydratedBodyRangesType | undefined;
   conversationId: string;
+  discardEditMessage: (id: string) => unknown;
+  draftEditMessage: DraftEditMessageType | null;
   draftAttachments: ReadonlyArray<AttachmentDraftType>;
-  errorDialogAudioRecorderType?: ErrorDialogAudioRecorderType;
+  errorDialogAudioRecorderType: ErrorDialogAudioRecorderType | null;
   errorRecording: (e: ErrorDialogAudioRecorderType) => unknown;
+  focusCounter: number;
   groupAdmins: Array<ConversationType>;
-  groupVersion?: 1 | 2;
+  groupVersion: 1 | 2 | null;
   i18n: LocalizerType;
-  isFetchingUUID?: boolean;
-  isGroupV1AndDisabled?: boolean;
-  isMissingMandatoryProfileSharing?: boolean;
+  imageToBlurHash: typeof imageToBlurHash;
+  isDisabled: boolean;
+  isFetchingUUID: boolean | null;
+  isFormattingEnabled: boolean;
+  isGroupV1AndDisabled: boolean | null;
+  isMissingMandatoryProfileSharing: boolean | null;
+  isSignalConversation: boolean | null;
+  isActive: boolean;
+  lastEditableMessageId: string | null;
   recordingState: RecordingState;
-  isSMSOnly?: boolean;
-  left?: boolean;
+  messageCompositionId: string;
+  shouldHidePopovers: boolean | null;
+  isMuted: boolean;
+  isSmsOnlyOrUnregistered: boolean | null;
+  left: boolean | null;
   linkPreviewLoading: boolean;
-  linkPreviewResult?: LinkPreviewType;
-  messageRequestsEnabled?: boolean;
-  onClearAttachments(): unknown;
-  onClickQuotedMessage(): unknown;
-  onCloseLinkPreview(): unknown;
-  processAttachments: (options: HandleAttachmentsProcessingArgsType) => unknown;
-  onSelectMediaQuality(isHQ: boolean): unknown;
-  onSendMessage(options: {
-    draftAttachments?: ReadonlyArray<AttachmentDraftType>;
-    mentions?: BodyRangesType;
-    message?: string;
-    timestamp?: number;
-    voiceNoteAttachment?: InMemoryAttachmentDraftType;
-  }): unknown;
-  openConversation(conversationId: string): unknown;
-  quotedMessageProps?: Omit<
-    QuoteProps,
-    'i18n' | 'onClick' | 'onClose' | 'withContentAbove'
+  linkPreviewResult: LinkPreviewForUIType | null;
+  onClearAttachments(conversationId: string): unknown;
+  onCloseLinkPreview(conversationId: string): unknown;
+  platform: string;
+  showToast: ShowToastAction;
+  processAttachments: (options: {
+    conversationId: string;
+    files: ReadonlyArray<File>;
+    flags: number | null;
+  }) => unknown;
+  setMuteExpiration(conversationId: string, muteExpiresAt: number): unknown;
+  setMediaQualitySetting(conversationId: string, isHQ: boolean): unknown;
+  sendStickerMessage(
+    id: string,
+    opts: { packId: string; stickerId: number }
+  ): unknown;
+  sendEditedMessage(
+    conversationId: string,
+    options: {
+      bodyRanges?: DraftBodyRanges;
+      message?: string;
+      quoteAuthorAci?: AciString;
+      quoteSentAt?: number;
+      targetMessageId: string;
+    }
+  ): unknown;
+  sendMultiMediaMessage(
+    conversationId: string,
+    options: {
+      draftAttachments?: ReadonlyArray<AttachmentDraftType>;
+      bodyRanges?: DraftBodyRanges;
+      message?: string;
+      timestamp?: number;
+      voiceNoteAttachment?: InMemoryAttachmentDraftType;
+    }
+  ): unknown;
+  quotedMessageId: string | null;
+  quotedMessageProps: null | ReadonlyDeep<
+    Omit<
+      QuoteProps,
+      'i18n' | 'onClick' | 'onClose' | 'withContentAbove' | 'isCompose'
+    >
   >;
+  quotedMessageAuthorAci: AciString | null;
+  quotedMessageSentAt: number | null;
+
   removeAttachment: (conversationId: string, filePath: string) => unknown;
-  setQuotedMessage(message: undefined): unknown;
+  scrollToMessage: (conversationId: string, messageId: string) => unknown;
+  setComposerFocus: (conversationId: string) => unknown;
+  setMessageToEdit(conversationId: string, messageId: string): unknown;
+  setQuoteByMessageId(
+    conversationId: string,
+    messageId: string | undefined
+  ): unknown;
   shouldSendHighQualityAttachments: boolean;
-  startRecording: () => unknown;
+  showConversation: ShowConversationType;
+  startRecording: (id: string) => unknown;
   theme: ThemeType;
+  renderSmartCompositionRecording: (
+    props: SmartCompositionRecordingProps
+  ) => JSX.Element;
+  renderSmartCompositionRecordingDraft: (
+    props: SmartCompositionRecordingDraftProps
+  ) => JSX.Element | null;
+  selectedMessageIds: ReadonlyArray<string> | undefined;
+  toggleSelectMode: (on: boolean) => void;
+  toggleForwardMessagesModal: (
+    payload: ForwardMessagesPayload,
+    onForward: () => void
+  ) => void;
+  toggleDraftGifMessageSendModal: (
+    props: SmartDraftGifMessageSendModalProps | null
+  ) => void;
+
+  onPickEmoji: (e: EmojiPickDataType) => void;
+  emojiSkinToneDefault: EmojiSkinTone | null;
+  // StickerButton
+  installedPacks: ReadonlyArray<StickerPackType>;
+  recentStickers: ReadonlyArray<StickerType>;
 }>;
 
 export type Props = Pick<
   CompositionInputProps,
-  | 'sortedGroupMembers'
-  | 'onEditorStateChange'
-  | 'onTextTooLong'
   | 'draftText'
   | 'draftBodyRanges'
-  | 'clearQuotedMessage'
   | 'getPreferredBadge'
-  | 'getQuotedMessage'
+  | 'onEditorStateChange'
+  | 'onTextTooLong'
+  | 'ourConversationId'
+  | 'quotedMessageId'
+  | 'sendCounter'
+  | 'sortedGroupMembers'
 > &
   Pick<
     EmojiButtonProps,
-    'onPickEmoji' | 'onSetSkinTone' | 'recentEmojis' | 'skinTone'
+    | 'onPickEmoji'
+    | 'onEmojiSkinToneDefaultChange'
+    | 'recentEmojis'
+    | 'emojiSkinToneDefault'
   > &
   Pick<
     StickerButtonProps,
@@ -155,36 +243,51 @@ export type Props = Pick<
     | 'blessedPacks'
     | 'recentStickers'
     | 'clearInstalledStickerPack'
-    | 'onClickAddPack'
-    | 'onPickSticker'
+    | 'showIntroduction'
     | 'clearShowIntroduction'
     | 'showPickerHint'
     | 'clearShowPickerHint'
   > &
   MessageRequestActionsProps &
-  Pick<GroupV1DisabledActionsPropsType, 'onStartGroupMigration'> &
-  Pick<GroupV2PendingApprovalActionsPropsType, 'onCancelJoinRequest'> &
-  OwnProps;
+  Pick<GroupV1DisabledActionsPropsType, 'showGV2MigrationDialog'> &
+  Pick<GroupV2PendingApprovalActionsPropsType, 'cancelJoinRequest'> & {
+    pushPanelForConversation: PushPanelForConversationActionType;
+  } & OwnProps;
 
-export const CompositionArea = ({
+export const CompositionArea = memo(function CompositionArea({
   // Base props
   addAttachment,
-  addPendingAttachment,
   conversationId,
+  convertDraftBodyRangesIntoHydrated,
+  discardEditMessage,
+  draftEditMessage,
+  focusCounter,
   i18n,
-  onSendMessage,
+  imageToBlurHash,
+  isDisabled,
+  isSignalConversation,
+  isMuted,
+  isActive,
+  lastEditableMessageId,
+  messageCompositionId,
+  pushPanelForConversation,
+  platform,
   processAttachments,
   removeAttachment,
+  sendEditedMessage,
+  sendMultiMediaMessage,
+  setComposerFocus,
+  setMessageToEdit,
+  setQuoteByMessageId,
+  shouldHidePopovers,
+  showToast,
   theme,
+  setMuteExpiration,
 
   // AttachmentList
   draftAttachments,
   onClearAttachments,
   // AudioCapture
-  cancelRecording,
-  completeRecording,
-  errorDialogAudioRecorderType,
-  errorRecording,
   recordingState,
   startRecording,
   // StagedLinkPreview
@@ -192,27 +295,29 @@ export const CompositionArea = ({
   linkPreviewResult,
   onCloseLinkPreview,
   // Quote
+  quotedMessageId,
   quotedMessageProps,
-  onClickQuotedMessage,
-  setQuotedMessage,
+  quotedMessageAuthorAci,
+  quotedMessageSentAt,
+  scrollToMessage,
   // MediaQualitySelector
-  onSelectMediaQuality,
+  setMediaQualitySetting,
   shouldSendHighQualityAttachments,
   // CompositionInput
-  compositionApi,
+  draftBodyRanges,
+  draftText,
+  getPreferredBadge,
+  isFormattingEnabled,
   onEditorStateChange,
   onTextTooLong,
-  draftText,
-  draftBodyRanges,
-  clearQuotedMessage,
-  getPreferredBadge,
-  getQuotedMessage,
+  ourConversationId,
+  sendCounter,
   sortedGroupMembers,
   // EmojiButton
   onPickEmoji,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   recentEmojis,
-  skinTone,
+  emojiSkinToneDefault,
   // StickerButton
   knownPacks,
   receivedPacks,
@@ -221,8 +326,8 @@ export const CompositionArea = ({
   blessedPacks,
   recentStickers,
   clearInstalledStickerPack,
-  onClickAddPack,
-  onPickSticker,
+  sendStickerMessage,
+  showIntroduction,
   clearShowIntroduction,
   showPickerHint,
   clearShowPickerHint,
@@ -233,29 +338,40 @@ export const CompositionArea = ({
   conversationType,
   groupVersion,
   isBlocked,
+  isHidden,
+  isReported,
   isMissingMandatoryProfileSharing,
   left,
-  messageRequestsEnabled,
-  onAccept,
-  onBlock,
-  onBlockAndReportSpam,
-  onDelete,
-  onUnblock,
-  title,
+  removalStage,
+  acceptConversation,
+  blockConversation,
+  reportSpam,
+  blockAndReportSpam,
+  deleteConversation,
+  conversationName,
+  addedByName,
   // GroupV1 Disabled Actions
   isGroupV1AndDisabled,
-  onStartGroupMigration,
+  showGV2MigrationDialog,
   // GroupV2
   announcementsOnly,
   areWeAdmin,
   groupAdmins,
-  onCancelJoinRequest,
-  openConversation,
+  cancelJoinRequest,
+  showConversation,
   // SMS-only contacts
-  isSMSOnly,
+  isSmsOnlyOrUnregistered,
   isFetchingUUID,
-}: Props): JSX.Element => {
-  const [disabled, setDisabled] = useState(false);
+  sharedGroupNames,
+  renderSmartCompositionRecording,
+  renderSmartCompositionRecordingDraft,
+  // Selected messages
+  selectedMessageIds,
+  toggleSelectMode,
+  toggleForwardMessagesModal,
+  // DraftGifMessageSendModal
+  toggleDraftGifMessageSendModal,
+}: Props): JSX.Element | null {
   const [dirty, setDirty] = useState(false);
   const [large, setLarge] = useState(false);
   const [attachmentToEdit, setAttachmentToEdit] = useState<
@@ -272,18 +388,66 @@ export const CompositionArea = ({
     }
   }, [inputApiRef, setLarge]);
 
+  const draftEditMessageBody = draftEditMessage?.body;
+  const editedMessageId = draftEditMessage?.targetMessageId;
+
+  const canSend =
+    // Text or link preview edited
+    dirty ||
+    // Quote of edited message changed
+    (draftEditMessage != null &&
+      dropNull(draftEditMessage.quote?.messageId) !==
+        dropNull(quotedMessageId)) ||
+    // Link preview of edited message changed
+    (draftEditMessage != null &&
+      !isSameLinkPreview(linkPreviewResult, draftEditMessage?.preview)) ||
+    // Not edit message, but has attachments
+    (draftEditMessage == null && draftAttachments.length !== 0);
+
   const handleSubmit = useCallback(
-    (message: string, mentions: Array<BodyRangeType>, timestamp: number) => {
+    (
+      message: string,
+      bodyRanges: DraftBodyRanges,
+      timestamp: number
+    ): boolean => {
+      if (!canSend) {
+        return false;
+      }
+
       emojiButtonRef.current?.close();
-      onSendMessage({
-        draftAttachments,
-        mentions,
-        message,
-        timestamp,
-      });
+
+      if (editedMessageId) {
+        sendEditedMessage(conversationId, {
+          bodyRanges,
+          message,
+          // sent timestamp for the quote
+          quoteSentAt: quotedMessageSentAt ?? undefined,
+          quoteAuthorAci: quotedMessageAuthorAci ?? undefined,
+          targetMessageId: editedMessageId,
+        });
+      } else {
+        sendMultiMediaMessage(conversationId, {
+          draftAttachments,
+          bodyRanges,
+          message,
+          timestamp,
+        });
+      }
       setLarge(false);
+
+      return true;
     },
-    [draftAttachments, onSendMessage, setLarge]
+    [
+      conversationId,
+      canSend,
+      draftAttachments,
+      editedMessageId,
+      quotedMessageSentAt,
+      quotedMessageAuthorAci,
+      sendEditedMessage,
+      sendMultiMediaMessage,
+      setLarge,
+    ]
   );
 
   const launchAttachmentPicker = useCallback(() => {
@@ -304,14 +468,51 @@ export const CompositionArea = ({
     setAttachmentToEdit(attachment);
   }
 
-  const attachFileShortcut = useAttachFileShortcut(launchAttachmentPicker);
-  useKeyboardShortcuts(attachFileShortcut);
+  const isComposerEmpty =
+    !draftAttachments.length && !draftText && !draftEditMessage;
 
-  const focusInput = useCallback(() => {
+  const maybeEditMessage = useCallback(() => {
+    if (!isComposerEmpty || !lastEditableMessageId) {
+      return false;
+    }
+
+    setMessageToEdit(conversationId, lastEditableMessageId);
+    return true;
+  }, [
+    conversationId,
+    isComposerEmpty,
+    lastEditableMessageId,
+    setMessageToEdit,
+  ]);
+
+  const [hasFocus, setHasFocus] = useState(false);
+
+  const attachFileShortcut = useAttachFileShortcut(launchAttachmentPicker);
+  const editLastMessageSent = useEditLastMessageSent(maybeEditMessage);
+  useKeyboardShortcutsConditionally(
+    hasFocus,
+    attachFileShortcut,
+    editLastMessageSent
+  );
+
+  // Focus input on first mount
+  const previousFocusCounter = usePrevious<number | undefined>(
+    focusCounter,
+    focusCounter
+  );
+  useEffect(() => {
     if (inputApiRef.current) {
       inputApiRef.current.focus();
+      setHasFocus(true);
     }
-  }, [inputApiRef]);
+  }, []);
+  // Focus input whenever explicitly requested
+  useEffect(() => {
+    if (focusCounter !== previousFocusCounter && inputApiRef.current) {
+      inputApiRef.current.focus();
+      setHasFocus(true);
+    }
+  }, [inputApiRef, focusCounter, previousFocusCounter]);
 
   const withStickers =
     countStickers({
@@ -321,25 +522,27 @@ export const CompositionArea = ({
       receivedPacks,
     }) > 0;
 
-  if (compositionApi) {
-    // Using a React.MutableRefObject, so we need to reassign this prop.
-    // eslint-disable-next-line no-param-reassign
-    compositionApi.current = {
-      isDirty: () => dirty,
-      focusInput,
-      setDisabled,
-      reset: () => {
-        if (inputApiRef.current) {
-          inputApiRef.current.reset();
-        }
-      },
-      resetEmojiResults: () => {
-        if (inputApiRef.current) {
-          inputApiRef.current.resetEmojiResults();
-        }
-      },
-    };
-  }
+  const previousMessageCompositionId = usePrevious(
+    messageCompositionId,
+    messageCompositionId
+  );
+  const previousSendCounter = usePrevious(sendCounter, sendCounter);
+  useEffect(() => {
+    if (!inputApiRef.current) {
+      return;
+    }
+    if (
+      previousMessageCompositionId !== messageCompositionId ||
+      previousSendCounter !== sendCounter
+    ) {
+      inputApiRef.current.reset();
+    }
+  }, [
+    messageCompositionId,
+    sendCounter,
+    previousMessageCompositionId,
+    previousSendCounter,
+  ]);
 
   const insertEmoji = useCallback(
     (e: EmojiPickDataType) => {
@@ -351,34 +554,197 @@ export const CompositionArea = ({
     [inputApiRef, onPickEmoji]
   );
 
+  // We want to reset the state of Quill only if:
+  //
+  // - Our other device edits the message (edit history length would change)
+  // - User begins editing another message.
+  const editHistoryLength = draftEditMessage?.editHistoryLength;
+  const hasEditHistoryChanged =
+    usePrevious(editHistoryLength, editHistoryLength) !== editHistoryLength;
+  const hasEditedMessageChanged =
+    usePrevious(editedMessageId, editedMessageId) !== editedMessageId;
+
+  const hasEditDraftChanged = hasEditHistoryChanged || hasEditedMessageChanged;
+  useEffect(() => {
+    if (!hasEditDraftChanged) {
+      return;
+    }
+
+    inputApiRef.current?.setContents(
+      draftEditMessageBody ?? '',
+      draftBodyRanges ?? undefined,
+      true
+    );
+  }, [draftBodyRanges, draftEditMessageBody, hasEditDraftChanged]);
+
+  const previousConversationId = usePrevious(conversationId, conversationId);
+  useEffect(() => {
+    if (conversationId === previousConversationId) {
+      return;
+    }
+
+    if (!draftText) {
+      inputApiRef.current?.setContents('');
+      return;
+    }
+
+    inputApiRef.current?.setContents(
+      draftText,
+      draftBodyRanges ?? undefined,
+      true
+    );
+  }, [conversationId, draftBodyRanges, draftText, previousConversationId]);
+
   const handleToggleLarge = useCallback(() => {
     setLarge(l => !l);
   }, [setLarge]);
 
-  const shouldShowMicrophone = !large && !draftAttachments.length && !draftText;
+  const shouldShowMicrophone = !large && isComposerEmpty;
 
   const showMediaQualitySelector = draftAttachments.some(isImageAttachment);
 
+  const [funPickerOpen, setFunPickerOpen] = useState(false);
+
+  const handleFunPickerOpenChange = useCallback(
+    (open: boolean) => {
+      setFunPickerOpen(open);
+      if (!open) {
+        setComposerFocus(conversationId);
+      }
+    },
+    [conversationId, setComposerFocus]
+  );
+
+  const handleFunPickerSelectEmoji = useCallback(
+    (emojiSelection: FunEmojiSelection) => {
+      insertEmoji({
+        shortName: emojiSelection.englishShortName,
+        skinTone: emojiSelection.skinTone,
+      });
+    },
+    [insertEmoji]
+  );
+  const handleFunPickerSelectSticker = useCallback(
+    (stickerSelection: FunStickerSelection) => {
+      sendStickerMessage(conversationId, {
+        packId: stickerSelection.stickerPackId,
+        stickerId: stickerSelection.stickerId,
+      });
+    },
+    [sendStickerMessage, conversationId]
+  );
+
+  const [confirmGifSelection, setConfirmGifSelection] =
+    useState<FunGifSelection | null>(null);
+
+  const handleFunPickerSelectGif = useCallback(
+    async (gifSelection: FunGifSelection) => {
+      if (draftAttachments.length > 0) {
+        setConfirmGifSelection(gifSelection);
+      } else {
+        toggleDraftGifMessageSendModal({
+          conversationId,
+          previousComposerDraftText: draftText ?? '',
+          previousComposerDraftBodyRanges: draftBodyRanges ?? [],
+          gifSelection,
+        });
+      }
+    },
+    [
+      conversationId,
+      toggleDraftGifMessageSendModal,
+      draftText,
+      draftBodyRanges,
+      draftAttachments,
+    ]
+  );
+
+  const handleConfirmGifSelection = useCallback(() => {
+    strictAssert(confirmGifSelection != null, 'Need selected gif to confirm');
+    onClearAttachments(conversationId);
+    toggleDraftGifMessageSendModal({
+      conversationId,
+      previousComposerDraftText: draftText ?? '',
+      previousComposerDraftBodyRanges: draftBodyRanges ?? [],
+      gifSelection: confirmGifSelection,
+    });
+  }, [
+    confirmGifSelection,
+    conversationId,
+    toggleDraftGifMessageSendModal,
+    draftText,
+    draftBodyRanges,
+    onClearAttachments,
+  ]);
+
+  const handleCancelGifSelection = useCallback(() => {
+    setConfirmGifSelection(null);
+  }, []);
+
+  const handleFunPickerAddStickerPack = useCallback(() => {
+    pushPanelForConversation({
+      type: PanelType.StickerManager,
+    });
+  }, [pushPanelForConversation]);
+
   const leftHandSideButtonsFragment = (
     <>
-      <div className="CompositionArea__button-cell">
-        <EmojiButton
-          emojiButtonApi={emojiButtonRef}
+      {confirmGifSelection && (
+        <ConfirmationDialog
           i18n={i18n}
-          doSend={handleForceSend}
-          onPickEmoji={insertEmoji}
-          onClose={focusInput}
-          recentEmojis={recentEmojis}
-          skinTone={skinTone}
-          onSetSkinTone={onSetSkinTone}
-        />
-      </div>
+          dialogName="CompositionArea.ConfirmGifSelection"
+          hasXButton={false}
+          onClose={handleCancelGifSelection}
+          onCancel={handleCancelGifSelection}
+          title={i18n('icu:CompositionArea__ConfirmGifSelection__Title')}
+          actions={[
+            {
+              action: handleConfirmGifSelection,
+              style: 'affirmative',
+              text: i18n(
+                'icu:CompositionArea__ConfirmGifSelection__ReplaceButton'
+              ),
+            },
+          ]}
+        >
+          {i18n('icu:CompositionArea__ConfirmGifSelection__Body')}
+        </ConfirmationDialog>
+      )}
+      {isFunPickerEnabled() && (
+        <div className="CompositionArea__button-cell">
+          <FunPicker
+            placement="top start"
+            open={funPickerOpen}
+            onOpenChange={handleFunPickerOpenChange}
+            onSelectEmoji={handleFunPickerSelectEmoji}
+            onSelectSticker={handleFunPickerSelectSticker}
+            onSelectGif={handleFunPickerSelectGif}
+            onAddStickerPack={handleFunPickerAddStickerPack}
+          >
+            <FunPickerButton i18n={i18n} />
+          </FunPicker>
+        </div>
+      )}
+      {!isFunPickerEnabled() && (
+        <div className="CompositionArea__button-cell">
+          <EmojiButton
+            emojiButtonApi={emojiButtonRef}
+            i18n={i18n}
+            onPickEmoji={insertEmoji}
+            onClose={() => setComposerFocus(conversationId)}
+            recentEmojis={recentEmojis}
+            emojiSkinToneDefault={emojiSkinToneDefault}
+            onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+          />
+        </div>
+      )}
       {showMediaQualitySelector ? (
         <div className="CompositionArea__button-cell">
           <MediaQualitySelector
+            conversationId={conversationId}
             i18n={i18n}
             isHighQuality={shouldSendHighQualityAttachments}
-            onSelectQuality={onSelectMediaQuality}
+            onSelectQuality={setMediaQualitySetting}
           />
         </div>
       ) : null}
@@ -388,39 +754,50 @@ export const CompositionArea = ({
   const micButtonFragment = shouldShowMicrophone ? (
     <div className="CompositionArea__button-cell">
       <AudioCapture
-        cancelRecording={cancelRecording}
-        completeRecording={completeRecording}
         conversationId={conversationId}
         draftAttachments={draftAttachments}
-        errorDialogAudioRecorderType={errorDialogAudioRecorderType}
-        errorRecording={errorRecording}
         i18n={i18n}
-        recordingState={recordingState}
-        onSendAudioRecording={(
-          voiceNoteAttachment: InMemoryAttachmentDraftType
-        ) => {
-          emojiButtonRef.current?.close();
-          onSendMessage({ voiceNoteAttachment });
-        }}
+        showToast={showToast}
         startRecording={startRecording}
       />
     </div>
   ) : null;
 
+  const editMessageFragment = draftEditMessage ? (
+    <>
+      {large && <div className="CompositionArea__placeholder" />}
+      <div className="CompositionArea__button-cell CompositionArea__button-edit">
+        <button
+          aria-label={i18n('icu:CompositionArea__edit-action--discard')}
+          className="CompositionArea__edit-button CompositionArea__edit-button--discard"
+          onClick={() => discardEditMessage(conversationId)}
+          type="button"
+        />
+        <button
+          aria-label={i18n('icu:CompositionArea__edit-action--send')}
+          className="CompositionArea__edit-button CompositionArea__edit-button--accept"
+          disabled={!canSend}
+          onClick={() => inputApiRef.current?.submit()}
+          type="button"
+        />
+      </div>
+    </>
+  ) : null;
+
   const isRecording = recordingState === RecordingState.Recording;
   const attButton =
-    linkPreviewResult || isRecording ? undefined : (
+    draftEditMessage || linkPreviewResult || isRecording ? undefined : (
       <div className="CompositionArea__button-cell">
         <button
           type="button"
           className="CompositionArea__attach-file"
           onClick={launchAttachmentPicker}
-          aria-label={i18n('CompositionArea--attach-file')}
+          aria-label={i18n('icu:CompositionArea--attach-file')}
         />
       </div>
     );
 
-  const sendButtonFragment = (
+  const sendButtonFragment = !draftEditMessage ? (
     <>
       <div className="CompositionArea__placeholder" />
       <div className="CompositionArea__button-cell">
@@ -428,47 +805,55 @@ export const CompositionArea = ({
           type="button"
           className="CompositionArea__send-button"
           onClick={handleForceSend}
-          aria-label={i18n('sendMessageToContact')}
+          aria-label={i18n('icu:sendMessageToContact')}
         />
       </div>
     </>
-  );
+  ) : null;
 
   const stickerButtonPlacement = large ? 'top-start' : 'top-end';
-  const stickerButtonFragment = withStickers ? (
-    <div className="CompositionArea__button-cell">
-      <StickerButton
-        i18n={i18n}
-        knownPacks={knownPacks}
-        receivedPacks={receivedPacks}
-        installedPack={installedPack}
-        installedPacks={installedPacks}
-        blessedPacks={blessedPacks}
-        recentStickers={recentStickers}
-        clearInstalledStickerPack={clearInstalledStickerPack}
-        onClickAddPack={onClickAddPack}
-        onPickSticker={onPickSticker}
-        clearShowIntroduction={clearShowIntroduction}
-        showPickerHint={showPickerHint}
-        clearShowPickerHint={clearShowPickerHint}
-        position={stickerButtonPlacement}
-      />
-    </div>
-  ) : null;
+  const stickerButtonFragment =
+    !isFunPickerEnabled() && !draftEditMessage && withStickers ? (
+      <div className="CompositionArea__button-cell">
+        <StickerButton
+          i18n={i18n}
+          knownPacks={knownPacks}
+          receivedPacks={receivedPacks}
+          installedPack={installedPack}
+          installedPacks={installedPacks}
+          blessedPacks={blessedPacks}
+          recentStickers={recentStickers}
+          clearInstalledStickerPack={clearInstalledStickerPack}
+          onClickAddPack={() =>
+            pushPanelForConversation({
+              type: PanelType.StickerManager,
+            })
+          }
+          onPickSticker={(packId, stickerId) =>
+            sendStickerMessage(conversationId, { packId, stickerId })
+          }
+          showIntroduction={showIntroduction}
+          clearShowIntroduction={clearShowIntroduction}
+          showPickerHint={showPickerHint}
+          clearShowPickerHint={clearShowPickerHint}
+          position={stickerButtonPlacement}
+        />
+      </div>
+    ) : null;
 
   // Listen for cmd/ctrl-shift-x to toggle large composition mode
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const { shiftKey, ctrlKey, metaKey } = e;
       const key = KeyboardLayout.lookup(e);
-      // When using the ctrl key, `key` is `'X'`. When using the cmd key, `key` is `'x'`
-      const xKey = key === 'x' || key === 'X';
-      const commandKey = get(window, 'platform') === 'darwin' && metaKey;
-      const controlKey = get(window, 'platform') !== 'darwin' && ctrlKey;
+      // When using the ctrl key, `key` is `'K'`. When using the cmd key, `key` is `'k'`
+      const targetKey = key === 'k' || key === 'K';
+      const commandKey = platform === 'darwin' && metaKey;
+      const controlKey = platform !== 'darwin' && ctrlKey;
       const commandOrCtrl = commandKey || controlKey;
 
-      // cmd/ctrl-shift-x
-      if (xKey && shiftKey && commandOrCtrl) {
+      // cmd/ctrl-shift-k
+      if (targetKey && shiftKey && commandOrCtrl) {
         e.preventDefault();
         setLarge(x => !x);
       }
@@ -479,29 +864,104 @@ export const CompositionArea = ({
     return () => {
       document.removeEventListener('keydown', handler);
     };
-  }, [setLarge]);
+  }, [platform, setLarge]);
 
-  if (
-    isBlocked ||
-    areWePending ||
-    (messageRequestsEnabled && !acceptedMessageRequest)
-  ) {
+  const handleRecordingBeforeSend = useCallback(() => {
+    emojiButtonRef.current?.close();
+  }, [emojiButtonRef]);
+
+  const handleEscape = useCallback(() => {
+    if (linkPreviewResult) {
+      onCloseLinkPreview(conversationId);
+    } else if (quotedMessageId) {
+      setQuoteByMessageId(conversationId, undefined);
+    } else if (draftEditMessage) {
+      discardEditMessage(conversationId);
+    }
+  }, [
+    conversationId,
+    discardEditMessage,
+    draftEditMessage,
+    linkPreviewResult,
+    onCloseLinkPreview,
+    quotedMessageId,
+    setQuoteByMessageId,
+  ]);
+
+  useEscapeHandling(handleEscape);
+
+  if (isSignalConversation) {
     return (
-      <MessageRequestActions
+      <SignalConversationMuteToggle
+        conversationId={conversationId}
+        isMuted={isMuted}
         i18n={i18n}
-        conversationType={conversationType}
-        isBlocked={isBlocked}
-        onBlock={onBlock}
-        onBlockAndReportSpam={onBlockAndReportSpam}
-        onUnblock={onUnblock}
-        onDelete={onDelete}
-        onAccept={onAccept}
-        title={title}
+        setMuteExpiration={setMuteExpiration}
       />
     );
   }
 
-  if (conversationType === 'direct' && isSMSOnly) {
+  if (selectedMessageIds != null) {
+    return (
+      <SelectModeActions
+        i18n={i18n}
+        selectedMessageIds={selectedMessageIds}
+        onExitSelectMode={() => {
+          toggleSelectMode(false);
+        }}
+        onDeleteMessages={() => {
+          window.reduxActions.globalModals.toggleDeleteMessagesModal({
+            conversationId,
+            messageIds: selectedMessageIds,
+            onDelete() {
+              toggleSelectMode(false);
+            },
+          });
+        }}
+        onForwardMessages={() => {
+          if (selectedMessageIds.length > 0) {
+            toggleForwardMessagesModal(
+              {
+                type: ForwardMessagesModalType.Forward,
+                messageIds: selectedMessageIds,
+              },
+              () => {
+                toggleSelectMode(false);
+              }
+            );
+          }
+        }}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (
+    isBlocked ||
+    areWePending ||
+    (!acceptedMessageRequest && removalStage !== 'justNotification')
+  ) {
+    return (
+      <MessageRequestActions
+        addedByName={addedByName}
+        conversationType={conversationType}
+        conversationId={conversationId}
+        conversationName={conversationName}
+        i18n={i18n}
+        isBlocked={isBlocked}
+        isHidden={isHidden}
+        isReported={isReported}
+        sharedGroupNames={sharedGroupNames}
+        acceptConversation={acceptConversation}
+        reportSpam={reportSpam}
+        blockAndReportSpam={blockAndReportSpam}
+        blockConversation={blockConversation}
+        deleteConversation={deleteConversation}
+      />
+    );
+  }
+
+  if (conversationType === 'direct' && isSmsOnlyOrUnregistered) {
     return (
       <div
         className={classNames([
@@ -512,7 +972,7 @@ export const CompositionArea = ({
       >
         {isFetchingUUID ? (
           <Spinner
-            ariaLabel={i18n('CompositionArea--sms-only__spinner-label')}
+            ariaLabel={i18n('icu:CompositionArea--sms-only__spinner-label')}
             role="presentation"
             moduleClassName="module-image-spinner"
             svgSize="small"
@@ -520,10 +980,10 @@ export const CompositionArea = ({
         ) : (
           <>
             <h2 className="CompositionArea--sms-only__title">
-              {i18n('CompositionArea--sms-only__title')}
+              {i18n('icu:CompositionArea--sms-only__title')}
             </h2>
             <p className="CompositionArea--sms-only__body">
-              {i18n('CompositionArea--sms-only__body')}
+              {i18n('icu:CompositionArea--sms-only__body')}
             </p>
           </>
         )}
@@ -540,13 +1000,18 @@ export const CompositionArea = ({
   ) {
     return (
       <MandatoryProfileSharingActions
-        i18n={i18n}
+        addedByName={addedByName}
+        conversationId={conversationId}
         conversationType={conversationType}
-        onBlock={onBlock}
-        onBlockAndReportSpam={onBlockAndReportSpam}
-        onDelete={onDelete}
-        onAccept={onAccept}
-        title={title}
+        conversationName={conversationName}
+        i18n={i18n}
+        isBlocked={isBlocked}
+        isReported={isReported}
+        acceptConversation={acceptConversation}
+        reportSpam={reportSpam}
+        blockAndReportSpam={blockAndReportSpam}
+        blockConversation={blockConversation}
+        deleteConversation={deleteConversation}
       />
     );
   }
@@ -555,8 +1020,9 @@ export const CompositionArea = ({
   if (!left && isGroupV1AndDisabled) {
     return (
       <GroupV1DisabledActions
+        conversationId={conversationId}
         i18n={i18n}
-        onStartGroupMigration={onStartGroupMigration}
+        showGV2MigrationDialog={showGV2MigrationDialog}
       />
     );
   }
@@ -564,8 +1030,9 @@ export const CompositionArea = ({
   if (areWePendingApproval) {
     return (
       <GroupV2PendingApprovalActions
+        cancelJoinRequest={cancelJoinRequest}
+        conversationId={conversationId}
         i18n={i18n}
-        onCancelJoinRequest={onCancelJoinRequest}
       />
     );
   }
@@ -575,35 +1042,81 @@ export const CompositionArea = ({
       <AnnouncementsOnlyGroupBanner
         groupAdmins={groupAdmins}
         i18n={i18n}
-        openConversation={openConversation}
+        showConversation={showConversation}
         theme={theme}
       />
     );
   }
 
+  if (isRecording) {
+    return renderSmartCompositionRecording({
+      onBeforeSend: handleRecordingBeforeSend,
+    });
+  }
+
+  if (draftAttachments.length === 1 && isVoiceMessage(draftAttachments[0])) {
+    const voiceNoteAttachment = draftAttachments[0];
+
+    if (!voiceNoteAttachment.pending && voiceNoteAttachment.url) {
+      return renderSmartCompositionRecordingDraft({ voiceNoteAttachment });
+    }
+  }
+
   return (
     <div className="CompositionArea">
-      {attachmentToEdit && 'url' in attachmentToEdit && attachmentToEdit.url && (
-        <MediaEditor
-          i18n={i18n}
-          imageSrc={attachmentToEdit.url}
-          isSending={false}
-          onClose={() => setAttachmentToEdit(undefined)}
-          onDone={data => {
-            const newAttachment = {
-              ...attachmentToEdit,
-              contentType: IMAGE_PNG,
+      {attachmentToEdit &&
+        'url' in attachmentToEdit &&
+        attachmentToEdit.url && (
+          <MediaEditor
+            draftBodyRanges={draftBodyRanges}
+            draftText={draftText}
+            getPreferredBadge={getPreferredBadge}
+            i18n={i18n}
+            imageSrc={attachmentToEdit.url}
+            imageToBlurHash={imageToBlurHash}
+            installedPacks={installedPacks}
+            isFormattingEnabled={isFormattingEnabled}
+            isSending={false}
+            onClose={() => setAttachmentToEdit(undefined)}
+            onDone={({
+              caption,
+              captionBodyRanges,
               data,
-              size: data.byteLength,
-            };
+              contentType,
+              blurHash,
+            }) => {
+              const newAttachment = {
+                ...attachmentToEdit,
+                contentType,
+                blurHash,
+                data,
+                size: data.byteLength,
+              };
 
-            addAttachment(conversationId, newAttachment);
-            setAttachmentToEdit(undefined);
-          }}
-          installedPacks={installedPacks}
-          recentStickers={recentStickers}
-        />
-      )}
+              addAttachment(conversationId, newAttachment);
+              setAttachmentToEdit(undefined);
+              onEditorStateChange?.({
+                bodyRanges: captionBodyRanges ?? [],
+                conversationId,
+                messageText: caption ?? '',
+                sendCounter,
+              });
+
+              inputApiRef.current?.setContents(
+                caption ?? '',
+                convertDraftBodyRangesIntoHydrated(captionBodyRanges),
+                true
+              );
+            }}
+            onPickEmoji={onPickEmoji}
+            onTextTooLong={onTextTooLong}
+            ourConversationId={ourConversationId}
+            platform={platform}
+            recentStickers={recentStickers}
+            emojiSkinToneDefault={emojiSkinToneDefault}
+            sortedGroupMembers={sortedGroupMembers}
+          />
+        )}
       <div className="CompositionArea__toggle-large">
         <button
           type="button"
@@ -614,7 +1127,7 @@ export const CompositionArea = ({
           // This prevents the user from tabbing here
           tabIndex={-1}
           onClick={handleToggleLarge}
-          aria-label={i18n('CompositionArea--expand')}
+          aria-label={i18n('icu:CompositionArea--expand')}
         />
       </div>
       <div
@@ -629,22 +1142,14 @@ export const CompositionArea = ({
               isCompose
               {...quotedMessageProps}
               i18n={i18n}
-              onClick={onClickQuotedMessage}
+              onClick={
+                quotedMessageId
+                  ? () => scrollToMessage(conversationId, quotedMessageId)
+                  : undefined
+              }
               onClose={() => {
-                // This one is for redux...
-                setQuotedMessage(undefined);
-                // and this is for conversation_view.
-                clearQuotedMessage?.();
+                setQuoteByMessageId(conversationId, undefined);
               }}
-            />
-          </div>
-        )}
-        {linkPreviewLoading && linkPreviewResult && (
-          <div className="preview-wrapper">
-            <StagedLinkPreview
-              {...linkPreviewResult}
-              i18n={i18n}
-              onClose={onCloseLinkPreview}
             />
           </div>
         )}
@@ -656,7 +1161,7 @@ export const CompositionArea = ({
               i18n={i18n}
               onAddAttachment={launchAttachmentPicker}
               onClickAttachment={maybeEditAttachment}
-              onClose={onClearAttachments}
+              onClose={() => onClearAttachments(conversationId)}
               onCloseAttachment={attachment => {
                 if (attachment.path) {
                   removeAttachment(conversationId, attachment.path);
@@ -680,21 +1185,33 @@ export const CompositionArea = ({
           )}
         >
           <CompositionInput
-            clearQuotedMessage={clearQuotedMessage}
-            disabled={disabled}
+            conversationId={conversationId}
+            disabled={isDisabled}
             draftBodyRanges={draftBodyRanges}
+            draftEditMessage={draftEditMessage}
             draftText={draftText}
             getPreferredBadge={getPreferredBadge}
-            getQuotedMessage={getQuotedMessage}
             i18n={i18n}
             inputApi={inputApiRef}
+            isFormattingEnabled={isFormattingEnabled}
+            isActive={isActive}
             large={large}
+            linkPreviewLoading={linkPreviewLoading}
+            linkPreviewResult={linkPreviewResult}
+            onBlur={() => setHasFocus(false)}
+            onFocus={() => setHasFocus(true)}
+            onCloseLinkPreview={onCloseLinkPreview}
             onDirtyChange={setDirty}
             onEditorStateChange={onEditorStateChange}
             onPickEmoji={onPickEmoji}
             onSubmit={handleSubmit}
             onTextTooLong={onTextTooLong}
-            skinTone={skinTone}
+            ourConversationId={ourConversationId}
+            platform={platform}
+            quotedMessageId={quotedMessageId}
+            sendCounter={sendCounter}
+            shouldHidePopovers={shouldHidePopovers}
+            emojiSkinToneDefault={emojiSkinToneDefault ?? null}
             sortedGroupMembers={sortedGroupMembers}
             theme={theme}
           />
@@ -703,6 +1220,7 @@ export const CompositionArea = ({
           <>
             {stickerButtonFragment}
             {!dirty ? micButtonFragment : null}
+            {editMessageFragment}
             {attButton}
           </>
         ) : null}
@@ -718,19 +1236,17 @@ export const CompositionArea = ({
           {stickerButtonFragment}
           {attButton}
           {!dirty ? micButtonFragment : null}
+          {editMessageFragment}
           {dirty || !shouldShowMicrophone ? sendButtonFragment : null}
         </div>
       ) : null}
       <CompositionUpload
-        addAttachment={addAttachment}
-        addPendingAttachment={addPendingAttachment}
         conversationId={conversationId}
         draftAttachments={draftAttachments}
         i18n={i18n}
         processAttachments={processAttachments}
-        removeAttachment={removeAttachment}
         ref={fileInputRef}
       />
     </div>
   );
-};
+});

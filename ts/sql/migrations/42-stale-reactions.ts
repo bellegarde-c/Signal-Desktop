@@ -1,15 +1,13 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
-
 import { batchMultiVarQuery } from '../util';
-import type { ArrayQuery } from '../util';
+import type { WritableDB } from '../Interface';
 import type { LoggerType } from '../../types/Logging';
 
 export default function updateToSchemaVersion42(
   currentVersion: number,
-  db: Database,
+  db: WritableDB,
   logger: LoggerType
 ): void {
   if (currentVersion >= 42) {
@@ -40,8 +38,9 @@ export default function updateToSchemaVersion42(
     // Note: we use `pluck` here to fetch only the first column of
     //   returned row.
     const messageIdList: Array<string> = db
-      .prepare('SELECT id FROM messages ORDER BY id ASC;')
-      .pluck()
+      .prepare('SELECT id FROM messages ORDER BY id ASC;', {
+        pluck: true,
+      })
       .all();
     const allReactions: Array<{
       rowid: number;
@@ -57,12 +56,16 @@ export default function updateToSchemaVersion42(
       }
     });
 
-    function deleteReactions(rowids: Array<number>) {
-      db.prepare<ArrayQuery>(
+    function deleteReactions(
+      rowids: ReadonlyArray<number>,
+      persistent: boolean
+    ) {
+      db.prepare(
         `
         DELETE FROM reactions
         WHERE rowid IN ( ${rowids.map(() => '?').join(', ')} );
-        `
+        `,
+        { persistent }
       ).run(rowids);
     }
 

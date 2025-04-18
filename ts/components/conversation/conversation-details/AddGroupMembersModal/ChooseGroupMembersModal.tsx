@@ -1,7 +1,6 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent } from 'react';
 import React, {
   useEffect,
   useMemo,
@@ -10,19 +9,18 @@ import React, {
   useCallback,
 } from 'react';
 import { omit } from 'lodash';
-import type { MeasuredComponentProps } from 'react-measure';
-import Measure from 'react-measure';
+import type { ListRowProps } from 'react-virtualized';
 
 import type { LocalizerType, ThemeType } from '../../../../types/Util';
-import { getUsernameFromSearch } from '../../../../types/Username';
+import { strictAssert, assertDev } from '../../../../util/assert';
 import { refMerger } from '../../../../util/refMerger';
 import { useRestoreFocus } from '../../../../hooks/useRestoreFocus';
 import { missingCaseError } from '../../../../util/missingCaseError';
-import type { LookupConversationWithoutUuidActionsType } from '../../../../util/lookupConversationWithoutUuid';
+import type { LookupConversationWithoutServiceIdActionsType } from '../../../../util/lookupConversationWithoutServiceId';
 import { parseAndFormatPhoneNumber } from '../../../../util/libphonenumberInstance';
-import { filterAndSortConversationsByRecent } from '../../../../util/filterAndSortConversations';
+import type { ParsedE164Type } from '../../../../util/libphonenumberInstance';
+import { filterAndSortConversations } from '../../../../util/filterAndSortConversations';
 import type { ConversationType } from '../../../../state/ducks/conversations';
-import type { PreferredBadgeSelectorType } from '../../../../state/selectors/badges';
 import type {
   UUIDFetchStateKeyType,
   UUIDFetchStateType,
@@ -35,90 +33,97 @@ import { ModalHost } from '../../../ModalHost';
 import { ContactPills } from '../../../ContactPills';
 import { ContactPill } from '../../../ContactPill';
 import type { Row } from '../../../ConversationList';
-import { ConversationList, RowType } from '../../../ConversationList';
-import { ContactCheckboxDisabledReason } from '../../../conversationList/ContactCheckbox';
+import { RowType } from '../../../ConversationList';
+import {
+  ContactCheckbox,
+  ContactCheckboxDisabledReason,
+} from '../../../conversationList/ContactCheckbox';
 import { Button, ButtonVariant } from '../../../Button';
 import { SearchInput } from '../../../SearchInput';
-import { shouldNeverBeCalled } from '../../../../util/shouldNeverBeCalled';
+import { ListView } from '../../../ListView';
+import { UsernameCheckbox } from '../../../conversationList/UsernameCheckbox';
+import { PhoneNumberCheckbox } from '../../../conversationList/PhoneNumberCheckbox';
+import { SizeObserver } from '../../../../hooks/useSizeObserver';
 
 export type StatePropsType = {
   regionCode: string | undefined;
   candidateContacts: ReadonlyArray<ConversationType>;
   conversationIdsAlreadyInGroup: Set<string>;
-  getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
   theme: ThemeType;
   maxGroupSize: number;
+  ourE164: string | undefined;
+  ourUsername: string | undefined;
   searchTerm: string;
   selectedContacts: ReadonlyArray<ConversationType>;
+  username: string | undefined;
 
   confirmAdds: () => void;
   onClose: () => void;
   removeSelectedContact: (_: string) => void;
   setSearchTerm: (_: string) => void;
   toggleSelectedContact: (conversationId: string) => void;
-  isUsernamesEnabled: boolean;
 } & Pick<
-  LookupConversationWithoutUuidActionsType,
-  'lookupConversationWithoutUuid'
+  LookupConversationWithoutServiceIdActionsType,
+  'lookupConversationWithoutServiceId'
 >;
 
 type ActionPropsType = Omit<
-  LookupConversationWithoutUuidActionsType,
-  'setIsFetchingUUID' | 'lookupConversationWithoutUuid'
+  LookupConversationWithoutServiceIdActionsType,
+  'setIsFetchingUUID' | 'lookupConversationWithoutServiceId'
 >;
 
 type PropsType = StatePropsType & ActionPropsType;
 
 // TODO: This should use <Modal>. See DESKTOP-1038.
-export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
+export function ChooseGroupMembersModal({
   regionCode,
   candidateContacts,
   confirmAdds,
   conversationIdsAlreadyInGroup,
-  getPreferredBadge,
   i18n,
   maxGroupSize,
   onClose,
+  ourE164,
+  ourUsername,
   removeSelectedContact,
   searchTerm,
   selectedContacts,
   setSearchTerm,
   theme,
   toggleSelectedContact,
-  lookupConversationWithoutUuid,
+  lookupConversationWithoutServiceId,
   showUserNotFoundModal,
-  isUsernamesEnabled,
-}) => {
+  username,
+}: PropsType): JSX.Element {
   const [focusRef] = useRestoreFocus();
 
-  const phoneNumber = parseAndFormatPhoneNumber(searchTerm, regionCode);
+  const isUsernameChecked = selectedContacts.some(
+    contact => contact.username === username
+  );
 
-  let username: string | undefined;
-  let isUsernameChecked = false;
-  let isUsernameVisible = false;
-  if (isUsernamesEnabled) {
-    username = getUsernameFromSearch(searchTerm);
+  const isUsernameVisible =
+    Boolean(username) &&
+    username !== ourUsername &&
+    candidateContacts.every(contact => contact.username !== username);
 
-    isUsernameChecked = selectedContacts.some(
-      contact => contact.username === username
-    );
-
-    isUsernameVisible =
-      Boolean(username) &&
-      candidateContacts.every(contact => contact.username !== username);
+  let phoneNumber: ParsedE164Type | undefined;
+  if (!username) {
+    phoneNumber = parseAndFormatPhoneNumber(searchTerm, regionCode);
   }
 
   let isPhoneNumberChecked = false;
-  if (!username && phoneNumber) {
+  let isPhoneNumberVisible = false;
+  if (phoneNumber) {
+    const { e164 } = phoneNumber;
     isPhoneNumberChecked =
       phoneNumber.isValid &&
-      selectedContacts.some(contact => contact.e164 === phoneNumber.e164);
-  }
+      selectedContacts.some(contact => contact.e164 === e164);
 
-  const isPhoneNumberVisible =
-    phoneNumber &&
-    candidateContacts.every(contact => contact.e164 !== phoneNumber.e164);
+    isPhoneNumberVisible =
+      e164 !== ourE164 &&
+      candidateContacts.every(contact => contact.e164 !== e164);
+  }
 
   const inputRef = useRef<null | HTMLInputElement>(null);
 
@@ -135,13 +140,13 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
   const canContinue = Boolean(selectedContacts.length);
 
   const [filteredContacts, setFilteredContacts] = useState(
-    filterAndSortConversationsByRecent(candidateContacts, '', regionCode)
+    filterAndSortConversations(candidateContacts, '', regionCode)
   );
   const normalizedSearchTerm = searchTerm.trim();
   useEffect(() => {
     const timeout = setTimeout(() => {
       setFilteredContacts(
-        filterAndSortConversationsByRecent(
+        filterAndSortConversations(
           candidateContacts,
           normalizedSearchTerm,
           regionCode
@@ -199,7 +204,8 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
       if (virtualIndex === 0) {
         return {
           type: RowType.Header,
-          i18nKey: 'contactsHeader',
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:contactsHeader'),
         };
       }
 
@@ -230,10 +236,15 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
     virtualIndex -= filteredContacts.length;
 
     if (isPhoneNumberVisible) {
+      strictAssert(
+        phoneNumber !== undefined,
+        "phone number can't be visible if not present"
+      );
       if (virtualIndex === 0) {
         return {
           type: RowType.Header,
-          i18nKey: 'findByPhoneNumberHeader',
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByPhoneNumberHeader'),
         };
       }
       if (virtualIndex === 1) {
@@ -251,7 +262,8 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
       if (virtualIndex === 0) {
         return {
           type: RowType.Header,
-          i18nKey: 'findByUsernameHeader',
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByUsernameHeader'),
         };
       }
       if (virtualIndex === 1) {
@@ -268,6 +280,101 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
     return undefined;
   };
 
+  const handleContactClick = (
+    conversationId: string,
+    disabledReason: undefined | ContactCheckboxDisabledReason
+  ) => {
+    switch (disabledReason) {
+      case undefined:
+        toggleSelectedContact(conversationId);
+        break;
+      case ContactCheckboxDisabledReason.AlreadyAdded:
+      case ContactCheckboxDisabledReason.MaximumContactsSelected:
+        // These are no-ops.
+        break;
+      default:
+        throw missingCaseError(disabledReason);
+    }
+  };
+
+  const renderItem = ({ key, index, style }: ListRowProps) => {
+    const row = getRow(index);
+
+    let item;
+    switch (row?.type) {
+      case RowType.Header: {
+        const headerText = row.getHeaderText(i18n);
+        item = (
+          <div
+            className="module-conversation-list__item--header"
+            aria-label={headerText}
+          >
+            {headerText}
+          </div>
+        );
+        break;
+      }
+      case RowType.ContactCheckbox:
+        item = (
+          <ContactCheckbox
+            i18n={i18n}
+            theme={theme}
+            {...row.contact}
+            onClick={handleContactClick}
+            isChecked={row.isChecked}
+            badge={undefined}
+            disabledReason={row.disabledReason}
+          />
+        );
+        break;
+      case RowType.UsernameCheckbox:
+        item = (
+          <UsernameCheckbox
+            i18n={i18n}
+            theme={theme}
+            username={row.username}
+            isChecked={row.isChecked}
+            isFetching={row.isFetching}
+            toggleConversationInChooseMembers={conversationId =>
+              handleContactClick(conversationId, undefined)
+            }
+            showUserNotFoundModal={showUserNotFoundModal}
+            setIsFetchingUUID={setIsFetchingUUID}
+            lookupConversationWithoutServiceId={
+              lookupConversationWithoutServiceId
+            }
+          />
+        );
+        break;
+      case RowType.PhoneNumberCheckbox:
+        item = (
+          <PhoneNumberCheckbox
+            phoneNumber={row.phoneNumber}
+            lookupConversationWithoutServiceId={
+              lookupConversationWithoutServiceId
+            }
+            showUserNotFoundModal={showUserNotFoundModal}
+            setIsFetchingUUID={setIsFetchingUUID}
+            toggleConversationInChooseMembers={conversationId =>
+              handleContactClick(conversationId, undefined)
+            }
+            isChecked={row.isChecked}
+            isFetching={row.isFetching}
+            i18n={i18n}
+            theme={theme}
+          />
+        );
+        break;
+      default:
+    }
+
+    return (
+      <div key={key} style={style}>
+        {item}
+      </div>
+    );
+  };
+
   return (
     <ModalHost
       modalName="AddGroupMembersModal.ChooseGroupMembersModal"
@@ -275,7 +382,7 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
     >
       <div className="module-AddGroupMembersModal module-AddGroupMembersModal--choose-members">
         <button
-          aria-label={i18n('close')}
+          aria-label={i18n('icu:close')}
           className="module-AddGroupMembersModal__close-button"
           type="button"
           onClick={() => {
@@ -283,11 +390,11 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
           }}
         />
         <h1 className="module-AddGroupMembersModal__header">
-          {i18n('AddGroupMembersModal--title')}
+          {i18n('icu:AddGroupMembersModal--title')}
         </h1>
         <SearchInput
           i18n={i18n}
-          placeholder={i18n('contactSearchPlaceholder')}
+          placeholder={i18n('icu:contactSearchPlaceholder')}
           onChange={event => {
             setSearchTerm(event.target.value);
           }}
@@ -304,10 +411,11 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
             {selectedContacts.map(contact => (
               <ContactPill
                 key={contact.id}
-                acceptedMessageRequest={contact.acceptedMessageRequest}
-                avatarPath={contact.avatarPath}
+                avatarPlaceholderGradient={contact.avatarPlaceholderGradient}
+                avatarUrl={contact.avatarUrl}
                 color={contact.color}
                 firstName={contact.systemGivenName ?? contact.firstName}
+                hasAvatar={contact.hasAvatar}
                 i18n={i18n}
                 isMe={contact.isMe}
                 id={contact.id}
@@ -323,8 +431,8 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
           </ContactPills>
         )}
         {rowCount ? (
-          <Measure bounds>
-            {({ contentRect, measureRef }: MeasuredComponentProps) => {
+          <SizeObserver>
+            {(ref, size) => {
               // We disable this ESLint rule because we're capturing a bubbled keydown
               //   event. See [this note in the jsx-a11y docs][0].
               //
@@ -333,71 +441,55 @@ export const ChooseGroupMembersModal: FunctionComponent<PropsType> = ({
               return (
                 <div
                   className="module-AddGroupMembersModal__list-wrapper"
-                  ref={measureRef}
+                  ref={ref}
                   onKeyDown={event => {
                     if (event.key === 'Enter') {
                       inputRef.current?.focus();
                     }
                   }}
                 >
-                  <ConversationList
-                    dimensions={contentRect.bounds}
-                    getPreferredBadge={getPreferredBadge}
-                    getRow={getRow}
-                    i18n={i18n}
-                    onClickArchiveButton={shouldNeverBeCalled}
-                    onClickContactCheckbox={(
-                      conversationId: string,
-                      disabledReason: undefined | ContactCheckboxDisabledReason
-                    ) => {
-                      switch (disabledReason) {
-                        case undefined:
-                          toggleSelectedContact(conversationId);
-                          break;
-                        case ContactCheckboxDisabledReason.AlreadyAdded:
-                        case ContactCheckboxDisabledReason.MaximumContactsSelected:
-                          // These are no-ops.
-                          break;
-                        default:
-                          throw missingCaseError(disabledReason);
-                      }
-                    }}
-                    lookupConversationWithoutUuid={
-                      lookupConversationWithoutUuid
-                    }
-                    showUserNotFoundModal={showUserNotFoundModal}
-                    setIsFetchingUUID={setIsFetchingUUID}
-                    showConversation={shouldNeverBeCalled}
-                    onSelectConversation={shouldNeverBeCalled}
-                    renderMessageSearchResult={() => {
-                      shouldNeverBeCalled();
-                      return <div />;
-                    }}
-                    rowCount={rowCount}
-                    shouldRecomputeRowHeights={false}
-                    showChooseGroupMembers={shouldNeverBeCalled}
-                    theme={theme}
-                  />
+                  {size != null && (
+                    <ListView
+                      width={size.width}
+                      height={size.height}
+                      rowCount={rowCount}
+                      calculateRowHeight={index => {
+                        const row = getRow(index);
+                        if (!row) {
+                          assertDev(false, `Expected a row at index ${index}`);
+                          return 52;
+                        }
+
+                        switch (row.type) {
+                          case RowType.Header:
+                            return 40;
+                          default:
+                            return 52;
+                        }
+                      }}
+                      rowRenderer={renderItem}
+                    />
+                  )}
                 </div>
               );
               /* eslint-enable jsx-a11y/no-static-element-interactions */
             }}
-          </Measure>
+          </SizeObserver>
         ) : (
           <div className="module-AddGroupMembersModal__no-candidate-contacts">
-            {i18n('noContactsFound')}
+            {i18n('icu:noContactsFound')}
           </div>
         )}
         <div className="module-AddGroupMembersModal__button-container">
           <Button onClick={onClose} variant={ButtonVariant.Secondary}>
-            {i18n('cancel')}
+            {i18n('icu:cancel')}
           </Button>
 
           <Button disabled={!canContinue} onClick={confirmAdds}>
-            {i18n('AddGroupMembersModal--continue-to-confirm')}
+            {i18n('icu:AddGroupMembersModal--continue-to-confirm')}
           </Button>
         </div>
       </div>
     </ModalHost>
   );
-};
+}

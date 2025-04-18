@@ -33,23 +33,24 @@ export enum ButtonVariant {
 
 export enum ButtonIconType {
   audio = 'audio',
+  message = 'message',
   muted = 'muted',
-  photo = 'photo',
   search = 'search',
-  text = 'text',
   unmuted = 'unmuted',
   video = 'video',
 }
 
-type PropsType = {
+export type PropsType = {
   className?: string;
   disabled?: boolean;
+  discouraged?: boolean;
   icon?: ButtonIconType;
   size?: ButtonSize;
   style?: CSSProperties;
   tabIndex?: number;
   theme?: Theme;
   variant?: ButtonVariant;
+  'aria-disabled'?: boolean;
 } & (
   | {
       onClick: MouseEventHandler<HTMLButtonElement>;
@@ -100,11 +101,12 @@ const VARIANT_CLASS_NAMES = new Map<ButtonVariant, string>([
 ]);
 
 export const Button = React.forwardRef<HTMLButtonElement, PropsType>(
-  (props, ref) => {
+  function ButtonInner(props, ref) {
     const {
       children,
       className,
       disabled = false,
+      discouraged = false,
       icon,
       style,
       tabIndex,
@@ -115,6 +117,7 @@ export const Button = React.forwardRef<HTMLButtonElement, PropsType>(
         : ButtonSize.Medium,
     } = props;
     const ariaLabel = props['aria-label'];
+    const ariaDisabled = props['aria-disabled'];
 
     let onClick: undefined | MouseEventHandler<HTMLButtonElement>;
     let type: 'button' | 'submit';
@@ -137,12 +140,15 @@ export const Button = React.forwardRef<HTMLButtonElement, PropsType>(
     const buttonElement = (
       <button
         aria-label={ariaLabel}
+        aria-disabled={ariaDisabled}
         className={classNames(
           'module-Button',
           sizeClassName,
           variantClassName,
+          discouraged ? `${variantClassName}--discouraged` : undefined,
           icon && `module-Button--icon--${icon}`,
-          className
+          className,
+          className && discouraged ? `${className}--discouraged` : undefined
         )}
         disabled={disabled}
         onClick={onClick}

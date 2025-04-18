@@ -1,11 +1,11 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// This has to be the first import because of monkey-patching
-import '../shims';
-
 import { contextBridge } from 'electron';
+import { config } from '../../context/config';
+import { localeMessages } from '../../context/localeMessages';
 
-import { SignalContext } from '../context';
-
-contextBridge.exposeInMainWorld('SignalContext', SignalContext);
+contextBridge.exposeInMainWorld('SignalContext', {
+  getI18nLocale: () => config.resolvedTranslationsLocale,
+  getI18nLocaleMessages: () => localeMessages,
+});

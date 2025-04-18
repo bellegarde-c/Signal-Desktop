@@ -1,35 +1,68 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import Delta from 'quill-delta';
+import { Delta } from '@signalapp/quill-cjs';
+
 import { insertEmojiOps } from '../util';
+import type { Matcher } from '../util';
+import {
+  FUN_INLINE_EMOJI_CLASS,
+  FUN_STATIC_EMOJI_CLASS,
+} from '../../components/fun/FunEmoji';
 
-export const matchEmojiImage = (node: Element): Delta => {
-  if (node.classList.contains('emoji')) {
-    const emoji = node.getAttribute('title');
-    return new Delta().insert({ emoji });
-  }
-  return new Delta();
-};
-
-export const matchEmojiBlot = (node: HTMLElement, delta: Delta): Delta => {
-  if (node.classList.contains('emoji-blot')) {
-    const { emoji } = node.dataset;
-    return new Delta().insert({ emoji });
-  }
-  return delta;
-};
-
-export const matchReactEmoji = (node: HTMLElement, delta: Delta): Delta => {
-  if (node.classList.contains('module-emoji')) {
-    const emoji = node.innerText.trim();
-    return new Delta().insert({ emoji });
+export const matchEmojiImage: Matcher = (
+  node,
+  delta,
+  _scroll,
+  attributes
+): Delta => {
+  if (
+    node.classList.contains(FUN_INLINE_EMOJI_CLASS) ||
+    (node.classList.contains(FUN_STATIC_EMOJI_CLASS) &&
+      node.dataset.emoji == null)
+  ) {
+    const value = node.getAttribute('aria-label');
+    return new Delta().insert({ emoji: { value } }, attributes);
   }
   return delta;
 };
 
-export const matchEmojiText = (node: Text): Delta => {
-  const nodeAsInsert = { insert: node.data };
+export const matchEmojiBlot: Matcher = (
+  node,
+  delta,
+  _scroll,
+  attributes
+): Delta => {
+  if (
+    node.classList.contains(FUN_STATIC_EMOJI_CLASS) &&
+    node.dataset.emoji != null
+  ) {
+    const { emoji: value, source } = node.dataset;
+    return new Delta().insert({ emoji: { value, source } }, attributes);
+  }
+  return delta;
+};
 
-  return new Delta(insertEmojiOps([nodeAsInsert]));
+export const matchEmojiText: Matcher = (
+  node,
+  _delta,
+  _scroll,
+  attributes
+): Delta => {
+  if (!('data' in node)) {
+    return new Delta();
+  }
+
+  const { data } = node;
+  if (!data || typeof data !== 'string') {
+    return new Delta();
+  }
+
+  if (data.replace(/(\n|\r\n)/g, '') === '') {
+    return new Delta();
+  }
+
+  const nodeAsInsert = { insert: data, attributes };
+
+  return new Delta(insertEmojiOps([nodeAsInsert], attributes));
 };

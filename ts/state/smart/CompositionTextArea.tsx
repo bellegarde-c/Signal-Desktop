@@ -1,22 +1,21 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
-import React from 'react';
+import React, { memo } from 'react';
 import { useSelector } from 'react-redux';
 import type { CompositionTextAreaProps } from '../../components/CompositionTextArea';
 import { CompositionTextArea } from '../../components/CompositionTextArea';
-import type { LocalizerType } from '../../types/I18N';
-import type { StateType } from '../reducer';
-import { getIntl } from '../selectors/user';
-import { useActions as useEmojiActions } from '../ducks/emojis';
-import { useActions as useItemsActions } from '../ducks/items';
+import { getIntl, getPlatform, getUserConversationId } from '../selectors/user';
+import { useEmojisActions as useEmojiActions } from '../ducks/emojis';
+import { useItemsActions } from '../ducks/items';
 import { getPreferredBadgeSelector } from '../selectors/badges';
-import { showToast } from '../../util/showToast';
-import { ToastMessageBodyTooLong } from '../../components/ToastMessageBodyTooLong';
+import { useComposerActions } from '../ducks/composer';
+import { getTextFormattingEnabled } from '../selectors/items';
 
 export type SmartCompositionTextAreaProps = Pick<
   CompositionTextAreaProps,
+  | 'bodyRanges'
   | 'draftText'
+  | 'isActive'
   | 'placeholder'
   | 'onChange'
   | 'onScroll'
@@ -24,27 +23,35 @@ export type SmartCompositionTextAreaProps = Pick<
   | 'theme'
   | 'maxLength'
   | 'whenToShowRemainingCount'
-  | 'scrollerRef'
+  | 'emojiSkinToneDefault'
 >;
 
-export const SmartCompositionTextArea = (
+export const SmartCompositionTextArea = memo(function SmartCompositionTextArea(
   props: SmartCompositionTextAreaProps
-): JSX.Element => {
-  const i18n = useSelector<StateType, LocalizerType>(getIntl);
+) {
+  const i18n = useSelector(getIntl);
+  const platform = useSelector(getPlatform);
+  const ourConversationId = useSelector(getUserConversationId);
 
   const { onUseEmoji: onPickEmoji } = useEmojiActions();
-  const { onSetSkinTone } = useItemsActions();
+  const { setEmojiSkinToneDefault } = useItemsActions();
+  const { onTextTooLong } = useComposerActions();
 
   const getPreferredBadge = useSelector(getPreferredBadgeSelector);
+  const isFormattingEnabled = useSelector(getTextFormattingEnabled);
 
   return (
     <CompositionTextArea
       {...props}
-      i18n={i18n}
-      onPickEmoji={onPickEmoji}
-      onSetSkinTone={onSetSkinTone}
       getPreferredBadge={getPreferredBadge}
-      onTextTooLong={() => showToast(ToastMessageBodyTooLong)}
+      i18n={i18n}
+      isActive
+      isFormattingEnabled={isFormattingEnabled}
+      onPickEmoji={onPickEmoji}
+      onEmojiSkinToneDefaultChange={setEmojiSkinToneDefault}
+      onTextTooLong={onTextTooLong}
+      platform={platform}
+      ourConversationId={ourConversationId}
     />
   );
-};
+});

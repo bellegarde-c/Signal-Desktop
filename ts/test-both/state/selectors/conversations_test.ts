@@ -1,7 +1,8 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
+import { v4 as generateUuid } from 'uuid';
 
 import {
   ComposerStep,
@@ -27,8 +28,8 @@ import {
   getComposeSelectedContacts,
   getContactNameColorSelector,
   getConversationByIdSelector,
-  getConversationUuidsStoppingSend,
-  getConversationsByTitleSelector,
+  getConversationServiceIdsStoppingSend,
+  getSafeConversationWithSameTitle,
   getConversationSelector,
   getConversationsStoppingSend,
   getFilteredCandidateContactsForNewGroup,
@@ -46,12 +47,13 @@ import { noopAction } from '../../../state/ducks/noop';
 import type { StateType } from '../../../state/reducer';
 import { reducer as rootReducer } from '../../../state/reducer';
 import { setupI18n } from '../../../util/setupI18n';
-import { UUID } from '../../../types/UUID';
-import type { UUIDStringType } from '../../../types/UUID';
+import type { ServiceIdString } from '../../../types/ServiceId';
+import { generateAci, getAciFromPrefix } from '../../../types/ServiceId';
 import enMessages from '../../../../_locales/en/messages.json';
 import {
   getDefaultConversation,
-  getDefaultConversationWithUuid,
+  getDefaultGroup,
+  getDefaultConversationWithServiceId,
 } from '../../helpers/getDefaultConversation';
 import {
   defaultStartDirectConversationComposerState,
@@ -59,7 +61,10 @@ import {
   defaultSetGroupMetadataComposerState,
 } from '../../helpers/defaultComposerStates';
 
-describe('both/state/selectors/conversations', () => {
+describe('both/state/selectors/conversations-extra', () => {
+  const SERVICE_ID_1 = generateAci();
+  const SERVICE_ID_2 = generateAci();
+
   const getEmptyRootState = (): StateType => {
     return rootReducer(undefined, noopAction());
   };
@@ -74,19 +79,29 @@ describe('both/state/selectors/conversations', () => {
     });
   }
 
-  function makeConversationWithUuid(
+  function makeGroup(id: string): ConversationType {
+    const title = `${id} title`;
+    return getDefaultGroup({
+      id,
+      searchableTitle: title,
+      title,
+      titleNoDefault: title,
+    });
+  }
+
+  function makeConversationWithServiceId(
     id: string
-  ): ConversationType & { uuid: UUIDStringType } {
+  ): ConversationType & { serviceId: ServiceIdString } {
     const title = `${id} title`;
 
-    return getDefaultConversationWithUuid(
+    return getDefaultConversationWithServiceId(
       {
         id,
         searchableTitle: title,
         title,
         titleNoDefault: title,
       },
-      UUID.fromPrefix(id).toString()
+      getAciFromPrefix(id)
     );
   }
 
@@ -134,7 +149,7 @@ describe('both/state/selectors/conversations', () => {
       assert.deepEqual(actual, getPlaceholderContact());
     });
 
-    it('returns conversation by uuid first', () => {
+    it('returns conversation by uuid', () => {
       const id = 'id';
 
       const conversation = makeConversation(id);
@@ -150,11 +165,8 @@ describe('both/state/selectors/conversations', () => {
           conversationsByE164: {
             [id]: wrongConversation,
           },
-          conversationsByUuid: {
+          conversationsByServiceId: {
             [id]: conversation,
-          },
-          conversationsByGroupId: {
-            [id]: wrongConversation,
           },
         },
       };
@@ -181,9 +193,6 @@ describe('both/state/selectors/conversations', () => {
           conversationsByE164: {
             [id]: conversation,
           },
-          conversationsByGroupId: {
-            [id]: wrongConversation,
-          },
         },
       };
 
@@ -208,6 +217,37 @@ describe('both/state/selectors/conversations', () => {
           },
           conversationsByGroupId: {
             [id]: conversation,
+          },
+        },
+      };
+
+      const selector = getConversationSelector(state);
+
+      const actual = selector(id);
+
+      assert.strictEqual(actual, conversation);
+    });
+    it('returns conversation by groupId first', () => {
+      const id = 'id';
+
+      const conversation = makeConversation(id);
+      const wrongConversation = makeConversation('wrong');
+
+      const state = {
+        ...getEmptyRootState(),
+        conversations: {
+          ...getEmptyState(),
+          conversationLookup: {
+            [id]: wrongConversation,
+          },
+          conversationsByGroupId: {
+            [id]: conversation,
+          },
+          conversationsByE164: {
+            [id]: wrongConversation,
+          },
+          conversationsByServiceId: {
+            [id]: wrongConversation,
           },
         },
       };
@@ -301,32 +341,32 @@ describe('both/state/selectors/conversations', () => {
     });
 
     it('returns all conversations stopping send', () => {
-      const convo1 = makeConversation('abc');
-      const convo2 = makeConversation('def');
+      const convo1 = makeConversation(SERVICE_ID_1);
+      const convo2 = makeConversation(SERVICE_ID_2);
       const state: StateType = {
         ...getEmptyRootState(),
         conversations: {
           ...getEmptyState(),
           conversationLookup: {
-            def: convo2,
-            abc: convo1,
+            [SERVICE_ID_1]: convo1,
+            [SERVICE_ID_2]: convo2,
           },
           verificationDataByConversation: {
             'convo a': {
               type: ConversationVerificationState.PendingVerification as const,
-              uuidsNeedingVerification: ['abc'],
+              serviceIdsNeedingVerification: [SERVICE_ID_1],
             },
             'convo b': {
               type: ConversationVerificationState.PendingVerification as const,
-              uuidsNeedingVerification: ['def', 'abc'],
+              serviceIdsNeedingVerification: [SERVICE_ID_2, SERVICE_ID_1],
             },
           },
         },
       };
 
-      assert.sameDeepMembers(getConversationUuidsStoppingSend(state), [
-        'abc',
-        'def',
+      assert.sameDeepMembers(getConversationServiceIdsStoppingSend(state), [
+        SERVICE_ID_1,
+        SERVICE_ID_2,
       ]);
 
       assert.sameDeepMembers(getConversationsStoppingSend(state), [
@@ -344,17 +384,17 @@ describe('both/state/selectors/conversations', () => {
     });
 
     it('returns "hydrated" invited contacts', () => {
-      const abc = makeConversationWithUuid('abc');
-      const def = makeConversationWithUuid('def');
+      const abc = makeConversationWithServiceId('abc');
+      const def = makeConversationWithServiceId('def');
       const state = {
         ...getEmptyRootState(),
         conversations: {
           ...getEmptyState(),
-          conversationsByUuid: {
-            [abc.uuid]: abc,
-            [def.uuid]: def,
+          conversationsByServiceId: {
+            [abc.serviceId]: abc,
+            [def.serviceId]: def,
           },
-          invitedUuidsForNewlyCreatedGroup: [def.uuid, abc.uuid],
+          invitedServiceIdsForNewlyCreatedGroup: [def.serviceId, abc.serviceId],
         },
       };
       const result = getInvitedContactsForNewlyCreatedGroup(state);
@@ -532,15 +572,13 @@ describe('both/state/selectors/conversations', () => {
           title: 'A',
         },
         'convo-2': {
-          ...makeConversation('convo-2'),
-          type: 'group',
+          ...makeGroup('convo-2'),
           isGroupV1AndDisabled: true,
           name: '2',
           title: 'Should Be Dropped (GV1)',
         },
         'convo-3': {
-          ...makeConversation('convo-3'),
-          type: 'group',
+          ...makeGroup('convo-3'),
           name: 'B',
           title: 'B',
         },
@@ -621,10 +659,8 @@ describe('both/state/selectors/conversations', () => {
               profileSharing: false,
             },
             'convo-1': {
-              ...makeConversation('convo-1'),
-              type: 'group' as const,
+              ...makeGroup('convo-1'),
               name: 'Friends!',
-              sharedGroupNames: [],
             },
             'convo-2': {
               ...makeConversation('convo-2'),
@@ -704,10 +740,8 @@ describe('both/state/selectors/conversations', () => {
               name: 'Me!',
             },
             'convo-1': {
-              ...makeConversation('convo-1'),
-              type: 'group' as const,
+              ...makeGroup('convo-1'),
               name: 'Friends!',
-              sharedGroupNames: [],
             },
             'convo-2': {
               ...makeConversation('convo-2'),
@@ -787,15 +821,11 @@ describe('both/state/selectors/conversations', () => {
               name: 'Me!',
             },
             'convo-1': {
-              ...makeConversation('convo-1'),
-              type: 'group' as const,
+              ...makeGroup('convo-1'),
               name: 'Friends!',
-              sharedGroupNames: [],
             },
             'convo-2': {
-              ...makeConversation('convo-2'),
-              type: 'group' as const,
-              sharedGroupNames: [],
+              ...makeGroup('convo-2'),
             },
           },
         },
@@ -813,22 +843,16 @@ describe('both/state/selectors/conversations', () => {
           ...getEmptyState(),
           conversationLookup: {
             'convo-0': {
-              ...makeConversation('convo-0'),
-              type: 'group' as const,
+              ...makeGroup('convo-0'),
               name: 'Family!',
               isBlocked: true,
-              sharedGroupNames: [],
             },
             'convo-1': {
-              ...makeConversation('convo-1'),
-              type: 'group' as const,
+              ...makeGroup('convo-1'),
               name: 'Friends!',
-              sharedGroupNames: [],
             },
             'convo-2': {
-              ...makeConversation('convo-2'),
-              type: 'group' as const,
-              sharedGroupNames: [],
+              ...makeGroup('convo-2'),
             },
           },
         },
@@ -883,8 +907,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'Should Be Dropped (no name, no profile sharing)',
         },
         'convo-3': {
-          ...makeConversation('convo-3'),
-          type: 'group',
+          ...makeGroup('convo-3'),
           title: 'Should Be Dropped (group)',
         },
         'convo-4': {
@@ -926,10 +949,10 @@ describe('both/state/selectors/conversations', () => {
 
       const ids = result.map(contact => contact.id);
       assert.deepEqual(ids, [
-        'our-conversation-id',
         'convo-1',
         'convo-5',
         'convo-6',
+        'our-conversation-id',
       ]);
     });
 
@@ -980,39 +1003,29 @@ describe('both/state/selectors/conversations', () => {
               title: 'Should be dropped (contact)',
             },
             'convo-3': {
-              ...makeConversation('convo-3'),
-              type: 'group',
+              ...makeGroup('convo-3'),
               name: 'Hello World',
               title: 'Hello World',
-              sharedGroupNames: [],
             },
             'convo-4': {
-              ...makeConversation('convo-4'),
-              type: 'group',
+              ...makeGroup('convo-4'),
               isBlocked: true,
               title: 'Should be dropped (blocked)',
-              sharedGroupNames: [],
             },
             'convo-5': {
-              ...makeConversation('convo-5'),
-              type: 'group',
+              ...makeGroup('convo-5'),
               title: 'Unknown Group',
-              sharedGroupNames: [],
             },
             'convo-6': {
-              ...makeConversation('convo-6'),
-              type: 'group',
+              ...makeGroup('convo-6'),
               name: 'Signal',
               title: 'Signal',
-              sharedGroupNames: [],
             },
             'convo-7': {
-              ...makeConversation('convo-7'),
+              ...makeGroup('convo-7'),
               profileSharing: false,
-              type: 'group',
               name: 'Signal Fake',
               title: 'Signal Fake',
-              sharedGroupNames: [],
             },
           },
           composer: {
@@ -1067,10 +1080,8 @@ describe('both/state/selectors/conversations', () => {
               title: 'Should be dropped (has no name)',
             },
             'convo-3': {
-              ...makeConversation('convo-3'),
-              type: 'group',
+              ...makeGroup('convo-3'),
               title: 'Should Be Dropped (group)',
-              sharedGroupNames: [],
             },
             'convo-4': {
               ...makeConversation('convo-4'),
@@ -1159,7 +1170,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'No timestamp',
           unreadCount: 1,
           isSelected: false,
-          typingContactId: UUID.generate().toString(),
+          typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
           acceptedMessageRequest: true,
         }),
@@ -1180,7 +1191,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'B',
           unreadCount: 1,
           isSelected: false,
-          typingContactId: UUID.generate().toString(),
+          typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
           acceptedMessageRequest: true,
         }),
@@ -1201,7 +1212,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'C',
           unreadCount: 1,
           isSelected: false,
-          typingContactId: UUID.generate().toString(),
+          typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
           acceptedMessageRequest: true,
         }),
@@ -1222,7 +1233,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'A',
           unreadCount: 1,
           isSelected: false,
-          typingContactId: UUID.generate().toString(),
+          typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
           acceptedMessageRequest: true,
         }),
@@ -1243,7 +1254,7 @@ describe('both/state/selectors/conversations', () => {
           title: 'First!',
           unreadCount: 1,
           isSelected: false,
-          typingContactId: UUID.generate().toString(),
+          typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
           acceptedMessageRequest: true,
         }),
@@ -1285,7 +1296,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin Two',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1307,7 +1318,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin Three',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1329,7 +1340,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin One',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1368,7 +1379,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin Two',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1389,7 +1400,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin Three',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1410,7 +1421,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin One',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1432,7 +1443,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin One',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1453,7 +1464,7 @@ describe('both/state/selectors/conversations', () => {
             title: 'Pin One',
             unreadCount: 1,
             isSelected: false,
-            typingContactId: UUID.generate().toString(),
+            typingContactIdTimestamps: { [generateUuid()]: Date.now() },
 
             acceptedMessageRequest: true,
           }),
@@ -1591,32 +1602,32 @@ describe('both/state/selectors/conversations', () => {
     });
   });
 
-  describe('#getConversationsByTitleSelector', () => {
+  describe('#getSafeConversationWithSameTitle', () => {
     it('returns a selector that finds conversations by title', () => {
+      const unsafe = { ...makeConversation('abc'), title: 'Janet' };
+      const safe = { ...makeConversation('def'), title: 'Janet' };
+      const unique = { ...makeConversation('geh'), title: 'Rick' };
       const state = {
         ...getEmptyRootState(),
         conversations: {
           ...getEmptyState(),
           conversationLookup: {
-            abc: { ...makeConversation('abc'), title: 'Janet' },
-            def: { ...makeConversation('def'), title: 'Janet' },
-            geh: { ...makeConversation('geh'), title: 'Rick' },
+            abc: unsafe,
+            def: safe,
+            geh: unique,
           },
         },
       };
 
-      const selector = getConversationsByTitleSelector(state);
+      const janet = getSafeConversationWithSameTitle(state, {
+        possiblyUnsafeConversation: unsafe,
+      });
+      assert.strictEqual(janet, safe);
 
-      assert.sameMembers(
-        selector('Janet').map(c => c.id),
-        ['abc', 'def']
-      );
-      assert.sameMembers(
-        selector('Rick').map(c => c.id),
-        ['geh']
-      );
-      assert.isEmpty(selector('abc'));
-      assert.isEmpty(selector('xyz'));
+      const rick = getSafeConversationWithSameTitle(state, {
+        possiblyUnsafeConversation: unique,
+      });
+      assert.strictEqual(rick, undefined);
     });
   });
 
@@ -1651,17 +1662,18 @@ describe('both/state/selectors/conversations', () => {
 
   describe('#getContactNameColorSelector', () => {
     it('returns the right color order sorted by UUID ASC', () => {
-      const group = makeConversation('group');
-      group.type = 'group';
-      group.sortedGroupMembers = [
-        makeConversationWithUuid('fff'),
-        makeConversationWithUuid('f00'),
-        makeConversationWithUuid('e00'),
-        makeConversationWithUuid('d00'),
-        makeConversationWithUuid('c00'),
-        makeConversationWithUuid('b00'),
-        makeConversationWithUuid('a00'),
-      ];
+      const group: ConversationType = {
+        ...makeGroup('group'),
+        sortedGroupMembers: [
+          makeConversationWithServiceId('fff'),
+          makeConversationWithServiceId('f00'),
+          makeConversationWithServiceId('e00'),
+          makeConversationWithServiceId('d00'),
+          makeConversationWithServiceId('c00'),
+          makeConversationWithServiceId('b00'),
+          makeConversationWithServiceId('a00'),
+        ],
+      };
       const state = {
         ...getEmptyRootState(),
         conversations: {

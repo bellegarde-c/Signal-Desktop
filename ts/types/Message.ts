@@ -1,8 +1,7 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable camelcase */
-
+import type { DurationInSeconds } from '../util/durations';
 import type { AttachmentType } from './Attachment';
 import type { EmbeddedContactType } from './EmbeddedContact';
 import type { IndexableBoolean, IndexablePresence } from './IndexedDB';
@@ -12,11 +11,9 @@ export function getMentionsRegex(): RegExp {
 }
 
 export type Message = (
-  | UserMessage
   | VerifiedChangeMessage
   | ProfileChangeNotificationMessage
 ) & { deletedForEveryone?: boolean };
-export type UserMessage = IncomingMessage | OutgoingMessage;
 
 export type IncomingMessage = Readonly<
   {
@@ -30,7 +27,7 @@ export type IncomingMessage = Readonly<
     body?: string;
     decrypted_at?: number;
     errors?: Array<Error>;
-    expireTimer?: number;
+    expireTimer?: DurationInSeconds;
     messageTimer?: number; // deprecated
     isViewOnce?: number;
     flags?: number;
@@ -54,7 +51,7 @@ export type OutgoingMessage = Readonly<
 
     // Optional
     body?: string;
-    expireTimer?: number;
+    expireTimer?: DurationInSeconds;
     messageTimer?: number; // deprecated
     isViewOnce?: number;
     synced: boolean;
@@ -88,7 +85,7 @@ export type SharedMessageProperties = Readonly<{
 export type ExpirationTimerUpdate = Partial<
   Readonly<{
     expirationTimerUpdate: Readonly<{
-      expireTimer: number;
+      expireTimer: DurationInSeconds;
       fromSync: boolean;
       source: string; // PhoneNumber
     }>;
@@ -108,16 +105,3 @@ export type MessageSchemaVersion6 = Partial<
     contact: Array<EmbeddedContactType>;
   }>
 >;
-
-export const isUserMessage = (message: Message): message is UserMessage =>
-  message.type === 'incoming' || message.type === 'outgoing';
-
-export const hasExpiration = (message: Message): boolean => {
-  if (!isUserMessage(message)) {
-    return false;
-  }
-
-  const { expireTimer } = message;
-
-  return typeof expireTimer === 'number' && expireTimer > 0;
-};

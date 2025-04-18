@@ -1,10 +1,14 @@
-// Copyright 2014-2021 Signal Messenger, LLC
+// Copyright 2014 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
+import { v7 as generateUuid } from 'uuid';
+
+import { DataWriter } from '../../sql/Client';
 import { SendStatus } from '../../messages/MessageSendState';
 import { IMAGE_PNG } from '../../types/MIME';
-import { UUID } from '../../types/UUID';
+import { generateAci, generatePni } from '../../types/ServiceId';
+import { MessageModel } from '../../models/messages';
 
 describe('Conversations', () => {
   async function resetConversationController(): Promise<void> {
@@ -18,15 +22,15 @@ describe('Conversations', () => {
 
   it('updates lastMessage even in race conditions with db', async () => {
     const ourNumber = '+15550000000';
-    const ourUuid = UUID.generate().toString();
-    const ourPni = UUID.generate().toString();
+    const ourAci = generateAci();
+    const ourPni = generatePni();
 
     // Creating a fake conversation
     const conversation = new window.Whisper.Conversation({
       avatars: [],
-      id: UUID.generate().toString(),
+      id: generateUuid(),
       e164: '+15551234567',
-      uuid: UUID.generate().toString(),
+      serviceId: generateAci(),
       type: 'private',
       inbox_position: 0,
       isPinned: false,
@@ -36,23 +40,28 @@ describe('Conversations', () => {
       sentMessageCount: 0,
       profileSharing: true,
       version: 0,
+      expireTimerVersion: 1,
+      lastMessage: 'starting value',
     });
 
     await window.textsecure.storage.user.setCredentials({
       number: ourNumber,
-      uuid: ourUuid,
+      aci: ourAci,
       pni: ourPni,
       deviceId: 2,
       deviceName: 'my device',
       password: 'password',
     });
     await window.ConversationController.load();
-
-    await window.Signal.Data.saveConversation(conversation.attributes);
+    await window.ConversationController.getOrCreateAndWait(
+      conversation.attributes.e164 ?? null,
+      conversation.attributes.type,
+      conversation.attributes
+    );
 
     // Creating a fake message
     const now = Date.now();
-    let message = new window.Whisper.Message({
+    let message = new MessageModel({
       attachments: [],
       body: 'bananas',
       conversationId: conversation.id,
@@ -60,7 +69,7 @@ describe('Conversations', () => {
       hasAttachments: false,
       hasFileAttachments: false,
       hasVisualMediaAttachments: false,
-      id: UUID.generate().toString(),
+      id: generateUuid(),
       received_at: now,
       sent_at: now,
       timestamp: now,
@@ -74,12 +83,11 @@ describe('Conversations', () => {
     });
 
     // Saving to db and updating the convo's last message
-    await window.Signal.Data.saveMessage(message.attributes, {
+    await window.MessageCache.saveMessage(message.attributes, {
       forceSave: true,
-      ourUuid,
     });
-    message = window.MessageController.register(message.id, message);
-    await window.Signal.Data.updateConversation(conversation.attributes);
+    message = window.MessageCache.register(message);
+    await DataWriter.updateConversation(conversation.attributes);
     await conversation.updateLastMessage();
 
     // Should be set to bananas because that's the last message sent.
@@ -110,9 +118,9 @@ describe('Conversations', () => {
     // Creating a fake conversation
     const conversation = new window.Whisper.Conversation({
       avatars: [],
-      id: UUID.generate().toString(),
+      id: generateUuid(),
       e164: '+15551234567',
-      uuid: UUID.generate().toString(),
+      serviceId: generateAci(),
       type: 'private',
       inbox_position: 0,
       isPinned: false,
@@ -122,6 +130,7 @@ describe('Conversations', () => {
       sentMessageCount: 0,
       profileSharing: true,
       version: 0,
+      expireTimerVersion: 1,
     });
 
     const resultNoImage = await conversation.getQuoteAttachment(
@@ -129,6 +138,7 @@ describe('Conversations', () => {
       [
         {
           url: 'https://sometest.signal.org/',
+          isCallLink: false,
         },
       ]
     );
@@ -145,6 +155,7 @@ describe('Conversations', () => {
             size: 100,
             data: new Uint8Array(),
           },
+          isCallLink: false,
         },
       ]
     );

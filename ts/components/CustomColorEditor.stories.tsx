@@ -5,16 +5,15 @@ import React from 'react';
 
 import { action } from '@storybook/addon-actions';
 
-import enMessages from '../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './CustomColorEditor';
 import { CustomColorEditor } from './CustomColorEditor';
-import { setupI18n } from '../util/setupI18n';
 
 export default {
   title: 'Components/CustomColorEditor',
-};
+} satisfies Meta<PropsType>;
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (): PropsType => ({
   i18n,
@@ -22,6 +21,6 @@ const createProps = (): PropsType => ({
   onSave: action('onSave'),
 });
 
-export const Default = (): JSX.Element => (
-  <CustomColorEditor {...createProps()} />
-);
+export function Default(): JSX.Element {
+  return <CustomColorEditor {...createProps()} />;
+}

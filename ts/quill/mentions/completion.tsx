@@ -1,37 +1,39 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import _ from 'lodash';
-import type Quill from 'quill';
-import Delta from 'quill-delta';
-import type { RefObject } from 'react';
 import React from 'react';
-
+import _ from 'lodash';
+import { Delta } from '@signalapp/quill-cjs';
+import Emitter from '@signalapp/quill-cjs/core/emitter';
+import type Quill from '@signalapp/quill-cjs';
+import type { RefObject } from 'react';
 import { Popper } from 'react-popper';
 import classNames from 'classnames';
 import { createPortal } from 'react-dom';
-import type { ConversationType } from '../../state/ducks/conversations';
-import { Avatar } from '../../components/Avatar';
+
+import { Avatar, AvatarSize } from '../../components/Avatar';
 import type { LocalizerType, ThemeType } from '../../types/Util';
-import type { MemberRepository } from '../memberRepository';
+import type { MemberType, MemberRepository } from '../memberRepository';
 import type { PreferredBadgeSelectorType } from '../../state/selectors/badges';
 import { matchBlotTextPartitions } from '../util';
+import type { MentionBlotValue } from '../util';
 import { handleOutsideClick } from '../../util/handleOutsideClick';
 import { sameWidthModifier } from '../../util/popperUtil';
+import { UserText } from '../../components/UserText';
 
 export type MentionCompletionOptions = {
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
   memberRepositoryRef: RefObject<MemberRepository>;
   setMentionPickerElement: (element: JSX.Element | null) => void;
-  me?: ConversationType;
+  ourConversationId: string | undefined;
   theme: ThemeType;
 };
 
-const MENTION_REGEX = /(?:^|\W)@([-+\w]*)$/;
+const MENTION_REGEX = /(?:^|\W)@([-+\p{L}\p{M}\p{N}]*)$/u;
 
 export class MentionCompletion {
-  results: Array<ConversationType>;
+  results: ReadonlyArray<MemberType>;
 
   index: number;
 
@@ -75,8 +77,14 @@ export class MentionCompletion {
     this.quill.keyboard.addBinding({ key: 39 }, clearResults); // Right Arrow
     this.quill.keyboard.addBinding({ key: 40 }, changeIndex(1)); // Down Arrow
 
-    this.quill.on('text-change', _.debounce(this.onTextChange.bind(this), 0));
-    this.quill.on('selection-change', this.onSelectionChange.bind(this));
+    this.quill.on(
+      Emitter.events.TEXT_CHANGE,
+      _.debounce(this.onTextChange.bind(this), 0)
+    );
+    this.quill.on(
+      Emitter.events.SELECTION_CHANGE,
+      this.onSelectionChange.bind(this)
+    );
   }
 
   destroy(): void {
@@ -105,7 +113,7 @@ export class MentionCompletion {
     this.clearResults();
   }
 
-  possiblyShowMemberResults(): Array<ConversationType> {
+  possiblyShowMemberResults(): ReadonlyArray<MemberType> {
     const range = this.quill.getSelection();
 
     if (range) {
@@ -120,16 +128,21 @@ export class MentionCompletion {
       if (leftTokenTextMatch) {
         const [, leftTokenText] = leftTokenTextMatch;
 
-        let results: Array<ConversationType> = [];
+        let results: ReadonlyArray<MemberType> = [];
 
         const memberRepository = this.options.memberRepositoryRef.current;
 
         if (memberRepository) {
           if (leftTokenText === '') {
-            results = memberRepository.getMembers(this.options.me);
+            results = memberRepository.getMembers(
+              this.options.ourConversationId
+            );
           } else {
             const fullMentionText = leftTokenText;
-            results = memberRepository.search(fullMentionText, this.options.me);
+            results = memberRepository.search(
+              fullMentionText,
+              this.options.ourConversationId
+            );
           }
         }
 
@@ -183,16 +196,36 @@ export class MentionCompletion {
     }
   }
 
+  getAttributesForInsert(index: number): Record<string, unknown> {
+    const character = index > 0 ? index - 1 : 0;
+    const contents = this.quill.getContents(character, 1);
+    return contents.ops.reduce(
+      (acc, op) => ({ acc, ...op.attributes }),
+      {} as Record<string, unknown>
+    );
+  }
+
   insertMention(
-    mention: ConversationType,
+    member: MemberType,
     index: number,
     range: number,
     withTrailingSpace = false
   ): void {
-    const delta = new Delta().retain(index).delete(range).insert({ mention });
+    // The mention + space we add won't be formatted unless we manually provide attributes
+    const attributes = this.getAttributesForInsert(range - 1);
+
+    const mention: MentionBlotValue = {
+      aci: member.aci,
+      title: member.title,
+    };
+
+    const delta = new Delta()
+      .retain(index)
+      .delete(range)
+      .insert({ mention }, attributes);
 
     if (withTrailingSpace) {
-      this.quill.updateContents(delta.insert(' '), 'user');
+      this.quill.updateContents(delta.insert(' ', attributes), 'user');
       this.quill.setSelection(index + 2, 0, 'user');
     } else {
       this.quill.updateContents(delta, 'user');
@@ -245,7 +278,7 @@ export class MentionCompletion {
               {memberResults.map((member, index) => (
                 <button
                   type="button"
-                  key={member.uuid}
+                  key={member.aci}
                   id={`mention-result--${member.name}`}
                   role="option button"
                   aria-selected={memberResultsIndex === index}
@@ -261,20 +294,19 @@ export class MentionCompletion {
                   )}
                 >
                   <Avatar
-                    acceptedMessageRequest={member.acceptedMessageRequest}
-                    avatarPath={member.avatarPath}
+                    avatarPlaceholderGradient={member.avatarPlaceholderGradient}
+                    avatarUrl={member.avatarUrl}
                     badge={getPreferredBadge(member.badges)}
                     conversationType="direct"
+                    hasAvatar={member.hasAvatar}
                     i18n={this.options.i18n}
-                    isMe={member.isMe}
                     sharedGroupNames={member.sharedGroupNames}
-                    size={28}
+                    size={AvatarSize.TWENTY_EIGHT}
                     theme={theme}
                     title={member.title}
-                    unblurredAvatarPath={member.unblurredAvatarPath}
                   />
                   <div className="module-composition-input__suggestions__title">
-                    {member.title}
+                    <UserText text={member.title} />
                   </div>
                 </button>
               ))}

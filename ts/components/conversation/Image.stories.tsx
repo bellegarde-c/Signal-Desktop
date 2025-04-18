@@ -1,30 +1,26 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-import { boolean, number, text } from '@storybook/addon-knobs';
-
+import type { Meta } from '@storybook/react';
 import { pngUrl } from '../../storybook/Fixtures';
 import type { Props } from './Image';
 import { CurveType, Image } from './Image';
 import { IMAGE_PNG } from '../../types/MIME';
 import type { ThemeType } from '../../types/Util';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import { StorybookThemeContext } from '../../../.storybook/StorybookThemeContext';
 
 import { fakeAttachment } from '../../test-both/helpers/fakeAttachment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/Image',
-};
+} satisfies Meta<Props>;
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  alt: text('alt', overrideProps.alt || ''),
+  alt: overrideProps.alt || '',
   attachment:
     overrideProps.attachment ||
     fakeAttachment({
@@ -32,55 +28,38 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
       fileName: 'sax.png',
       url: pngUrl,
     }),
-  blurHash: text('blurHash', overrideProps.blurHash || ''),
-  bottomOverlay: boolean('bottomOverlay', overrideProps.bottomOverlay || false),
-  closeButton: boolean('closeButton', overrideProps.closeButton || false),
-  curveBottomLeft: number(
-    'curveBottomLeft',
-    overrideProps.curveBottomLeft || CurveType.None
-  ),
-  curveBottomRight: number(
-    'curveBottomRight',
-    overrideProps.curveBottomRight || CurveType.None
-  ),
-  curveTopLeft: number(
-    'curveTopLeft',
-    overrideProps.curveTopLeft || CurveType.None
-  ),
-  curveTopRight: number(
-    'curveTopRight',
-    overrideProps.curveTopRight || CurveType.None
-  ),
-  darkOverlay: boolean('darkOverlay', overrideProps.darkOverlay || false),
-  height: number('height', overrideProps.height || 100),
+  blurHash: overrideProps.blurHash || '',
+  bottomOverlay: overrideProps.bottomOverlay || false,
+  closeButton: overrideProps.closeButton || false,
+  curveBottomLeft: overrideProps.curveBottomLeft || CurveType.None,
+  curveBottomRight: overrideProps.curveBottomRight || CurveType.None,
+  curveTopLeft: overrideProps.curveTopLeft || CurveType.None,
+  curveTopRight: overrideProps.curveTopRight || CurveType.None,
+  darkOverlay: overrideProps.darkOverlay || false,
+  height: overrideProps.height || 200,
   i18n,
-  noBackground: boolean('noBackground', overrideProps.noBackground || false),
-  noBorder: boolean('noBorder', overrideProps.noBorder || false),
-  onClick: action('onClick'),
+  noBackground: overrideProps.noBackground || false,
+  noBorder: overrideProps.noBorder || false,
+  showVisualAttachment: action('showVisualAttachment'),
+  startDownload: action('startDownload'),
+  cancelDownload: action('cancelDownload'),
   onClickClose: action('onClickClose'),
   onError: action('onError'),
-  overlayText: text('overlayText', overrideProps.overlayText || ''),
-  playIconOverlay: boolean(
-    'playIconOverlay',
-    overrideProps.playIconOverlay || false
-  ),
-  tabIndex: number('tabIndex', overrideProps.tabIndex || 0),
-  theme: text('theme', overrideProps.theme || 'light') as ThemeType,
-  url: text('url', 'url' in overrideProps ? overrideProps.url || '' : pngUrl),
-  width: number('width', overrideProps.width || 100),
+  overlayText: overrideProps.overlayText || '',
+  playIconOverlay: overrideProps.playIconOverlay || false,
+  tabIndex: overrideProps.tabIndex || 0,
+  theme: overrideProps.theme || ('light' as ThemeType),
+  url: 'url' in overrideProps ? overrideProps.url || '' : pngUrl,
+  width: overrideProps.width || 300,
 });
 
-export const UrlWithHeightWidth = (): JSX.Element => {
+export function UrlWithHeightWidth(): JSX.Element {
   const props = createProps();
 
   return <Image {...props} />;
-};
+}
 
-UrlWithHeightWidth.story = {
-  name: 'URL with Height/Width',
-};
-
-export const Caption = (): JSX.Element => {
+export function Caption(): JSX.Element {
   const defaultProps = createProps();
   const props = {
     ...defaultProps,
@@ -91,25 +70,25 @@ export const Caption = (): JSX.Element => {
   };
 
   return <Image {...props} />;
-};
+}
 
-export const PlayIcon = (): JSX.Element => {
+export function PlayIcon(): JSX.Element {
   const props = createProps({
     playIconOverlay: true,
   });
 
   return <Image {...props} />;
-};
+}
 
-export const CloseButton = (): JSX.Element => {
+export function CloseButton(): JSX.Element {
   const props = createProps({
     closeButton: true,
   });
 
   return <Image {...props} />;
-};
+}
 
-export const NoBorderOrBackground = (): JSX.Element => {
+export function NoBorderOrBackground(): JSX.Element {
   const props = createProps({
     attachment: fakeAttachment({
       contentType: IMAGE_PNG,
@@ -126,50 +105,149 @@ export const NoBorderOrBackground = (): JSX.Element => {
       <Image {...props} />
     </div>
   );
-};
+}
 
-NoBorderOrBackground.story = {
-  name: 'No Border or Background',
-};
-
-export const Pending = (): JSX.Element => {
+export function NotDownloadedNotIncrementalNotPending(): JSX.Element {
   const props = createProps({
     attachment: fakeAttachment({
       contentType: IMAGE_PNG,
       fileName: 'sax.png',
-      url: pngUrl,
-      pending: true,
+      path: undefined,
+      size: 5300000,
     }),
+    url: undefined,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
   });
 
   return <Image {...props} />;
-};
+}
 
-export const PendingWBlurhash = (): JSX.Element => {
+export function PendingWDownloadQueuedNotIncremental(): JSX.Element {
   const props = createProps({
     attachment: fakeAttachment({
       contentType: IMAGE_PNG,
       fileName: 'sax.png',
-      url: pngUrl,
+      path: undefined,
       pending: true,
+      size: 5300000,
     }),
+    url: undefined,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
   });
 
-  return (
-    <Image
-      {...props}
-      blurHash="LDA,FDBnm+I=p{tkIUI;~UkpELV]"
-      width={300}
-      height={400}
-    />
-  );
-};
+  return <Image {...props} />;
+}
 
-PendingWBlurhash.story = {
-  name: 'Pending w/blurhash',
-};
+export function PendingWDownloadProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      pending: true,
+      size: 5300000,
+      totalDownloaded: 1230000,
+    }),
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
 
-export const CurvedCorners = (): JSX.Element => {
+  return <Image {...props} />;
+}
+
+export function NotPendingWDownloadProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      size: 5300000,
+      totalDownloaded: 1230000,
+    }),
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function PendingIncrementalNoProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      pending: true,
+      size: 5300000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function PendingIncrementalDownloadProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      pending: true,
+      size: 5300000,
+      totalDownloaded: 1230000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function NotPendingIncrementalNoProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      size: 5300000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function NotPendingIncrementalWProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      size: 5300000,
+      totalDownloaded: 1230000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function CurvedCorners(): JSX.Element {
   const props = createProps({
     curveBottomLeft: CurveType.Normal,
     curveBottomRight: CurveType.Normal,
@@ -178,17 +256,17 @@ export const CurvedCorners = (): JSX.Element => {
   });
 
   return <Image {...props} />;
-};
+}
 
-export const SmallCurveTopLeft = (): JSX.Element => {
+export function SmallCurveTopLeft(): JSX.Element {
   const props = createProps({
     curveTopLeft: CurveType.Small,
   });
 
   return <Image {...props} />;
-};
+}
 
-export const SoftCorners = (): JSX.Element => {
+export function SoftCorners(): JSX.Element {
   const props = createProps({
     curveBottomLeft: CurveType.Tiny,
     curveBottomRight: CurveType.Tiny,
@@ -197,65 +275,58 @@ export const SoftCorners = (): JSX.Element => {
   });
 
   return <Image {...props} />;
-};
+}
 
-export const BottomOverlay = (): JSX.Element => {
+export function BottomOverlay(): JSX.Element {
   const props = createProps({
     bottomOverlay: true,
   });
 
   return <Image {...props} />;
-};
+}
 
-export const FullOverlayWithText = (): JSX.Element => {
+export function FullOverlayWithText(): JSX.Element {
   const props = createProps({
     darkOverlay: true,
     overlayText: 'Honk!',
   });
 
   return <Image {...props} />;
-};
+}
 
-FullOverlayWithText.story = {
-  name: 'Full Overlay with Text',
-};
-
-export const Blurhash = (): JSX.Element => {
-  const defaultProps = createProps();
-  const props = {
-    ...defaultProps,
+export function Blurhash(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+    }),
     blurHash: 'thisisafakeblurhashthatwasmadeup',
-  };
+    url: undefined,
+  });
 
   return <Image {...props} />;
-};
+}
 
-export const UndefinedBlurHash = (): JSX.Element => {
-  const Wrapper = () => {
-    const theme = React.useContext(StorybookThemeContext);
-    const props = createProps({
-      blurHash: undefined,
-      theme,
-      url: undefined,
-    });
-
-    return <Image {...props} />;
-  };
-
-  return <Wrapper />;
-};
-
-UndefinedBlurHash.story = {
-  name: 'undefined blurHash',
-};
-
-export const MissingImage = (): JSX.Element => {
-  const defaultProps = createProps();
-  const props = {
-    ...defaultProps,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    attachment: undefined as any,
-  };
+function UndefinedBlurHashWrapper() {
+  const theme = React.useContext(StorybookThemeContext);
+  const props = createProps({
+    blurHash: undefined,
+    theme,
+    url: undefined,
+  });
 
   return <Image {...props} />;
-};
+}
+
+export function UndefinedBlurHash(): JSX.Element {
+  return <UndefinedBlurHashWrapper />;
+}
+
+export function MissingImage(): JSX.Element {
+  const props = createProps({
+    attachment: undefined,
+    url: 'random',
+  });
+
+  return <Image {...props} />;
+}

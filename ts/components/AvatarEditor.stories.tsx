@@ -4,20 +4,18 @@
 import React from 'react';
 
 import { action } from '@storybook/addon-actions';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
 import { AvatarColors } from '../types/Colors';
 import type { PropsType } from './AvatarEditor';
 import { AvatarEditor } from './AvatarEditor';
 import { getDefaultAvatars } from '../types/Avatar';
 import { createAvatarData } from '../util/createAvatarData';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   avatarColor: overrideProps.avatarColor || AvatarColors[9],
-  avatarPath: overrideProps.avatarPath,
+  avatarUrl: overrideProps.avatarUrl,
   conversationId: '123',
   conversationTitle: overrideProps.conversationTitle || 'Default Title',
   deleteAvatarFromDisk: action('deleteAvatarFromDisk'),
@@ -80,30 +78,31 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/AvatarEditor',
-};
+} satisfies Meta<PropsType>;
 
-export const NoAvatarGroup = (): JSX.Element => (
-  <AvatarEditor
-    {...createProps({ isGroup: true, userAvatarData: getDefaultAvatars(true) })}
-  />
-);
+export function NoAvatarGroup(): JSX.Element {
+  return (
+    <AvatarEditor
+      {...createProps({
+        isGroup: true,
+        userAvatarData: getDefaultAvatars(true),
+      })}
+    />
+  );
+}
 
-NoAvatarGroup.story = {
-  name: 'No Avatar (group)',
-};
+export function NoAvatarMe(): JSX.Element {
+  return (
+    <AvatarEditor {...createProps({ userAvatarData: getDefaultAvatars() })} />
+  );
+}
 
-export const NoAvatarMe = (): JSX.Element => (
-  <AvatarEditor {...createProps({ userAvatarData: getDefaultAvatars() })} />
-);
-
-NoAvatarMe.story = {
-  name: 'No Avatar (me)',
-};
-
-export const HasAvatar = (): JSX.Element => (
-  <AvatarEditor
-    {...createProps({
-      avatarPath: '/fixtures/kitten-3-64-64.jpg',
-    })}
-  />
-);
+export function HasAvatar(): JSX.Element {
+  return (
+    <AvatarEditor
+      {...createProps({
+        avatarUrl: '/fixtures/kitten-3-64-64.jpg',
+      })}
+    />
+  );
+}

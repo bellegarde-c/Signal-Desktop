@@ -3,44 +3,54 @@
 
 import type { ThunkAction } from 'redux-thunk';
 
+import type { ReadonlyDeep } from 'type-fest';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
+import type {
+  LinkPreviewType,
+  LinkPreviewForUIType,
+} from '../../types/message/LinkPreviews';
+import type { AttachmentForUIType } from '../../types/Attachment';
+import type { MaybeGrabLinkPreviewOptionsType } from '../../types/LinkPreview';
 import type { NoopActionType } from './noop';
 import type { StateType as RootStateType } from '../reducer';
-import type { LinkPreviewType } from '../../types/message/LinkPreviews';
-import type {
-  LinkPreviewSourceType,
-  MaybeGrabLinkPreviewOptionsType,
-} from '../../types/LinkPreview';
+import { LinkPreviewSourceType } from '../../types/LinkPreview';
 import { assignWithNoUnnecessaryAllocation } from '../../util/assignWithNoUnnecessaryAllocation';
 import { maybeGrabLinkPreview } from '../../services/LinkPreview';
+import { strictAssert } from '../../util/assert';
 import { useBoundActions } from '../../hooks/useBoundActions';
+import { getPropsForAttachment } from '../selectors/message';
 
 // State
 
-export type LinkPreviewsStateType = {
-  readonly linkPreview?: LinkPreviewType;
-  readonly source?: LinkPreviewSourceType;
-};
+export type LinkPreviewsStateType = ReadonlyDeep<{
+  linkPreview?: LinkPreviewForUIType;
+  source?: LinkPreviewSourceType;
+}>;
 
 // Actions
 
 export const ADD_PREVIEW = 'linkPreviews/ADD_PREVIEW';
 export const REMOVE_PREVIEW = 'linkPreviews/REMOVE_PREVIEW';
 
-export type AddLinkPreviewActionType = {
+export type AddLinkPreviewActionType = ReadonlyDeep<{
   type: 'linkPreviews/ADD_PREVIEW';
   payload: {
-    linkPreview: LinkPreviewType;
+    conversationId?: string;
+    linkPreview: LinkPreviewForUIType;
     source: LinkPreviewSourceType;
   };
-};
+}>;
 
-export type RemoveLinkPreviewActionType = {
+export type RemoveLinkPreviewActionType = ReadonlyDeep<{
   type: 'linkPreviews/REMOVE_PREVIEW';
-};
+  payload: {
+    conversationId?: string;
+  };
+}>;
 
-type LinkPreviewsActionType =
-  | AddLinkPreviewActionType
-  | RemoveLinkPreviewActionType;
+type LinkPreviewsActionType = ReadonlyDeep<
+  AddLinkPreviewActionType | RemoveLinkPreviewActionType
+>;
 
 // Action Creators
 
@@ -61,20 +71,47 @@ function debouncedMaybeGrabLinkPreview(
 
 function addLinkPreview(
   linkPreview: LinkPreviewType,
-  source: LinkPreviewSourceType
+  source: LinkPreviewSourceType,
+  conversationId?: string
 ): AddLinkPreviewActionType {
+  if (source === LinkPreviewSourceType.Composer) {
+    strictAssert(conversationId, 'no conversationId provided');
+  }
+
+  let image: AttachmentForUIType | undefined;
+  if (linkPreview.image != null) {
+    image = {
+      ...getPropsForAttachment(linkPreview.image, 'preview', {
+        type:
+          source === LinkPreviewSourceType.StoryCreator ? 'story' : 'outgoing',
+      }),
+
+      // Save URL to the blob (it gets stripped by `getPropsForAttachment`)
+      url: linkPreview.image.url,
+    };
+  }
+
   return {
     type: ADD_PREVIEW,
     payload: {
-      linkPreview,
+      conversationId,
+      linkPreview: {
+        ...linkPreview,
+        image,
+      },
       source,
     },
   };
 }
 
-function removeLinkPreview(): RemoveLinkPreviewActionType {
+function removeLinkPreview(
+  conversationId?: string
+): RemoveLinkPreviewActionType {
   return {
     type: REMOVE_PREVIEW,
+    payload: {
+      conversationId,
+    },
   };
 }
 
@@ -84,8 +121,9 @@ export const actions = {
   removeLinkPreview,
 };
 
-export const useLinkPreviewActions = (): typeof actions =>
-  useBoundActions(actions);
+export const useLinkPreviewActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 // Reducer
 

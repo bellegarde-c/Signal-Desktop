@@ -1,4 +1,4 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import Long from 'long';
@@ -10,12 +10,10 @@ import { dropNull, shallowDropNull } from '../util/dropNull';
 import { SignalService as Proto } from '../protobuf';
 import { deriveGroupFields } from '../groups';
 import * as Bytes from '../Bytes';
-import { deriveMasterKeyFromGroupV1 } from '../Crypto';
 
 import type {
   ProcessedAttachment,
   ProcessedDataMessage,
-  ProcessedGroupContext,
   ProcessedGroupV2Context,
   ProcessedQuote,
   ProcessedContact,
@@ -25,10 +23,18 @@ import type {
   ProcessedDelete,
   ProcessedGiftBadge,
 } from './Types.d';
-import { WarnOnlyError } from './Errors';
 import { GiftBadgeStates } from '../components/conversation/Message';
 import { APPLICATION_OCTET_STREAM, stringToMIMEType } from '../types/MIME';
-import { SECOND } from '../util/durations';
+import { SECOND, DurationInSeconds } from '../util/durations';
+import type { AnyPaymentEvent } from '../types/Payment';
+import { PaymentEventKind } from '../types/Payment';
+import { filterAndClean } from '../types/BodyRange';
+import { isAciString } from '../util/isAciString';
+import { normalizeAci } from '../util/normalizeAci';
+import { bytesToUuid } from '../util/uuidToBytes';
+import { createName } from '../util/attachmentPath';
+import { partitionBodyAndNormalAttachments } from '../types/Attachment';
+import { isNotNil } from '../util/isNotNil';
 
 const FLAGS = Proto.DataMessage.Flags;
 export const ATTACHMENT_MAX = 32;
@@ -50,7 +56,8 @@ export function processAttachment(
   const { cdnId } = attachment;
   const hasCdnId = Long.isLong(cdnId) ? !cdnId.isZero() : Boolean(cdnId);
 
-  const { contentType, digest, key, size } = attachment;
+  const { clientUuid, contentType, digest, incrementalMac, key, size } =
+    attachment;
   if (!isNumber(size)) {
     throw new Error('Missing size on incoming attachment!');
   }
@@ -59,46 +66,19 @@ export function processAttachment(
     ...shallowDropNull(attachment),
 
     cdnId: hasCdnId ? String(cdnId) : undefined,
+    clientUuid: Bytes.isNotEmpty(clientUuid)
+      ? bytesToUuid(clientUuid)
+      : undefined,
     contentType: contentType
       ? stringToMIMEType(contentType)
       : APPLICATION_OCTET_STREAM,
-    digest: digest ? Bytes.toBase64(digest) : undefined,
-    key: key ? Bytes.toBase64(key) : undefined,
+    digest: Bytes.isNotEmpty(digest) ? Bytes.toBase64(digest) : undefined,
+    incrementalMac: Bytes.isNotEmpty(incrementalMac)
+      ? Bytes.toBase64(incrementalMac)
+      : undefined,
+    key: Bytes.isNotEmpty(key) ? Bytes.toBase64(key) : undefined,
     size,
   };
-}
-
-function processGroupContext(
-  group?: Proto.IGroupContext | null
-): ProcessedGroupContext | undefined {
-  if (!group) {
-    return undefined;
-  }
-
-  strictAssert(group.id, 'group context without id');
-  strictAssert(group.type != null, 'group context without type');
-
-  const masterKey = deriveMasterKeyFromGroupV1(group.id);
-  const data = deriveGroupFields(masterKey);
-
-  const derivedGroupV2Id = Bytes.toBase64(data.id);
-
-  const result: ProcessedGroupContext = {
-    id: Bytes.toBinary(group.id),
-    type: group.type,
-    name: dropNull(group.name),
-    membersE164: group.membersE164 ?? [],
-    avatar: processAttachment(group.avatar),
-    derivedGroupV2Id,
-  };
-
-  if (result.type === Proto.GroupContext.Type.DELIVER) {
-    result.name = undefined;
-    result.membersE164 = [];
-    result.avatar = undefined;
-  }
-
-  return result;
 }
 
 export function processGroupV2Context(
@@ -123,6 +103,38 @@ export function processGroupV2Context(
   };
 }
 
+export function processPayment(
+  payment?: Proto.DataMessage.IPayment | null
+): AnyPaymentEvent | undefined {
+  if (!payment) {
+    return undefined;
+  }
+
+  if (payment.notification != null) {
+    return {
+      kind: PaymentEventKind.Notification,
+      note: payment.notification.note ?? null,
+    };
+  }
+
+  if (payment.activation != null) {
+    if (
+      payment.activation.type ===
+      Proto.DataMessage.Payment.Activation.Type.REQUEST
+    ) {
+      return { kind: PaymentEventKind.ActivationRequest };
+    }
+    if (
+      payment.activation.type ===
+      Proto.DataMessage.Payment.Activation.Type.ACTIVATED
+    ) {
+      return { kind: PaymentEventKind.Activation };
+    }
+  }
+
+  return undefined;
+}
+
 export function processQuote(
   quote?: Proto.DataMessage.IQuote | null
 ): ProcessedQuote | undefined {
@@ -130,18 +142,25 @@ export function processQuote(
     return undefined;
   }
 
+  const { authorAci } = quote;
+  if (!isAciString(authorAci)) {
+    throw new Error('quote.authorAci is not an ACI string');
+  }
+
   return {
     id: quote.id?.toNumber(),
-    authorUuid: dropNull(quote.authorUuid),
+    authorAci: normalizeAci(authorAci, 'Quote.authorAci'),
     text: dropNull(quote.text),
-    attachments: (quote.attachments ?? []).map(attachment => {
+    attachments: (quote.attachments ?? []).slice(0, 1).map(attachment => {
       return {
-        contentType: dropNull(attachment.contentType),
+        contentType: attachment.contentType
+          ? stringToMIMEType(attachment.contentType)
+          : APPLICATION_OCTET_STREAM,
         fileName: dropNull(attachment.fileName),
         thumbnail: processAttachment(attachment.thumbnail),
       };
     }),
-    bodyRanges: quote.bodyRanges ?? [],
+    bodyRanges: filterAndClean(quote.bodyRanges),
     type: quote.type || Proto.DataMessage.Quote.Type.NORMAL,
   };
 }
@@ -153,7 +172,7 @@ export function processContact(
     return undefined;
   }
 
-  return contact.map(item => {
+  return contact.slice(0, 1).map(item => {
     return {
       ...item,
       avatar: item.avatar
@@ -181,13 +200,13 @@ function cleanLinkPreviewDate(value?: Long | null): number | undefined {
 }
 
 export function processPreview(
-  preview?: ReadonlyArray<Proto.DataMessage.IPreview> | null
+  preview?: ReadonlyArray<Proto.IPreview> | null
 ): ReadonlyArray<ProcessedPreview> | undefined {
   if (!preview) {
     return undefined;
   }
 
-  return preview.map(item => {
+  return preview.slice(0, 1).map(item => {
     return {
       url: dropNull(item.url),
       title: dropNull(item.title),
@@ -221,11 +240,16 @@ export function processReaction(
     return undefined;
   }
 
+  const { targetAuthorAci } = reaction;
+  if (!isAciString(targetAuthorAci)) {
+    throw new Error('reaction.targetAuthorAci is not an ACI string');
+  }
+
   return {
     emoji: dropNull(reaction.emoji),
     remove: Boolean(reaction.remove),
-    targetAuthorUuid: dropNull(reaction.targetAuthorUuid),
-    targetTimestamp: reaction.targetTimestamp?.toNumber(),
+    targetAuthorAci: normalizeAci(targetAuthorAci, 'Reaction.targetAuthorAci'),
+    targetTimestamp: reaction.targetSentTimestamp?.toNumber(),
   };
 }
 
@@ -267,10 +291,13 @@ export function processGiftBadge(
   };
 }
 
-export async function processDataMessage(
+export function processDataMessage(
   message: Proto.IDataMessage,
-  envelopeTimestamp: number
-): Promise<ProcessedDataMessage> {
+  envelopeTimestamp: number,
+
+  // Only for testing
+  { _createName: doCreateName = createName } = {}
+): ProcessedDataMessage {
   /* eslint-disable no-bitwise */
 
   // Now that its decrypted, validate the message and clean it up for consumer
@@ -291,20 +318,32 @@ export async function processDataMessage(
     );
   }
 
+  const processedAttachments = message.attachments
+    ?.map((attachment: Proto.IAttachmentPointer) => ({
+      ...processAttachment(attachment),
+      downloadPath: doCreateName(),
+    }))
+    .filter(isNotNil);
+
+  const { bodyAttachment, attachments } = partitionBodyAndNormalAttachments(
+    { attachments: processedAttachments ?? [] },
+    { logId: `processDataMessage(${timestamp})` }
+  );
+
   const result: ProcessedDataMessage = {
     body: dropNull(message.body),
-    attachments: (message.attachments ?? []).map(
-      (attachment: Proto.IAttachmentPointer) => processAttachment(attachment)
-    ),
-    group: processGroupContext(message.group),
+    bodyAttachment,
+    attachments,
     groupV2: processGroupV2Context(message.groupV2),
     flags: message.flags ?? 0,
-    expireTimer: message.expireTimer ?? 0,
+    expireTimer: DurationInSeconds.fromSeconds(message.expireTimer ?? 0),
+    expireTimerVersion: message.expireTimerVersion ?? 0,
     profileKey:
       message.profileKey && message.profileKey.length > 0
         ? Bytes.toBase64(message.profileKey)
         : undefined,
     timestamp,
+    payment: processPayment(message.payment),
     quote: processQuote(message.quote),
     contact: processContact(message.contact),
     preview: processPreview(message.preview),
@@ -313,7 +352,7 @@ export async function processDataMessage(
     isViewOnce: Boolean(message.isViewOnce),
     reaction: processReaction(message.reaction),
     delete: processDelete(message.delete),
-    bodyRanges: message.bodyRanges ?? [],
+    bodyRanges: filterAndClean(message.bodyRanges),
     groupCallUpdate: dropNull(message.groupCallUpdate),
     storyContext: dropNull(message.storyContext),
     giftBadge: processGiftBadge(message.giftBadge),
@@ -339,7 +378,6 @@ export async function processDataMessage(
   if (isEndSession) {
     result.body = undefined;
     result.attachments = [];
-    result.group = undefined;
     return result;
   }
 
@@ -351,27 +389,6 @@ export async function processDataMessage(
     result.attachments = [];
   } else if (result.flags !== 0) {
     throw new Error(`Unknown flags in message: ${result.flags}`);
-  }
-
-  if (result.group) {
-    switch (result.group.type) {
-      case Proto.GroupContext.Type.UPDATE:
-        result.body = undefined;
-        result.attachments = [];
-        break;
-      case Proto.GroupContext.Type.QUIT:
-        result.body = undefined;
-        result.attachments = [];
-        break;
-      case Proto.GroupContext.Type.DELIVER:
-        // Cleaned up in `processGroupContext`
-        break;
-      default: {
-        throw new WarnOnlyError(
-          `Unknown group message type: ${result.group.type}`
-        );
-      }
-    }
   }
 
   const attachmentCount = result.attachments.length;

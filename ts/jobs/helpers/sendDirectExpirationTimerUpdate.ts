@@ -19,6 +19,7 @@ import type {
 import { handleMessageSend } from '../../util/handleMessageSend';
 import { isConversationAccepted } from '../../util/isConversationAccepted';
 import { isConversationUnregistered } from '../../util/isConversationUnregistered';
+import { DurationInSeconds } from '../../util/durations';
 
 export async function sendDirectExpirationTimerUpdate(
   conversation: ConversationModel,
@@ -45,14 +46,12 @@ export async function sendDirectExpirationTimerUpdate(
   }
 
   if (conversation.isUntrusted()) {
-    const uuid = conversation
-      .getCheckedUuid(
-        'Expiration timer send blocked: untrusted and missing uuid!'
-      )
-      .toString();
+    const serviceId = conversation.getCheckedServiceId(
+      'Expiration timer send blocked: untrusted and missing serviceId!'
+    );
     window.reduxActions.conversations.conversationStoppedByMissingVerification({
       conversationId: conversation.id,
-      untrustedUuids: [uuid],
+      untrustedServiceIds: [serviceId],
     });
     throw new Error(
       'Expiration timer send blocked because conversation is untrusted. Failing this attempt.'
@@ -77,7 +76,12 @@ export async function sendDirectExpirationTimerUpdate(
   const sendType = 'expirationTimerUpdate';
   const flags = Proto.DataMessage.Flags.EXPIRATION_TIMER_UPDATE;
   const proto = await messaging.getContentMessage({
-    expireTimer,
+    // `expireTimer` is already in seconds
+    expireTimer:
+      expireTimer === undefined
+        ? undefined
+        : DurationInSeconds.fromSeconds(expireTimer),
+    expireTimerVersion: conversation.getExpireTimerVersion(),
     flags,
     profileKey,
     recipients: conversation.getRecipients(),
@@ -101,8 +105,8 @@ export async function sendDirectExpirationTimerUpdate(
           encodedDataMessage: Proto.DataMessage.encode(
             proto.dataMessage
           ).finish(),
-          destination: conversation.get('e164'),
-          destinationUuid: conversation.get('uuid'),
+          destinationE164: conversation.get('e164'),
+          destinationServiceId: conversation.getServiceId(),
           expirationStartTimestamp: null,
           options: sendOptions,
           timestamp,
@@ -137,7 +141,7 @@ export async function sendDirectExpirationTimerUpdate(
         send: async sender =>
           sender.sendIndividualProto({
             contentHint,
-            identifier: conversation.getSendTarget(),
+            serviceId: conversation.getSendTarget(),
             options: sendOptions,
             proto,
             timestamp,

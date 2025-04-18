@@ -1,32 +1,52 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-import { select } from '@storybook/addon-knobs';
-
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './LeftPane';
-import { LeftPane, LeftPaneMode } from './LeftPane';
+import { LeftPane } from './LeftPane';
 import { CaptchaDialog } from './CaptchaDialog';
 import { CrashReportDialog } from './CrashReportDialog';
+import { ToastManager } from './ToastManager';
+import type { PropsType as DialogNetworkStatusPropsType } from './DialogNetworkStatus';
+import { DialogExpiredBuild } from './DialogExpiredBuild';
+import { DialogNetworkStatus } from './DialogNetworkStatus';
+import { DialogRelink } from './DialogRelink';
+import type { PropsType as DialogUpdatePropsType } from './DialogUpdate';
+import { DialogUpdate } from './DialogUpdate';
+import { UnsupportedOSDialog } from './UnsupportedOSDialog';
 import type { ConversationType } from '../state/ducks/conversations';
 import { MessageSearchResult } from './conversationList/MessageSearchResult';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
+import { DurationInSeconds, DAY } from '../util/durations';
+import { LeftPaneMode } from '../types/leftPane';
 import { ThemeType } from '../types/Util';
-import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
+import {
+  getDefaultConversation,
+  getDefaultGroupListItem,
+} from '../test-both/helpers/getDefaultConversation';
+import { DialogType } from '../types/Dialogs';
+import { SocketStatus } from '../types/SocketStatus';
 import { StorybookThemeContext } from '../../.storybook/StorybookThemeContext';
 import {
-  makeFakeLookupConversationWithoutUuid,
+  makeFakeLookupConversationWithoutServiceId,
   useUuidFetchState,
-} from '../test-both/helpers/fakeLookupConversationWithoutUuid';
+} from '../test-both/helpers/fakeLookupConversationWithoutServiceId';
+import type { GroupListItemConversationType } from './conversationList/GroupListItem';
+import { ServerAlert } from '../util/handleServerAlerts';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
+
+type OverridePropsType = Partial<PropsType> & {
+  dialogNetworkStatus?: Partial<DialogNetworkStatusPropsType>;
+  dialogUpdate?: Partial<DialogUpdatePropsType>;
+};
 
 export default {
   title: 'Components/LeftPane',
-};
+  argTypes: {},
+  args: {},
+} satisfies Meta<PropsType>;
 
 const defaultConversations: Array<ConversationType> = [
   getDefaultConversation({
@@ -41,27 +61,32 @@ const defaultConversations: Array<ConversationType> = [
 ];
 
 const defaultSearchProps = {
+  filterByUnread: false,
+  isSearchingGlobally: true,
   searchConversation: undefined,
   searchDisabled: false,
   searchTerm: 'hello',
   startSearchCounter: 0,
 };
 
-const defaultGroups: Array<ConversationType> = [
-  getDefaultConversation({
+const defaultGroups: Array<GroupListItemConversationType> = [
+  getDefaultGroupListItem({
     id: 'biking-group',
     title: 'Mtn Biking Arizona 🚵☀️⛰',
-    type: 'group',
-    sharedGroupNames: [],
   }),
-  getDefaultConversation({
+  getDefaultGroupListItem({
     id: 'dance-group',
     title: 'Are we dancers? 💃',
-    type: 'group',
-    sharedGroupNames: [],
   }),
 ];
 
+const backupMediaDownloadProgress = {
+  downloadedBytes: 1024,
+  totalBytes: 4098,
+  downloadBannerDismissed: false,
+  isIdle: false,
+  isPaused: false,
+};
 const defaultArchivedConversations: Array<ConversationType> = [
   getDefaultConversation({
     id: 'michelle-archive-convo',
@@ -85,16 +110,17 @@ const pinnedConversations: Array<ConversationType> = [
 
 const defaultModeSpecificProps = {
   ...defaultSearchProps,
+  filterByUnread: false,
   mode: LeftPaneMode.Inbox as const,
   pinnedConversations,
   conversations: defaultConversations,
   archivedConversations: defaultArchivedConversations,
-  isAboutToSearchInAConversation: false,
+  isAboutToSearch: false,
 };
 
 const emptySearchResultsGroup = { isLoading: false, results: [] };
 
-const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
+const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
   let modeSpecificProps =
     overrideProps.modeSpecificProps ?? defaultModeSpecificProps;
 
@@ -111,33 +137,72 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
     };
   }
 
+  const isUpdateDownloaded = false;
+
   return {
+    otherTabsUnreadStats: {
+      unreadCount: 0,
+      unreadMentionsCount: 0,
+      markedUnread: false,
+    },
+    backupMediaDownloadProgress: {
+      downloadBannerDismissed: false,
+      isIdle: false,
+      isPaused: false,
+      totalBytes: 0,
+      downloadedBytes: 0,
+    },
     clearConversationSearch: action('clearConversationSearch'),
     clearGroupCreationError: action('clearGroupCreationError'),
-    clearSearch: action('clearSearch'),
+    clearSearchQuery: action('clearSearchQuery'),
     closeMaximumGroupSizeModal: action('closeMaximumGroupSizeModal'),
     closeRecommendedGroupSizeModal: action('closeRecommendedGroupSizeModal'),
     composeDeleteAvatarFromDisk: action('composeDeleteAvatarFromDisk'),
     composeReplaceAvatar: action('composeReplaceAvatar'),
     composeSaveAvatarToDisk: action('composeSaveAvatarToDisk'),
     createGroup: action('createGroup'),
-    getPreferredBadge: () => undefined,
-    i18n,
-    preferredWidthFromStorage: 320,
-    regionCode: 'US',
-    challengeStatus: select(
-      'challengeStatus',
-      ['idle', 'required', 'pending'],
-      'idle'
+    dismissBackupMediaDownloadBanner: action(
+      'dismissBackupMediaDownloadBanner'
     ),
-    crashReportCount: select('challengeReportCount', [0, 1], 0),
+    pauseBackupMediaDownload: action('pauseBackupMediaDownload'),
+    resumeBackupMediaDownload: action('resumeBackupMediaDownload'),
+    cancelBackupMediaDownload: action('cancelBackupMediaDownload'),
+    endConversationSearch: action('endConversationSearch'),
+    endSearch: action('endSearch'),
+    getPreferredBadge: () => undefined,
+    hasFailedStorySends: false,
+    hasPendingUpdate: false,
+    i18n,
+    isMacOS: false,
+    preferredWidthFromStorage: 320,
+    challengeStatus: 'idle',
+    crashReportCount: 0,
+
+    hasNetworkDialog: false,
+    hasExpiredDialog: false,
+    hasRelinkDialog: false,
+    hasUpdateDialog: false,
+    unsupportedOSDialogType: undefined,
+    usernameCorrupted: false,
+    usernameLinkCorrupted: false,
+    isUpdateDownloaded,
+    navTabsCollapsed: false,
+
     setChallengeStatus: action('setChallengeStatus'),
-    lookupConversationWithoutUuid: makeFakeLookupConversationWithoutUuid(),
+    lookupConversationWithoutServiceId:
+      makeFakeLookupConversationWithoutServiceId(),
     showUserNotFoundModal: action('showUserNotFoundModal'),
     setIsFetchingUUID,
+    preloadConversation: action('preloadConversation'),
     showConversation: action('showConversation'),
-    renderExpiredBuildDialog: () => <div />,
-    renderMainHeader: () => <div />,
+    blockConversation: action('blockConversation'),
+    onOutgoingAudioCallInConversation: action(
+      'onOutgoingAudioCallInConversation'
+    ),
+    onOutgoingVideoCallInConversation: action(
+      'onOutgoingVideoCallInConversation'
+    ),
+    removeConversation: action('removeConversation'),
     renderMessageSearchResult: (id: string) => (
       <MessageSearchResult
         body="Lorem ipsum wow"
@@ -147,16 +212,47 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
         getPreferredBadge={() => undefined}
         i18n={i18n}
         id={id}
-        showConversation={action('showConversation')}
         sentAt={1587358800000}
+        showConversation={action('showConversation')}
         snippet="Lorem <<left>>ipsum<<right>> wow"
         theme={ThemeType.light}
         to={defaultConversations[1]}
       />
     ),
-    renderNetworkStatus: () => <div />,
-    renderRelinkDialog: () => <div />,
-    renderUpdateDialog: () => <div />,
+
+    renderNetworkStatus: props => (
+      <DialogNetworkStatus
+        i18n={i18n}
+        socketStatus={SocketStatus.CLOSED}
+        isOnline={false}
+        isOutage={false}
+        manualReconnect={action('manualReconnect')}
+        {...overrideProps.dialogNetworkStatus}
+        {...props}
+      />
+    ),
+    renderRelinkDialog: props => (
+      <DialogRelink
+        i18n={i18n}
+        relinkDevice={action('relinkDevice')}
+        {...props}
+      />
+    ),
+    renderUpdateDialog: props => (
+      <DialogUpdate
+        i18n={i18n}
+        dialogType={
+          isUpdateDownloaded ? DialogType.AutoUpdate : DialogType.DownloadReady
+        }
+        dismissDialog={action('dismissUpdate')}
+        snoozeUpdate={action('snoozeUpdate')}
+        startUpdate={action('startUpdate')}
+        currentVersion="1.0.0"
+        {...overrideProps.dialogUpdate}
+        {...props}
+      />
+    ),
+
     renderCaptchaDialog: () => (
       <CaptchaDialog
         i18n={i18n}
@@ -169,15 +265,43 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
       <CrashReportDialog
         i18n={i18n}
         isPending={false}
-        uploadCrashReports={action('uploadCrashReports')}
+        writeCrashReportsToLog={action('writeCrashReportsToLog')}
         eraseCrashReports={action('eraseCrashReports')}
       />
     ),
+    renderExpiredBuildDialog: props => <DialogExpiredBuild {...props} />,
+    renderUnsupportedOSDialog: props => (
+      <UnsupportedOSDialog
+        i18n={i18n}
+        OS="macOS"
+        expirationTimestamp={Date.now() + 5 * DAY}
+        {...props}
+      />
+    ),
+    renderToastManager: ({ containerWidthBreakpoint }) => (
+      <ToastManager
+        OS="unused"
+        hideToast={action('hideToast')}
+        i18n={i18n}
+        onShowDebugLog={action('onShowDebugLog')}
+        onUndoArchive={action('onUndoArchive')}
+        openFileInFolder={action('openFileInFolder')}
+        showAttachmentNotAvailableModal={action(
+          'showAttachmentNotAvailableModal'
+        )}
+        toast={undefined}
+        megaphone={undefined}
+        containerWidthBreakpoint={containerWidthBreakpoint}
+        isInFullScreenCall={false}
+      />
+    ),
     selectedConversationId: undefined,
-    selectedMessageId: undefined,
+    targetedMessageId: undefined,
+    openUsernameReservationModal: action('openUsernameReservationModal'),
     savePreferredLeftPaneWidth: action('savePreferredLeftPaneWidth'),
     searchInConversation: action('searchInConversation'),
     setComposeSearchTerm: action('setComposeSearchTerm'),
+    setComposeSelectedRegion: action('setComposeSelectedRegion'),
     setComposeGroupAvatar: action('setComposeGroupAvatar'),
     setComposeGroupName: action('setComposeGroupName'),
     setComposeGroupExpireTimer: action('setComposeGroupExpireTimer'),
@@ -185,6 +309,8 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
     showInbox: action('showInbox'),
     startComposing: action('startComposing'),
     showChooseGroupMembers: action('showChooseGroupMembers'),
+    showFindByUsername: action('showFindByUsername'),
+    showFindByPhoneNumber: action('showFindByPhoneNumber'),
     startSearch: action('startSearch'),
     startSettingGroupMetadata: action('startSettingGroupMetadata'),
     theme: React.useContext(StorybookThemeContext),
@@ -192,6 +318,9 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
     toggleConversationInChooseMembers: action(
       'toggleConversationInChooseMembers'
     ),
+    toggleNavTabsCollapse: action('toggleNavTabsCollapse'),
+    toggleProfileEditor: action('toggleProfileEditor'),
+    updateFilterByUnread: action('updateFilterByUnread'),
     updateSearchTerm: action('updateSearchTerm'),
 
     ...overrideProps,
@@ -200,249 +329,376 @@ const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
   };
 };
 
-export const InboxNoConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations: [],
-        conversations: [],
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
+function LeftPaneInContainer(props: PropsType): JSX.Element {
+  return (
+    <div style={{ height: '600px' }}>
+      <LeftPane {...props} />
+    </div>
+  );
+}
 
-InboxNoConversations.story = {
-  name: 'Inbox: no conversations',
-};
-
-export const InboxOnlyPinnedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: [],
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxOnlyPinnedConversations.story = {
-  name: 'Inbox: only pinned conversations',
-};
-
-export const InboxOnlyNonPinnedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations: [],
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxOnlyNonPinnedConversations.story = {
-  name: 'Inbox: only non-pinned conversations',
-};
-
-export const InboxOnlyArchivedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations: [],
-        conversations: [],
-        archivedConversations: defaultArchivedConversations,
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxOnlyArchivedConversations.story = {
-  name: 'Inbox: only archived conversations',
-};
-
-export const InboxPinnedAndArchivedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: [],
-        archivedConversations: defaultArchivedConversations,
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxPinnedAndArchivedConversations.story = {
-  name: 'Inbox: pinned and archived conversations',
-};
-
-export const InboxNonPinnedAndArchivedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations: [],
-        conversations: defaultConversations,
-        archivedConversations: defaultArchivedConversations,
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxNonPinnedAndArchivedConversations.story = {
-  name: 'Inbox: non-pinned and archived conversations',
-};
-
-export const InboxPinnedAndNonPinnedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-      },
-    })}
-  />
-);
-
-InboxPinnedAndNonPinnedConversations.story = {
-  name: 'Inbox: pinned and non-pinned conversations',
-};
-
-export const InboxPinnedNonPinnedAndArchivedConversations = (): JSX.Element => (
-  <LeftPane {...useProps()} />
-);
-
-InboxPinnedNonPinnedAndArchivedConversations.story = {
-  name: 'Inbox: pinned, non-pinned, and archived conversations',
-};
-
-export const SearchNoResultsWhenSearchingEverywhere = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: emptySearchResultsGroup,
-        contactResults: emptySearchResultsGroup,
-        messageResults: emptySearchResultsGroup,
-        primarySendsSms: false,
-      },
-    })}
-  />
-);
-
-SearchNoResultsWhenSearchingEverywhere.story = {
-  name: 'Search: no results when searching everywhere',
-};
-
-export const SearchNoResultsWhenSearchingEverywhereSms = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: emptySearchResultsGroup,
-        contactResults: emptySearchResultsGroup,
-        messageResults: emptySearchResultsGroup,
-        primarySendsSms: true,
-      },
-    })}
-  />
-);
-
-SearchNoResultsWhenSearchingEverywhereSms.story = {
-  name: 'Search: no results when searching everywhere (SMS)',
-};
-
-export const SearchNoResultsWhenSearchingInAConversation = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: emptySearchResultsGroup,
-        contactResults: emptySearchResultsGroup,
-        messageResults: emptySearchResultsGroup,
-        searchConversationName: 'Bing Bong',
-        primarySendsSms: false,
-      },
-    })}
-  />
-);
-
-SearchNoResultsWhenSearchingInAConversation.story = {
-  name: 'Search: no results when searching in a conversation',
-};
-
-export const SearchAllResultsLoading = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: { isLoading: true },
-        contactResults: { isLoading: true },
-        messageResults: { isLoading: true },
-        primarySendsSms: false,
-      },
-    })}
-  />
-);
-
-SearchAllResultsLoading.story = {
-  name: 'Search: all results loading',
-};
-
-export const SearchSomeResultsLoading = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: {
-          isLoading: false,
-          results: defaultConversations,
+export function InboxNoConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: [],
+          archivedConversations: [],
+          isAboutToSearch: false,
         },
-        contactResults: { isLoading: true },
-        messageResults: { isLoading: true },
-        primarySendsSms: false,
-      },
-    })}
-  />
-);
+      })}
+    />
+  );
+}
 
-SearchSomeResultsLoading.story = {
-  name: 'Search: some results loading',
-};
+export function InboxBackupMediaDownload(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        backupMediaDownloadProgress,
+      })}
+    />
+  );
+}
 
-export const SearchHasConversationsAndContactsButNotMessages =
-  (): JSX.Element => (
-    <LeftPane
+export function InboxBackupMediaDownloadWithDialogs(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        backupMediaDownloadProgress,
+        unsupportedOSDialogType: 'error',
+      })}
+    />
+  );
+}
+export function InboxBackupMediaDownloadWithDialogsAndUnpinnedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        backupMediaDownloadProgress,
+        unsupportedOSDialogType: 'error',
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+export function InboxCriticalIdlePrimaryDeviceAlert(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.CRITICAL_IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now(),
+          },
+        },
+      })}
+    />
+  );
+}
+export function InboxIdlePrimaryDeviceAlert(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now(),
+          },
+        },
+      })}
+    />
+  );
+}
+export function InboxIdlePrimaryDeviceAlertNonDismissable(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now() - 10 * DAY,
+            dismissedAt: Date.now() - 8 * DAY,
+          },
+        },
+      })}
+    />
+  );
+}
+
+export function InboxUsernameCorrupted(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: [],
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+        usernameCorrupted: true,
+      })}
+    />
+  );
+}
+
+export function InboxUsernameLinkCorrupted(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: [],
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+        usernameLinkCorrupted: true,
+      })}
+    />
+  );
+}
+
+export function InboxOnlyPinnedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: [],
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxOnlyNonPinnedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxOnlyArchivedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: [],
+          archivedConversations: defaultArchivedConversations,
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxPinnedAndArchivedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: [],
+          archivedConversations: defaultArchivedConversations,
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxNonPinnedAndArchivedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: defaultConversations,
+          archivedConversations: defaultArchivedConversations,
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxPinnedAndNonPinnedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+
+export function InboxPinnedAndNonPinnedConversationsWithBackupDownload(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+        },
+        backupMediaDownloadProgress,
+      })}
+    />
+  );
+}
+
+export function InboxPinnedNonPinnedAndArchivedConversations(): JSX.Element {
+  return <LeftPaneInContainer {...useProps()} />;
+}
+
+export function SearchNoResultsWhenSearchingEverywhere(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchNoResultsWhenSearchingInAConversation(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
+          searchConversationName: 'Bing Bong',
+        },
+      })}
+    />
+  );
+}
+
+export function SearchNoResultsUnreadFilterAndQuery(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchNoResultsUnreadFilterWithoutQuery(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          searchTerm: '',
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchAllResultsLoading(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Search,
+          conversationResults: { isLoading: true },
+          contactResults: { isLoading: true },
+          messageResults: { isLoading: true },
+        },
+      })}
+    />
+  );
+}
+
+export function SearchSomeResultsLoading(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Search,
+          conversationResults: {
+            isLoading: false,
+            results: defaultConversations,
+          },
+          contactResults: { isLoading: true },
+          messageResults: { isLoading: true },
+        },
+      })}
+    />
+  );
+}
+
+export function SearchHasConversationsAndContactsButNotMessages(): JSX.Element {
+  return (
+    <LeftPaneInContainer
       {...useProps({
         modeSpecificProps: {
           ...defaultSearchProps,
@@ -453,578 +709,517 @@ export const SearchHasConversationsAndContactsButNotMessages =
           },
           contactResults: { isLoading: false, results: defaultConversations },
           messageResults: { isLoading: false, results: [] },
-          primarySendsSms: false,
         },
       })}
     />
   );
+}
 
-SearchHasConversationsAndContactsButNotMessages.story = {
-  name: 'Search: has conversations and contacts, but not messages',
-};
-
-export const SearchAllResults = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Search,
-        conversationResults: {
-          isLoading: false,
-          results: defaultConversations,
+export function SearchAllResults(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Search,
+          conversationResults: {
+            isLoading: false,
+            results: defaultConversations,
+          },
+          contactResults: { isLoading: false, results: defaultConversations },
+          messageResults: {
+            isLoading: false,
+            results: [
+              { id: 'msg1', type: 'outgoing', conversationId: 'foo' },
+              { id: 'msg2', type: 'incoming', conversationId: 'bar' },
+            ],
+          },
         },
-        contactResults: { isLoading: false, results: defaultConversations },
-        messageResults: {
-          isLoading: false,
-          results: [
-            { id: 'msg1', type: 'outgoing', conversationId: 'foo' },
-            { id: 'msg2', type: 'incoming', conversationId: 'bar' },
-          ],
+      })}
+    />
+  );
+}
+
+export function SearchAllResultsUnreadFilter(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: {
+            isLoading: false,
+            results: defaultConversations,
+          },
+          contactResults: { isLoading: false, results: [] },
+          messageResults: {
+            isLoading: false,
+            results: [],
+          },
         },
-        primarySendsSms: false,
-      },
-    })}
-  />
-);
+      })}
+    />
+  );
+}
 
-SearchAllResults.story = {
-  name: 'Search: all results',
-};
-
-export const ArchiveNoArchivedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Archive,
-        archivedConversations: [],
-        searchConversation: undefined,
-        searchTerm: '',
-        startSearchCounter: 0,
-      },
-    })}
-  />
-);
-
-ArchiveNoArchivedConversations.story = {
-  name: 'Archive: no archived conversations',
-};
-
-export const ArchiveArchivedConversations = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Archive,
-        archivedConversations: defaultConversations,
-        searchConversation: undefined,
-        searchTerm: '',
-        startSearchCounter: 0,
-      },
-    })}
-  />
-);
-
-ArchiveArchivedConversations.story = {
-  name: 'Archive: archived conversations',
-};
-
-export const ArchiveSearchingAConversation = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Archive,
-        archivedConversations: defaultConversations,
-        searchConversation: undefined,
-        searchTerm: '',
-        startSearchCounter: 0,
-      },
-    })}
-  />
-);
-
-ArchiveSearchingAConversation.story = {
-  name: 'Archive: searching a conversation',
-};
-
-export const ComposeNoResults = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '',
-      },
-    })}
-  />
-);
-
-ComposeNoResults.story = {
-  name: 'Compose: no results',
-};
-
-export const ComposeSomeContactsNoSearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: defaultConversations,
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '',
-      },
-    })}
-  />
-);
-
-ComposeSomeContactsNoSearchTerm.story = {
-  name: 'Compose: some contacts, no search term',
-};
-
-export const ComposeSomeContactsWithASearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: defaultConversations,
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: 'ar',
-      },
-    })}
-  />
-);
-
-ComposeSomeContactsWithASearchTerm.story = {
-  name: 'Compose: some contacts, with a search term',
-};
-
-export const ComposeSomeGroupsNoSearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: defaultGroups,
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '',
-      },
-    })}
-  />
-);
-
-ComposeSomeGroupsNoSearchTerm.story = {
-  name: 'Compose: some groups, no search term',
-};
-
-export const ComposeSomeGroupsWithSearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: defaultGroups,
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: 'ar',
-      },
-    })}
-  />
-);
-
-ComposeSomeGroupsWithSearchTerm.story = {
-  name: 'Compose: some groups, with search term',
-};
-
-export const ComposeSearchIsValidUsername = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: 'someone',
-      },
-    })}
-  />
-);
-
-ComposeSearchIsValidUsername.story = {
-  name: 'Compose: search is valid username',
-};
-
-export const ComposeSearchIsValidUsernameFetchingUsername = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {
-          'username:someone': true,
+export function ArchiveNoArchivedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Archive,
+          archivedConversations: [],
+          isSearchingGlobally: false,
+          searchConversation: undefined,
+          searchTerm: '',
+          startSearchCounter: 0,
         },
-        regionCode: 'US',
-        searchTerm: 'someone',
-      },
-    })}
-  />
-);
+      })}
+    />
+  );
+}
 
-ComposeSearchIsValidUsernameFetchingUsername.story = {
-  name: 'Compose: search is valid username, fetching username',
-};
+export function ArchiveArchivedConversations(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Archive,
+          archivedConversations: defaultConversations,
+          isSearchingGlobally: false,
+          searchConversation: undefined,
+          searchTerm: '',
+          startSearchCounter: 0,
+        },
+      })}
+    />
+  );
+}
 
-export const ComposeSearchIsValidUsernameButFlagIsNotEnabled =
-  (): JSX.Element => (
-    <LeftPane
+export function ArchiveSearchingAConversation(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Archive,
+          archivedConversations: defaultConversations,
+          isSearchingGlobally: false,
+          searchConversation: undefined,
+          searchTerm: '',
+          startSearchCounter: 0,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeNoResults(): JSX.Element {
+  return (
+    <LeftPaneInContainer
       {...useProps({
         modeSpecificProps: {
           mode: LeftPaneMode.Compose,
           composeContacts: [],
           composeGroups: [],
-          isUsernamesEnabled: false,
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: '',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSomeContactsNoSearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: defaultConversations,
+          composeGroups: [],
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: '',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSomeContactsWithASearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: defaultConversations,
+          composeGroups: [],
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: 'ar',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSomeGroupsNoSearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: [],
+          composeGroups: defaultGroups,
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: '',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSomeGroupsWithSearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: [],
+          composeGroups: defaultGroups,
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: 'ar',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSearchIsValidUsername(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: [],
+          composeGroups: [],
           uuidFetchState: {},
           regionCode: 'US',
           searchTerm: 'someone',
+          username: 'someone',
         },
       })}
     />
   );
+}
 
-ComposeSearchIsValidUsernameButFlagIsNotEnabled.story = {
-  name: 'Compose: search is valid username, but flag is not enabled',
-};
-
-export const ComposeSearchIsPartialPhoneNumber = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: [],
-        isUsernamesEnabled: false,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '+1(212)555',
-      },
-    })}
-  />
-);
-
-ComposeSearchIsPartialPhoneNumber.story = {
-  name: 'Compose: search is partial phone number',
-};
-
-export const ComposeSearchIsValidPhoneNumber = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: [],
-        composeGroups: [],
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '2125555454',
-      },
-    })}
-  />
-);
-
-ComposeSearchIsValidPhoneNumber.story = {
-  name: 'Compose: search is valid phone number',
-};
-
-export const ComposeSearchIsValidPhoneNumberFetchingPhoneNumber =
-  (): JSX.Element => (
-    <LeftPane
+export function ComposeSearchIsValidUsernameFetchingUsername(): JSX.Element {
+  return (
+    <LeftPaneInContainer
       {...useProps({
         modeSpecificProps: {
           mode: LeftPaneMode.Compose,
           composeContacts: [],
           composeGroups: [],
-          isUsernamesEnabled: true,
+          uuidFetchState: {
+            'username:someone': true,
+          },
+          regionCode: 'US',
+          searchTerm: 'someone',
+          username: 'someone',
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSearchIsValidPhoneNumber(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: [],
+          composeGroups: [],
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: '2125555454',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
+
+export function ComposeSearchIsValidPhoneNumberFetchingPhoneNumber(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: [],
+          composeGroups: [],
           uuidFetchState: {
             'e164:+12125555454': true,
           },
           regionCode: 'US',
           searchTerm: '(212)5555454',
+          username: undefined,
         },
       })}
     />
   );
+}
 
-ComposeSearchIsValidPhoneNumberFetchingPhoneNumber.story = {
-  name: 'Compose: search is valid phone number, fetching phone number',
-};
+export function ComposeAllKindsOfResultsNoSearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: defaultConversations,
+          composeGroups: defaultGroups,
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: '',
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
 
-export const ComposeAllKindsOfResultsNoSearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: defaultConversations,
-        composeGroups: defaultGroups,
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: '',
-      },
-    })}
-  />
-);
+export function ComposeAllKindsOfResultsWithASearchTerm(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.Compose,
+          composeContacts: defaultConversations,
+          composeGroups: defaultGroups,
+          uuidFetchState: {},
+          regionCode: 'US',
+          searchTerm: 'someone',
+          username: 'someone',
+        },
+      })}
+    />
+  );
+}
 
-ComposeAllKindsOfResultsNoSearchTerm.story = {
-  name: 'Compose: all kinds of results, no search term',
-};
+export function CaptchaDialogRequired(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+          searchTerm: '',
+        },
+        challengeStatus: 'required',
+      })}
+    />
+  );
+}
 
-export const ComposeAllKindsOfResultsWithASearchTerm = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.Compose,
-        composeContacts: defaultConversations,
-        composeGroups: defaultGroups,
-        isUsernamesEnabled: true,
-        uuidFetchState: {},
-        regionCode: 'US',
-        searchTerm: 'someone',
-      },
-    })}
-  />
-);
+export function CaptchaDialogPending(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+          searchTerm: '',
+        },
+        challengeStatus: 'pending',
+      })}
+    />
+  );
+}
 
-ComposeAllKindsOfResultsWithASearchTerm.story = {
-  name: 'Compose: all kinds of results, with a search term',
-};
+export function _CrashReportDialog(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations,
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+          searchTerm: '',
+        },
+        crashReportCount: 42,
+      })}
+    />
+  );
+}
 
-export const CaptchaDialogRequired = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-        searchTerm: '',
-      },
-      challengeStatus: 'required',
-    })}
-  />
-);
+export function ChooseGroupMembersPartialPhoneNumber(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.ChooseGroupMembers,
+          uuidFetchState: {},
+          candidateContacts: [],
+          groupSizeRecommendedLimit: 151,
+          groupSizeHardLimit: 1001,
+          isShowingRecommendedGroupSizeModal: false,
+          isShowingMaximumGroupSizeModal: false,
+          ourE164: undefined,
+          ourUsername: undefined,
+          searchTerm: '+1(212) 555',
+          username: undefined,
+          regionCode: 'US',
+          selectedContacts: [],
+        },
+      })}
+    />
+  );
+}
 
-CaptchaDialogRequired.story = {
-  name: 'Captcha dialog: required',
-};
+export function ChooseGroupMembersValidPhoneNumber(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.ChooseGroupMembers,
+          uuidFetchState: {},
+          candidateContacts: [],
+          groupSizeRecommendedLimit: 151,
+          groupSizeHardLimit: 1001,
+          isShowingRecommendedGroupSizeModal: false,
+          isShowingMaximumGroupSizeModal: false,
+          ourE164: undefined,
+          ourUsername: undefined,
+          searchTerm: '+1(212) 555 5454',
+          regionCode: 'US',
+          selectedContacts: [],
+          username: undefined,
+        },
+      })}
+    />
+  );
+}
 
-export const CaptchaDialogPending = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-        searchTerm: '',
-      },
-      challengeStatus: 'pending',
-    })}
-  />
-);
+export function ChooseGroupMembersUsername(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.ChooseGroupMembers,
+          uuidFetchState: {},
+          candidateContacts: [],
+          groupSizeRecommendedLimit: 151,
+          groupSizeHardLimit: 1001,
+          isShowingRecommendedGroupSizeModal: false,
+          isShowingMaximumGroupSizeModal: false,
+          ourE164: undefined,
+          ourUsername: undefined,
+          searchTerm: 'signal.01',
+          regionCode: 'US',
+          selectedContacts: [],
+          username: 'signal.01',
+        },
+      })}
+    />
+  );
+}
 
-CaptchaDialogPending.story = {
-  name: 'Captcha dialog: pending',
-};
+export function GroupMetadataNoTimer(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.SetGroupMetadata,
+          groupAvatar: undefined,
+          groupName: 'Group 1',
+          groupExpireTimer: DurationInSeconds.ZERO,
+          hasError: false,
+          isCreating: false,
+          isEditingAvatar: false,
+          selectedContacts: defaultConversations,
+          userAvatarData: [],
+        },
+      })}
+    />
+  );
+}
 
-export const _CrashReportDialog = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations,
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-        searchTerm: '',
-      },
-      crashReportCount: 42,
-    })}
-  />
-);
+export function GroupMetadataRegularTimer(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.SetGroupMetadata,
+          groupAvatar: undefined,
+          groupName: 'Group 1',
+          groupExpireTimer: DurationInSeconds.DAY,
+          hasError: false,
+          isCreating: false,
+          isEditingAvatar: false,
+          selectedContacts: defaultConversations,
+          userAvatarData: [],
+        },
+      })}
+    />
+  );
+}
 
-_CrashReportDialog.story = {
-  name: 'Crash report dialog',
-};
+export function GroupMetadataCustomTimer(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          mode: LeftPaneMode.SetGroupMetadata,
+          groupAvatar: undefined,
+          groupName: 'Group 1',
+          groupExpireTimer: DurationInSeconds.fromHours(7),
+          hasError: false,
+          isCreating: false,
+          isEditingAvatar: false,
+          selectedContacts: defaultConversations,
+          userAvatarData: [],
+        },
+      })}
+    />
+  );
+}
 
-export const ChooseGroupMembersPartialPhoneNumber = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.ChooseGroupMembers,
-        uuidFetchState: {},
-        candidateContacts: [],
-        groupSizeRecommendedLimit: 151,
-        groupSizeHardLimit: 1001,
-        isShowingRecommendedGroupSizeModal: false,
-        isShowingMaximumGroupSizeModal: false,
-        isUsernamesEnabled: true,
-        searchTerm: '+1(212) 555',
-        regionCode: 'US',
-        selectedContacts: [],
-      },
-    })}
-  />
-);
-
-ChooseGroupMembersPartialPhoneNumber.story = {
-  name: 'Choose Group Members: Partial phone number',
-};
-
-export const ChooseGroupMembersValidPhoneNumber = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.ChooseGroupMembers,
-        uuidFetchState: {},
-        candidateContacts: [],
-        groupSizeRecommendedLimit: 151,
-        groupSizeHardLimit: 1001,
-        isShowingRecommendedGroupSizeModal: false,
-        isShowingMaximumGroupSizeModal: false,
-        isUsernamesEnabled: true,
-        searchTerm: '+1(212) 555 5454',
-        regionCode: 'US',
-        selectedContacts: [],
-      },
-    })}
-  />
-);
-
-ChooseGroupMembersValidPhoneNumber.story = {
-  name: 'Choose Group Members: Valid phone number',
-};
-
-export const ChooseGroupMembersUsername = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.ChooseGroupMembers,
-        uuidFetchState: {},
-        candidateContacts: [],
-        groupSizeRecommendedLimit: 151,
-        groupSizeHardLimit: 1001,
-        isShowingRecommendedGroupSizeModal: false,
-        isShowingMaximumGroupSizeModal: false,
-        isUsernamesEnabled: true,
-        searchTerm: '@signal',
-        regionCode: 'US',
-        selectedContacts: [],
-      },
-    })}
-  />
-);
-
-ChooseGroupMembersUsername.story = {
-  name: 'Choose Group Members: username',
-};
-
-export const GroupMetadataNoTimer = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.SetGroupMetadata,
-        groupAvatar: undefined,
-        groupName: 'Group 1',
-        groupExpireTimer: 0,
-        hasError: false,
-        isCreating: false,
-        isEditingAvatar: false,
-        selectedContacts: defaultConversations,
-        userAvatarData: [],
-      },
-    })}
-  />
-);
-
-GroupMetadataNoTimer.story = {
-  name: 'Group Metadata: No Timer',
-};
-
-export const GroupMetadataRegularTimer = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.SetGroupMetadata,
-        groupAvatar: undefined,
-        groupName: 'Group 1',
-        groupExpireTimer: 24 * 3600,
-        hasError: false,
-        isCreating: false,
-        isEditingAvatar: false,
-        selectedContacts: defaultConversations,
-        userAvatarData: [],
-      },
-    })}
-  />
-);
-
-GroupMetadataRegularTimer.story = {
-  name: 'Group Metadata: Regular Timer',
-};
-
-export const GroupMetadataCustomTimer = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        mode: LeftPaneMode.SetGroupMetadata,
-        groupAvatar: undefined,
-        groupName: 'Group 1',
-        groupExpireTimer: 7 * 3600,
-        hasError: false,
-        isCreating: false,
-        isEditingAvatar: false,
-        selectedContacts: defaultConversations,
-        userAvatarData: [],
-      },
-    })}
-  />
-);
-
-GroupMetadataCustomTimer.story = {
-  name: 'Group Metadata: Custom Timer',
-};
-
-export const SearchingConversation = (): JSX.Element => (
-  <LeftPane
-    {...useProps({
-      modeSpecificProps: {
-        ...defaultSearchProps,
-        mode: LeftPaneMode.Inbox,
-        pinnedConversations: [],
-        conversations: defaultConversations,
-        archivedConversations: [],
-        isAboutToSearchInAConversation: false,
-        searchConversation: getDefaultConversation(),
-        searchTerm: '',
-      },
-    })}
-  />
-);
+export function SearchingConversation(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          mode: LeftPaneMode.Inbox,
+          pinnedConversations: [],
+          conversations: defaultConversations,
+          archivedConversations: [],
+          isAboutToSearch: false,
+          searchConversation: getDefaultConversation(),
+          searchTerm: '',
+        },
+      })}
+    />
+  );
+}

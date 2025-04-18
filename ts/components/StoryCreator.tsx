@@ -4,24 +4,44 @@
 import React, { useEffect, useState } from 'react';
 import { get, has } from 'lodash';
 
+import { createPortal } from 'react-dom';
 import type {
   AttachmentType,
   InMemoryAttachmentDraftType,
 } from '../types/Attachment';
 import type { LinkPreviewSourceType } from '../types/LinkPreview';
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
-import type { LocalizerType } from '../types/Util';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews';
+import type { LocalizerType, ThemeType } from '../types/Util';
 import type { Props as StickerButtonProps } from './stickers/StickerButton';
 import type { PropsType as SendStoryModalPropsType } from './SendStoryModal';
-import type { UUIDStringType } from '../types/UUID';
+import type { StoryDistributionIdString } from '../types/StoryDistributionId';
+import type { imageToBlurHash } from '../util/imageToBlurHash';
+import type { PropsType as TextStoryCreatorPropsType } from './TextStoryCreator';
+import type { PropsType as MediaEditorPropsType } from './MediaEditor';
 
-import { IMAGE_JPEG, TEXT_ATTACHMENT } from '../types/MIME';
+import { TEXT_ATTACHMENT } from '../types/MIME';
 import { isVideoAttachment } from '../types/Attachment';
 import { SendStoryModal } from './SendStoryModal';
 
 import { MediaEditor } from './MediaEditor';
 import { TextStoryCreator } from './TextStoryCreator';
-import type { SmartCompositionTextAreaProps } from '../state/smart/CompositionTextArea';
+import type { DraftBodyRanges } from '../types/BodyRange';
+
+function usePortalElement(testid: string): HTMLDivElement | null {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const div = document.createElement('div');
+    div.dataset.testid = testid;
+    document.body.appendChild(div);
+    setElement(div);
+    return () => {
+      document.body.removeChild(div);
+    };
+  }, [testid]);
+
+  return element;
+}
 
 export type PropsType = {
   debouncedMaybeGrabLinkPreview: (
@@ -31,20 +51,20 @@ export type PropsType = {
   file?: File;
   i18n: LocalizerType;
   isSending: boolean;
-  linkPreview?: LinkPreviewType;
+  linkPreview?: LinkPreviewForUIType;
   onClose: () => unknown;
   onSend: (
-    listIds: Array<UUIDStringType>,
+    listIds: Array<StoryDistributionIdString>,
     conversationIds: Array<string>,
-    attachment: AttachmentType
+    attachment: AttachmentType,
+    bodyRanges: DraftBodyRanges | undefined
   ) => unknown;
+  imageToBlurHash: typeof imageToBlurHash;
   processAttachment: (
     file: File
   ) => Promise<void | InMemoryAttachmentDraftType>;
-  renderCompositionTextArea: (
-    props: SmartCompositionTextAreaProps
-  ) => JSX.Element;
   sendStoryModalOpenStateChanged: (isOpen: boolean) => unknown;
+  theme: ThemeType;
 } & Pick<StickerButtonProps, 'installedPacks' | 'recentStickers'> &
   Pick<
     SendStoryModalPropsType,
@@ -55,20 +75,38 @@ export type PropsType = {
     | 'groupStories'
     | 'hasFirstStoryPostExperience'
     | 'me'
+    | 'ourConversationId'
     | 'onDeleteList'
     | 'onDistributionListCreated'
     | 'onHideMyStoriesFrom'
-    | 'onRemoveMember'
+    | 'onRemoveMembers'
     | 'onRepliesNReactionsChanged'
     | 'onSelectedStoryList'
     | 'onViewersUpdated'
     | 'setMyStoriesToAllSignalConnections'
     | 'signalConnections'
     | 'toggleGroupsForStorySend'
+    | 'mostRecentActiveStoryTimestampByGroupOrDistributionList'
     | 'toggleSignalConnectionsModal'
+    | 'onMediaPlaybackStart'
+  > &
+  Pick<
+    TextStoryCreatorPropsType,
+    | 'onUseEmoji'
+    | 'emojiSkinToneDefault'
+    | 'onEmojiSkinToneDefaultChange'
+    | 'recentEmojis'
+  > &
+  Pick<
+    MediaEditorPropsType,
+    | 'isFormattingEnabled'
+    | 'onPickEmoji'
+    | 'onTextTooLong'
+    | 'platform'
+    | 'sortedGroupMembers'
   >;
 
-export const StoryCreator = ({
+export function StoryCreator({
   candidateConversations,
   debouncedMaybeGrabLinkPreview,
   distributionLists,
@@ -78,32 +116,49 @@ export const StoryCreator = ({
   groupStories,
   hasFirstStoryPostExperience,
   i18n,
+  imageToBlurHash,
   installedPacks,
+  isFormattingEnabled,
   isSending,
   linkPreview,
   me,
+  mostRecentActiveStoryTimestampByGroupOrDistributionList,
   onClose,
   onDeleteList,
   onDistributionListCreated,
   onHideMyStoriesFrom,
-  onRemoveMember,
+  onMediaPlaybackStart,
+  onPickEmoji,
+  onRemoveMembers,
   onRepliesNReactionsChanged,
   onSelectedStoryList,
   onSend,
+  onEmojiSkinToneDefaultChange,
+  onTextTooLong,
+  onUseEmoji,
   onViewersUpdated,
+  ourConversationId,
+  platform,
   processAttachment,
+  recentEmojis,
   recentStickers,
-  renderCompositionTextArea,
   sendStoryModalOpenStateChanged,
   setMyStoriesToAllSignalConnections,
   signalConnections,
+  emojiSkinToneDefault,
+  sortedGroupMembers,
+  theme,
   toggleGroupsForStorySend,
   toggleSignalConnectionsModal,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element | null {
+  const portalElement = usePortalElement('StoryCreatorPortal');
+
   const [draftAttachment, setDraftAttachment] = useState<
     AttachmentType | undefined
   >();
+  const [isReadyToSend, setIsReadyToSend] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState<string | undefined>();
+  const [bodyRanges, setBodyRanges] = useState<DraftBodyRanges | undefined>();
 
   useEffect(() => {
     let url: string | undefined;
@@ -119,15 +174,20 @@ export const StoryCreator = ({
         return;
       }
 
+      setDraftAttachment(attachment);
       if (isVideoAttachment(attachment)) {
-        setDraftAttachment(attachment);
+        setAttachmentUrl(undefined);
+        setIsReadyToSend(true);
       } else if (attachment && has(attachment, 'data')) {
         url = URL.createObjectURL(new Blob([get(attachment, 'data')]));
         setAttachmentUrl(url);
+
+        // Needs editing in MediaEditor
+        setIsReadyToSend(false);
       }
     }
 
-    loadAttachment();
+    void loadAttachment();
 
     return () => {
       unmounted = true;
@@ -138,79 +198,117 @@ export const StoryCreator = ({
   }, [file, processAttachment]);
 
   useEffect(() => {
-    sendStoryModalOpenStateChanged(Boolean(draftAttachment));
+    if (draftAttachment === undefined) {
+      sendStoryModalOpenStateChanged(false);
+      setIsReadyToSend(false);
+    } else {
+      sendStoryModalOpenStateChanged(true);
+    }
   }, [draftAttachment, sendStoryModalOpenStateChanged]);
 
-  return (
-    <>
-      {draftAttachment && (
-        <SendStoryModal
-          draftAttachment={draftAttachment}
-          candidateConversations={candidateConversations}
-          distributionLists={distributionLists}
-          getPreferredBadge={getPreferredBadge}
-          groupConversations={groupConversations}
-          groupStories={groupStories}
-          hasFirstStoryPostExperience={hasFirstStoryPostExperience}
-          i18n={i18n}
-          me={me}
-          onClose={() => setDraftAttachment(undefined)}
-          onDeleteList={onDeleteList}
-          onDistributionListCreated={onDistributionListCreated}
-          onHideMyStoriesFrom={onHideMyStoriesFrom}
-          onRemoveMember={onRemoveMember}
-          onRepliesNReactionsChanged={onRepliesNReactionsChanged}
-          onSelectedStoryList={onSelectedStoryList}
-          onSend={(listIds, groupIds) => {
-            onSend(listIds, groupIds, draftAttachment);
-            setDraftAttachment(undefined);
-          }}
-          onViewersUpdated={onViewersUpdated}
-          setMyStoriesToAllSignalConnections={
-            setMyStoriesToAllSignalConnections
-          }
-          signalConnections={signalConnections}
-          toggleGroupsForStorySend={toggleGroupsForStorySend}
-          toggleSignalConnectionsModal={toggleSignalConnectionsModal}
-        />
-      )}
-      {attachmentUrl && (
-        <MediaEditor
-          doneButtonLabel={i18n('next2')}
-          i18n={i18n}
-          imageSrc={attachmentUrl}
-          installedPacks={installedPacks}
-          isSending={isSending}
-          onClose={onClose}
-          supportsCaption
-          renderCompositionTextArea={renderCompositionTextArea}
-          onDone={(data, caption) => {
-            setDraftAttachment({
-              contentType: IMAGE_JPEG,
-              data,
-              size: data.byteLength,
-              caption,
-            });
-          }}
-          recentStickers={recentStickers}
-        />
-      )}
-      {!file && (
-        <TextStoryCreator
-          debouncedMaybeGrabLinkPreview={debouncedMaybeGrabLinkPreview}
-          i18n={i18n}
-          isSending={isSending}
-          linkPreview={linkPreview}
-          onClose={onClose}
-          onDone={textAttachment => {
-            setDraftAttachment({
-              contentType: TEXT_ATTACHMENT,
-              textAttachment,
-              size: textAttachment.text?.length || 0,
-            });
-          }}
-        />
-      )}
-    </>
-  );
-};
+  return portalElement != null
+    ? createPortal(
+        <>
+          {draftAttachment && isReadyToSend && (
+            <SendStoryModal
+              draftAttachment={draftAttachment}
+              candidateConversations={candidateConversations}
+              distributionLists={distributionLists}
+              getPreferredBadge={getPreferredBadge}
+              groupConversations={groupConversations}
+              groupStories={groupStories}
+              hasFirstStoryPostExperience={hasFirstStoryPostExperience}
+              ourConversationId={ourConversationId}
+              i18n={i18n}
+              me={me}
+              onClose={() => setIsReadyToSend(false)}
+              onDeleteList={onDeleteList}
+              onDistributionListCreated={onDistributionListCreated}
+              onHideMyStoriesFrom={onHideMyStoriesFrom}
+              onRemoveMembers={onRemoveMembers}
+              onRepliesNReactionsChanged={onRepliesNReactionsChanged}
+              onSelectedStoryList={onSelectedStoryList}
+              onSend={(listIds, groupIds) => {
+                onSend(listIds, groupIds, draftAttachment, bodyRanges);
+                setDraftAttachment(undefined);
+              }}
+              onViewersUpdated={onViewersUpdated}
+              onMediaPlaybackStart={onMediaPlaybackStart}
+              setMyStoriesToAllSignalConnections={
+                setMyStoriesToAllSignalConnections
+              }
+              signalConnections={signalConnections}
+              toggleGroupsForStorySend={toggleGroupsForStorySend}
+              mostRecentActiveStoryTimestampByGroupOrDistributionList={
+                mostRecentActiveStoryTimestampByGroupOrDistributionList
+              }
+              theme={theme}
+              toggleSignalConnectionsModal={toggleSignalConnectionsModal}
+            />
+          )}
+          {draftAttachment && attachmentUrl && (
+            <MediaEditor
+              doneButtonLabel={i18n('icu:next2')}
+              getPreferredBadge={getPreferredBadge}
+              i18n={i18n}
+              imageSrc={attachmentUrl}
+              imageToBlurHash={imageToBlurHash}
+              installedPacks={installedPacks}
+              isFormattingEnabled={isFormattingEnabled}
+              isSending={isSending}
+              onClose={onClose}
+              onDone={({
+                contentType,
+                data,
+                blurHash,
+                caption,
+                captionBodyRanges,
+              }) => {
+                setDraftAttachment({
+                  ...draftAttachment,
+                  contentType,
+                  data,
+                  size: data.byteLength,
+                  blurHash,
+                  caption,
+                });
+                setBodyRanges(captionBodyRanges);
+                setIsReadyToSend(true);
+              }}
+              onPickEmoji={onPickEmoji}
+              onTextTooLong={onTextTooLong}
+              ourConversationId={ourConversationId}
+              platform={platform}
+              recentStickers={recentStickers}
+              emojiSkinToneDefault={emojiSkinToneDefault}
+              sortedGroupMembers={sortedGroupMembers}
+              draftText={null}
+              draftBodyRanges={null}
+            />
+          )}
+          {!file && (
+            <TextStoryCreator
+              debouncedMaybeGrabLinkPreview={debouncedMaybeGrabLinkPreview}
+              i18n={i18n}
+              isSending={isSending}
+              linkPreview={linkPreview}
+              onClose={onClose}
+              onDone={textAttachment => {
+                setDraftAttachment({
+                  contentType: TEXT_ATTACHMENT,
+                  textAttachment,
+                  size: textAttachment.text?.length || 0,
+                });
+                setIsReadyToSend(true);
+              }}
+              onUseEmoji={onUseEmoji}
+              onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+              recentEmojis={recentEmojis}
+              emojiSkinToneDefault={emojiSkinToneDefault}
+            />
+          )}
+        </>,
+        portalElement
+      )
+    : null;
+}

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { EventEmitter } from 'events';
@@ -9,25 +9,22 @@ import Long from 'long';
 
 import type { LoggerType } from '../../types/Logging';
 import { strictAssert } from '../../util/assert';
-import { dropNull } from '../../util/dropNull';
-import { UUID_BYTE_SIZE } from '../../types/UUID';
+import { isUntaggedPniString, toTaggedPni } from '../../types/ServiceId';
+import { isAciString } from '../../util/isAciString';
 import * as Bytes from '../../Bytes';
-import { uuidToBytes, bytesToUuid } from '../../Crypto';
+import { UUID_BYTE_SIZE } from '../../types/Crypto';
+import { uuidToBytes, bytesToUuid } from '../../util/uuidToBytes';
 import { SignalService as Proto } from '../../protobuf';
 import type {
   CDSRequestOptionsType,
   CDSResponseEntryType,
   CDSResponseType,
 } from './Types.d';
+import { RateLimitedError } from './RateLimitedError';
 
 export type CDSSocketBaseOptionsType = Readonly<{
   logger: LoggerType;
   socket: WebSocket;
-}>;
-
-export type CDSSocketResponseType = Readonly<{
-  response: CDSResponseType;
-  retryAfterSecs?: number;
 }>;
 
 export enum CDSSocketState {
@@ -42,7 +39,7 @@ const E164_BYTE_SIZE = 8;
 const TRIPLE_BYTE_SIZE = UUID_BYTE_SIZE * 2 + E164_BYTE_SIZE;
 
 export abstract class CDSSocketBase<
-  Options extends CDSSocketBaseOptionsType = CDSSocketBaseOptionsType
+  Options extends CDSSocketBaseOptionsType = CDSSocketBaseOptionsType,
 > extends EventEmitter {
   protected state = CDSSocketState.Open;
 
@@ -59,7 +56,7 @@ export abstract class CDSSocketBase<
     this.logger = options.logger;
     this.socket = options.socket;
 
-    this.socketIterator = this.iterateSocket();
+    this.socketIterator = this.#iterateSocket();
   }
 
   public async close(code: number, reason: string): Promise<void> {
@@ -68,10 +65,9 @@ export abstract class CDSSocketBase<
 
   public async request({
     e164s,
-    acis,
-    accessKeys,
+    acisAndAccessKeys,
     returnAcisWithoutUaks = false,
-  }: CDSRequestOptionsType): Promise<CDSSocketResponseType> {
+  }: CDSRequestOptionsType): Promise<CDSResponseType> {
     const log = this.logger;
 
     strictAssert(
@@ -84,23 +80,11 @@ export abstract class CDSSocketBase<
       'CDS Connection not established'
     );
 
-    const aciUakPairs = new Array<Uint8Array>();
-
     const version = 2;
-    strictAssert(
-      acis.length === accessKeys.length,
-      `Number of ACIs ${acis.length} is different ` +
-        `from number of access keys ${accessKeys.length}`
-    );
 
-    for (let i = 0; i < acis.length; i += 1) {
-      aciUakPairs.push(
-        Bytes.concatenate([
-          uuidToBytes(acis[i]),
-          Bytes.fromBase64(accessKeys[i]),
-        ])
-      );
-    }
+    const aciUakPairs = acisAndAccessKeys.map(({ aci, accessKey }) =>
+      Bytes.concatenate([uuidToBytes(aci), Bytes.fromBase64(accessKey)])
+    );
 
     const request = Proto.CDSClientRequest.encode({
       newE164s: Buffer.concat(
@@ -117,7 +101,6 @@ export abstract class CDSSocketBase<
     await this.sendRequest(version, Buffer.from(request));
 
     const resultMap: Map<string, CDSResponseEntryType> = new Map();
-    let retryAfterSecs: number | undefined;
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -134,21 +117,12 @@ export abstract class CDSSocketBase<
       log.info('CDSSocket.request(): processing response message');
 
       const response = Proto.CDSClientResponse.decode(message);
-      const newRetryAfterSecs = dropNull(response.retryAfterSecs);
 
       decodeSingleResponse(resultMap, response);
-
-      if (newRetryAfterSecs) {
-        retryAfterSecs = Math.max(newRetryAfterSecs, retryAfterSecs ?? 0);
-      }
     }
 
     log.info('CDSSocket.request(): done');
-
-    return {
-      response: resultMap,
-      retryAfterSecs,
-    };
+    return { debugPermitsUsed: 0, entries: resultMap };
   }
 
   // Abstract methods
@@ -187,7 +161,7 @@ export abstract class CDSSocketBase<
   // Private
   //
 
-  private iterateSocket(): AsyncIterator<Buffer> {
+  #iterateSocket(): AsyncIterator<Buffer> {
     const stream = new Readable({ read: noop, objectMode: true });
 
     this.socket.on('message', ({ type, binaryData }) => {
@@ -200,6 +174,19 @@ export abstract class CDSSocketBase<
     this.socket.on('close', (code, reason) => {
       if (code === 1000) {
         stream.push(null);
+      } else if (code === 4008) {
+        try {
+          const payload = JSON.parse(reason);
+
+          stream.destroy(new RateLimitedError(payload));
+        } catch (error) {
+          stream.destroy(
+            new Error(
+              `Socket closed with code ${code} and reason ${reason}, ` +
+                'but rate limiting response cannot be parsed'
+            )
+          );
+        }
       } else {
         stream.destroy(
           new Error(`Socket closed with code ${code} and reason ${reason}`)
@@ -216,6 +203,9 @@ function decodeSingleResponse(
   resultMap: Map<string, CDSResponseEntryType>,
   response: Proto.CDSClientResponse
 ): void {
+  if (!response.e164PniAciTriples) {
+    return;
+  }
   for (
     let i = 0;
     i < response.e164PniAciTriples.length;
@@ -248,7 +238,18 @@ function decodeSingleResponse(
     const e164 = `+${e164Long.toString()}`;
     const pni = bytesToUuid(pniBytes);
     const aci = bytesToUuid(aciBytes);
+    strictAssert(
+      aci === undefined || isAciString(aci),
+      'CDSI response has invalid ACI'
+    );
+    strictAssert(
+      pni === undefined || isUntaggedPniString(pni),
+      'CDSI response has invalid PNI'
+    );
 
-    resultMap.set(e164, { pni, aci });
+    resultMap.set(e164, {
+      pni: pni === undefined ? undefined : toTaggedPni(pni),
+      aci,
+    });
   }
 }

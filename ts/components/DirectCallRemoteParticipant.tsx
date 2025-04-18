@@ -1,26 +1,30 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useRef, useEffect } from 'react';
+import classNames from 'classnames';
 import type { SetRendererCanvasType } from '../state/ducks/calling';
 import type { ConversationType } from '../state/ducks/conversations';
 import type { LocalizerType } from '../types/Util';
 import { AvatarColors } from '../types/Colors';
-import { Avatar } from './Avatar';
+import { Avatar, AvatarSize } from './Avatar';
+import { CallBackgroundBlur } from './CallBackgroundBlur';
 
 type PropsType = {
   conversation: ConversationType;
   hasRemoteVideo: boolean;
   i18n: LocalizerType;
+  isReconnecting: boolean;
   setRendererCanvas: (_: SetRendererCanvasType) => void;
 };
 
-export const DirectCallRemoteParticipant: React.FC<PropsType> = ({
+export function DirectCallRemoteParticipant({
   conversation,
   hasRemoteVideo,
   i18n,
+  isReconnecting,
   setRendererCanvas,
-}) => {
+}: PropsType): JSX.Element {
   const remoteVideoRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -32,30 +36,36 @@ export const DirectCallRemoteParticipant: React.FC<PropsType> = ({
 
   return hasRemoteVideo ? (
     <canvas
-      className="module-ongoing-call__remote-video-enabled"
+      className={classNames(
+        'module-ongoing-call__remote-video-enabled',
+        isReconnecting &&
+          'module-ongoing-call__remote-video-enabled--reconnecting'
+      )}
       ref={remoteVideoRef}
     />
   ) : (
     renderAvatar(i18n, conversation)
   );
-};
+}
 
 function renderAvatar(
   i18n: LocalizerType,
   {
-    acceptedMessageRequest,
-    avatarPath,
+    avatarPlaceholderGradient,
+    avatarUrl,
     color,
-    isMe,
+    hasAvatar,
     phoneNumber,
     profileName,
     sharedGroupNames,
     title,
   }: Pick<
     ConversationType,
+    | 'avatarPlaceholderGradient'
     | 'acceptedMessageRequest'
-    | 'avatarPath'
+    | 'avatarUrl'
     | 'color'
+    | 'hasAvatar'
     | 'isMe'
     | 'phoneNumber'
     | 'profileName'
@@ -65,21 +75,23 @@ function renderAvatar(
 ): JSX.Element {
   return (
     <div className="module-ongoing-call__remote-video-disabled">
-      <Avatar
-        acceptedMessageRequest={acceptedMessageRequest}
-        avatarPath={avatarPath}
-        badge={undefined}
-        color={color || AvatarColors[0]}
-        noteToSelf={false}
-        conversationType="direct"
-        i18n={i18n}
-        isMe={isMe}
-        phoneNumber={phoneNumber}
-        profileName={profileName}
-        title={title}
-        sharedGroupNames={sharedGroupNames}
-        size={112}
-      />
+      <CallBackgroundBlur avatarUrl={avatarUrl}>
+        <Avatar
+          avatarPlaceholderGradient={avatarPlaceholderGradient}
+          avatarUrl={avatarUrl}
+          badge={undefined}
+          color={color || AvatarColors[0]}
+          hasAvatar={hasAvatar}
+          noteToSelf={false}
+          conversationType="direct"
+          i18n={i18n}
+          phoneNumber={phoneNumber}
+          profileName={profileName}
+          title={title}
+          sharedGroupNames={sharedGroupNames}
+          size={AvatarSize.EIGHTY}
+        />
+      </CallBackgroundBlur>
     </div>
   );
 }

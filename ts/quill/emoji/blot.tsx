@@ -1,39 +1,62 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type Parchment from 'parchment';
-import Quill from 'quill';
-
-import { emojiToImage } from '../../components/emoji/lib';
-
-const Embed: typeof Parchment.Embed = Quill.import('blots/embed');
+import EmbedBlot from '@signalapp/quill-cjs/blots/embed';
+import { strictAssert } from '../../util/assert';
+import {
+  getEmojiVariantByKey,
+  getEmojiVariantKeyByValue,
+  isEmojiVariantValue,
+} from '../../components/fun/data/emojis';
+import {
+  createStaticEmojiBlot,
+  FUN_STATIC_EMOJI_CLASS,
+} from '../../components/fun/FunEmoji';
 
 // the DOM structure of this EmojiBlot should match the other emoji implementations:
-// ts/components/conversation/Emojify.tsx
-// ts/components/emoji/Emoji.tsx
+// ts/components/fun/FunEmoji.tsx
 
-export class EmojiBlot extends Embed {
+export type EmojiBlotValue = Readonly<{
+  value: string;
+  source?: string;
+}>;
+
+export class EmojiBlot extends EmbedBlot {
   static override blotName = 'emoji';
 
+  // See `createStaticEmojiBlot()`
   static override tagName = 'img';
 
-  static override className = 'emoji-blot';
+  static override className = FUN_STATIC_EMOJI_CLASS;
 
-  static override create(emoji: string): Node {
-    const node = super.create(undefined) as HTMLElement;
-    node.dataset.emoji = emoji;
+  static override create({ value: emoji, source }: EmojiBlotValue): Node {
+    const node = super.create(undefined) as HTMLImageElement;
 
-    const image = emojiToImage(emoji);
+    strictAssert(isEmojiVariantValue(emoji), 'Value is not a known emoji');
+    const variantKey = getEmojiVariantKeyByValue(emoji);
+    const variant = getEmojiVariantByKey(variantKey);
 
-    node.setAttribute('src', image || '');
+    createStaticEmojiBlot(node, {
+      role: 'img',
+      'aria-label': emoji,
+      emoji: variant,
+      size: 20,
+    });
     node.setAttribute('data-emoji', emoji);
-    node.setAttribute('title', emoji);
-    node.setAttribute('aria-label', emoji);
+    node.setAttribute('data-emoji', emoji);
+    node.setAttribute('data-source', source ?? '');
 
     return node;
   }
 
-  static override value(node: HTMLElement): string | undefined {
-    return node.dataset.emoji;
+  static override value(node: HTMLElement): EmojiBlotValue | undefined {
+    const { emoji, source } = node.dataset;
+    if (emoji === undefined) {
+      throw new Error(
+        `Failed to make EmojiBlot with emoji: ${emoji}, source: ${source}`
+      );
+    }
+
+    return { value: emoji, source };
   }
 }

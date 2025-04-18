@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
@@ -6,16 +6,18 @@ import { reducer as rootReducer } from '../../../state/reducer';
 import { noopAction } from '../../../state/ducks/noop';
 import { actions as userActions } from '../../../state/ducks/user';
 import {
-  CallMode,
   CallState,
   CallViewMode,
   GroupCallConnectionState,
   GroupCallJoinState,
 } from '../../../types/Calling';
+import { CallMode } from '../../../types/CallDisposition';
+import { generateAci } from '../../../types/ServiceId';
 import {
   getCallsByConversation,
   getCallSelector,
-  getIncomingCall,
+  getHasAnyAdminCallLinks,
+  getRingingCall,
   isInCall,
 } from '../../../state/selectors/calling';
 import type {
@@ -24,6 +26,13 @@ import type {
   GroupCallStateType,
 } from '../../../state/ducks/calling';
 import { getEmptyState } from '../../../state/ducks/calling';
+import {
+  FAKE_CALL_LINK,
+  FAKE_CALL_LINK_WITH_ADMIN_KEY,
+} from '../../../test-both/helpers/fakeCallLink';
+
+const OUR_ACI = generateAci();
+const ACI_1 = generateAci();
 
 describe('state/selectors/calling', () => {
   const getEmptyRootState = () => {
@@ -31,7 +40,7 @@ describe('state/selectors/calling', () => {
     return rootReducer(
       initial,
       userActions.userChanged({
-        ourACI: '00000000-0000-4000-8000-000000000000',
+        ourAci: OUR_ACI,
       })
     );
   };
@@ -51,6 +60,7 @@ describe('state/selectors/calling', () => {
         isIncoming: false,
         isVideoCall: false,
         hasRemoteVideo: false,
+        remoteAudioLevel: 0,
       },
     },
   };
@@ -58,16 +68,19 @@ describe('state/selectors/calling', () => {
   const stateWithActiveDirectCall: CallingStateType = {
     ...stateWithDirectCall,
     activeCallState: {
+      state: 'Active',
+      callMode: CallMode.Direct,
       conversationId: 'fake-direct-call-conversation-id',
       hasLocalAudio: true,
       hasLocalVideo: false,
       localAudioLevel: 0,
-      viewMode: CallViewMode.Grid,
+      viewMode: CallViewMode.Paginated,
       showParticipantsList: false,
-      safetyNumberChangedUuids: [],
       outgoingRing: true,
       pip: false,
+      selfViewExpanded: false,
       settingsDialogOpen: false,
+      joinedAt: null,
     },
   };
 
@@ -78,6 +91,7 @@ describe('state/selectors/calling', () => {
     isIncoming: true,
     isVideoCall: false,
     hasRemoteVideo: false,
+    remoteAudioLevel: 0,
   };
 
   const stateWithIncomingDirectCall: CallingStateType = {
@@ -92,21 +106,37 @@ describe('state/selectors/calling', () => {
     conversationId: 'fake-group-call-conversation-id',
     connectionState: GroupCallConnectionState.NotConnected,
     joinState: GroupCallJoinState.NotJoined,
+    localDemuxId: undefined,
     peekInfo: {
-      uuids: ['c75b51da-d484-4674-9b2c-cc11de00e227'],
-      creatorUuid: 'c75b51da-d484-4674-9b2c-cc11de00e227',
+      acis: [ACI_1],
+      pendingAcis: [],
+      creatorAci: ACI_1,
       maxDevices: Infinity,
       deviceCount: 1,
     },
     remoteParticipants: [],
     ringId: BigInt(123),
-    ringerUuid: 'c75b51da-d484-4674-9b2c-cc11de00e227',
+    ringerAci: ACI_1,
   };
 
   const stateWithIncomingGroupCall: CallingStateType = {
     ...getEmptyState(),
     callsByConversation: {
       'fake-group-call-conversation-id': incomingGroupCall,
+    },
+  };
+
+  const stateWithCallLink: CallingStateType = {
+    ...getEmptyState(),
+    callLinks: {
+      [FAKE_CALL_LINK.roomId]: FAKE_CALL_LINK,
+    },
+  };
+
+  const stateWithAdminCallLink: CallingStateType = {
+    ...getEmptyState(),
+    callLinks: {
+      [FAKE_CALL_LINK_WITH_ADMIN_KEY.roomId]: FAKE_CALL_LINK_WITH_ADMIN_KEY,
     },
   };
 
@@ -124,6 +154,7 @@ describe('state/selectors/calling', () => {
             isIncoming: false,
             isVideoCall: false,
             hasRemoteVideo: false,
+            remoteAudioLevel: 0,
           },
         }
       );
@@ -149,20 +180,21 @@ describe('state/selectors/calling', () => {
           isIncoming: false,
           isVideoCall: false,
           hasRemoteVideo: false,
+          remoteAudioLevel: 0,
         }
       );
     });
   });
 
-  describe('getIncomingCall', () => {
+  describe('getRingingCall', () => {
     it('returns undefined if there are no calls', () => {
-      assert.isUndefined(getIncomingCall(getEmptyRootState()));
+      assert.isUndefined(getRingingCall(getEmptyRootState()));
     });
 
     it('returns undefined if there is no incoming call', () => {
-      assert.isUndefined(getIncomingCall(getCallingState(stateWithDirectCall)));
+      assert.isUndefined(getRingingCall(getCallingState(stateWithDirectCall)));
       assert.isUndefined(
-        getIncomingCall(getCallingState(stateWithActiveDirectCall))
+        getRingingCall(getCallingState(stateWithActiveDirectCall))
       );
     });
 
@@ -173,7 +205,8 @@ describe('state/selectors/calling', () => {
           'fake-group-call-conversation-id': {
             ...incomingGroupCall,
             peekInfo: {
-              uuids: [],
+              acis: [],
+              pendingAcis: [],
               maxDevices: Infinity,
               deviceCount: 1,
             },
@@ -181,19 +214,19 @@ describe('state/selectors/calling', () => {
         },
       };
 
-      assert.isUndefined(getIncomingCall(getCallingState(state)));
+      assert.isUndefined(getRingingCall(getCallingState(state)));
     });
 
     it('returns an incoming direct call', () => {
       assert.deepEqual(
-        getIncomingCall(getCallingState(stateWithIncomingDirectCall)),
+        getRingingCall(getCallingState(stateWithIncomingDirectCall)),
         incomingDirectCall
       );
     });
 
     it('returns an incoming group call', () => {
       assert.deepEqual(
-        getIncomingCall(getCallingState(stateWithIncomingGroupCall)),
+        getRingingCall(getCallingState(stateWithIncomingGroupCall)),
         incomingGroupCall
       );
     });
@@ -206,6 +239,24 @@ describe('state/selectors/calling', () => {
 
     it('should be true if we are in a call', () => {
       assert.isTrue(isInCall(getCallingState(stateWithActiveDirectCall)));
+    });
+  });
+
+  describe('getHasAnyAdminCallLinks', () => {
+    it('returns true with admin call links', () => {
+      assert.isTrue(
+        getHasAnyAdminCallLinks(getCallingState(stateWithAdminCallLink))
+      );
+    });
+
+    it('returns false with only non-admin call links', () => {
+      assert.isFalse(
+        getHasAnyAdminCallLinks(getCallingState(stateWithCallLink))
+      );
+    });
+
+    it('returns false without any call links', () => {
+      assert.isFalse(getHasAnyAdminCallLinks(getEmptyRootState()));
     });
   });
 });

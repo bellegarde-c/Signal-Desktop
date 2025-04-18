@@ -6,20 +6,32 @@ import { execSync } from 'child_process';
 import { writeFileSync } from 'fs';
 
 import { DAY } from '../util/durations';
+import { version } from '../../package.json';
+import { isNotUpdatable } from '../util/version';
 
 const unixTimestamp = parseInt(
-  execSync('git show -s --format=%ct').toString('utf8'),
+  process.env.SOURCE_DATE_EPOCH ||
+    execSync('git show -s --format=%ct').toString('utf8'),
   10
 );
 const buildCreation = unixTimestamp * 1000;
 
-const buildExpiration = buildCreation + DAY * 90;
+// NB: Build expirations are also determined via users' auto-update settings; see
+// getExpirationTimestamp
+const validDuration = isNotUpdatable(version) ? DAY * 30 : DAY * 90;
+const buildExpiration = buildCreation + validDuration;
 
 const localProductionPath = join(
   __dirname,
   '../../config/local-production.json'
 );
-const localProductionConfig = { buildCreation, buildExpiration };
+
+const localProductionConfig = {
+  buildCreation,
+  buildExpiration,
+  ...(isNotUpdatable(version) ? { updatesEnabled: false } : {}),
+};
+
 writeFileSync(
   localProductionPath,
   `${JSON.stringify(localProductionConfig)}\n`

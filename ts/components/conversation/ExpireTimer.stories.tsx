@@ -2,45 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
-import { boolean, number } from '@storybook/addon-knobs';
-
+import type { Meta } from '@storybook/react';
 import type { Props } from './ExpireTimer';
 import { ExpireTimer } from './ExpireTimer';
 
 export default {
   title: 'Components/Conversation/ExpireTimer',
-};
+} satisfies Meta<Props>;
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   direction: overrideProps.direction || 'outgoing',
-  expirationLength: number(
-    'expirationLength',
-    overrideProps.expirationLength || 30 * 1000
-  ),
-  expirationTimestamp: number(
-    'expirationTimestamp',
-    overrideProps.expirationTimestamp || Date.now() + 30 * 1000
-  ),
-  withImageNoCaption: boolean(
-    'withImageNoCaption',
-    overrideProps.withImageNoCaption || false
-  ),
-  withSticker: boolean('withSticker', overrideProps.withSticker || false),
-  withTapToViewExpired: boolean(
-    'withTapToViewExpired',
-    overrideProps.withTapToViewExpired || false
-  ),
+  expirationLength: overrideProps.expirationLength || 30 * 1000,
+  expirationTimestamp:
+    overrideProps.expirationTimestamp || Date.now() + 30 * 1000,
+  withImageNoCaption: overrideProps.withImageNoCaption || false,
+  withSticker: overrideProps.withSticker || false,
 });
 
 export const _30Seconds = (): JSX.Element => {
   const props = createProps();
 
   return <ExpireTimer {...props} />;
-};
-
-_30Seconds.story = {
-  name: '30 seconds',
 };
 
 export const _2Minutes = (): JSX.Element => {
@@ -53,43 +35,31 @@ export const _2Minutes = (): JSX.Element => {
   return <ExpireTimer {...props} />;
 };
 
-_2Minutes.story = {
-  name: '2 minutes',
-};
-
-export const InProgress = (): JSX.Element => {
+export function InProgress(): JSX.Element {
   const props = createProps({
     expirationTimestamp: Date.now() + 15 * 1000,
   });
 
   return <ExpireTimer {...props} />;
-};
+}
 
-export const Expired = (): JSX.Element => {
+export function Expired(): JSX.Element {
   const props = createProps({
     expirationTimestamp: Date.now() - 30 * 1000,
   });
 
   return <ExpireTimer {...props} />;
-};
+}
 
-export const Sticker = (): JSX.Element => {
+export function Sticker(): JSX.Element {
   const props = createProps({
     withSticker: true,
   });
 
   return <ExpireTimer {...props} />;
-};
+}
 
-export const TapToViewExpired = (): JSX.Element => {
-  const props = createProps({
-    withTapToViewExpired: true,
-  });
-
-  return <ExpireTimer {...props} />;
-};
-
-export const ImageNoCaption = (): JSX.Element => {
+export function ImageNoCaption(): JSX.Element {
   const props = createProps({
     withImageNoCaption: true,
   });
@@ -99,9 +69,9 @@ export const ImageNoCaption = (): JSX.Element => {
       <ExpireTimer {...props} />
     </div>
   );
-};
+}
 
-export const Incoming = (): JSX.Element => {
+export function Incoming(): JSX.Element {
   const props = createProps({
     direction: 'incoming',
   });
@@ -111,12 +81,12 @@ export const Incoming = (): JSX.Element => {
       <ExpireTimer {...props} />
     </div>
   );
-};
+}
 
-export const ExpirationTooFarOut = (): JSX.Element => {
+export function ExpirationTooFarOut(): JSX.Element {
   const props = createProps({
     expirationTimestamp: Date.now() + 150 * 1000,
   });
 
   return <ExpireTimer {...props} />;
-};
+}

@@ -20,7 +20,9 @@ export async function deleteGroupStoryReplyForEveryone(
 
   const timestamp = messageModel.get('timestamp');
 
-  const group = messageModel.getConversation();
+  const group = window.ConversationController.get(
+    messageModel.get('conversationId')
+  );
 
   if (!group) {
     log.warn(
@@ -31,7 +33,7 @@ export async function deleteGroupStoryReplyForEveryone(
     return;
   }
 
-  sendDeleteForEveryoneMessage(group.attributes, {
+  void sendDeleteForEveryoneMessage(group.attributes, {
     deleteForEveryoneDuration: DAY,
     id: replyMessageId,
     timestamp,

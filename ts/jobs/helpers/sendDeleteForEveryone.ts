@@ -23,7 +23,7 @@ import type {
   ConversationQueueJobBundle,
   DeleteForEveryoneJobData,
 } from '../conversationJobQueue';
-import { getUntrustedConversationUuids } from './getUntrustedConversationUuids';
+import { getUntrustedConversationServiceIds } from './getUntrustedConversationServiceIds';
 import { handleMessageSend } from '../../util/handleMessageSend';
 import { isConversationAccepted } from '../../util/isConversationAccepted';
 import { isConversationUnregistered } from '../../util/isConversationUnregistered';
@@ -34,7 +34,9 @@ import type { MessageModel } from '../../models/messages';
 import { SendMessageProtoError } from '../../textsecure/Errors';
 import { strictAssert } from '../../util/assert';
 import type { LoggerType } from '../../types/Logging';
+import type { ServiceIdString } from '../../types/ServiceId';
 import { isStory } from '../../messages/helpers';
+import { sendToGroup } from '../../util/sendToGroup';
 
 export async function sendDeleteForEveryone(
   conversation: ConversationModel,
@@ -55,16 +57,27 @@ export async function sendDeleteForEveryone(
     targetTimestamp,
   } = data;
 
+  const logId = `sendDeleteForEveryone(${conversation.idForLogging()}, ${messageId})`;
+
   const message = await getMessageById(messageId);
   if (!message) {
-    log.error(`Failed to fetch message ${messageId}. Failing job.`);
+    log.error(`${logId}: Failed to fetch message. Failing job.`);
     return;
   }
+
   const story = isStory(message.attributes);
+  if (story && !isGroupV2(conversation.attributes)) {
+    log.error(`${logId}: 1-on-1 Story DOE must use its own job. Failing job`);
+    return;
+  }
 
   if (!shouldContinue) {
-    log.info('Ran out of time. Giving up on sending delete for everyone');
-    updateMessageWithFailure(message, [new Error('Ran out of time!')], log);
+    log.info(`${logId}: Ran out of time. Giving up on sending`);
+    void updateMessageWithFailure(
+      message,
+      [new Error('Ran out of time!')],
+      log
+    );
     return;
   }
 
@@ -73,23 +86,25 @@ export async function sendDeleteForEveryone(
   const contentHint = ContentHint.RESENDABLE;
   const messageIds = [messageId];
 
-  const logId = `deleteForEveryone/${conversation.idForLogging()}`;
-
   const deletedForEveryoneSendStatus = message.get(
     'deletedForEveryoneSendStatus'
   );
   const recipients = deletedForEveryoneSendStatus
     ? getRecipients(deletedForEveryoneSendStatus)
-    : recipientsFromJob;
+    : recipientsFromJob
+        .map(recipient => {
+          return window.ConversationController.get(recipient)?.getServiceId();
+        })
+        .filter(isNotNil);
 
-  const untrustedUuids = getUntrustedConversationUuids(recipients);
-  if (untrustedUuids.length) {
+  const untrustedServiceIds = getUntrustedConversationServiceIds(recipients);
+  if (untrustedServiceIds.length) {
     window.reduxActions.conversations.conversationStoppedByMissingVerification({
       conversationId: conversation.id,
-      untrustedUuids,
+      untrustedServiceIds,
     });
     throw new Error(
-      `Delete for everyone blocked because ${untrustedUuids.length} conversation(s) were untrusted. Failing this attempt.`
+      `Delete for everyone blocked because ${untrustedServiceIds.length} conversation(s) were untrusted. Failing this attempt.`
     );
   }
 
@@ -97,9 +112,8 @@ export async function sendDeleteForEveryone(
     'conversationQueue/sendDeleteForEveryone',
     async abortSignal => {
       log.info(
-        `Sending deleteForEveryone to conversation ${logId}`,
-        `with timestamp ${timestamp}`,
-        `for message ${targetTimestamp}`
+        `${logId}: Sending deleteForEveryone with timestamp ${timestamp}` +
+          `for message ${targetTimestamp}, isStory=${story}`
       );
 
       let profileKey: Uint8Array | undefined;
@@ -118,6 +132,7 @@ export async function sendDeleteForEveryone(
             profileKey,
             recipients: conversation.getRecipients(),
             timestamp,
+            expireTimerVersion: undefined,
           });
           strictAssert(
             proto.dataMessage,
@@ -129,8 +144,8 @@ export async function sendDeleteForEveryone(
               encodedDataMessage: Proto.DataMessage.encode(
                 proto.dataMessage
               ).finish(),
-              destination: conversation.get('e164'),
-              destinationUuid: conversation.get('uuid'),
+              destinationE164: conversation.get('e164'),
+              destinationServiceId: conversation.getServiceId(),
               expirationStartTimestamp: null,
               options: sendOptions,
               timestamp,
@@ -144,7 +159,7 @@ export async function sendDeleteForEveryone(
             log.info(
               `conversation ${conversation.idForLogging()} is not accepted; refusing to send`
             );
-            updateMessageWithFailure(
+            void updateMessageWithFailure(
               message,
               [new Error('Message request was not accepted')],
               log
@@ -155,7 +170,7 @@ export async function sendDeleteForEveryone(
             log.info(
               `conversation ${conversation.idForLogging()} is unregistered; refusing to send`
             );
-            updateMessageWithFailure(
+            void updateMessageWithFailure(
               message,
               [new Error('Contact no longer has a Signal account')],
               log
@@ -166,7 +181,7 @@ export async function sendDeleteForEveryone(
             log.info(
               `conversation ${conversation.idForLogging()} is blocked; refusing to send`
             );
-            updateMessageWithFailure(
+            void updateMessageWithFailure(
               message,
               [new Error('Contact is blocked')],
               log
@@ -179,14 +194,15 @@ export async function sendDeleteForEveryone(
             logId,
             messageIds,
             send: async sender =>
-              sender.sendMessageToIdentifier({
+              sender.sendMessageToServiceId({
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                identifier: conversation.getSendTarget()!,
+                serviceId: conversation.getSendTarget()!,
                 messageText: undefined,
                 attachments: [],
                 deletedForEveryoneTimestamp: targetTimestamp,
                 timestamp,
                 expireTimer: undefined,
+                expireTimerVersion: undefined,
                 contentHint,
                 groupId: undefined,
                 profileKey,
@@ -217,11 +233,10 @@ export async function sendDeleteForEveryone(
             logId,
             messageIds,
             send: async () =>
-              window.Signal.Util.sendToGroup({
+              sendToGroup({
                 abortSignal,
                 contentHint,
                 groupSendOptions: {
-                  groupV1: conversation.getGroupV1Info(recipients),
                   groupV2: groupV2Info,
                   deletedForEveryoneTimestamp: targetTimestamp,
                   timestamp,
@@ -261,7 +276,7 @@ export async function sendDeleteForEveryone(
 
 function getRecipients(
   sendStatusByConversationId: Record<string, boolean>
-): Array<string> {
+): Array<ServiceIdString> {
   return Object.entries(sendStatusByConversationId)
     .filter(([_, isSent]) => !isSent)
     .map(([conversationId]) => {
@@ -269,7 +284,13 @@ function getRecipients(
       if (!recipient) {
         return null;
       }
-      return recipient.get('uuid');
+      if (recipient.isUnregistered()) {
+        return null;
+      }
+      if (recipient.isBlocked()) {
+        return null;
+      }
+      return recipient.getServiceId();
     })
     .filter(isNotNil);
 }
@@ -283,9 +304,7 @@ async function updateMessageWithSuccessfulSends(
       deletedForEveryoneSendStatus: {},
       deletedForEveryoneFailed: undefined,
     });
-    await window.Signal.Data.saveMessage(message.attributes, {
-      ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
-    });
+    await window.MessageCache.saveMessage(message.attributes);
 
     return;
   }
@@ -294,8 +313,8 @@ async function updateMessageWithSuccessfulSends(
     ...message.get('deletedForEveryoneSendStatus'),
   };
 
-  result.successfulIdentifiers?.forEach(identifier => {
-    const conversation = window.ConversationController.get(identifier);
+  result.successfulServiceIds?.forEach(serviceId => {
+    const conversation = window.ConversationController.get(serviceId);
     if (!conversation) {
       return;
     }
@@ -306,9 +325,7 @@ async function updateMessageWithSuccessfulSends(
     deletedForEveryoneSendStatus,
     deletedForEveryoneFailed: undefined,
   });
-  await window.Signal.Data.saveMessage(message.attributes, {
-    ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
-  });
+  await window.MessageCache.saveMessage(message.attributes);
 }
 
 async function updateMessageWithFailure(
@@ -322,7 +339,5 @@ async function updateMessageWithFailure(
   );
 
   message.set({ deletedForEveryoneFailed: true });
-  await window.Signal.Data.saveMessage(message.attributes, {
-    ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
-  });
+  await window.MessageCache.saveMessage(message.attributes);
 }

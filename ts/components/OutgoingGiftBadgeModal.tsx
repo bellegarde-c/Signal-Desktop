@@ -21,13 +21,13 @@ export type PropsType = {
   getPreferredBadge: PreferredBadgeSelectorType;
 };
 
-export const OutgoingGiftBadgeModal = ({
+export function OutgoingGiftBadgeModal({
   recipientTitle,
   i18n,
   badgeId,
   hideOutgoingGiftBadgeModal,
   getPreferredBadge,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   const badge = getPreferredBadge([{ id: badgeId }]);
   const badgeSize = 140;
   const badgeImagePath = getBadgeImageFileLocalPath(
@@ -48,7 +48,7 @@ export const OutgoingGiftBadgeModal = ({
         `${CLASS_NAME}__badge`,
         `${CLASS_NAME}__badge--missing`
       )}
-      aria-label={i18n('giftBadge--missing')}
+      aria-label={i18n('icu:donation--missing')}
     />
   );
 
@@ -59,20 +59,19 @@ export const OutgoingGiftBadgeModal = ({
       moduleClassName={`${CLASS_NAME}__container`}
       onClose={hideOutgoingGiftBadgeModal}
       hasXButton
-      useFocusTrap
     >
       <div className={CLASS_NAME}>
         <div className={`${CLASS_NAME}__title`}>
-          {i18n('modal--giftBadge--title')}
+          {i18n('icu:modal--donation--title')}
         </div>
         <div className={`${CLASS_NAME}__description`}>
-          {i18n('modal--giftBadge--description', { name: recipientTitle })}
+          {i18n('icu:modal--donation--description', { name: recipientTitle })}
         </div>
         {badgeElement}
         <div className={`${CLASS_NAME}__badge-summary`}>
-          {i18n('message--giftBadge')}
+          {i18n('icu:message--donation')}
         </div>
       </div>
     </Modal>
   );
-};
+}

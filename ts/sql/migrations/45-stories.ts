@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
+import type { Database } from '@signalapp/sqlcipher';
 
 import type { LoggerType } from '../../types/Logging';
 
@@ -51,6 +51,8 @@ export default function updateToSchemaVersion45(
       --- Message insert/update triggers to exclude stories and story replies
 
       DROP   TRIGGER messages_on_insert;
+      -- Note: any changes to this trigger must be reflected in 
+      -- Server.ts: enableMessageInsertTriggersAndBackfill
       CREATE TRIGGER messages_on_insert AFTER INSERT ON messages
       WHEN new.isViewOnce IS NOT 1 AND new.storyId IS NULL
       BEGIN
@@ -75,6 +77,8 @@ export default function updateToSchemaVersion45(
 
       --- Update delete trigger to remove storyReads
 
+      --- Note: for future updates to this trigger, be sure to update Server.ts/removeAll()
+      ---       (it deletes and re-adds this trigger for performance)
       DROP   TRIGGER messages_on_delete;
       CREATE TRIGGER messages_on_delete AFTER DELETE ON messages BEGIN
         DELETE FROM messages_fts WHERE rowid = old.rowid;

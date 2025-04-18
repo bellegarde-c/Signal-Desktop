@@ -1,10 +1,10 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { times } from 'lodash';
-import { RowType } from '../../../components/ConversationList';
+import { RowType, _testHeaderText } from '../../../components/ConversationList';
 import { ContactCheckboxDisabledReason } from '../../../components/conversationList/ContactCheckbox';
 import { getDefaultConversation } from '../../../test-both/helpers/getDefaultConversation';
 
@@ -16,10 +16,12 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
     candidateContacts: [],
     isShowingRecommendedGroupSizeModal: false,
     isShowingMaximumGroupSizeModal: false,
-    isUsernamesEnabled: true,
+    ourE164: undefined,
+    ourUsername: undefined,
     groupSizeRecommendedLimit: 22,
     groupSizeHardLimit: 33,
     searchTerm: '',
+    username: undefined,
     regionCode: 'US',
     selectedContacts: [],
   };
@@ -43,6 +45,7 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
           ...defaults,
           candidateContacts: [],
           searchTerm: '',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
         }).getRowCount(),
         0
@@ -52,8 +55,8 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
           ...defaults,
           candidateContacts: [],
           searchTerm: 'foo bar',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
-          isUsernamesEnabled: false,
         }).getRowCount(),
         0
       );
@@ -68,6 +71,7 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
             getDefaultConversation(),
           ],
           searchTerm: '',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
         }).getRowCount(),
         4
@@ -82,6 +86,7 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
           ...defaults,
           candidateContacts: [],
           searchTerm: '',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
         }).getRow(0)
       );
@@ -90,6 +95,7 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
           ...defaults,
           candidateContacts: [],
           searchTerm: '',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
         }).getRow(99)
       );
@@ -98,8 +104,8 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
           ...defaults,
           candidateContacts: [],
           searchTerm: 'foo bar',
+          username: undefined,
           selectedContacts: [getDefaultConversation()],
-          isUsernamesEnabled: false,
         }).getRow(0)
       );
     });
@@ -113,14 +119,11 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
         ...defaults,
         candidateContacts,
         searchTerm: 'foo bar',
-        isUsernamesEnabled: false,
+        username: undefined,
         selectedContacts: [candidateContacts[1]],
       });
 
-      assert.deepEqual(helper.getRow(0), {
-        type: RowType.Header,
-        i18nKey: 'contactsHeader',
-      });
+      assert.deepEqual(_testHeaderText(helper.getRow(0)), 'icu:contactsHeader');
       assert.deepEqual(helper.getRow(1), {
         type: RowType.ContactCheckbox,
         contact: candidateContacts[0],
@@ -142,6 +145,7 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
         ...defaults,
         candidateContacts,
         searchTerm: 'foo bar',
+        username: undefined,
         selectedContacts: candidateContacts.slice(1, 33),
       });
 
@@ -164,13 +168,14 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
         ...defaults,
         candidateContacts: [],
         searchTerm: '212 555',
+        username: undefined,
         selectedContacts: [],
       });
 
-      assert.deepEqual(helper.getRow(0), {
-        type: RowType.Header,
-        i18nKey: 'findByPhoneNumberHeader',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:findByPhoneNumberHeader'
+      );
       assert.deepEqual(helper.getRow(1), {
         type: RowType.PhoneNumberCheckbox,
         phoneNumber: {
@@ -188,17 +193,18 @@ describe('LeftPaneChooseGroupMembersHelper', () => {
       const helper = new LeftPaneChooseGroupMembersHelper({
         ...defaults,
         candidateContacts: [],
-        searchTerm: 'signal',
+        searchTerm: 'signal.01',
+        username: 'signal.01',
         selectedContacts: [],
       });
 
-      assert.deepEqual(helper.getRow(0), {
-        type: RowType.Header,
-        i18nKey: 'findByUsernameHeader',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:findByUsernameHeader'
+      );
       assert.deepEqual(helper.getRow(1), {
         type: RowType.UsernameCheckbox,
-        username: 'signal',
+        username: 'signal.01',
         isChecked: false,
         isFetching: false,
       });

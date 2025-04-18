@@ -2,67 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
-import { range } from 'lodash';
 import { Proto } from '@signalapp/mock-server';
-import type { StorageStateRecord } from '@signalapp/mock-server';
-import fs from 'fs/promises';
-import path from 'path';
-
 import * as durations from '../../util/durations';
 import type { App, Bootstrap } from './fixtures';
-import { initStorage, debug } from './fixtures';
+import {
+  initStorage,
+  debug,
+  STICKER_PACKS,
+  EMPTY,
+  storeStickerPacks,
+  getStickerPackRecordPredicate,
+  getStickerPackLink,
+} from './fixtures';
 
 const { StickerPackOperation } = Proto.SyncMessage;
 
-const FIXTURES = path.join(__dirname, '..', '..', '..', 'fixtures');
-const IdentifierType = Proto.ManifestRecord.Identifier.Type;
-
-const EMPTY = new Uint8Array(0);
-
-export type StickerPackType = Readonly<{
-  id: Buffer;
-  key: Buffer;
-  stickerCount: number;
-}>;
-
-const STICKER_PACKS: ReadonlyArray<StickerPackType> = [
-  {
-    id: Buffer.from('c40ed069cdc2b91eccfccf25e6bcddfc', 'hex'),
-    key: Buffer.from(
-      'cefadd6e81c128680aead1711eb5c92c10f63bdfbc78528a4519ba682de396e4',
-      'hex'
-    ),
-    stickerCount: 1,
-  },
-  {
-    id: Buffer.from('ae8fedafda4768fd3384d4b3b9db963d', 'hex'),
-    key: Buffer.from(
-      '53f4aa8b95e1c2e75afab2328fe67eb6d7affbcd4f50cd4da89dfc325dbc73ca',
-      'hex'
-    ),
-    stickerCount: 1,
-  },
-];
-
-function getStickerPackLink(pack: StickerPackType): string {
-  return (
-    `https://signal.art/addstickers/#pack_id=${pack.id.toString('hex')}&` +
-    `pack_key=${pack.key.toString('hex')}`
-  );
-}
-
-function getStickerPackRecordPredicate(
-  pack: StickerPackType
-): (record: StorageStateRecord) => boolean {
-  return ({ type, record }: StorageStateRecord): boolean => {
-    if (type !== IdentifierType.STICKER_PACK) {
-      return false;
-    }
-    return pack.id.equals(record.stickerPack?.packId ?? EMPTY);
-  };
-}
-
-describe('storage service', function needsName() {
+describe('storage service', function (this: Mocha.Suite) {
   this.timeout(durations.MINUTE);
 
   let bootstrap: Bootstrap;
@@ -70,39 +25,16 @@ describe('storage service', function needsName() {
 
   beforeEach(async () => {
     ({ bootstrap, app } = await initStorage());
-
     const { server } = bootstrap;
-
-    await Promise.all(
-      STICKER_PACKS.map(async ({ id, stickerCount }) => {
-        const hexId = id.toString('hex');
-
-        await server.storeStickerPack({
-          id,
-          manifest: await fs.readFile(
-            path.join(FIXTURES, `stickerpack-${hexId}.bin`)
-          ),
-          stickers: await Promise.all(
-            range(0, stickerCount).map(async index =>
-              fs.readFile(
-                path.join(FIXTURES, `stickerpack-${hexId}-${index}.bin`)
-              )
-            )
-          ),
-        });
-      })
-    );
+    await storeStickerPacks(server, STICKER_PACKS);
   });
 
-  afterEach(async function after() {
+  afterEach(async function (this: Mocha.Context) {
     if (!bootstrap) {
       return;
     }
 
-    if (this.currentTest?.state !== 'passed') {
-      await bootstrap.saveLogs(app);
-    }
-
+    await bootstrap.maybeSaveLogs(this.currentTest, app);
     await app.close();
     await bootstrap.teardown();
   });
@@ -113,8 +45,10 @@ describe('storage service', function needsName() {
 
     const window = await app.getWindow();
 
-    const leftPane = window.locator('.left-pane-wrapper');
-    const conversationStack = window.locator('.conversation-stack');
+    const leftPane = window.locator('#LeftPane');
+    const conversationView = window.locator(
+      '.Inbox__conversation > .ConversationView'
+    );
 
     debug('sending two sticker pack links');
     await firstContact.sendText(
@@ -127,22 +61,19 @@ describe('storage service', function needsName() {
     );
 
     await leftPane
-      .locator(
-        '_react=ConversationListItem' +
-          `[title = ${JSON.stringify(firstContact.profileName)}]`
-      )
+      .locator(`[data-testid="${firstContact.toContact().aci}"]`)
       .click();
 
     {
       debug('installing first sticker pack via UI');
       const state = await phone.expectStorageState('initial state');
 
-      await conversationStack
+      await conversationView
         .locator(`a:has-text("${STICKER_PACKS[0].id.toString('hex')}")`)
         .click({ noWaitAfter: true });
       await window
         .locator(
-          '.module-sticker-manager__preview-modal__container button >> "Install"'
+          '.module-sticker-manager__preview-modal__footer--install button >> "Install"'
         )
         .click();
 
@@ -181,18 +112,20 @@ describe('storage service', function needsName() {
       debug('uninstalling first sticker pack via UI');
       const state = await phone.expectStorageState('initial state');
 
-      await conversationStack
+      await conversationView
         .locator(`a:has-text("${STICKER_PACKS[0].id.toString('hex')}")`)
         .click({ noWaitAfter: true });
       await window
         .locator(
-          '.module-sticker-manager__preview-modal__container button ' +
+          '.module-sticker-manager__preview-modal__footer--install button ' +
             '>> "Uninstall"'
         )
         .click();
 
       // Confirm
-      await window.locator('.module-Modal button >> "Uninstall"').click();
+      await window
+        .locator('.module-Button--destructive >> "Uninstall"')
+        .click();
 
       debug('waiting for sync message');
       const { syncMessage } = await phone.waitForSyncMessage(entry =>
@@ -225,12 +158,17 @@ describe('storage service', function needsName() {
       );
     }
 
-    debug('opening sticker picker');
-    conversationStack
+    debug('opening sticker manager');
+    await conversationView
       .locator('.CompositionArea .module-sticker-button__button')
       .click();
 
-    const stickerPicker = conversationStack.locator('.module-sticker-picker');
+    const stickerManager = conversationView.locator(
+      '[data-testid=StickerManager]'
+    );
+
+    debug('switching to Installed tab');
+    await stickerManager.locator('.Tabs__tab >> "Installed"').click();
 
     {
       debug('installing first sticker pack via storage service');
@@ -255,11 +193,8 @@ describe('storage service', function needsName() {
       });
 
       debug('waiting for sticker pack to become visible');
-      stickerPicker
-        .locator(
-          'button.module-sticker-picker__header__button' +
-            `[key="${STICKER_PACKS[0].id.toString('hex')}"]`
-        )
+      await stickerManager
+        .locator(`[data-testid="${STICKER_PACKS[0].id.toString('hex')}"]`)
         .waitFor();
     }
 
@@ -275,11 +210,8 @@ describe('storage service', function needsName() {
       });
 
       debug('waiting for sticker pack to become visible');
-      stickerPicker
-        .locator(
-          'button.module-sticker-picker__header__button' +
-            `[key="${STICKER_PACKS[1].id.toString('hex')}"]`
-        )
+      await stickerManager
+        .locator(`[data-testid="${STICKER_PACKS[1].id.toString('hex')}"]`)
         .waitFor();
 
       debug('waiting for storage service update');
@@ -299,7 +231,7 @@ describe('storage service', function needsName() {
       );
       assert.strictEqual(
         stickerPack?.record.stickerPack?.position,
-        6,
+        7,
         'Wrong sticker pack position'
       );
     }

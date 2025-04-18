@@ -11,7 +11,7 @@ export type Props = {
   disabled?: boolean;
   icon?: React.ReactNode;
   label: string | React.ReactNode;
-  info?: string;
+  info?: string | React.ReactNode;
   right?: string | React.ReactNode;
   actions?: React.ReactNode;
   onClick?: () => void;
@@ -20,7 +20,7 @@ export type Props = {
 const bem = bemGenerator('ConversationDetails-panel-row');
 
 export const PanelRow = React.forwardRef<HTMLButtonElement, Props>(
-  (
+  function PanelRowInner(
     {
       alwaysShowActions,
       className,
@@ -33,7 +33,7 @@ export const PanelRow = React.forwardRef<HTMLButtonElement, Props>(
       onClick,
     }: Props,
     ref: React.Ref<HTMLButtonElement>
-  ) => {
+  ) {
     const content = (
       <>
         {icon !== undefined ? <div className={bem('icon')}>{icon}</div> : null}

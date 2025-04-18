@@ -3,20 +3,20 @@
 
 import { assert } from 'chai';
 import type { PrimaryDevice, Group } from '@signalapp/mock-server';
-import { StorageState, Proto, UUIDKind } from '@signalapp/mock-server';
+import { StorageState, Proto, ServiceIdKind } from '@signalapp/mock-server';
 import createDebug from 'debug';
 
 import * as durations from '../../util/durations';
 import { Bootstrap } from '../bootstrap';
 import type { App } from '../bootstrap';
-import { MY_STORIES_ID } from '../../types/Stories';
+import { MY_STORY_ID } from '../../types/Stories';
 import { uuidToBytes } from '../../util/uuidToBytes';
 
 const IdentifierType = Proto.ManifestRecord.Identifier.Type;
 
 export const debug = createDebug('mock:test:gv2');
 
-describe('pnp/send gv2 invite', function needsName() {
+describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
   this.timeout(durations.MINUTE);
 
   let bootstrap: Bootstrap;
@@ -25,7 +25,9 @@ describe('pnp/send gv2 invite', function needsName() {
   let pniContact: PrimaryDevice;
 
   beforeEach(async () => {
-    bootstrap = new Bootstrap();
+    bootstrap = new Bootstrap({
+      contactCount: 0,
+    });
     await bootstrap.init();
 
     const { phone, server } = bootstrap;
@@ -34,7 +36,6 @@ describe('pnp/send gv2 invite', function needsName() {
 
     state = state.updateAccount({
       profileKey: phone.profileKey.serialize(),
-      e164: phone.device.number,
     });
 
     aciContact = await server.createPrimaryDevice({
@@ -57,11 +58,11 @@ describe('pnp/send gv2 invite', function needsName() {
         identityState: Proto.ContactRecord.IdentityState.VERIFIED,
         whitelisted: true,
 
-        identityKey: pniContact.getPublicKey(UUIDKind.PNI).serialize(),
+        identityKey: pniContact.getPublicKey(ServiceIdKind.PNI).serialize(),
 
         givenName: 'PNI Contact',
       },
-      UUIDKind.PNI
+      ServiceIdKind.PNI
     );
 
     state = state.addRecord({
@@ -69,10 +70,10 @@ describe('pnp/send gv2 invite', function needsName() {
       record: {
         storyDistributionList: {
           allowsReplies: true,
-          identifier: uuidToBytes(MY_STORIES_ID),
+          identifier: uuidToBytes(MY_STORY_ID),
           isBlockList: true,
-          name: MY_STORIES_ID,
-          recipientUuids: [],
+          name: MY_STORY_ID,
+          recipientServiceIds: [],
         },
       },
     });
@@ -82,11 +83,8 @@ describe('pnp/send gv2 invite', function needsName() {
     app = await bootstrap.link();
   });
 
-  afterEach(async function after() {
-    if (this.currentTest?.state !== 'passed') {
-      await bootstrap.saveLogs(app);
-    }
-
+  afterEach(async function (this: Mocha.Context) {
+    await bootstrap.maybeSaveLogs(this.currentTest, app);
     await app.close();
     await bootstrap.teardown();
   });
@@ -98,16 +96,14 @@ describe('pnp/send gv2 invite', function needsName() {
 
     const window = await app.getWindow();
 
-    const leftPane = window.locator('.left-pane-wrapper');
-    const conversationStack = window.locator('.conversation-stack');
+    const leftPane = window.locator('#LeftPane');
+    const conversationStack = window.locator('.Inbox__conversation-stack');
 
     debug('clicking compose and "New group" buttons');
 
-    await leftPane.locator('.module-main-header__compose-icon').click();
+    await window.getByRole('button', { name: 'New chat' }).click();
 
-    await leftPane
-      .locator('_react=BaseConversationListItem[title = "New group"]')
-      .click();
+    await leftPane.getByTestId('ComposeStepButton--group').click();
 
     debug('inviting ACI member');
 
@@ -115,9 +111,7 @@ describe('pnp/send gv2 invite', function needsName() {
       .locator('.module-left-pane__compose-search-form__input')
       .fill('ACI');
 
-    await leftPane
-      .locator('_react=BaseConversationListItem[title = "ACI Contact"]')
-      .click();
+    await leftPane.locator('.ListTile >> "ACI Contact"').click();
 
     debug('inviting PNI member');
 
@@ -125,9 +119,7 @@ describe('pnp/send gv2 invite', function needsName() {
       .locator('.module-left-pane__compose-search-form__input')
       .fill('PNI');
 
-    await leftPane
-      .locator('_react=BaseConversationListItem[title = "PNI Contact"]')
-      .click();
+    await leftPane.locator('.ListTile >> "PNI Contact"').click();
 
     await leftPane
       .locator('.module-left-pane__footer button >> "Next"')
@@ -156,7 +148,6 @@ describe('pnp/send gv2 invite', function needsName() {
     let group: Group;
     {
       state = await phone.waitForStorageState({ after: state });
-
       const groups = await phone.getAllGroups(state);
       assert.strictEqual(groups.length, 1);
 
@@ -173,22 +164,17 @@ describe('pnp/send gv2 invite', function needsName() {
       .locator('button.module-ConversationHeader__button--more')
       .click();
 
-    await conversationStack
-      .locator('.react-contextmenu-item >> "Group settings"')
-      .click();
+    await window.locator('.react-contextmenu-item >> "Group settings"').click();
 
     debug('editing group title');
     {
       const detailsHeader = conversationStack.locator(
-        '_react=ConversationDetailsHeader'
+        '[data-testid=ConversationDetailsHeader]'
       );
-      detailsHeader.locator('button >> "My group"').click();
+      await detailsHeader.locator('button >> "My group"').click();
 
       const modal = window.locator('.module-Modal:has-text("Edit group")');
-
-      // Group title should be immediately focused.
-      await modal.type(' (v2)');
-
+      await modal.locator('input').fill('My group (v2)');
       await modal.locator('button >> "Save"').click();
     }
 

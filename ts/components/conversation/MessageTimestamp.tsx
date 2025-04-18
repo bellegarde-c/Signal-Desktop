@@ -1,4 +1,4 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ReactElement } from 'react';
@@ -12,9 +12,9 @@ import { Time } from '../Time';
 import { useNowThatUpdatesEveryMinute } from '../../hooks/useNowThatUpdatesEveryMinute';
 
 export type Props = {
-  deletedForEveryone?: boolean;
   direction?: 'incoming' | 'outgoing';
   i18n: LocalizerType;
+  isOutlineOnlyBubble?: boolean;
   isRelativeTime?: boolean;
   module?: string;
   timestamp: number;
@@ -24,15 +24,14 @@ export type Props = {
 };
 
 export function MessageTimestamp({
-  deletedForEveryone,
   direction,
   i18n,
   isRelativeTime,
+  isOutlineOnlyBubble,
   module,
   timestamp,
   withImageNoCaption,
   withSticker,
-  withTapToViewExpired,
 }: Readonly<Props>): ReactElement {
   const now = useNowThatUpdatesEveryMinute();
   const moduleName = module || 'module-timestamp';
@@ -42,12 +41,9 @@ export function MessageTimestamp({
       className={classNames(
         moduleName,
         direction ? `${moduleName}--${direction}` : null,
-        withTapToViewExpired && direction
-          ? `${moduleName}--${direction}-with-tap-to-view-expired`
-          : null,
         withImageNoCaption ? `${moduleName}--with-image-no-caption` : null,
         withSticker ? `${moduleName}--with-sticker` : null,
-        deletedForEveryone ? `${moduleName}--deleted-for-everyone` : null
+        isOutlineOnlyBubble ? `${moduleName}--outline-only-bubble` : null
       )}
       timestamp={timestamp}
     >

@@ -1,27 +1,24 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { boolean, select } from '@storybook/addon-knobs';
 import { action } from '@storybook/addon-actions';
+import type { Meta } from '@storybook/react';
+import type { PropsType } from './DialogUpdate';
 import { DialogUpdate } from './DialogUpdate';
 import { DialogType } from '../types/Dialogs';
 import { WidthBreakpoint } from './_util';
+import { SECOND } from '../util/durations';
 import { FakeLeftPaneContainer } from '../test-both/helpers/FakeLeftPaneContainer';
 
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const defaultProps = {
   containerWidthBreakpoint: WidthBreakpoint.Wide,
   dismissDialog: action('dismiss-dialog'),
   downloadSize: 116504357,
   downloadedSize: 61003110,
-  hasNetworkDialog: false,
   i18n,
-  didSnooze: false,
   showEventsCount: 0,
   snoozeUpdate: action('snooze-update'),
   startUpdate: action('start-update'),
@@ -30,17 +27,13 @@ const defaultProps = {
 
 export default {
   title: 'Components/DialogUpdate',
-};
+  argTypes: {},
+  args: {},
+} satisfies Meta<PropsType>;
 
-export const KnobsPlayground = (): JSX.Element => {
-  const containerWidthBreakpoint = select(
-    'containerWidthBreakpoint',
-    WidthBreakpoint,
-    WidthBreakpoint.Wide
-  );
-  const dialogType = select('dialogType', DialogType, DialogType.Update);
-  const hasNetworkDialog = boolean('hasNetworkDialog', false);
-  const didSnooze = boolean('didSnooze', false);
+export function KnobsPlayground(): JSX.Element {
+  const containerWidthBreakpoint = WidthBreakpoint.Wide;
+  const dialogType = DialogType.AutoUpdate;
 
   return (
     <FakeLeftPaneContainer containerWidthBreakpoint={containerWidthBreakpoint}>
@@ -48,284 +41,317 @@ export const KnobsPlayground = (): JSX.Element => {
         {...defaultProps}
         containerWidthBreakpoint={containerWidthBreakpoint}
         dialogType={dialogType}
-        didSnooze={didSnooze}
-        hasNetworkDialog={hasNetworkDialog}
         currentVersion="5.24.0"
       />
     </FakeLeftPaneContainer>
   );
-};
+}
 
-export const UpdateWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      dialogType={DialogType.Update}
-      currentVersion="5.24.0"
-    />
-  </FakeLeftPaneContainer>
-);
+export function UpdateWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        dialogType={DialogType.AutoUpdate}
+        currentVersion="5.24.0"
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-UpdateWide.story = {
-  name: 'Update (Wide)',
-};
+export function DownloadedWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        dialogType={DialogType.DownloadedUpdate}
+        currentVersion="5.24.0"
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const DownloadReadyWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.DownloadReady}
-      downloadSize={30123456}
-    />
-  </FakeLeftPaneContainer>
-);
+export function DownloadReadyWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.DownloadReady}
+        downloadSize={30123456}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-DownloadReadyWide.story = {
-  name: 'DownloadReady (Wide)',
-};
+export function FullDownloadReadyWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.FullDownloadReady}
+        downloadSize={300123456}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const FullDownloadReadyWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.FullDownloadReady}
-      downloadSize={300123456}
-    />
-  </FakeLeftPaneContainer>
-);
+export function DownloadingWide(): JSX.Element {
+  const [downloadedSize, setDownloadedSize] = React.useState(0);
 
-FullDownloadReadyWide.story = {
-  name: 'FullDownloadReady (Wide)',
-};
+  const { downloadSize } = defaultProps;
 
-export const DownloadingWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Downloading}
-    />
-  </FakeLeftPaneContainer>
-);
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setDownloadedSize(x => {
+        const newValue = x + 0.25 * downloadSize;
+        if (newValue > downloadSize) {
+          return 0;
+        }
+        return newValue;
+      });
+    }, SECOND);
 
-DownloadingWide.story = {
-  name: 'Downloading (Wide)',
-};
+    return () => clearInterval(interval);
+  }, [downloadSize]);
 
-export const CannotUpdateWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Cannot_Update}
-    />
-  </FakeLeftPaneContainer>
-);
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        downloadedSize={downloadedSize}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Downloading}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-CannotUpdateWide.story = {
-  name: 'Cannot_Update (Wide)',
-};
+export function CannotUpdateWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Cannot_Update}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const CannotUpdateBetaWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0-beta.1"
-      dialogType={DialogType.Cannot_Update}
-    />
-  </FakeLeftPaneContainer>
-);
+export function CannotUpdateBetaWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0-beta.1"
+        dialogType={DialogType.Cannot_Update}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-CannotUpdateBetaWide.story = {
-  name: 'Cannot_Update_Beta (Wide)',
-};
+export function CannotUpdateRequireManualWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Cannot_Update_Require_Manual}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const CannotUpdateRequireManualWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Cannot_Update_Require_Manual}
-    />
-  </FakeLeftPaneContainer>
-);
+export function CannotUpdateRequireManualBetaWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0-beta.1"
+        dialogType={DialogType.Cannot_Update_Require_Manual}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-CannotUpdateRequireManualWide.story = {
-  name: 'Cannot_Update_Require_Manual (Wide)',
-};
+export function MacOSReadOnlyWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.MacOS_Read_Only}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const CannotUpdateRequireManualBetaWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0-beta.1"
-      dialogType={DialogType.Cannot_Update_Require_Manual}
-    />
-  </FakeLeftPaneContainer>
-);
+export function UnsupportedOSWide(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Wide}
+        currentVersion="5.24.0"
+        dialogType={DialogType.UnsupportedOS}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-CannotUpdateRequireManualBetaWide.story = {
-  name: 'Cannot_Update_Require_Manual_Beta (Wide)',
-};
+export function UpdateNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        dialogType={DialogType.AutoUpdate}
+        currentVersion="5.24.0"
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const MacOSReadOnlyWide = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Wide}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Wide}
-      currentVersion="5.24.0"
-      dialogType={DialogType.MacOS_Read_Only}
-    />
-  </FakeLeftPaneContainer>
-);
+export function DownloadedNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        dialogType={DialogType.DownloadedUpdate}
+        currentVersion="5.24.0"
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-MacOSReadOnlyWide.story = {
-  name: 'MacOS_Read_Only (Wide)',
-};
+export function DownloadReadyNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.DownloadReady}
+        downloadSize={30123456}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const UpdateNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      dialogType={DialogType.Update}
-      currentVersion="5.24.0"
-    />
-  </FakeLeftPaneContainer>
-);
+export function FullDownloadReadyNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.FullDownloadReady}
+        downloadSize={300123456}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-UpdateNarrow.story = {
-  name: 'Update (Narrow)',
-};
+export function DownloadingNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Downloading}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const DownloadReadyNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.DownloadReady}
-      downloadSize={30123456}
-    />
-  </FakeLeftPaneContainer>
-);
+export function CannotUpdateNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Cannot_Update}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-DownloadReadyNarrow.story = {
-  name: 'DownloadReady (Narrow)',
-};
+export function CannotUpdateBetaNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0-beta.1"
+        dialogType={DialogType.Cannot_Update}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const FullDownloadReadyNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.FullDownloadReady}
-      downloadSize={300123456}
-    />
-  </FakeLeftPaneContainer>
-);
+export function CannotUpdateRequireManualNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.Cannot_Update_Require_Manual}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-FullDownloadReadyNarrow.story = {
-  name: 'FullDownloadReady (Narrow)',
-};
+export function CannotUpdateRequireManualBetaNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0-beta.1"
+        dialogType={DialogType.Cannot_Update_Require_Manual}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-export const DownloadingNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Downloading}
-    />
-  </FakeLeftPaneContainer>
-);
+export function MacOSReadOnlyNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.MacOS_Read_Only}
+      />
+    </FakeLeftPaneContainer>
+  );
+}
 
-DownloadingNarrow.story = {
-  name: 'Downloading (Narrow)',
-};
-
-export const CannotUpdateNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Cannot_Update}
-    />
-  </FakeLeftPaneContainer>
-);
-
-CannotUpdateNarrow.story = {
-  name: 'Cannot Update (Narrow)',
-};
-
-export const CannotUpdateBetaNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0-beta.1"
-      dialogType={DialogType.Cannot_Update}
-    />
-  </FakeLeftPaneContainer>
-);
-
-CannotUpdateBetaNarrow.story = {
-  name: 'Cannot Update Beta (Narrow)',
-};
-
-export const CannotUpdateRequireManualNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.Cannot_Update_Require_Manual}
-    />
-  </FakeLeftPaneContainer>
-);
-
-CannotUpdateRequireManualNarrow.story = {
-  name: 'Cannot_Update_Require_Manual (Narrow)',
-};
-
-export const CannotUpdateRequireManualBetaNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0-beta.1"
-      dialogType={DialogType.Cannot_Update_Require_Manual}
-    />
-  </FakeLeftPaneContainer>
-);
-
-CannotUpdateRequireManualBetaNarrow.story = {
-  name: 'Cannot_Update_Require_Manual_Beta (Narrow)',
-};
-
-export const MacOSReadOnlyNarrow = (): JSX.Element => (
-  <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
-    <DialogUpdate
-      {...defaultProps}
-      containerWidthBreakpoint={WidthBreakpoint.Narrow}
-      currentVersion="5.24.0"
-      dialogType={DialogType.MacOS_Read_Only}
-    />
-  </FakeLeftPaneContainer>
-);
-
-MacOSReadOnlyNarrow.story = {
-  name: 'MacOS_Read_Only (Narrow)',
-};
+export function UnsupportedOSNarrow(): JSX.Element {
+  return (
+    <FakeLeftPaneContainer containerWidthBreakpoint={WidthBreakpoint.Narrow}>
+      <DialogUpdate
+        {...defaultProps}
+        containerWidthBreakpoint={WidthBreakpoint.Narrow}
+        currentVersion="5.24.0"
+        dialogType={DialogType.UnsupportedOS}
+      />
+    </FakeLeftPaneContainer>
+  );
+}

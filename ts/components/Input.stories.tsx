@@ -1,21 +1,19 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useState } from 'react';
-
-import { text } from '@storybook/addon-knobs';
 import { action } from '@storybook/addon-actions';
-
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './Input';
 import { Input } from './Input';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Input',
-};
+  argTypes: {},
+  args: {},
+} satisfies Meta<PropsType>;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   disabled: Boolean(overrideProps.disabled),
@@ -26,11 +24,8 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   icon: overrideProps.icon,
   maxLengthCount: overrideProps.maxLengthCount,
   onChange: action('onChange'),
-  placeholder: text(
-    'placeholder',
-    overrideProps.placeholder || 'Enter some text here'
-  ),
-  value: text('value', overrideProps.value || ''),
+  placeholder: overrideProps.placeholder ?? 'Enter some text here',
+  value: overrideProps.value ?? '',
   whenToShowRemainingCount: overrideProps.whenToShowRemainingCount,
 });
 
@@ -41,92 +36,80 @@ function Controller(props: PropsType): JSX.Element {
   return <Input {...props} onChange={setValue} value={value} />;
 }
 
-export const Simple = (): JSX.Element => <Controller {...createProps()} />;
+export function Simple(): JSX.Element {
+  return <Controller {...createProps()} />;
+}
 
-export const HasClearButton = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      hasClearButton: true,
-    })}
-  />
-);
+export function HasClearButton(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        hasClearButton: true,
+      })}
+    />
+  );
+}
 
-HasClearButton.story = {
-  name: 'hasClearButton',
-};
+export function CharacterCount(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        maxLengthCount: 10,
+      })}
+    />
+  );
+}
 
-export const CharacterCount = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      maxLengthCount: 10,
-    })}
-  />
-);
+export function CharacterCountCustomizableShow(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        maxLengthCount: 64,
+        whenToShowRemainingCount: 32,
+      })}
+    />
+  );
+}
 
-CharacterCount.story = {
-  name: 'character count',
-};
+export function Expandable(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        expandable: true,
+      })}
+    />
+  );
+}
 
-export const CharacterCountCustomizableShow = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      maxLengthCount: 64,
-      whenToShowRemainingCount: 32,
-    })}
-  />
-);
+export function ExpandableWCount(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        expandable: true,
+        hasClearButton: true,
+        maxLengthCount: 140,
+        whenToShowRemainingCount: 0,
+      })}
+    />
+  );
+}
 
-CharacterCountCustomizableShow.story = {
-  name: 'character count (customizable show)',
-};
+export function Disabled(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        disabled: true,
+      })}
+    />
+  );
+}
 
-export const Expandable = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      expandable: true,
-    })}
-  />
-);
-
-Expandable.story = {
-  name: 'expandable',
-};
-
-export const ExpandableWCount = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      expandable: true,
-      hasClearButton: true,
-      maxLengthCount: 140,
-      whenToShowRemainingCount: 0,
-    })}
-  />
-);
-
-ExpandableWCount.story = {
-  name: 'expandable w/count',
-};
-
-export const Disabled = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      disabled: true,
-    })}
-  />
-);
-
-Disabled.story = {
-  name: 'disabled',
-};
-
-export const SpellcheckDisabled = (): JSX.Element => (
-  <Controller
-    {...createProps({
-      disableSpellcheck: true,
-    })}
-  />
-);
-
-SpellcheckDisabled.story = {
-  name: 'spellcheck disabled',
-};
+export function SpellcheckDisabled(): JSX.Element {
+  return (
+    <Controller
+      {...createProps({
+        disableSpellcheck: true,
+      })}
+    />
+  );
+}

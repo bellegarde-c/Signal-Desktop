@@ -1,21 +1,28 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
-import Delta from 'quill-delta';
+import { Delta } from '@signalapp/quill-cjs';
 import type { SinonStub } from 'sinon';
 import sinon from 'sinon';
-import type { Quill, KeyboardStatic } from 'quill';
+import type Quill from '@signalapp/quill-cjs';
+import type Keyboard from '@signalapp/quill-cjs/modules/keyboard';
 
 import type { MutableRefObject } from 'react';
 import type { MentionCompletionOptions } from '../../../quill/mentions/completion';
 import { MentionCompletion } from '../../../quill/mentions/completion';
 import type { ConversationType } from '../../../state/ducks/conversations';
-import { MemberRepository } from '../../../quill/memberRepository';
+import { MemberRepository, _toMembers } from '../../../quill/memberRepository';
+import type { MemberType } from '../../../quill/memberRepository';
 import { ThemeType } from '../../../types/Util';
-import { getDefaultConversationWithUuid } from '../../../test-both/helpers/getDefaultConversation';
+import { getDefaultConversationWithServiceId } from '../../../test-both/helpers/getDefaultConversation';
+import { setupI18n } from '../../../util/setupI18n';
 
-const me: ConversationType = getDefaultConversationWithUuid({
+type MiniLeafBlot = {
+  value: () => string;
+};
+
+const me: ConversationType = getDefaultConversationWithServiceId({
   id: '666777',
   title: 'Fred Savage',
   firstName: 'Fred',
@@ -27,8 +34,8 @@ const me: ConversationType = getDefaultConversationWithUuid({
   isMe: true,
 });
 
-const members: Array<ConversationType> = [
-  getDefaultConversationWithUuid({
+const conversations: Array<ConversationType> = [
+  getDefaultConversationWithServiceId({
     id: '555444',
     title: 'Mahershala Ali',
     firstName: 'Mahershala',
@@ -38,7 +45,7 @@ const members: Array<ConversationType> = [
     markedUnread: false,
     areWeAdmin: false,
   }),
-  getDefaultConversationWithUuid({
+  getDefaultConversationWithServiceId({
     id: '333222',
     title: 'Shia LaBeouf',
     firstName: 'Shia',
@@ -48,31 +55,39 @@ const members: Array<ConversationType> = [
     markedUnread: false,
     areWeAdmin: false,
   }),
+  getDefaultConversationWithServiceId({
+    areWeAdmin: false,
+    firstName: 'Zoë',
+    id: '999977',
+    lastUpdated: Date.now(),
+    markedUnread: false,
+    profileName: 'Zoë A',
+    title: 'Zoë Aurélien',
+    type: 'direct',
+  }),
   me,
 ];
+
+const members = _toMembers(conversations);
 
 describe('MentionCompletion', () => {
   let mockQuill: Omit<
     Partial<{ [K in keyof Quill]: SinonStub }>,
     'keyboard'
   > & {
-    keyboard: Partial<{ [K in keyof KeyboardStatic]: SinonStub }>;
+    keyboard: Partial<{ [K in keyof Keyboard]: SinonStub }>;
   };
   let mentionCompletion: MentionCompletion;
 
-  beforeEach(function beforeEach() {
+  beforeEach(() => {
     const memberRepositoryRef: MutableRefObject<MemberRepository> = {
-      current: new MemberRepository(members),
+      current: new MemberRepository(conversations),
     };
 
     const options: MentionCompletionOptions = {
       getPreferredBadge: () => undefined,
-      i18n: Object.assign(sinon.stub(), {
-        getLocale: sinon.stub(),
-        getIntl: sinon.stub(),
-        isLegacyFormat: sinon.stub(),
-      }),
-      me,
+      i18n: setupI18n('en', {}),
+      ourConversationId: me.id,
       memberRepositoryRef,
       setMentionPickerElement: sinon.stub(),
       theme: ThemeType.dark,
@@ -99,7 +114,7 @@ describe('MentionCompletion', () => {
   describe('onTextChange', () => {
     let possiblyShowMemberResultsStub: sinon.SinonStub<
       [],
-      Array<ConversationType>
+      ReadonlyArray<MemberType>
     >;
 
     beforeEach(() => {
@@ -152,14 +167,17 @@ describe('MentionCompletion', () => {
   describe('completeMention', () => {
     describe('given a completable mention', () => {
       let insertMentionStub: SinonStub<
-        [ConversationType, number, number, (boolean | undefined)?],
+        [MemberType, number, number, (boolean | undefined)?],
         void
       >;
 
       beforeEach(() => {
         mentionCompletion.results = members;
         mockQuill.getSelection?.returns({ index: 5 });
-        mockQuill.getLeaf?.returns([{ text: '@shia' }, 5]);
+        const blot: MiniLeafBlot = {
+          value: () => '@shia',
+        };
+        mockQuill.getLeaf?.returns([blot, 5]);
 
         insertMentionStub = sinon.stub(mentionCompletion, 'insertMention');
       });
@@ -200,7 +218,10 @@ describe('MentionCompletion', () => {
       describe('from the middle of a string', () => {
         beforeEach(() => {
           mockQuill.getSelection?.returns({ index: 9 });
-          mockQuill.getLeaf?.returns([{ text: 'foo @shia bar' }, 9]);
+          const blot: MiniLeafBlot = {
+            value: () => 'foo @shia bar',
+          };
+          mockQuill.getLeaf?.returns([blot, 9]);
         });
 
         it('inserts correctly', () => {
@@ -224,11 +245,11 @@ describe('MentionCompletion', () => {
         const text = '@Sh';
         const index = text.length;
 
-        beforeEach(function beforeEach() {
+        beforeEach(() => {
           mockQuill.getSelection?.returns({ index });
 
-          const blot = {
-            text,
+          const blot: MiniLeafBlot = {
+            value: () => text,
           };
           mockQuill.getLeaf?.returns([blot, index]);
 
@@ -247,6 +268,23 @@ describe('MentionCompletion', () => {
           assert.equal(distanceFromCursor, 0);
           assert.equal(adjustCursorAfterBy, 3);
           assert.equal(withTrailingSpace, true);
+        });
+      });
+
+      describe('diacritics', () => {
+        it('finds a member with diacritics using non-diacritic chars', () => {
+          const text = '@zoe';
+          const index = text.length;
+          mockQuill.getSelection?.returns({ index });
+          const blot: MiniLeafBlot = {
+            value: () => text,
+          };
+          mockQuill.getLeaf?.returns([blot, index]);
+          mentionCompletion.completeMention(2);
+
+          const [member] = insertMentionStub.getCall(0).args;
+
+          assert.equal(member, members[2]);
         });
       });
     });

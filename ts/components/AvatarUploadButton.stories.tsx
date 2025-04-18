@@ -4,13 +4,11 @@
 import React from 'react';
 
 import { action } from '@storybook/addon-actions';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './AvatarUploadButton';
 import { AvatarUploadButton } from './AvatarUploadButton';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   className: overrideProps.className || '',
@@ -20,8 +18,8 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/AvatarUploadButton',
-};
+} satisfies Meta<PropsType>;
 
-export const Default = (): JSX.Element => (
-  <AvatarUploadButton {...createProps()} />
-);
+export function Default(): JSX.Element {
+  return <AvatarUploadButton {...createProps()} />;
+}

@@ -4,7 +4,6 @@
 import type { ConversationAttributesType } from '../model-types.d';
 
 import { makeEnumParser } from './enum';
-import { isInSystemContacts } from './isInSystemContacts';
 import { missingCaseError } from './missingCaseError';
 import { isDirectConversation, isMe } from './whatTypeOfConversation';
 
@@ -17,16 +16,10 @@ export enum PhoneNumberSharingMode {
 
 export const parsePhoneNumberSharingMode = makeEnumParser(
   PhoneNumberSharingMode,
-  PhoneNumberSharingMode.Everybody
+  PhoneNumberSharingMode.Nobody
 );
 
-export const shouldSharePhoneNumberWith = (
-  conversation: ConversationAttributesType
-): boolean => {
-  if (!isDirectConversation(conversation) || isMe(conversation)) {
-    return false;
-  }
-
+export const isSharingPhoneNumberWithEverybody = (): boolean => {
   const phoneNumberSharingMode = parsePhoneNumberSharingMode(
     window.storage.get('phoneNumberSharingMode')
   );
@@ -35,10 +28,19 @@ export const shouldSharePhoneNumberWith = (
     case PhoneNumberSharingMode.Everybody:
       return true;
     case PhoneNumberSharingMode.ContactsOnly:
-      return isInSystemContacts(conversation);
     case PhoneNumberSharingMode.Nobody:
       return false;
     default:
       throw missingCaseError(phoneNumberSharingMode);
   }
+};
+
+export const shouldSharePhoneNumberWith = (
+  conversation: ConversationAttributesType
+): boolean => {
+  if (!isDirectConversation(conversation) || isMe(conversation)) {
+    return false;
+  }
+
+  return isSharingPhoneNumberWithEverybody();
 };

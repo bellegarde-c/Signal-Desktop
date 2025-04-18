@@ -1,11 +1,11 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
+import type { Database } from '@signalapp/sqlcipher';
 import { keyBy } from 'lodash';
+import { v4 as generateUuid } from 'uuid';
 
 import type { LoggerType } from '../../types/Logging';
-import { UUID } from '../../types/UUID';
 import {
   getSchemaVersion,
   getUserVersion,
@@ -14,7 +14,7 @@ import {
   objectToJSON,
   jsonToObject,
 } from '../util';
-import type { Query, EmptyQuery } from '../util';
+import type { WritableDB } from '../Interface';
 
 import updateToSchemaVersion41 from './41-uuid-keys';
 import updateToSchemaVersion42 from './42-stale-reactions';
@@ -44,6 +44,77 @@ import updateToSchemaVersion65 from './65-add-storage-id-to-stickers';
 import updateToSchemaVersion66 from './66-add-pni-signature-to-sent-protos';
 import updateToSchemaVersion67 from './67-add-story-to-unprocessed';
 import updateToSchemaVersion68 from './68-drop-deprecated-columns';
+import updateToSchemaVersion69 from './69-group-call-ring-cancellations';
+import updateToSchemaVersion70 from './70-story-reply-index';
+import updateToSchemaVersion71 from './71-merge-notifications';
+import updateToSchemaVersion72 from './72-optimize-call-id-message-lookup';
+import updateToSchemaVersion73 from './73-remove-phone-number-discovery';
+import updateToSchemaVersion74 from './74-optimize-convo-open';
+import updateToSchemaVersion75 from './75-noop';
+import updateToSchemaVersion76 from './76-optimize-convo-open-2';
+import updateToSchemaVersion77 from './77-signal-tokenizer';
+import updateToSchemaVersion78 from './78-merge-receipt-jobs';
+import updateToSchemaVersion79 from './79-paging-lightbox';
+import updateToSchemaVersion80 from './80-edited-messages';
+import updateToSchemaVersion81 from './81-contact-removed-notification';
+import updateToSchemaVersion82 from './82-edited-messages-read-index';
+import updateToSchemaVersion83 from './83-mentions';
+import updateToSchemaVersion84 from './84-all-mentions';
+import updateToSchemaVersion85 from './85-add-kyber-keys';
+import updateToSchemaVersion86 from './86-story-replies-index';
+import updateToSchemaVersion87 from './87-cleanup';
+import updateToSchemaVersion88 from './88-service-ids';
+import updateToSchemaVersion89 from './89-call-history';
+import updateToSchemaVersion90 from './90-delete-story-reply-screenshot';
+import updateToSchemaVersion91 from './91-clean-keys';
+import { updateToSchemaVersion920 } from './920-clean-more-keys';
+import { updateToSchemaVersion930 } from './930-fts5-secure-delete';
+import { updateToSchemaVersion940 } from './940-fts5-revert';
+import { updateToSchemaVersion950 } from './950-fts5-secure-delete';
+import { updateToSchemaVersion960 } from './960-untag-pni';
+import { updateToSchemaVersion970 } from './970-fts5-optimize';
+import { updateToSchemaVersion980 } from './980-reaction-timestamp';
+import { updateToSchemaVersion990 } from './990-phone-number-sharing';
+import { updateToSchemaVersion1000 } from './1000-mark-unread-call-history-messages-as-unseen';
+import { updateToSchemaVersion1010 } from './1010-call-links-table';
+import { updateToSchemaVersion1020 } from './1020-self-merges';
+import { updateToSchemaVersion1030 } from './1030-unblock-event';
+import { updateToSchemaVersion1040 } from './1040-undownloaded-backed-up-media';
+import { updateToSchemaVersion1050 } from './1050-group-send-endorsements';
+import { updateToSchemaVersion1060 } from './1060-addressable-messages-and-sync-tasks';
+import { updateToSchemaVersion1070 } from './1070-attachment-backup';
+import { updateToSchemaVersion1080 } from './1080-nondisappearing-addressable';
+import { updateToSchemaVersion1090 } from './1090-message-delete-indexes';
+import { updateToSchemaVersion1100 } from './1100-optimize-mark-call-history-read-in-conversation';
+import { updateToSchemaVersion1110 } from './1110-sticker-local-key';
+import { updateToSchemaVersion1120 } from './1120-messages-foreign-keys-indexes';
+import { updateToSchemaVersion1130 } from './1130-isStory-index';
+import { updateToSchemaVersion1140 } from './1140-call-links-deleted-column';
+import { updateToSchemaVersion1150 } from './1150-expire-timer-version';
+import { updateToSchemaVersion1160 } from './1160-optimize-calls-unread-count';
+import { updateToSchemaVersion1170 } from './1170-update-call-history-unread-index';
+import { updateToSchemaVersion1180 } from './1180-add-attachment-download-source';
+import { updateToSchemaVersion1190 } from './1190-call-links-storage';
+import { updateToSchemaVersion1200 } from './1200-attachment-download-source-index';
+import { updateToSchemaVersion1210 } from './1210-call-history-started-id';
+import { updateToSchemaVersion1220 } from './1220-blob-sessions';
+import { updateToSchemaVersion1230 } from './1230-call-links-admin-key-index';
+import { updateToSchemaVersion1240 } from './1240-defunct-call-links-table';
+import { updateToSchemaVersion1250 } from './1250-defunct-call-links-storage';
+import { updateToSchemaVersion1260 } from './1260-sync-tasks-rowid';
+import { updateToSchemaVersion1270 } from './1270-normalize-messages';
+import { updateToSchemaVersion1280 } from './1280-blob-unprocessed';
+import { updateToSchemaVersion1290 } from './1290-int-unprocessed-source-device';
+import { updateToSchemaVersion1300 } from './1300-sticker-pack-refs';
+import { updateToSchemaVersion1310 } from './1310-muted-fixup';
+import { updateToSchemaVersion1320 } from './1320-unprocessed-received-at-date';
+import { updateToSchemaVersion1330 } from './1330-sync-tasks-type-index';
+import {
+  updateToSchemaVersion1340,
+  version as MAX_VERSION,
+} from './1340-recent-gifs';
+
+import { DataWriter } from '../Server';
 
 function updateToSchemaVersion1(
   currentVersion: number,
@@ -318,7 +389,7 @@ function updateToSchemaVersion7(
         number
       ) WHERE number IS NOT NULL;
       INSERT INTO sessions(id, number, json)
-        SELECT "+" || id, number, json FROM sessions_old;
+        SELECT '+' || id, number, json FROM sessions_old;
       DROP TABLE sessions_old;
     `);
 
@@ -747,13 +818,7 @@ function updateToSchemaVersion17(
       );
     }
 
-    try {
-      db.exec('DROP INDEX messages_view_once;');
-    } catch (error) {
-      logger.info(
-        'updateToSchemaVersion17: Index messages_view_once did not already exist'
-      );
-    }
+    db.exec('DROP INDEX IF EXISTS messages_view_once;');
 
     db.exec(`
       CREATE INDEX messages_view_once ON messages (
@@ -892,10 +957,10 @@ function updateToSchemaVersion20(
     // significantly, so we drop them and recreate them later.
     // Drop triggers
     const triggers = db
-      .prepare<EmptyQuery>(
-        'SELECT * FROM sqlite_master WHERE type = "trigger" AND tbl_name = "messages"'
+      .prepare(
+        "SELECT * FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'messages'"
       )
-      .all();
+      .all<{ name: string; sql: string }>();
 
     for (const trigger of triggers) {
       db.exec(`DROP TRIGGER ${trigger.name}`);
@@ -920,33 +985,34 @@ function updateToSchemaVersion20(
 
     // Drop invalid groups and any associated messages
     const maybeInvalidGroups = db
-      .prepare<EmptyQuery>(
+      .prepare(
         "SELECT * FROM conversations WHERE type = 'group' AND members IS NULL;"
       )
-      .all();
+      .all<{ id: string; json: string }>();
     for (const group of maybeInvalidGroups) {
       const json: { id: string; members: Array<unknown> } = JSON.parse(
         group.json
       );
       if (!json.members || !json.members.length) {
-        db.prepare<Query>('DELETE FROM conversations WHERE id = $id;').run({
+        db.prepare('DELETE FROM conversations WHERE id = $id;').run({
           id: json.id,
         });
-        db.prepare<Query>(
-          'DELETE FROM messages WHERE conversationId = $id;'
-        ).run({ id: json.id });
+        db.prepare('DELETE FROM messages WHERE conversationId = $id;').run({
+          id: json.id,
+        });
       }
     }
 
     // Generate new IDs and alter data
-    const allConversations = db
-      .prepare<EmptyQuery>('SELECT * FROM conversations;')
-      .all();
+    const allConversations = db.prepare('SELECT * FROM conversations;').all<{
+      id: string;
+      type: string;
+    }>();
     const allConversationsByOldId = keyBy(allConversations, 'id');
 
     for (const row of allConversations) {
       const oldId = row.id;
-      const newId = UUID.generate().toString();
+      const newId = generateUuid();
       allConversationsByOldId[oldId].id = newId;
       const patchObj: { id: string; e164?: string; groupId?: string } = {
         id: newId,
@@ -958,7 +1024,7 @@ function updateToSchemaVersion20(
       }
       const patch = JSON.stringify(patchObj);
 
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE conversations
         SET id = $newId, json = JSON_PATCH(json, $patch)
@@ -970,7 +1036,7 @@ function updateToSchemaVersion20(
         patch,
       });
       const messagePatch = JSON.stringify({ conversationId: newId });
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE messages
         SET conversationId = $newId, json = JSON_PATCH(json, $patch)
@@ -984,7 +1050,7 @@ function updateToSchemaVersion20(
       members: string;
       json: string;
     }> = db
-      .prepare<EmptyQuery>(
+      .prepare(
         `
         SELECT id, members, json FROM conversations WHERE type = 'group';
         `
@@ -1003,7 +1069,7 @@ function updateToSchemaVersion20(
         } else {
           // We didn't previously have a private conversation for this member,
           // we need to create one
-          const id = UUID.generate().toString();
+          const id = generateUuid();
           const updatedConversation = {
             id,
             e164: m,
@@ -1023,13 +1089,13 @@ function updateToSchemaVersion20(
             profileSharing: false,
           };
 
-          db.prepare<Query>(
+          db.prepare(
             `
             UPDATE conversations
             SET
               json = $json,
               e164 = $e164,
-              type = $type,
+              type = $type
             WHERE
               id = $id;
             `
@@ -1048,7 +1114,7 @@ function updateToSchemaVersion20(
         members: newMembers,
       };
       const newMembersValue = newMembers.join(' ');
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE conversations
         SET members = $newMembersValue, json = $newJsonValue
@@ -1062,7 +1128,10 @@ function updateToSchemaVersion20(
     });
 
     // Update sessions to stable IDs
-    const allSessions = db.prepare<EmptyQuery>('SELECT * FROM sessions;').all();
+    const allSessions = db.prepare('SELECT * FROM sessions;').all<{
+      id: string;
+      json: string;
+    }>();
     for (const session of allSessions) {
       // Not using patch here so we can explicitly delete a property rather than
       // implicitly delete via null
@@ -1073,7 +1142,7 @@ function updateToSchemaVersion20(
         newJson.id = `${newJson.conversationId}.${newJson.deviceId}`;
       }
       delete newJson.number;
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE sessions
         SET id = $newId, json = $newJson, conversationId = $newConversationId
@@ -1088,13 +1157,14 @@ function updateToSchemaVersion20(
     }
 
     // Update identity keys to stable IDs
-    const allIdentityKeys = db
-      .prepare<EmptyQuery>('SELECT * FROM identityKeys;')
-      .all();
+    const allIdentityKeys = db.prepare('SELECT * FROM identityKeys;').all<{
+      json: string;
+      id: number;
+    }>();
     for (const identityKey of allIdentityKeys) {
       const newJson = JSON.parse(identityKey.json);
       newJson.id = allConversationsByOldId[newJson.id];
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE identityKeys
         SET id = $newId, json = $newJson
@@ -1886,11 +1956,12 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion2,
   updateToSchemaVersion3,
   updateToSchemaVersion4,
-  (_v: number, _i: Database, _l: LoggerType): void => undefined, // version 5 was dropped
+  // version 5 was dropped
   updateToSchemaVersion6,
   updateToSchemaVersion7,
   updateToSchemaVersion8,
   updateToSchemaVersion9,
+
   updateToSchemaVersion10,
   updateToSchemaVersion11,
   updateToSchemaVersion12,
@@ -1901,6 +1972,7 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion17,
   updateToSchemaVersion18,
   updateToSchemaVersion19,
+
   updateToSchemaVersion20,
   updateToSchemaVersion21,
   updateToSchemaVersion22,
@@ -1911,6 +1983,7 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion27,
   updateToSchemaVersion28,
   updateToSchemaVersion29,
+
   updateToSchemaVersion30,
   updateToSchemaVersion31,
   updateToSchemaVersion32,
@@ -1921,6 +1994,7 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion37,
   updateToSchemaVersion38,
   updateToSchemaVersion39,
+
   updateToSchemaVersion40,
   updateToSchemaVersion41,
   updateToSchemaVersion42,
@@ -1931,6 +2005,7 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion47,
   updateToSchemaVersion48,
   updateToSchemaVersion49,
+
   updateToSchemaVersion50,
   updateToSchemaVersion51,
   updateToSchemaVersion52,
@@ -1941,6 +2016,7 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion57,
   updateToSchemaVersion58,
   updateToSchemaVersion59,
+
   updateToSchemaVersion60,
   updateToSchemaVersion61,
   updateToSchemaVersion62,
@@ -1950,34 +2026,146 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion66,
   updateToSchemaVersion67,
   updateToSchemaVersion68,
+  updateToSchemaVersion69,
+
+  updateToSchemaVersion70,
+  updateToSchemaVersion71,
+  updateToSchemaVersion72,
+  updateToSchemaVersion73,
+  updateToSchemaVersion74,
+  updateToSchemaVersion75,
+  updateToSchemaVersion76,
+  updateToSchemaVersion77,
+  updateToSchemaVersion78,
+  updateToSchemaVersion79,
+
+  updateToSchemaVersion80,
+  updateToSchemaVersion81,
+  updateToSchemaVersion82,
+  updateToSchemaVersion83,
+  updateToSchemaVersion84,
+  updateToSchemaVersion85,
+  updateToSchemaVersion86,
+  updateToSchemaVersion87,
+  updateToSchemaVersion88,
+  updateToSchemaVersion89,
+
+  updateToSchemaVersion90,
+  updateToSchemaVersion91,
+  // From here forward, all migrations should be multiples of 10
+  updateToSchemaVersion920,
+  updateToSchemaVersion930,
+  updateToSchemaVersion940,
+  updateToSchemaVersion950,
+  updateToSchemaVersion960,
+  updateToSchemaVersion970,
+  updateToSchemaVersion980,
+  updateToSchemaVersion990,
+
+  updateToSchemaVersion1000,
+  updateToSchemaVersion1010,
+  updateToSchemaVersion1020,
+  updateToSchemaVersion1030,
+  updateToSchemaVersion1040,
+  updateToSchemaVersion1050,
+  updateToSchemaVersion1060,
+  updateToSchemaVersion1070,
+  updateToSchemaVersion1080,
+  updateToSchemaVersion1090,
+
+  updateToSchemaVersion1100,
+  updateToSchemaVersion1110,
+  updateToSchemaVersion1120,
+  updateToSchemaVersion1130,
+  updateToSchemaVersion1140,
+  updateToSchemaVersion1150,
+  updateToSchemaVersion1160,
+  updateToSchemaVersion1170,
+  updateToSchemaVersion1180,
+  updateToSchemaVersion1190,
+
+  updateToSchemaVersion1200,
+  updateToSchemaVersion1210,
+  updateToSchemaVersion1220,
+  updateToSchemaVersion1230,
+  updateToSchemaVersion1240,
+  updateToSchemaVersion1250,
+  updateToSchemaVersion1260,
+  updateToSchemaVersion1270,
+  updateToSchemaVersion1280,
+  updateToSchemaVersion1290,
+
+  updateToSchemaVersion1300,
+  updateToSchemaVersion1310,
+  updateToSchemaVersion1320,
+  updateToSchemaVersion1330,
+  updateToSchemaVersion1340,
 ];
 
-export function updateSchema(db: Database, logger: LoggerType): void {
+export class DBVersionFromFutureError extends Error {
+  override name = 'DBVersionFromFutureError';
+}
+
+export function enableFTS5SecureDelete(db: Database, logger: LoggerType): void {
+  const isEnabled =
+    db
+      .prepare(
+        `
+      SELECT v FROM messages_fts_config WHERE k is 'secure-delete';
+    `,
+        {
+          pluck: true,
+        }
+      )
+      .get() === 1;
+
+  if (!isEnabled) {
+    logger.info('enableFTS5SecureDelete: enabling');
+    db.exec(`
+      -- Enable secure-delete
+      INSERT INTO messages_fts
+      (messages_fts, rank)
+      VALUES
+      ('secure-delete', 1);
+    `);
+  }
+}
+
+export function updateSchema(db: WritableDB, logger: LoggerType): void {
   const sqliteVersion = getSQLiteVersion(db);
   const sqlcipherVersion = getSQLCipherVersion(db);
-  const userVersion = getUserVersion(db);
-  const maxUserVersion = SCHEMA_VERSIONS.length;
+  const startingVersion = getUserVersion(db);
   const schemaVersion = getSchemaVersion(db);
 
   logger.info(
     'updateSchema:\n',
-    ` Current user_version: ${userVersion};\n`,
-    ` Most recent db schema: ${maxUserVersion};\n`,
+    ` Current user_version: ${startingVersion};\n`,
+    ` Most recent db schema: ${MAX_VERSION};\n`,
     ` SQLite version: ${sqliteVersion};\n`,
     ` SQLCipher version: ${sqlcipherVersion};\n`,
     ` (deprecated) schema_version: ${schemaVersion};\n`
   );
 
-  if (userVersion > maxUserVersion) {
-    throw new Error(
-      `SQL: User version is ${userVersion} but the expected maximum version ` +
-        `is ${maxUserVersion}. Did you try to start an old version of Signal?`
+  if (startingVersion > MAX_VERSION) {
+    throw new DBVersionFromFutureError(
+      `SQL: User version is ${startingVersion} but the expected maximum version ` +
+        `is ${MAX_VERSION}.`
     );
   }
 
-  for (let index = 0; index < maxUserVersion; index += 1) {
+  for (let index = 0, max = SCHEMA_VERSIONS.length; index < max; index += 1) {
     const runSchemaUpdate = SCHEMA_VERSIONS[index];
 
-    runSchemaUpdate(userVersion, db, logger);
+    runSchemaUpdate(startingVersion, db, logger);
+  }
+
+  DataWriter.ensureMessageInsertTriggersAreEnabled(db);
+  enableFTS5SecureDelete(db, logger);
+
+  if (startingVersion !== MAX_VERSION) {
+    const start = Date.now();
+    db.pragma('optimize');
+    const duration = Date.now() - start;
+    logger.info(`updateSchema: optimize took ${duration}ms`);
   }
 }

@@ -2,23 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { text } from '@storybook/addon-knobs';
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../../util/setupI18n';
-import enMessages from '../../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { MediaItemType } from '../../../types/MediaItem';
 import type { AttachmentType } from '../../../types/Attachment';
 import { stringToMIMEType } from '../../../types/MIME';
-
 import type { Props } from './MediaGridItem';
 import { MediaGridItem } from './MediaGridItem';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/MediaGallery/MediaGridItem',
-};
+} satisfies Meta<Props>;
 
 const createProps = (
   overrideProps: Partial<Props> & { mediaItem: MediaItemType }
@@ -31,26 +27,21 @@ const createProps = (
 const createMediaItem = (
   overrideProps: Partial<MediaItemType> = {}
 ): MediaItemType => ({
-  thumbnailObjectUrl: text(
-    'thumbnailObjectUrl',
-    overrideProps.thumbnailObjectUrl || ''
-  ),
-  contentType: stringToMIMEType(
-    text('contentType', overrideProps.contentType || '')
-  ),
+  thumbnailObjectUrl: overrideProps.thumbnailObjectUrl || '',
+  contentType: overrideProps.contentType || stringToMIMEType(''),
   index: 0,
   attachment: {} as AttachmentType, // attachment not useful in the component
   message: {
     attachments: [],
     conversationId: '1234',
     id: 'id',
-    received_at: Date.now(),
-    received_at_ms: Date.now(),
-    sent_at: Date.now(),
+    receivedAt: Date.now(),
+    receivedAtMs: Date.now(),
+    sentAt: Date.now(),
   },
 });
 
-export const Image = (): JSX.Element => {
+export function Image(): JSX.Element {
   const mediaItem = createMediaItem({
     thumbnailObjectUrl: '/fixtures/kitten-1-64-64.jpg',
     contentType: stringToMIMEType('image/jpeg'),
@@ -61,9 +52,9 @@ export const Image = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const Video = (): JSX.Element => {
+export function Video(): JSX.Element {
   const mediaItem = createMediaItem({
     thumbnailObjectUrl: '/fixtures/kitten-2-64-64.jpg',
     contentType: stringToMIMEType('video/mp4'),
@@ -74,9 +65,9 @@ export const Video = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const MissingImage = (): JSX.Element => {
+export function MissingImage(): JSX.Element {
   const mediaItem = createMediaItem({
     contentType: stringToMIMEType('image/jpeg'),
   });
@@ -86,9 +77,9 @@ export const MissingImage = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const MissingVideo = (): JSX.Element => {
+export function MissingVideo(): JSX.Element {
   const mediaItem = createMediaItem({
     contentType: stringToMIMEType('video/mp4'),
   });
@@ -98,9 +89,9 @@ export const MissingVideo = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const BrokenImage = (): JSX.Element => {
+export function BrokenImage(): JSX.Element {
   const mediaItem = createMediaItem({
     thumbnailObjectUrl: '/missing-fixtures/nope.jpg',
     contentType: stringToMIMEType('image/jpeg'),
@@ -111,9 +102,9 @@ export const BrokenImage = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const BrokenVideo = (): JSX.Element => {
+export function BrokenVideo(): JSX.Element {
   const mediaItem = createMediaItem({
     thumbnailObjectUrl: '/missing-fixtures/nope.mp4',
     contentType: stringToMIMEType('video/mp4'),
@@ -124,9 +115,9 @@ export const BrokenVideo = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
+}
 
-export const OtherContentType = (): JSX.Element => {
+export function OtherContentType(): JSX.Element {
   const mediaItem = createMediaItem({
     contentType: stringToMIMEType('application/text'),
   });
@@ -136,8 +127,4 @@ export const OtherContentType = (): JSX.Element => {
   });
 
   return <MediaGridItem {...props} />;
-};
-
-OtherContentType.story = {
-  name: 'Other ContentType',
-};
+}

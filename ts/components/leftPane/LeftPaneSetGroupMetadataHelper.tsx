@@ -10,6 +10,7 @@ import { RowType } from '../ConversationList';
 import type { ContactListItemConversationType } from '../conversationList/ContactListItem';
 import { DisappearingTimerSelect } from '../DisappearingTimerSelect';
 import type { LocalizerType } from '../../types/Util';
+import type { DurationInSeconds } from '../../util/durations';
 import { Alert } from '../Alert';
 import { AvatarEditor } from '../AvatarEditor';
 import { AvatarPreview } from '../AvatarPreview';
@@ -28,7 +29,7 @@ import { AvatarColors } from '../../types/Colors';
 export type LeftPaneSetGroupMetadataPropsType = {
   groupAvatar: undefined | Uint8Array;
   groupName: string;
-  groupExpireTimer: number;
+  groupExpireTimer: DurationInSeconds;
   hasError: boolean;
   isCreating: boolean;
   isEditingAvatar: boolean;
@@ -37,21 +38,14 @@ export type LeftPaneSetGroupMetadataPropsType = {
 };
 
 export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGroupMetadataPropsType> {
-  private readonly groupAvatar: undefined | Uint8Array;
-
-  private readonly groupName: string;
-
-  private readonly groupExpireTimer: number;
-
-  private readonly hasError: boolean;
-
-  private readonly isCreating: boolean;
-
-  private readonly isEditingAvatar: boolean;
-
-  private readonly selectedContacts: ReadonlyArray<ContactListItemConversationType>;
-
-  private readonly userAvatarData: ReadonlyArray<AvatarDataType>;
+  readonly #groupAvatar: undefined | Uint8Array;
+  readonly #groupName: string;
+  readonly #groupExpireTimer: DurationInSeconds;
+  readonly #hasError: boolean;
+  readonly #isCreating: boolean;
+  readonly #isEditingAvatar: boolean;
+  readonly #selectedContacts: ReadonlyArray<ContactListItemConversationType>;
+  readonly #userAvatarData: ReadonlyArray<AvatarDataType>;
 
   constructor({
     groupAvatar,
@@ -65,14 +59,14 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
   }: Readonly<LeftPaneSetGroupMetadataPropsType>) {
     super();
 
-    this.groupAvatar = groupAvatar;
-    this.groupName = groupName;
-    this.groupExpireTimer = groupExpireTimer;
-    this.hasError = hasError;
-    this.isCreating = isCreating;
-    this.isEditingAvatar = isEditingAvatar;
-    this.selectedContacts = selectedContacts;
-    this.userAvatarData = userAvatarData;
+    this.#groupAvatar = groupAvatar;
+    this.#groupName = groupName;
+    this.#groupExpireTimer = groupExpireTimer;
+    this.#hasError = hasError;
+    this.#isCreating = isCreating;
+    this.#isEditingAvatar = isEditingAvatar;
+    this.#selectedContacts = selectedContacts;
+    this.#userAvatarData = userAvatarData;
   }
 
   override getHeaderContents({
@@ -82,20 +76,20 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
     i18n: LocalizerType;
     showChooseGroupMembers: () => void;
   }>): ReactChild {
-    const backButtonLabel = i18n('setGroupMetadata__back-button');
+    const backButtonLabel = i18n('icu:setGroupMetadata__back-button');
 
     return (
       <div className="module-left-pane__header__contents">
         <button
           aria-label={backButtonLabel}
           className="module-left-pane__header__contents__back-button"
-          disabled={this.isCreating}
+          disabled={this.#isCreating}
           onClick={this.getBackAction({ showChooseGroupMembers })}
           title={backButtonLabel}
           type="button"
         />
         <div className="module-left-pane__header__contents__text">
-          {i18n('setGroupMetadata__title')}
+          {i18n('icu:setGroupMetadata__title')}
         </div>
       </div>
     );
@@ -106,7 +100,7 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
   }: {
     showChooseGroupMembers: () => void;
   }): undefined | (() => void) {
-    return this.isCreating ? undefined : showChooseGroupMembers;
+    return this.#isCreating ? undefined : showChooseGroupMembers;
   }
 
   override getPreRowsNode({
@@ -128,12 +122,12 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
     createGroup: () => unknown;
     i18n: LocalizerType;
     setComposeGroupAvatar: (_: undefined | Uint8Array) => unknown;
-    setComposeGroupExpireTimer: (_: number) => void;
+    setComposeGroupExpireTimer: (_: DurationInSeconds) => void;
     setComposeGroupName: (_: string) => unknown;
     toggleComposeEditingAvatar: () => unknown;
   }>): ReactChild {
     const [avatarColor] = AvatarColors;
-    const disabled = this.isCreating;
+    const disabled = this.#isCreating;
 
     return (
       <form
@@ -142,24 +136,26 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
           event.preventDefault();
           event.stopPropagation();
 
-          if (!this.canCreateGroup()) {
+          if (!this.#canCreateGroup()) {
             return;
           }
 
           createGroup();
         }}
       >
-        {this.isEditingAvatar && (
+        {this.#isEditingAvatar && (
           <Modal
             modalName="LeftPaneSetGroupMetadataHelper.AvatarEditor"
             hasXButton
             i18n={i18n}
             onClose={toggleComposeEditingAvatar}
-            title={i18n('LeftPaneSetGroupMetadataHelper__avatar-modal-title')}
+            title={i18n(
+              'icu:LeftPaneSetGroupMetadataHelper__avatar-modal-title'
+            )}
           >
             <AvatarEditor
               avatarColor={avatarColor}
-              avatarValue={this.groupAvatar}
+              avatarValue={this.#groupAvatar}
               deleteAvatarFromDisk={composeDeleteAvatarFromDisk}
               i18n={i18n}
               isGroup
@@ -168,7 +164,7 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
                 setComposeGroupAvatar(newAvatar);
                 toggleComposeEditingAvatar();
               }}
-              userAvatarData={this.userAvatarData}
+              userAvatarData={this.#userAvatarData}
               replaceAvatar={composeReplaceAvatar}
               saveAvatarToDisk={composeSaveAvatarToDisk}
             />
@@ -176,7 +172,7 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
         )}
         <AvatarPreview
           avatarColor={avatarColor}
-          avatarValue={this.groupAvatar}
+          avatarValue={this.#groupAvatar}
           i18n={i18n}
           isEditable
           isGroup
@@ -193,7 +189,7 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
             i18n={i18n}
             onChangeValue={setComposeGroupName}
             ref={focusRef}
-            value={this.groupName}
+            value={this.#groupName}
           />
         </div>
 
@@ -203,14 +199,14 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
           </div>
           <DisappearingTimerSelect
             i18n={i18n}
-            value={this.groupExpireTimer}
+            value={this.#groupExpireTimer}
             onChange={setComposeGroupExpireTimer}
           />
         </section>
 
-        {this.hasError && (
+        {this.#hasError && (
           <Alert
-            body={i18n('setGroupMetadata__error-message')}
+            body={i18n('icu:setGroupMetadata__error-message')}
             i18n={i18n}
             onClose={clearGroupCreationError}
           />
@@ -228,45 +224,47 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
   }>): ReactChild {
     return (
       <Button
-        disabled={!this.canCreateGroup()}
+        disabled={!this.#canCreateGroup()}
         onClick={() => {
           createGroup();
         }}
       >
-        {this.isCreating ? (
-          <Spinner size="20px" svgSize="small" direction="on-avatar" />
+        {this.#isCreating ? (
+          <span aria-label={i18n('icu:loading')} role="status">
+            <Spinner size="20px" svgSize="small" direction="on-avatar" />
+          </span>
         ) : (
-          i18n('setGroupMetadata__create-group')
+          i18n('icu:setGroupMetadata__create-group')
         )}
       </Button>
     );
   }
 
   getRowCount(): number {
-    if (!this.selectedContacts.length) {
+    if (!this.#selectedContacts.length) {
       return 0;
     }
-    return this.selectedContacts.length + 2;
+    return this.#selectedContacts.length + 2;
   }
 
   getRow(rowIndex: number): undefined | Row {
-    if (!this.selectedContacts.length) {
+    if (!this.#selectedContacts.length) {
       return undefined;
     }
 
     if (rowIndex === 0) {
       return {
         type: RowType.Header,
-        i18nKey: 'setGroupMetadata__members-header',
+        getHeaderText: i18n => i18n('icu:setGroupMetadata__members-header'),
       };
     }
 
     // This puts a blank row for the footer.
-    if (rowIndex === this.selectedContacts.length + 1) {
+    if (rowIndex === this.#selectedContacts.length + 1) {
       return { type: RowType.Blank };
     }
 
-    const contact = this.selectedContacts[rowIndex - 1];
+    const contact = this.#selectedContacts[rowIndex - 1];
     return contact
       ? {
           type: RowType.Contact,
@@ -294,8 +292,8 @@ export class LeftPaneSetGroupMetadataHelper extends LeftPaneHelper<LeftPaneSetGr
     return false;
   }
 
-  private canCreateGroup(): boolean {
-    return !this.isCreating && Boolean(this.groupName.trim());
+  #canCreateGroup(): boolean {
+    return !this.#isCreating && Boolean(this.#groupName.trim());
   }
 }
 

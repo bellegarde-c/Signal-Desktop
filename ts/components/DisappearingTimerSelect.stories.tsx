@@ -2,45 +2,37 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useState } from 'react';
-
+import type { Meta } from '@storybook/react';
+import type { Props } from './DisappearingTimerSelect';
 import { DisappearingTimerSelect } from './DisappearingTimerSelect';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
+import { DurationInSeconds } from '../util/durations';
 
 export default {
   title: 'Components/DisappearingTimerSelect',
-};
+} satisfies Meta<Props>;
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
-type Props = {
+type Args = {
   initialValue: number;
 };
 
-const TimerSelectWrap: React.FC<Props> = ({ initialValue }) => {
+function TimerSelectWrap({ initialValue }: Args): JSX.Element {
   const [value, setValue] = useState(initialValue);
 
   return (
     <DisappearingTimerSelect
       i18n={i18n}
-      value={value}
+      value={DurationInSeconds.fromSeconds(value)}
       onChange={newValue => setValue(newValue)}
     />
   );
-};
+}
 
-export const InitialValue1Day = (): JSX.Element => (
-  <TimerSelectWrap initialValue={24 * 3600} />
-);
+export function InitialValue1Day(): JSX.Element {
+  return <TimerSelectWrap initialValue={24 * 3600} />;
+}
 
-InitialValue1Day.story = {
-  name: 'Initial value: 1 day',
-};
-
-export const InitialValue3DaysCustomTime = (): JSX.Element => (
-  <TimerSelectWrap initialValue={3 * 24 * 3600} />
-);
-
-InitialValue3DaysCustomTime.story = {
-  name: 'Initial value 3 days (Custom time)',
-};
+export function InitialValue3DaysCustomTime(): JSX.Element {
+  return <TimerSelectWrap initialValue={3 * 24 * 3600} />;
+}

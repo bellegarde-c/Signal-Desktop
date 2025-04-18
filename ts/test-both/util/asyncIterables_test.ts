@@ -1,4 +1,4 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
@@ -57,7 +57,7 @@ describe('async iterable utilities', () => {
     });
 
     it('resolves to an array when wrapping an asynchronous iterable', async () => {
-      const iterable = (async function* test() {
+      const iterable = (async function* () {
         yield 1;
         yield 2;
         yield 3;

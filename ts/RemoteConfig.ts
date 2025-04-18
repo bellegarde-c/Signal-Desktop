@@ -1,52 +1,59 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { get, throttle } from 'lodash';
 
 import type { WebAPIType } from './textsecure/WebAPI';
 import * as log from './logging/log';
-import type { UUIDStringType } from './types/UUID';
+import type { AciString } from './types/ServiceId';
 import { parseIntOrThrow } from './util/parseIntOrThrow';
+import { HOUR } from './util/durations';
 import * as Bytes from './Bytes';
-import { hash, uuidToBytes } from './Crypto';
+import { uuidToBytes } from './util/uuidToBytes';
+import { dropNull } from './util/dropNull';
 import { HashType } from './types/Crypto';
 import { getCountryCode } from './types/PhoneNumber';
+import { parseRemoteClientExpiration } from './util/parseRemoteClientExpiration';
 
 export type ConfigKeyType =
-  | 'desktop.announcementGroup'
-  | 'desktop.calling.audioLevelForSpeaking'
-  | 'desktop.cdsi.returnAcisWithoutUaks'
+  | 'desktop.calling.ringrtcAdmFull.2'
+  | 'desktop.calling.ringrtcAdmInternal'
+  | 'desktop.calling.ringrtcAdmPreStable'
   | 'desktop.clientExpiration'
-  | 'desktop.groupCallOutboundRing'
+  | 'desktop.backup.credentialFetch'
   | 'desktop.internalUser'
-  | 'desktop.mandatoryProfileSharing'
   | 'desktop.mediaQuality.levels'
   | 'desktop.messageCleanup'
-  | 'desktop.messageRequests'
-  | 'desktop.pnp'
-  | 'desktop.retryReceiptLifespan'
   | 'desktop.retryRespondMaxAge'
   | 'desktop.senderKey.retry'
-  | 'desktop.senderKey.send'
   | 'desktop.senderKeyMaxAge'
-  | 'desktop.sendSenderKey3'
-  | 'desktop.showUserBadges.beta'
-  | 'desktop.showUserBadges2'
-  | 'desktop.stories'
-  | 'desktop.stories.beta'
-  | 'desktop.usernames'
+  | 'desktop.experimentalTransport.enableAuth'
+  | 'desktop.experimentalTransportEnabled.alpha'
+  | 'desktop.experimentalTransportEnabled.beta'
+  | 'desktop.experimentalTransportEnabled.prod'
+  | 'desktop.cdsiViaLibsignal'
+  | 'desktop.cdsiViaLibsignal.disableNewConnectionLogic'
+  | 'desktop.funPicker' // alpha
+  | 'desktop.funPicker.beta'
+  | 'desktop.funPicker.prod'
+  | 'desktop.releaseNotes'
+  | 'desktop.releaseNotes.beta'
+  | 'desktop.releaseNotes.dev'
   | 'global.attachments.maxBytes'
+  | 'global.attachments.maxReceiveBytes'
   | 'global.calling.maxGroupCallRingSize'
   | 'global.groupsv2.groupSizeHardLimit'
   | 'global.groupsv2.maxGroupSize'
+  | 'global.messageQueueTimeInSeconds'
   | 'global.nicknames.max'
-  | 'global.nicknames.min';
+  | 'global.nicknames.min'
+  | 'global.textAttachmentLimitBytes';
 
 type ConfigValueType = {
   name: ConfigKeyType;
   enabled: boolean;
   enabledAt?: number;
-  value?: unknown;
+  value?: string;
 };
 export type ConfigMapType = {
   [key in ConfigKeyType]?: ConfigValueType;
@@ -59,9 +66,8 @@ type ConfigListenersMapType = {
 let config: ConfigMapType = {};
 const listeners: ConfigListenersMapType = {};
 
-export async function initRemoteConfig(server: WebAPIType): Promise<void> {
+export function restoreRemoteConfigFromStorage(): void {
   config = window.storage.get('remoteConfig') || {};
-  await maybeRefreshRemoteConfig(server);
 }
 
 export function onChange(
@@ -77,11 +83,20 @@ export function onChange(
   };
 }
 
-export const refreshRemoteConfig = async (
+export const _refreshRemoteConfig = async (
   server: WebAPIType
 ): Promise<void> => {
   const now = Date.now();
-  const newConfig = await server.getConfig();
+  const { config: newConfig, serverTimestamp } = await server.getConfig();
+
+  const serverTimeSkew = serverTimestamp - now;
+
+  if (Math.abs(serverTimeSkew) > HOUR) {
+    log.warn(
+      'Remote Config: severe clock skew detected. ' +
+        `Server time ${serverTimestamp}, local time ${now}`
+    );
+  }
 
   // Process new configuration in light of the old configuration
   // The old configuration is not set as the initial value in reduce because
@@ -89,7 +104,11 @@ export const refreshRemoteConfig = async (
   const oldConfig = config;
   config = newConfig.reduce((acc, { name, enabled, value }) => {
     const previouslyEnabled: boolean = get(oldConfig, [name, 'enabled'], false);
-    const previousValue: unknown = get(oldConfig, [name, 'value'], undefined);
+    const previousValue: string | undefined = get(
+      oldConfig,
+      [name, 'value'],
+      undefined
+    );
     // If a flag was previously not enabled and is now enabled,
     // record the time it was enabled
     const enabledAt: number | undefined =
@@ -99,7 +118,7 @@ export const refreshRemoteConfig = async (
       name: name as ConfigKeyType,
       enabled,
       enabledAt,
-      value,
+      value: dropNull(value),
     };
 
     const hasChanged =
@@ -121,15 +140,44 @@ export const refreshRemoteConfig = async (
     };
   }, {});
 
-  window.storage.put('remoteConfig', config);
+  const remoteExpirationValue = getValue('desktop.clientExpiration');
+  if (!remoteExpirationValue) {
+    // If remote configuration fetch worked - we are not expired anymore.
+    if (window.storage.get('remoteBuildExpiration') != null) {
+      log.warn('Remote Config: clearing remote expiration on successful fetch');
+    }
+    await window.storage.remove('remoteBuildExpiration');
+  } else {
+    const remoteBuildExpirationTimestamp = parseRemoteClientExpiration(
+      remoteExpirationValue
+    );
+    if (remoteBuildExpirationTimestamp) {
+      await window.storage.put(
+        'remoteBuildExpiration',
+        remoteBuildExpirationTimestamp
+      );
+    }
+  }
+
+  await window.storage.put('remoteConfig', config);
+  await window.storage.put('serverTimeSkew', serverTimeSkew);
 };
 
 export const maybeRefreshRemoteConfig = throttle(
-  refreshRemoteConfig,
+  _refreshRemoteConfig,
   // Only fetch remote configuration if the last fetch was more than two hours ago
   2 * 60 * 60 * 1000,
   { trailing: false }
 );
+
+export async function forceRefreshRemoteConfig(
+  server: WebAPIType,
+  reason: string
+): Promise<void> {
+  log.info(`forceRefreshRemoteConfig: ${reason}`);
+  maybeRefreshRemoteConfig.cancel();
+  await _refreshRemoteConfig(server);
+}
 
 export function isEnabled(name: ConfigKeyType): boolean {
   return get(config, [name, 'enabled'], false);
@@ -143,18 +191,18 @@ export function getValue(name: ConfigKeyType): string | undefined {
 export function isBucketValueEnabled(
   name: ConfigKeyType,
   e164: string | undefined,
-  uuid: UUIDStringType | undefined
+  aci: AciString | undefined
 ): boolean {
-  return innerIsBucketValueEnabled(name, getValue(name), e164, uuid);
+  return innerIsBucketValueEnabled(name, getValue(name), e164, aci);
 }
 
 export function innerIsBucketValueEnabled(
   name: ConfigKeyType,
   flagValue: unknown,
   e164: string | undefined,
-  uuid: UUIDStringType | undefined
+  aci: AciString | undefined
 ): boolean {
-  if (e164 == null || uuid == null) {
+  if (e164 == null || aci == null) {
     return false;
   }
 
@@ -172,7 +220,7 @@ export function innerIsBucketValueEnabled(
     return false;
   }
 
-  const bucketValue = getBucketValue(uuid, name);
+  const bucketValue = getBucketValue(aci, name);
   return bucketValue < remoteConfigValue;
 }
 
@@ -211,13 +259,15 @@ export function getCountryCodeValue(
   return wildcard;
 }
 
-export function getBucketValue(uuid: UUIDStringType, flagName: string): number {
+export function getBucketValue(aci: AciString, flagName: string): number {
   const hashInput = Bytes.concatenate([
     Bytes.fromString(`${flagName}.`),
-    uuidToBytes(uuid),
+    uuidToBytes(aci),
   ]);
-  const hashResult = hash(HashType.size256, hashInput);
-  const buffer = Buffer.from(hashResult.slice(0, 8));
+  const hashResult = window.SignalContext.crypto.hash(
+    HashType.size256,
+    hashInput
+  );
 
-  return Number(buffer.readBigUint64BE() % 1_000_000n);
+  return Number(Bytes.readBigUint64BE(hashResult.slice(0, 8)) % 1_000_000n);
 }

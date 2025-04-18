@@ -1,19 +1,18 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
 import { action } from '@storybook/addon-actions';
 
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './ContextMenu';
 import { ContextMenu } from './ContextMenu';
-import enMessages from '../../_locales/en/messages.json';
-import { setupI18n } from '../util/setupI18n';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/ContextMenu',
-};
+} satisfies Meta<PropsType<unknown>>;
 
 const getDefaultProps = (): PropsType<number> => ({
   i18n,
@@ -33,6 +32,6 @@ const getDefaultProps = (): PropsType<number> => ({
   ],
 });
 
-export const Default = (): JSX.Element => {
+export function Default(): JSX.Element {
   return <ContextMenu {...getDefaultProps()}>Menu</ContextMenu>;
-};
+}

@@ -1,31 +1,29 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useContext } from 'react';
 import { times, omit } from 'lodash';
-
+import { v4 as generateUuid } from 'uuid';
 import { action } from '@storybook/addon-actions';
-import { boolean, date, select, text } from '@storybook/addon-knobs';
-
-import type { Row } from './ConversationList';
+import type { Meta } from '@storybook/react';
+import type { Row, PropsType } from './ConversationList';
 import { ConversationList, RowType } from './ConversationList';
 import { MessageSearchResult } from './conversationList/MessageSearchResult';
 import type { PropsData as ConversationListItemPropsType } from './conversationList/ConversationListItem';
 import { MessageStatuses } from './conversationList/ConversationListItem';
 import { ContactCheckboxDisabledReason } from './conversationList/ContactCheckbox';
 import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
 import { ThemeType } from '../types/Util';
 import { StorybookThemeContext } from '../../.storybook/StorybookThemeContext';
-import { UUID } from '../types/UUID';
-import { makeFakeLookupConversationWithoutUuid } from '../test-both/helpers/fakeLookupConversationWithoutUuid';
+import { makeFakeLookupConversationWithoutServiceId } from '../test-both/helpers/fakeLookupConversationWithoutServiceId';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/ConversationList',
-};
+  argTypes: {},
+  args: {},
+} satisfies Meta<PropsType>;
 
 const defaultConversations: Array<ConversationListItemPropsType> = [
   getDefaultConversation({
@@ -50,10 +48,10 @@ const defaultConversations: Array<ConversationListItemPropsType> = [
   getDefaultConversation(),
 ];
 
-const Wrapper = ({
+function Wrapper({
   rows,
   scrollable,
-}: Readonly<{ rows: ReadonlyArray<Row>; scrollable?: boolean }>) => {
+}: Readonly<{ rows: ReadonlyArray<Row>; scrollable?: boolean }>) {
   const theme = useContext(StorybookThemeContext);
 
   return (
@@ -67,9 +65,19 @@ const Wrapper = ({
       getRow={(index: number) => rows[index]}
       shouldRecomputeRowHeights={false}
       i18n={i18n}
+      blockConversation={action('blockConversation')}
+      onPreloadConversation={action('onPreloadConversation')}
       onSelectConversation={action('onSelectConversation')}
+      onOutgoingAudioCallInConversation={action(
+        'onOutgoingAudioCallInConversation'
+      )}
+      onOutgoingVideoCallInConversation={action(
+        'onOutgoingVideoCallInConversation'
+      )}
       onClickArchiveButton={action('onClickArchiveButton')}
+      onClickClearFilterButton={action('onClickClearFilterButton')}
       onClickContactCheckbox={action('onClickContactCheckbox')}
+      removeConversation={action('removeConversation')}
       renderMessageSearchResult={(id: string) => (
         <MessageSearchResult
           body="Lorem ipsum wow"
@@ -87,194 +95,199 @@ const Wrapper = ({
         />
       )}
       scrollable={scrollable}
-      lookupConversationWithoutUuid={makeFakeLookupConversationWithoutUuid()}
+      lookupConversationWithoutServiceId={makeFakeLookupConversationWithoutServiceId()}
       showChooseGroupMembers={action('showChooseGroupMembers')}
+      showFindByUsername={action('showFindByUsername')}
+      showFindByPhoneNumber={action('showFindByPhoneNumber')}
       showUserNotFoundModal={action('showUserNotFoundModal')}
       setIsFetchingUUID={action('setIsFetchingUUID')}
       showConversation={action('showConversation')}
       theme={theme}
     />
   );
-};
+}
 
-export const _ArchiveButton = (): JSX.Element => (
-  <Wrapper
-    rows={[{ type: RowType.ArchiveButton, archivedConversationsCount: 123 }]}
-  />
-);
+export function ArchiveButton(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[{ type: RowType.ArchiveButton, archivedConversationsCount: 123 }]}
+    />
+  );
+}
 
-_ArchiveButton.story = {
-  name: 'Archive button',
-};
-
-export const ContactNoteToSelf = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Contact,
-        contact: {
-          ...defaultConversations[0],
-          isMe: true,
-          about: '🤠 should be ignored',
+export function ContactNoteToSelf(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: {
+            ...defaultConversations[0],
+            isMe: true,
+            about: '🤠 should be ignored',
+          },
         },
-      },
-    ]}
-  />
-);
+      ]}
+    />
+  );
+}
 
-ContactNoteToSelf.story = {
-  name: 'Contact: note to self',
-};
+export function ContactDirect(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[{ type: RowType.Contact, contact: defaultConversations[0] }]}
+    />
+  );
+}
 
-export const ContactDirect = (): JSX.Element => (
-  <Wrapper
-    rows={[{ type: RowType.Contact, contact: defaultConversations[0] }]}
-  />
-);
-
-ContactDirect.story = {
-  name: 'Contact: direct',
-};
-
-export const ContactDirectWithShortAbout = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Contact,
-        contact: { ...defaultConversations[0], about: '🤠 yee haw' },
-      },
-    ]}
-  />
-);
-
-ContactDirectWithShortAbout.story = {
-  name: 'Contact: direct with short about',
-};
-
-export const ContactDirectWithLongAbout = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Contact,
-        contact: {
-          ...defaultConversations[0],
-          about:
-            '🤠 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit. Donec et mollis dolor. Praesent et diam eget libero egestas mattis sit amet vitae augue.',
+export function ContactInSystemContacts(): JSX.Element {
+  const contact = defaultConversations[0];
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: { ...contact, systemGivenName: contact.title },
         },
-      },
-    ]}
-  />
-);
+      ]}
+    />
+  );
+}
 
-ContactDirectWithLongAbout.story = {
-  name: 'Contact: direct with long about',
-};
-
-export const ContactGroup = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Contact,
-        contact: { ...defaultConversations[0], type: 'group' },
-      },
-    ]}
-  />
-);
-
-ContactGroup.story = {
-  name: 'Contact: group',
-};
-
-export const ContactCheckboxes = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.ContactCheckbox,
-        contact: defaultConversations[0],
-        isChecked: true,
-      },
-      {
-        type: RowType.ContactCheckbox,
-        contact: defaultConversations[1],
-        isChecked: false,
-      },
-      {
-        type: RowType.ContactCheckbox,
-        contact: {
-          ...defaultConversations[2],
-          about: '😃 Hola',
+export function ContactDirectWithContextMenu(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: defaultConversations[0],
+          hasContextMenu: true,
         },
-        isChecked: true,
-      },
-    ]}
-  />
-);
+      ]}
+    />
+  );
+}
 
-ContactCheckboxes.story = {
-  name: 'Contact checkboxes',
-};
+export function ContactDirectWithShortAbout(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: { ...defaultConversations[0], about: '🤠 yee haw' },
+        },
+      ]}
+    />
+  );
+}
 
-export const ContactCheckboxesDisabled = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.ContactCheckbox,
-        contact: defaultConversations[0],
-        isChecked: false,
-        disabledReason: ContactCheckboxDisabledReason.MaximumContactsSelected,
-      },
-      {
-        type: RowType.ContactCheckbox,
-        contact: defaultConversations[2],
-        isChecked: true,
-        disabledReason: ContactCheckboxDisabledReason.MaximumContactsSelected,
-      },
-      {
-        type: RowType.ContactCheckbox,
-        contact: defaultConversations[3],
-        isChecked: true,
-        disabledReason: ContactCheckboxDisabledReason.AlreadyAdded,
-      },
-    ]}
-  />
-);
+export function ContactDirectWithLongAbout(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: {
+            ...defaultConversations[0],
+            about:
+              '🤠 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit. Donec et mollis dolor. Praesent et diam eget libero egestas mattis sit amet vitae augue.',
+          },
+        },
+      ]}
+    />
+  );
+}
 
-ContactCheckboxesDisabled.story = {
-  name: 'Contact checkboxes: disabled',
-};
+export function ContactGroup(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Contact,
+          contact: { ...defaultConversations[0], type: 'group' },
+        },
+      ]}
+    />
+  );
+}
+
+export function ContactCheckboxes(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.ContactCheckbox,
+          contact: defaultConversations[0],
+          isChecked: true,
+        },
+        {
+          type: RowType.ContactCheckbox,
+          contact: defaultConversations[1],
+          isChecked: false,
+        },
+        {
+          type: RowType.ContactCheckbox,
+          contact: {
+            ...defaultConversations[2],
+            about: '😃 Hola',
+          },
+          isChecked: true,
+        },
+      ]}
+    />
+  );
+}
+
+export function ContactCheckboxesDisabled(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.ContactCheckbox,
+          contact: defaultConversations[0],
+          isChecked: false,
+          disabledReason: ContactCheckboxDisabledReason.MaximumContactsSelected,
+        },
+        {
+          type: RowType.ContactCheckbox,
+          contact: defaultConversations[2],
+          isChecked: true,
+          disabledReason: ContactCheckboxDisabledReason.MaximumContactsSelected,
+        },
+        {
+          type: RowType.ContactCheckbox,
+          contact: defaultConversations[3],
+          isChecked: true,
+          disabledReason: ContactCheckboxDisabledReason.AlreadyAdded,
+        },
+      ]}
+    />
+  );
+}
 
 const createConversation = (
   overrideProps: Partial<ConversationListItemPropsType> = {}
 ): ConversationListItemPropsType => ({
   ...overrideProps,
-  acceptedMessageRequest: boolean(
-    'acceptedMessageRequest',
+  acceptedMessageRequest:
     overrideProps.acceptedMessageRequest !== undefined
       ? overrideProps.acceptedMessageRequest
-      : true
-  ),
+      : true,
   badges: [],
-  isMe: boolean('isMe', overrideProps.isMe || false),
-  avatarPath: text('avatarPath', overrideProps.avatarPath || ''),
+  isMe: overrideProps.isMe ?? false,
+  avatarUrl: overrideProps.avatarUrl ?? '',
   id: overrideProps.id || '',
-  isSelected: boolean('isSelected', overrideProps.isSelected || false),
-  title: text('title', overrideProps.title || 'Some Person'),
+  isSelected: overrideProps.isSelected ?? false,
+  title: overrideProps.title ?? 'Some Person',
   profileName: overrideProps.profileName || 'Some Person',
   type: overrideProps.type || 'direct',
-  markedUnread: boolean('markedUnread', overrideProps.markedUnread || false),
+  markedUnread: overrideProps.markedUnread ?? false,
   lastMessage: overrideProps.lastMessage || {
-    text: text('lastMessage.text', 'Hi there!'),
-    status: select(
-      'status',
-      MessageStatuses.reduce((m, s) => ({ ...m, [s]: s }), {}),
-      'read'
-    ),
+    text: 'Hi there!',
+    status: 'read',
     deletedForEveryone: false,
   },
-  lastUpdated: date(
-    'lastUpdated',
-    new Date(overrideProps.lastUpdated || Date.now() - 5 * 60 * 1000)
-  ),
+  lastUpdated: overrideProps.lastUpdated ?? Date.now() - 5 * 60 * 1000,
   sharedGroupNames: [],
 });
 
@@ -293,18 +306,10 @@ const renderConversation = (
 
 export const ConversationName = (): JSX.Element => renderConversation();
 
-ConversationName.story = {
-  name: 'Conversation: name',
-};
-
 export const ConversationNameAndAvatar = (): JSX.Element =>
   renderConversation({
-    avatarPath: '/fixtures/kitten-1-64-64.jpg',
+    avatarUrl: '/fixtures/kitten-1-64-64.jpg',
   });
-
-ConversationNameAndAvatar.story = {
-  name: 'Conversation: name and avatar',
-};
 
 export const ConversationWithYourself = (): JSX.Element =>
   renderConversation({
@@ -318,52 +323,40 @@ export const ConversationWithYourself = (): JSX.Element =>
     isMe: true,
   });
 
-ConversationWithYourself.story = {
-  name: 'Conversation: with yourself',
-};
-
-export const ConversationsMessageStatuses = (): JSX.Element => (
-  <Wrapper
-    rows={MessageStatuses.map(status => ({
-      type: RowType.Conversation,
-      conversation: createConversation({
-        lastMessage: { text: status, status, deletedForEveryone: false },
-      }),
-    }))}
-  />
-);
-
-ConversationsMessageStatuses.story = {
-  name: 'Conversations: Message Statuses',
-};
+export function ConversationsMessageStatuses(): JSX.Element {
+  return (
+    <Wrapper
+      rows={MessageStatuses.map(status => ({
+        type: RowType.Conversation,
+        conversation: createConversation({
+          lastMessage: { text: status, status, deletedForEveryone: false },
+        }),
+      }))}
+    />
+  );
+}
 
 export const ConversationTypingStatus = (): JSX.Element =>
   renderConversation({
-    typingContactId: UUID.generate().toString(),
+    typingContactIdTimestamps: {
+      [generateUuid()]: Date.now(),
+    },
   });
-
-ConversationTypingStatus.story = {
-  name: 'Conversation: Typing Status',
-};
 
 export const ConversationWithDraft = (): JSX.Element =>
   renderConversation({
     shouldShowDraft: true,
-    draftPreview: "I'm in the middle of typing this...",
+    draftPreview: {
+      text: "I'm in the middle of typing this...",
+      prefix: '🎤',
+      bodyRanges: [],
+    },
   });
-
-ConversationWithDraft.story = {
-  name: 'Conversation: With draft',
-};
 
 export const ConversationDeletedForEveryone = (): JSX.Element =>
   renderConversation({
     lastMessage: { deletedForEveryone: true },
   });
-
-ConversationDeletedForEveryone.story = {
-  name: 'Conversation: Deleted for everyone',
-};
 
 export const ConversationMessageRequest = (): JSX.Element =>
   renderConversation({
@@ -375,36 +368,26 @@ export const ConversationMessageRequest = (): JSX.Element =>
     },
   });
 
-ConversationMessageRequest.story = {
-  name: 'Conversation: Message Request',
-};
-
-export const ConversationsUnreadCount = (): JSX.Element => (
-  <Wrapper
-    rows={[4, 10, 34, 250].map(unreadCount => ({
-      type: RowType.Conversation,
-      conversation: createConversation({
-        lastMessage: {
-          text: 'Hey there!',
-          status: 'delivered',
-          deletedForEveryone: false,
-        },
-        unreadCount,
-      }),
-    }))}
-  />
-);
-
-ConversationsUnreadCount.story = {
-  name: 'Conversations: unread count',
-};
+export function ConversationsUnreadCount(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[4, 10, 34, 250, 2048].map(unreadCount => ({
+        type: RowType.Conversation,
+        conversation: createConversation({
+          lastMessage: {
+            text: 'Hey there!',
+            status: 'delivered',
+            deletedForEveryone: false,
+          },
+          unreadCount,
+        }),
+      }))}
+    />
+  );
+}
 
 export const ConversationMarkedUnread = (): JSX.Element =>
   renderConversation({ markedUnread: true });
-
-ConversationMarkedUnread.story = {
-  name: 'Conversation: marked unread',
-};
 
 export const ConversationSelected = (): JSX.Element =>
   renderConversation({
@@ -416,10 +399,6 @@ export const ConversationSelected = (): JSX.Element =>
     isSelected: true,
   });
 
-ConversationSelected.story = {
-  name: 'Conversation: Selected',
-};
-
 export const ConversationEmojiInMessage = (): JSX.Element =>
   renderConversation({
     lastMessage: {
@@ -428,10 +407,6 @@ export const ConversationEmojiInMessage = (): JSX.Element =>
       deletedForEveryone: false,
     },
   });
-
-ConversationEmojiInMessage.story = {
-  name: 'Conversation: Emoji in Message',
-};
 
 export const ConversationLinkInMessage = (): JSX.Element =>
   renderConversation({
@@ -442,10 +417,6 @@ export const ConversationLinkInMessage = (): JSX.Element =>
     },
   });
 
-ConversationLinkInMessage.story = {
-  name: 'Conversation: Link in Message',
-};
-
 export const ConversationLongName = (): JSX.Element => {
   const name =
     'Long contact name. Esquire. The third. And stuff. And more! And more!';
@@ -455,11 +426,7 @@ export const ConversationLongName = (): JSX.Element => {
   });
 };
 
-ConversationLongName.story = {
-  name: 'Conversation: long name',
-};
-
-export const ConversationLongMessage = (): JSX.Element => {
+export function ConversationLongMessage(): JSX.Element {
   const messages = [
     "Long line. This is a really really really long line. Really really long. Because that's just how it is",
     `Many lines. This is a many-line message.
@@ -482,13 +449,9 @@ Line 4, well.`,
       }))}
     />
   );
-};
+}
 
-ConversationLongMessage.story = {
-  name: 'Conversation: Long Message',
-};
-
-export const ConversationsVariousTimes = (): JSX.Element => {
+export function ConversationsVariousTimes(): JSX.Element {
   const pairs: Array<[number, string]> = [
     [Date.now() - 5 * 60 * 60 * 1000, 'Five hours ago'],
     [Date.now() - 24 * 60 * 60 * 1000, 'One day ago'],
@@ -511,37 +474,25 @@ export const ConversationsVariousTimes = (): JSX.Element => {
       }))}
     />
   );
-};
+}
 
-ConversationsVariousTimes.story = {
-  name: 'Conversations: Various Times',
-};
-
-export const ConversationMissingDate = (): JSX.Element => {
+export function ConversationMissingDate(): JSX.Element {
   const row = {
     type: RowType.Conversation as const,
     conversation: omit(createConversation(), 'lastUpdated'),
   };
 
   return <Wrapper rows={[row]} />;
-};
+}
 
-ConversationMissingDate.story = {
-  name: 'Conversation: Missing Date',
-};
-
-export const ConversationMissingMessage = (): JSX.Element => {
+export function ConversationMissingMessage(): JSX.Element {
   const row = {
     type: RowType.Conversation as const,
     conversation: omit(createConversation(), 'lastMessage'),
   };
 
   return <Wrapper rows={[row]} />;
-};
-
-ConversationMissingMessage.story = {
-  name: 'Conversation: Missing Message',
-};
+}
 
 export const ConversationMissingText = (): JSX.Element =>
   renderConversation({
@@ -552,18 +503,10 @@ export const ConversationMissingText = (): JSX.Element =>
     },
   });
 
-ConversationMissingText.story = {
-  name: 'Conversation: Missing Text',
-};
-
 export const ConversationMutedConversation = (): JSX.Element =>
   renderConversation({
     muteExpiresAt: Date.now() + 1000 * 60 * 60,
   });
-
-ConversationMutedConversation.story = {
-  name: 'Conversation: Muted Conversation',
-};
 
 export const ConversationAtMention = (): JSX.Element =>
   renderConversation({
@@ -576,183 +519,182 @@ export const ConversationAtMention = (): JSX.Element =>
     },
   });
 
-ConversationAtMention.story = {
-  name: 'Conversation: At Mention',
-};
-
-export const Headers = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Header,
-        i18nKey: 'conversationsHeader',
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'messagesHeader',
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'findByUsernameHeader',
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'findByPhoneNumberHeader',
-      },
-    ]}
-  />
-);
-
-export const FindByPhoneNumber = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Header,
-        i18nKey: 'findByPhoneNumberHeader',
-      },
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: true,
-          userInput: '+1(234)555 98 76',
-          e164: '+12345559876',
+export function Headers(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:conversationsHeader'),
         },
-        isFetching: false,
-      },
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: true,
-          userInput: '+1(234)555 98 76',
-          e164: '+12345559876',
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:messagesHeader'),
         },
-        isFetching: true,
-      },
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: true,
-          userInput: '+1(234)555',
-          e164: '+1234555',
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByUsernameHeader'),
         },
-        isFetching: false,
-      },
-    ]}
-  />
-);
-
-FindByPhoneNumber.story = {
-  name: 'Find by phone number',
-};
-
-export const FindByUsername = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.Header,
-        i18nKey: 'findByUsernameHeader',
-      },
-      {
-        type: RowType.UsernameSearchResult,
-        username: 'jowerty',
-        isFetchingUsername: false,
-      },
-      {
-        type: RowType.UsernameSearchResult,
-        username: 'jowerty',
-        isFetchingUsername: true,
-      },
-    ]}
-  />
-);
-
-FindByUsername.story = {
-  name: 'Find by username',
-};
-
-export const SearchResultsLoadingSkeleton = (): JSX.Element => (
-  <Wrapper
-    scrollable={false}
-    rows={[
-      { type: RowType.SearchResultsLoadingFakeHeader },
-      ...times(99, () => ({
-        type: RowType.SearchResultsLoadingFakeRow as const,
-      })),
-    ]}
-  />
-);
-
-SearchResultsLoadingSkeleton.story = {
-  name: 'Search results loading skeleton',
-};
-
-export const KitchenSink = (): JSX.Element => (
-  <Wrapper
-    rows={[
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: true,
-          userInput: '+1(234)555 98 76',
-          e164: '+12345559876',
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByPhoneNumberHeader'),
         },
-        isFetching: false,
-      },
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: true,
-          userInput: '+1(234)555 98 76',
-          e164: '+12345559876',
-        },
-        isFetching: true,
-      },
-      {
-        type: RowType.StartNewConversation,
-        phoneNumber: {
-          isValid: false,
-          userInput: '+1(234)555 98',
-          e164: '+123455598',
-        },
-        isFetching: true,
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'contactsHeader',
-      },
-      {
-        type: RowType.Contact,
-        contact: defaultConversations[0],
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'messagesHeader',
-      },
-      {
-        type: RowType.Conversation,
-        conversation: defaultConversations[1],
-      },
-      {
-        type: RowType.MessageSearchResult,
-        messageId: '123',
-      },
-      {
-        type: RowType.Header,
-        i18nKey: 'findByUsernameHeader',
-      },
-      {
-        type: RowType.UsernameSearchResult,
-        username: 'jowerty',
-        isFetchingUsername: false,
-      },
-      {
-        type: RowType.ArchiveButton,
-        archivedConversationsCount: 123,
-      },
-    ]}
-  />
-);
+      ]}
+    />
+  );
+}
 
-KitchenSink.story = {
-  name: 'Kitchen sink',
-};
+export function FindByPhoneNumber(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByPhoneNumberHeader'),
+        },
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: true,
+            userInput: '+1(234)555 98 76',
+            e164: '+12345559876',
+          },
+          isFetching: false,
+        },
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: true,
+            userInput: '+1(234)555 98 76',
+            e164: '+12345559876',
+          },
+          isFetching: true,
+        },
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: true,
+            userInput: '+1(234)555',
+            e164: '+1234555',
+          },
+          isFetching: false,
+        },
+      ]}
+    />
+  );
+}
+
+export function FindByUsername(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByUsernameHeader'),
+        },
+        {
+          type: RowType.UsernameSearchResult,
+          username: 'jowerty',
+          isFetchingUsername: false,
+        },
+        {
+          type: RowType.UsernameSearchResult,
+          username: 'jowerty',
+          isFetchingUsername: true,
+        },
+      ]}
+    />
+  );
+}
+
+export function SearchResultsLoadingSkeleton(): JSX.Element {
+  return (
+    <Wrapper
+      scrollable={false}
+      rows={[
+        { type: RowType.SearchResultsLoadingFakeHeader },
+        ...times(99, () => ({
+          type: RowType.SearchResultsLoadingFakeRow as const,
+        })),
+      ]}
+    />
+  );
+}
+
+export function KitchenSink(): JSX.Element {
+  return (
+    <Wrapper
+      rows={[
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: true,
+            userInput: '+1(234)555 98 76',
+            e164: '+12345559876',
+          },
+          isFetching: false,
+        },
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: true,
+            userInput: '+1(234)555 98 76',
+            e164: '+12345559876',
+          },
+          isFetching: true,
+        },
+        {
+          type: RowType.StartNewConversation,
+          phoneNumber: {
+            isValid: false,
+            userInput: '+1(234)555 98',
+            e164: '+123455598',
+          },
+          isFetching: true,
+        },
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:contactsHeader'),
+        },
+        {
+          type: RowType.Contact,
+          contact: defaultConversations[0],
+        },
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:messagesHeader'),
+        },
+        {
+          type: RowType.Conversation,
+          conversation: defaultConversations[1],
+        },
+        {
+          type: RowType.MessageSearchResult,
+          messageId: '123',
+        },
+        {
+          type: RowType.Header,
+          // eslint-disable-next-line @typescript-eslint/no-shadow
+          getHeaderText: i18n => i18n('icu:findByUsernameHeader'),
+        },
+        {
+          type: RowType.UsernameSearchResult,
+          username: 'jowerty',
+          isFetchingUsername: false,
+        },
+        {
+          type: RowType.ArchiveButton,
+          archivedConversationsCount: 123,
+        },
+      ]}
+    />
+  );
+}

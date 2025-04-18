@@ -2,21 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
+import type { Props } from './EmojiButton';
 import { EmojiButton } from './EmojiButton';
+import { EmojiSkinTone } from '../fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Emoji/EmojiButton',
-};
+} satisfies Meta<Props>;
 
-export const Base = (): JSX.Element => {
+export function Base(): JSX.Element {
   return (
     <div
       style={{
@@ -29,8 +27,8 @@ export const Base = (): JSX.Element => {
       <EmojiButton
         i18n={i18n}
         onPickEmoji={action('onPickEmoji')}
-        skinTone={0}
-        onSetSkinTone={action('onSetSkinTone')}
+        emojiSkinToneDefault={EmojiSkinTone.None}
+        onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
         recentEmojis={[
           'grinning',
           'grin',
@@ -68,4 +66,4 @@ export const Base = (): JSX.Element => {
       />
     </div>
   );
-};
+}

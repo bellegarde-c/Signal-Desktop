@@ -1,19 +1,18 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
 
 import { action } from '@storybook/addon-actions';
 
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './GroupV1MigrationDialog';
 import { GroupV1MigrationDialog } from './GroupV1MigrationDialog';
 import type { ConversationType } from '../state/ducks/conversations';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
 import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
 import { ThemeType } from '../types/Util';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const contact1: ConversationType = getDefaultConversation({
   title: 'Alice',
@@ -35,29 +34,27 @@ const contact3: ConversationType = getDefaultConversation({
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   areWeInvited: Boolean(overrideProps.areWeInvited),
-  droppedMembers: overrideProps.droppedMembers || [contact3, contact1],
+  droppedMembers: overrideProps.droppedMembers,
+  droppedMemberCount: overrideProps.droppedMemberCount || 0,
   getPreferredBadge: () => undefined,
   hasMigrated: Boolean(overrideProps.hasMigrated),
   i18n,
-  invitedMembers: overrideProps.invitedMembers || [contact2],
-  migrate: action('migrate'),
+  invitedMembers: overrideProps.invitedMembers,
+  invitedMemberCount: overrideProps.invitedMemberCount || 0,
+  onMigrate: action('onMigrate'),
   onClose: action('onClose'),
   theme: ThemeType.light,
 });
 
 export default {
   title: 'Components/GroupV1MigrationDialog',
-};
+} satisfies Meta<PropsType>;
 
-export const NotYetMigratedBasic = (): JSX.Element => {
+export function NotYetMigratedBasic(): JSX.Element {
   return <GroupV1MigrationDialog {...createProps()} />;
-};
+}
 
-NotYetMigratedBasic.story = {
-  name: 'Not yet migrated, basic',
-};
-
-export const MigratedBasic = (): JSX.Element => {
+export function MigratedBasic(): JSX.Element {
   return (
     <GroupV1MigrationDialog
       {...createProps({
@@ -65,13 +62,9 @@ export const MigratedBasic = (): JSX.Element => {
       })}
     />
   );
-};
+}
 
-MigratedBasic.story = {
-  name: 'Migrated, basic',
-};
-
-export const MigratedYouAreInvited = (): JSX.Element => {
+export function MigratedYouAreInvited(): JSX.Element {
   return (
     <GroupV1MigrationDialog
       {...createProps({
@@ -80,53 +73,112 @@ export const MigratedYouAreInvited = (): JSX.Element => {
       })}
     />
   );
-};
+}
 
-MigratedYouAreInvited.story = {
-  name: 'Migrated, you are invited',
-};
-
-export const NotYetMigratedMultipleDroppedAndInvitedMembers =
-  (): JSX.Element => {
-    return (
-      <GroupV1MigrationDialog
-        {...createProps({
-          droppedMembers: [contact3, contact1, contact2],
-          invitedMembers: [contact2, contact3, contact1],
-        })}
-      />
-    );
-  };
-
-NotYetMigratedMultipleDroppedAndInvitedMembers.story = {
-  name: 'Not yet migrated, multiple dropped and invited members',
-};
-
-export const NotYetMigratedNoMembers = (): JSX.Element => {
+export function MigratedMultipleDroppedAndInvitedMember(): JSX.Element {
   return (
     <GroupV1MigrationDialog
       {...createProps({
-        droppedMembers: [],
-        invitedMembers: [],
+        hasMigrated: true,
+        droppedMembers: [contact1],
+        droppedMemberCount: 1,
+        invitedMembers: [contact2],
+        invitedMemberCount: 1,
       })}
     />
   );
-};
+}
 
-NotYetMigratedNoMembers.story = {
-  name: 'Not yet migrated, no members',
-};
-
-export const NotYetMigratedJustDroppedMember = (): JSX.Element => {
+export function MigratedMultipleDroppedAndInvitedMembers(): JSX.Element {
   return (
     <GroupV1MigrationDialog
       {...createProps({
-        invitedMembers: [],
+        hasMigrated: true,
+        droppedMembers: [contact3, contact1, contact2],
+        droppedMemberCount: 3,
+        invitedMembers: [contact2, contact3, contact1],
+        invitedMemberCount: 3,
       })}
     />
   );
-};
+}
 
-NotYetMigratedJustDroppedMember.story = {
-  name: 'Not yet migrated, just dropped member',
-};
+export function MigratedNoMembers(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        hasMigrated: true,
+        droppedMemberCount: 0,
+        invitedMemberCount: 0,
+      })}
+    />
+  );
+}
+
+export function NotYetMigratedJustDroppedMember(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        droppedMembers: [contact1],
+        droppedMemberCount: 1,
+      })}
+    />
+  );
+}
+
+export function NotYetMigratedJustDroppedMembers(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        droppedMembers: [contact1, contact2],
+        droppedMemberCount: 2,
+      })}
+    />
+  );
+}
+
+export function NotYetMigratedDropped1(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        droppedMemberCount: 1,
+        invitedMemberCount: 0,
+      })}
+    />
+  );
+}
+
+export function NotYetMigratedDropped2(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        droppedMemberCount: 2,
+        invitedMemberCount: 0,
+      })}
+    />
+  );
+}
+
+export function MigratedJustCountIs1(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        hasMigrated: true,
+        droppedMemberCount: 1,
+        invitedMemberCount: 1,
+      })}
+    />
+  );
+}
+
+export function MigratedJustCountIs2(): JSX.Element {
+  return (
+    <GroupV1MigrationDialog
+      {...createProps({
+        hasMigrated: true,
+        droppedMemberCount: 2,
+        invitedMemberCount: 2,
+      })}
+    />
+  );
+}

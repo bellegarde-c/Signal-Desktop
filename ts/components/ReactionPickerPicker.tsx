@@ -1,12 +1,19 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { CSSProperties, ReactNode } from 'react';
 import React, { forwardRef } from 'react';
 import classNames from 'classnames';
 
-import { Emoji } from './emoji/Emoji';
+import { Button } from 'react-aria-components';
 import type { LocalizerType } from '../types/Util';
+import { FunStaticEmoji } from './fun/FunEmoji';
+import { strictAssert } from '../util/assert';
+import {
+  getEmojiVariantByKey,
+  getEmojiVariantKeyByValue,
+  isEmojiVariantValue,
+} from './fun/data/emojis';
 
 export enum ReactionPickerPickerStyle {
   Picker,
@@ -21,62 +28,65 @@ export const ReactionPickerPickerEmojiButton = React.forwardRef<
     onClick: () => unknown;
     title?: string;
   }
->(({ emoji, onClick, isSelected, title }, ref) => (
-  <button
-    type="button"
-    ref={ref}
-    tabIndex={0}
-    className={classNames(
-      'module-ReactionPickerPicker__button',
-      'module-ReactionPickerPicker__button--emoji',
-      isSelected && 'module-ReactionPickerPicker__button--selected'
-    )}
-    onClick={event => {
-      event.stopPropagation();
-      onClick();
-    }}
-    onKeyDown={event => {
-      if (event.key === 'Enter' || event.key === 'Space') {
-        event.stopPropagation();
-        event.preventDefault();
-        onClick();
-      }
-    }}
-  >
-    <Emoji size={48} emoji={emoji} title={title} />
-  </button>
-));
+>(function ReactionPickerPickerEmojiButtonInner(
+  { emoji, onClick, isSelected, title },
+  ref
+) {
+  strictAssert(
+    isEmojiVariantValue(emoji),
+    'Expected a valid emoji variant value'
+  );
+  const emojiVariantKey = getEmojiVariantKeyByValue(emoji);
+  const emojiVariant = getEmojiVariantByKey(emojiVariantKey);
 
-export const ReactionPickerPickerMoreButton = ({
+  return (
+    <Button
+      ref={ref}
+      className={classNames(
+        'module-ReactionPickerPicker__button',
+        'module-ReactionPickerPicker__button--emoji',
+        isSelected && 'module-ReactionPickerPicker__button--selected'
+      )}
+      onPress={onClick}
+    >
+      <FunStaticEmoji
+        role="img"
+        aria-label={title ?? ''}
+        size={48}
+        emoji={emojiVariant}
+      />
+    </Button>
+  );
+});
+
+export function ReactionPickerPickerMoreButton({
   i18n,
   onClick,
 }: Readonly<{
   i18n: LocalizerType;
   onClick: () => unknown;
-}>): JSX.Element => (
-  <button
-    aria-label={i18n('Reactions--more')}
-    className="module-ReactionPickerPicker__button module-ReactionPickerPicker__button--more"
-    onClick={event => {
-      event.stopPropagation();
-      onClick();
-    }}
-    onKeyDown={event => {
-      if (event.key === 'Enter' || event.key === 'Space') {
+}>): JSX.Element {
+  return (
+    <button
+      aria-label={i18n('icu:Reactions--more')}
+      className="module-ReactionPickerPicker__button module-ReactionPickerPicker__button--more"
+      onClick={event => {
         event.stopPropagation();
-        event.preventDefault();
         onClick();
-      }
-    }}
-    tabIndex={0}
-    title={i18n('Reactions--more')}
-    type="button"
-  >
-    <div className="module-ReactionPickerPicker__button--more__dot" />
-    <div className="module-ReactionPickerPicker__button--more__dot" />
-    <div className="module-ReactionPickerPicker__button--more__dot" />
-  </button>
-);
+      }}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === 'Space') {
+          event.stopPropagation();
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      title={i18n('icu:Reactions--more')}
+      type="button"
+    />
+  );
+}
 
 export const ReactionPickerPicker = forwardRef<
   HTMLDivElement,
@@ -86,21 +96,27 @@ export const ReactionPickerPicker = forwardRef<
     pickerStyle: ReactionPickerPickerStyle;
     style?: CSSProperties;
   }
->(({ children, isSomethingSelected, pickerStyle, style }, ref) => (
-  <div
-    className={classNames(
-      'module-ReactionPickerPicker',
-      isSomethingSelected && 'module-ReactionPickerPicker--something-selected',
-      {
-        'module-ReactionPickerPicker--picker-style':
-          pickerStyle === ReactionPickerPickerStyle.Picker,
-        'module-ReactionPickerPicker--menu-style':
-          pickerStyle === ReactionPickerPickerStyle.Menu,
-      }
-    )}
-    ref={ref}
-    style={style}
-  >
-    {children}
-  </div>
-));
+>(function ReactionPickerPickerInner(
+  { children, isSomethingSelected, pickerStyle, style },
+  ref
+) {
+  return (
+    <div
+      className={classNames(
+        'module-ReactionPickerPicker',
+        isSomethingSelected &&
+          'module-ReactionPickerPicker--something-selected',
+        {
+          'module-ReactionPickerPicker--picker-style':
+            pickerStyle === ReactionPickerPickerStyle.Picker,
+          'module-ReactionPickerPicker--menu-style':
+            pickerStyle === ReactionPickerPickerStyle.Menu,
+        }
+      )}
+      ref={ref}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+});

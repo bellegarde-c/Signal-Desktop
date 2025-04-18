@@ -1,27 +1,33 @@
-// Copyright 2018-2020 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
 import classNames from 'classnames';
 
-import type { AttachmentType } from '../../types/Attachment';
+import type {
+  AttachmentForUIType,
+  AttachmentType,
+} from '../../types/Attachment';
 import {
   areAllAttachmentsVisual,
   getAlt,
   getImageDimensions,
   getThumbnailUrl,
   getUrl,
+  isDownloadable,
+  isIncremental,
   isVideoAttachment,
 } from '../../types/Attachment';
 
 import { Image, CurveType } from './Image';
 
 import type { LocalizerType, ThemeType } from '../../types/Util';
+import { AttachmentDetailPill } from './AttachmentDetailPill';
 
 export type DirectionType = 'incoming' | 'outgoing';
 
 export type Props = {
-  attachments: Array<AttachmentType>;
+  attachments: ReadonlyArray<AttachmentForUIType>;
   bottomOverlay?: boolean;
   direction: DirectionType;
   isSticker?: boolean;
@@ -36,7 +42,10 @@ export type Props = {
   theme?: ThemeType;
 
   onError: () => void;
-  onClick?: (attachment: AttachmentType) => void;
+  showVisualAttachment: (attachment: AttachmentType) => void;
+  showMediaNoLongerAvailableToast: () => void;
+  cancelDownload: () => void;
+  startDownload: () => void;
 };
 
 const GAP = 1;
@@ -75,13 +84,16 @@ function getCurves({
     curveTopRight = CurveType.Normal;
   }
 
-  if (shouldCollapseBelow && direction === 'incoming') {
+  if (withContentBelow) {
+    curveBottomLeft = CurveType.None;
+    curveBottomRight = CurveType.None;
+  } else if (shouldCollapseBelow && direction === 'incoming') {
     curveBottomLeft = CurveType.Tiny;
     curveBottomRight = CurveType.None;
   } else if (shouldCollapseBelow && direction === 'outgoing') {
     curveBottomLeft = CurveType.None;
     curveBottomRight = CurveType.Tiny;
-  } else if (!withContentBelow) {
+  } else {
     curveBottomLeft = CurveType.Normal;
     curveBottomRight = CurveType.Normal;
   }
@@ -94,7 +106,7 @@ function getCurves({
   };
 }
 
-export const ImageGrid = ({
+export function ImageGrid({
   attachments,
   bottomOverlay,
   direction,
@@ -102,14 +114,17 @@ export const ImageGrid = ({
   isSticker,
   stickerSize,
   onError,
-  onClick,
+  showMediaNoLongerAvailableToast,
+  showVisualAttachment,
+  cancelDownload,
+  startDownload,
   shouldCollapseAbove,
   shouldCollapseBelow,
   tabIndex,
   theme,
   withContentAbove,
   withContentBelow,
-}: Props): JSX.Element | null => {
+}: Props): JSX.Element | null {
   const { curveTopLeft, curveTopRight, curveBottomLeft, curveBottomRight } =
     getCurves({
       direction,
@@ -121,9 +136,57 @@ export const ImageGrid = ({
 
   const withBottomOverlay = Boolean(bottomOverlay && !withContentBelow);
 
+  const startDownloadClick = React.useCallback(
+    (event: React.MouseEvent) => {
+      if (startDownload) {
+        event.preventDefault();
+        event.stopPropagation();
+        startDownload();
+      }
+    },
+    [startDownload]
+  );
+  const startDownloadKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (startDownload && (event.key === 'Enter' || event.key === 'Space')) {
+        event.preventDefault();
+        event.stopPropagation();
+        startDownload();
+      }
+    },
+    [startDownload]
+  );
+
+  const showAttachmentOrNoLongerAvailableToast = React.useCallback(
+    attachmentIndex =>
+      attachments[attachmentIndex].isPermanentlyUndownloadable
+        ? showMediaNoLongerAvailableToast
+        : showVisualAttachment,
+    [attachments, showVisualAttachment, showMediaNoLongerAvailableToast]
+  );
+
   if (!attachments || !attachments.length) {
     return null;
   }
+
+  const downloadableAttachments = attachments.filter(attachment =>
+    isDownloadable(attachment)
+  );
+
+  const detailPill = (
+    <AttachmentDetailPill
+      attachments={downloadableAttachments}
+      i18n={i18n}
+      startDownload={startDownload}
+      cancelDownload={cancelDownload}
+    />
+  );
+  const downloadPill = renderDownloadPill({
+    attachments,
+    i18n,
+    startDownloadClick,
+    startDownloadKeyDown,
+  });
 
   if (attachments.length === 1 || !areAllAttachmentsVisual(attachments)) {
     const { height, width } = getImageDimensions(
@@ -155,11 +218,17 @@ export const ImageGrid = ({
           playIconOverlay={isVideoAttachment(attachments[0])}
           height={height}
           width={width}
-          url={getUrl(attachments[0])}
+          url={
+            getUrl(attachments[0]) ?? attachments[0].thumbnailFromBackup?.url
+          }
           tabIndex={tabIndex}
-          onClick={onClick}
+          showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+          showVisualAttachment={showAttachmentOrNoLongerAvailableToast(0)}
+          cancelDownload={cancelDownload}
+          startDownload={startDownload}
           onError={onError}
         />
+        {detailPill}
       </div>
     );
   }
@@ -182,7 +251,10 @@ export const ImageGrid = ({
           width={150}
           cropWidth={GAP}
           url={getThumbnailUrl(attachments[0])}
-          onClick={onClick}
+          showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+          showVisualAttachment={showAttachmentOrNoLongerAvailableToast(0)}
+          cancelDownload={cancelDownload}
+          startDownload={downloadPill ? undefined : startDownload}
           onError={onError}
         />
         <Image
@@ -199,9 +271,14 @@ export const ImageGrid = ({
           width={150}
           attachment={attachments[1]}
           url={getThumbnailUrl(attachments[1])}
-          onClick={onClick}
+          showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+          showVisualAttachment={showAttachmentOrNoLongerAvailableToast(1)}
+          cancelDownload={cancelDownload}
+          startDownload={downloadPill ? undefined : startDownload}
           onError={onError}
         />
+        {detailPill}
+        {downloadPill}
       </div>
     );
   }
@@ -224,7 +301,10 @@ export const ImageGrid = ({
           width={200}
           cropWidth={GAP}
           url={getUrl(attachments[0])}
-          onClick={onClick}
+          showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+          showVisualAttachment={showAttachmentOrNoLongerAvailableToast(0)}
+          cancelDownload={cancelDownload}
+          startDownload={downloadPill ? undefined : startDownload}
           onError={onError}
         />
         <div className="module-image-grid__column">
@@ -240,7 +320,10 @@ export const ImageGrid = ({
             attachment={attachments[1]}
             playIconOverlay={isVideoAttachment(attachments[1])}
             url={getThumbnailUrl(attachments[1])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showAttachmentOrNoLongerAvailableToast(1)}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
           <Image
@@ -256,10 +339,15 @@ export const ImageGrid = ({
             attachment={attachments[2]}
             playIconOverlay={isVideoAttachment(attachments[2])}
             url={getThumbnailUrl(attachments[2])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showAttachmentOrNoLongerAvailableToast(2)}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
         </div>
+        {detailPill}
+        {downloadPill}
       </div>
     );
   }
@@ -283,7 +371,10 @@ export const ImageGrid = ({
               cropHeight={GAP}
               cropWidth={GAP}
               url={getThumbnailUrl(attachments[0])}
-              onClick={onClick}
+              showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+              showVisualAttachment={showAttachmentOrNoLongerAvailableToast(0)}
+              cancelDownload={cancelDownload}
+              startDownload={downloadPill ? undefined : startDownload}
               onError={onError}
             />
             <Image
@@ -299,7 +390,10 @@ export const ImageGrid = ({
               cropHeight={GAP}
               attachment={attachments[1]}
               url={getThumbnailUrl(attachments[1])}
-              onClick={onClick}
+              showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+              showVisualAttachment={showAttachmentOrNoLongerAvailableToast(1)}
+              cancelDownload={cancelDownload}
+              startDownload={downloadPill ? undefined : startDownload}
               onError={onError}
             />
           </div>
@@ -318,7 +412,10 @@ export const ImageGrid = ({
               cropWidth={GAP}
               attachment={attachments[2]}
               url={getThumbnailUrl(attachments[2])}
-              onClick={onClick}
+              showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+              showVisualAttachment={showAttachmentOrNoLongerAvailableToast(2)}
+              cancelDownload={cancelDownload}
+              startDownload={downloadPill ? undefined : startDownload}
               onError={onError}
             />
             <Image
@@ -334,11 +431,16 @@ export const ImageGrid = ({
               width={150}
               attachment={attachments[3]}
               url={getThumbnailUrl(attachments[3])}
-              onClick={onClick}
+              showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+              showVisualAttachment={showAttachmentOrNoLongerAvailableToast(3)}
+              cancelDownload={cancelDownload}
+              startDownload={downloadPill ? undefined : startDownload}
               onError={onError}
             />
           </div>
         </div>
+        {detailPill}
+        {downloadPill}
       </div>
     );
   }
@@ -364,7 +466,10 @@ export const ImageGrid = ({
             width={150}
             cropWidth={GAP}
             url={getThumbnailUrl(attachments[0])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showVisualAttachment}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
           <Image
@@ -378,7 +483,10 @@ export const ImageGrid = ({
             width={150}
             attachment={attachments[1]}
             url={getThumbnailUrl(attachments[1])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showVisualAttachment}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
         </div>
@@ -397,7 +505,10 @@ export const ImageGrid = ({
             cropWidth={GAP}
             attachment={attachments[2]}
             url={getThumbnailUrl(attachments[2])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showVisualAttachment}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
           <Image
@@ -413,7 +524,10 @@ export const ImageGrid = ({
             cropWidth={GAP}
             attachment={attachments[3]}
             url={getThumbnailUrl(attachments[3])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showVisualAttachment}
+            cancelDownload={cancelDownload}
+            startDownload={downloadPill ? undefined : startDownload}
             onError={onError}
           />
           <Image
@@ -431,11 +545,60 @@ export const ImageGrid = ({
             overlayText={moreMessagesOverlayText}
             attachment={attachments[4]}
             url={getThumbnailUrl(attachments[4])}
-            onClick={onClick}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+            showVisualAttachment={showVisualAttachment}
+            cancelDownload={undefined}
+            startDownload={undefined}
             onError={onError}
           />
         </div>
       </div>
+      {detailPill}
+      {downloadPill}
     </div>
   );
-};
+}
+
+function renderDownloadPill({
+  attachments,
+  i18n,
+  startDownloadClick,
+  startDownloadKeyDown,
+}: {
+  attachments: ReadonlyArray<AttachmentForUIType>;
+  i18n: LocalizerType;
+  startDownloadClick: (event: React.MouseEvent) => void;
+  startDownloadKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
+}): JSX.Element | null {
+  const downloadedOrPendingOrIncremental = attachments.some(
+    attachment =>
+      attachment.path || attachment.pending || isIncremental(attachment)
+  );
+  if (downloadedOrPendingOrIncremental) {
+    return null;
+  }
+
+  const noneDownloadable = !attachments.some(attachment =>
+    isDownloadable(attachment)
+  );
+  if (noneDownloadable) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      className="module-image-grid__download-pill"
+      aria-label={i18n('icu:startDownload')}
+      onClick={startDownloadClick}
+      onKeyDown={startDownloadKeyDown}
+    >
+      <div className="module-image-grid__download_pill__icon-wrapper">
+        <div className="module-image-grid__download_pill__download-icon" />
+      </div>
+      <div className="module-image-grid__download_pill__text-wrapper">
+        {i18n('icu:downloadNItems', { count: attachments.length })}
+      </div>
+    </button>
+  );
+}

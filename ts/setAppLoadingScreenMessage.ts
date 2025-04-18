@@ -1,4 +1,4 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { LocalizerType } from './types/Util';
@@ -26,9 +26,9 @@ export function setAppLoadingScreenMessage(
     return clear;
   }
 
-  targetString = loadingText || i18n('optimizingApplication');
+  targetString = loadingText || i18n('icu:optimizingApplication');
 
-  message.innerText = didTimeout ? targetString : i18n('loading');
+  message.innerText = didTimeout ? targetString : i18n('icu:loading');
 
   if (timeout) {
     return clear;

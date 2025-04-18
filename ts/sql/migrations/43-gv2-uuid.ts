@@ -1,11 +1,11 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from 'better-sqlite3';
 import { omit } from 'lodash';
 
 import type { LoggerType } from '../../types/Logging';
-import type { UUIDStringType } from '../../types/UUID';
+import type { AciString, ServiceIdString } from '../../types/ServiceId';
+import { normalizeAci } from '../../util/normalizeAci';
 import { isNotNil } from '../../util/isNotNil';
 import { assertDev } from '../../util/assert';
 import {
@@ -14,12 +14,27 @@ import {
   jsonToObject,
   objectToJSON,
 } from '../util';
-import type { EmptyQuery, Query } from '../util';
-import type { MessageType, ConversationType } from '../Interface';
+import type { WritableDB } from '../Interface';
+
+type MessageType = Readonly<{
+  id: string;
+  sourceUuid: string;
+  groupV2Change?: {
+    from?: string;
+    details: Array<{ type: string }>;
+  };
+  invitedGV2Members?: Array<{ uuid: string }>;
+}>;
+
+type ConversationType = Readonly<{
+  id: string;
+  members: Array<string>;
+  membersV2: Array<{ uuid: string }>;
+}>;
 
 export default function updateToSchemaVersion43(
   currentVersion: number,
-  db: Database,
+  db: WritableDB,
   logger: LoggerType
 ): void {
   if (currentVersion >= 43) {
@@ -45,17 +60,18 @@ export default function updateToSchemaVersion43(
     pendingAdminApprovalV2?: Array<LegacyAdminApprovalType>;
   };
 
-  const getConversationUuid = db
-    .prepare<Query>(
-      `
-      SELECT uuid
-      FROM
-        conversations
-      WHERE
-        id = $conversationId
-      `
-    )
-    .pluck();
+  const getConversationUuid = db.prepare(
+    `
+  SELECT uuid
+  FROM
+    conversations
+  WHERE
+    id = $conversationId
+  `,
+    {
+      pluck: true,
+    }
+  );
 
   const updateConversationStmt = db.prepare(
     `
@@ -96,7 +112,7 @@ export default function updateToSchemaVersion43(
 
       const newValue = oldValue
         .map(member => {
-          const uuid: UUIDStringType = getConversationUuid.get({
+          const uuid = getConversationUuid.get<ServiceIdString>({
             conversationId: member.conversationId,
           });
           if (!uuid) {
@@ -117,7 +133,7 @@ export default function updateToSchemaVersion43(
             return updated;
           }
 
-          const addedByUserId: UUIDStringType | undefined =
+          const addedByUserId: ServiceIdString | undefined =
             getConversationUuid.get({
               conversationId: member.addedByUserId,
             });
@@ -227,7 +243,7 @@ export default function updateToSchemaVersion43(
     if (groupV2Change) {
       assertDev(result.groupV2Change, 'Pacify typescript');
 
-      const from: UUIDStringType | undefined = getConversationUuid.get({
+      const from: AciString | undefined = getConversationUuid.get({
         conversationId: groupV2Change.from,
       });
 
@@ -262,7 +278,7 @@ export default function updateToSchemaVersion43(
             }
             changedDetails = true;
 
-            const newValue: UUIDStringType | null = getConversationUuid.get({
+            const newValue = getConversationUuid.get<ServiceIdString>({
               conversationId: oldValue,
             });
             if (key === 'inviter' && !newValue) {
@@ -302,7 +318,7 @@ export default function updateToSchemaVersion43(
     }
 
     if (sourceUuid) {
-      const newValue: UUIDStringType | null = getConversationUuid.get({
+      const newValue = getConversationUuid.get<ServiceIdString>({
         conversationId: sourceUuid,
       });
 
@@ -317,7 +333,7 @@ export default function updateToSchemaVersion43(
     if (invitedGV2Members) {
       const newMembers = invitedGV2Members
         .map(({ addedByUserId, conversationId }, i) => {
-          const uuid: UUIDStringType | null = getConversationUuid.get({
+          const uuid = getConversationUuid.get<ServiceIdString>({
             conversationId,
           });
           const oldMember =
@@ -341,7 +357,7 @@ export default function updateToSchemaVersion43(
             return newMember;
           }
 
-          const newAddedBy: UUIDStringType | null = getConversationUuid.get({
+          const newAddedBy = getConversationUuid.get<ServiceIdString>({
             conversationId: addedByUserId,
           });
           if (!newAddedBy) {
@@ -350,7 +366,7 @@ export default function updateToSchemaVersion43(
 
           return {
             ...newMember,
-            addedByUserId: newAddedBy,
+            addedByUserId: normalizeAci(newAddedBy, 'migration-43'),
           };
         })
         .filter(isNotNil);
@@ -376,15 +392,16 @@ export default function updateToSchemaVersion43(
 
   db.transaction(() => {
     const allConversations = db
-      .prepare<EmptyQuery>(
+      .prepare(
         `
-      SELECT json, profileLastFetchedAt
+      SELECT json
       FROM conversations
       ORDER BY id ASC;
-      `
+      `,
+        { pluck: true }
       )
-      .all()
-      .map(({ json }) => jsonToObject<ConversationType>(json));
+      .all<string>()
+      .map(json => jsonToObject<ConversationType>(json));
 
     logger.info(
       'updateToSchemaVersion43: About to iterate through ' +

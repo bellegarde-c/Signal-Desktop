@@ -1,136 +1,131 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-/* eslint-disable no-await-in-loop, no-console */
 
 import { ReceiptType } from '@signalapp/mock-server';
+import { omit } from 'lodash';
 
-import { debug, Bootstrap, stats, RUN_COUNT } from './fixtures';
+import { debug, Bootstrap, MAX_CYCLES } from './fixtures';
+import { type RegressionSample } from '../bootstrap';
 
-const MESSAGE_BATCH_SIZE = 1000; // messages
+const INITIAL_MESSAGE_COUNT = 1000;
+const FINAL_MESSAGE_COUNT = 5000;
 
 const ENABLE_RECEIPTS = Boolean(process.env.ENABLE_RECEIPTS);
 
-(async () => {
-  const bootstrap = new Bootstrap({
-    benchmark: true,
-  });
+Bootstrap.regressionBenchmark(
+  async ({ bootstrap, value: messageCount }): Promise<RegressionSample> => {
+    await bootstrap.linkAndClose();
 
-  await bootstrap.init();
-  await bootstrap.linkAndClose();
-
-  try {
     const { server, contacts, phone, desktop } = bootstrap;
 
-    const messagesPerSec = new Array<number>();
+    // Generate messages
+    const messagePromises = new Array<Promise<Buffer>>();
+    debug('started generating messages');
 
-    for (let runId = 0; runId < RUN_COUNT; runId += 1) {
-      // Generate messages
-      const messagePromises = new Array<Promise<Buffer>>();
-      debug('started generating messages');
+    for (let i = 0; i < messageCount; i += 1) {
+      const contact = contacts[Math.floor(i / 2) % contacts.length];
+      const direction = i % 2 ? 'message' : 'reply';
 
-      for (let i = 0; i < MESSAGE_BATCH_SIZE; i += 1) {
-        const contact = contacts[Math.floor(i / 2) % contacts.length];
-        const direction = i % 2 ? 'message' : 'reply';
+      const messageTimestamp = bootstrap.getTimestamp();
 
-        const messageTimestamp = bootstrap.getTimestamp();
-
-        if (direction === 'message') {
-          messagePromises.push(
-            contact.encryptText(
-              desktop,
-              `Ping from mock server ${i + 1} / ${MESSAGE_BATCH_SIZE}`,
-              {
-                timestamp: messageTimestamp,
-                sealed: true,
-              }
-            )
-          );
-
-          if (ENABLE_RECEIPTS) {
-            messagePromises.push(
-              phone.encryptSyncRead(desktop, {
-                timestamp: bootstrap.getTimestamp(),
-                messages: [
-                  {
-                    senderUUID: contact.device.uuid,
-                    timestamp: messageTimestamp,
-                  },
-                ],
-              })
-            );
-          }
-          continue;
-        }
-
+      if (direction === 'message') {
         messagePromises.push(
-          phone.encryptSyncSent(
+          contact.encryptText(
             desktop,
-            `Pong from mock server ${i + 1} / ${MESSAGE_BATCH_SIZE}`,
+            `Ping from mock server ${i + 1} / ${messageCount}`,
             {
               timestamp: messageTimestamp,
-              destinationUUID: contact.device.uuid,
+              sealed: true,
             }
           )
         );
 
         if (ENABLE_RECEIPTS) {
           messagePromises.push(
-            contact.encryptReceipt(desktop, {
+            phone.encryptSyncRead(desktop, {
               timestamp: bootstrap.getTimestamp(),
-              messageTimestamps: [messageTimestamp],
-              type: ReceiptType.Delivery,
-            })
-          );
-          messagePromises.push(
-            contact.encryptReceipt(desktop, {
-              timestamp: bootstrap.getTimestamp(),
-              messageTimestamps: [messageTimestamp],
-              type: ReceiptType.Read,
+              messages: [
+                {
+                  senderAci: contact.device.aci,
+                  timestamp: messageTimestamp,
+                },
+              ],
             })
           );
         }
+        continue;
       }
 
-      debug('ended generating messages');
+      messagePromises.push(
+        phone.encryptSyncSent(
+          desktop,
+          `Pong from mock server ${i + 1} / ${messageCount}`,
+          {
+            timestamp: messageTimestamp,
+            destinationServiceId: contact.device.aci,
+          }
+        )
+      );
 
-      const messages = await Promise.all(messagePromises);
-
-      // Open the flood gates
-      {
-        debug('got synced, sending messages');
-
-        // Queue all messages
-        const queue = async (): Promise<void> => {
-          await Promise.all(
-            messages.map(message => {
-              return server.send(desktop, message);
-            })
-          );
-        };
-
-        const run = async (): Promise<void> => {
-          const app = await bootstrap.startApp();
-          const appLoadedInfo = await app.waitUntilLoaded();
-
-          console.log('run=%d info=%j', runId, appLoadedInfo);
-
-          messagesPerSec.push(appLoadedInfo.messagesPerSec);
-
-          await app.close();
-        };
-
-        await Promise.all([queue(), run()]);
+      if (ENABLE_RECEIPTS) {
+        messagePromises.push(
+          contact.encryptReceipt(desktop, {
+            timestamp: bootstrap.getTimestamp(),
+            messageTimestamps: [messageTimestamp],
+            type: ReceiptType.Delivery,
+          })
+        );
+        messagePromises.push(
+          contact.encryptReceipt(desktop, {
+            timestamp: bootstrap.getTimestamp(),
+            messageTimestamps: [messageTimestamp],
+            type: ReceiptType.Read,
+          })
+        );
       }
     }
 
-    // Compute human-readable statistics
-    if (messagesPerSec.length !== 0) {
-      console.log('stats info=%j', { messagesPerSec: stats(messagesPerSec) });
+    debug('ended generating messages');
+
+    const messages = await Promise.all(messagePromises);
+
+    // Open the flood gates
+    {
+      debug('got synced, sending messages');
+
+      // Queue all messages
+      const queue = async (): Promise<void> => {
+        await Promise.all(
+          messages.map(message => {
+            return server.send(desktop, message);
+          })
+        );
+      };
+
+      const run = async () => {
+        const app = await bootstrap.startApp();
+        const appLoadedInfo = await app.waitUntilLoaded();
+
+        await app.close();
+
+        return appLoadedInfo;
+      };
+
+      const [, info] = await Promise.all([queue(), run()]);
+
+      const { loadTime, preloadTime, preloadCompileTime, connectTime } = info;
+      const messagesDuration =
+        loadTime - preloadTime - preloadCompileTime - connectTime;
+
+      return {
+        messagesDuration,
+        metrics: omit(info, 'messagesPerSec', 'loadTime'),
+      };
     }
-  } catch (error) {
-    await bootstrap.saveLogs();
-    throw error;
-  } finally {
-    await bootstrap.teardown();
+  },
+  {
+    fromValue: INITIAL_MESSAGE_COUNT,
+    toValue: FINAL_MESSAGE_COUNT,
+    maxCycles: MAX_CYCLES,
   }
-})();
+);

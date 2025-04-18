@@ -1,103 +1,89 @@
-// Copyright 2019-2021 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable max-classes-per-file */
-
-import { Collection, Model } from 'backbone';
-import type { MessageModel } from '../models/messages';
+import type { AciString } from '../types/ServiceId';
+import type { ReadonlyMessageAttributesType } from '../model-types.d';
+import { DataReader } from '../sql/Client';
+import * as Errors from '../types/errors';
 import * as log from '../logging/log';
+import { getMessageIdForLogging } from '../util/idForLogging';
+import { markViewOnceMessageViewed } from '../services/MessageUpdater';
+import { MessageModel } from '../models/messages';
 
 export type ViewOnceOpenSyncAttributesType = {
-  source?: string;
-  sourceUuid: string;
+  removeFromMessageReceiverCache: () => unknown;
+  sourceAci: AciString;
   timestamp: number;
 };
 
-class ViewOnceOpenSyncModel extends Model<ViewOnceOpenSyncAttributesType> {}
+const viewOnceSyncs = new Map<number, ViewOnceOpenSyncAttributesType>();
 
-let singleton: ViewOnceOpenSyncs | undefined;
+function remove(sync: ViewOnceOpenSyncAttributesType): void {
+  viewOnceSyncs.delete(sync.timestamp);
+  sync.removeFromMessageReceiverCache();
+}
 
-export class ViewOnceOpenSyncs extends Collection<ViewOnceOpenSyncModel> {
-  static getSingleton(): ViewOnceOpenSyncs {
-    if (!singleton) {
-      singleton = new ViewOnceOpenSyncs();
-    }
+export function forMessage(
+  message: ReadonlyMessageAttributesType
+): ViewOnceOpenSyncAttributesType | null {
+  const logId = `ViewOnceOpenSyncs.forMessage(${getMessageIdForLogging(
+    message
+  )})`;
 
-    return singleton;
+  const viewOnceSyncValues = Array.from(viewOnceSyncs.values());
+
+  const syncBySourceServiceId = viewOnceSyncValues.find(item => {
+    return (
+      item.sourceAci === message.sourceServiceId &&
+      item.timestamp === message.sent_at
+    );
+  });
+
+  if (syncBySourceServiceId) {
+    log.info(`${logId}: Found early view once open sync for message`);
+    remove(syncBySourceServiceId);
+    return syncBySourceServiceId;
   }
 
-  forMessage(message: MessageModel): ViewOnceOpenSyncModel | null {
-    const syncBySourceUuid = this.find(item => {
-      return (
-        item.get('sourceUuid') === message.get('sourceUuid') &&
-        item.get('timestamp') === message.get('sent_at')
-      );
+  return null;
+}
+
+export async function onSync(
+  sync: ViewOnceOpenSyncAttributesType
+): Promise<void> {
+  viewOnceSyncs.set(sync.timestamp, sync);
+
+  const logId = `ViewOnceOpenSyncs.onSync(timestamp=${sync.timestamp})`;
+
+  try {
+    const messages = await DataReader.getMessagesBySentAt(sync.timestamp);
+
+    const found = messages.find(item => {
+      const itemSource = item.sourceServiceId;
+      const syncSource = sync.sourceAci;
+
+      return Boolean(itemSource && syncSource && itemSource === syncSource);
     });
-    if (syncBySourceUuid) {
-      log.info('Found early view once open sync for message');
-      this.remove(syncBySourceUuid);
-      return syncBySourceUuid;
-    }
 
-    const syncBySource = this.find(item => {
-      return (
-        item.get('source') === message.get('source') &&
-        item.get('timestamp') === message.get('sent_at')
-      );
+    const syncSourceAci = sync.sourceAci;
+    const syncTimestamp = sync.timestamp;
+    const wasMessageFound = Boolean(found);
+    log.info(`${logId} receive:`, {
+      syncSourceAci,
+      syncTimestamp,
+      wasMessageFound,
     });
-    if (syncBySource) {
-      log.info('Found early view once open sync for message');
-      this.remove(syncBySource);
-      return syncBySource;
+
+    if (!found) {
+      return;
     }
 
-    return null;
-  }
+    const message = window.MessageCache.register(new MessageModel(found));
+    await markViewOnceMessageViewed(message, { fromSync: true });
 
-  async onSync(sync: ViewOnceOpenSyncModel): Promise<void> {
-    try {
-      const messages = await window.Signal.Data.getMessagesBySentAt(
-        sync.get('timestamp')
-      );
-
-      const found = messages.find(item => {
-        const itemSourceUuid = item.sourceUuid;
-        const syncSourceUuid = sync.get('sourceUuid');
-        const itemSource = item.source;
-        const syncSource = sync.get('source');
-
-        return Boolean(
-          (itemSourceUuid &&
-            syncSourceUuid &&
-            itemSourceUuid === syncSourceUuid) ||
-            (itemSource && syncSource && itemSource === syncSource)
-        );
-      });
-
-      const syncSource = sync.get('source');
-      const syncSourceUuid = sync.get('sourceUuid');
-      const syncTimestamp = sync.get('timestamp');
-      const wasMessageFound = Boolean(found);
-      log.info('Receive view once open sync:', {
-        syncSource,
-        syncSourceUuid,
-        syncTimestamp,
-        wasMessageFound,
-      });
-
-      if (!found) {
-        return;
-      }
-
-      const message = window.MessageController.register(found.id, found);
-      await message.markViewOnceMessageViewed({ fromSync: true });
-
-      this.remove(sync);
-    } catch (error) {
-      log.error(
-        'ViewOnceOpenSyncs.onSync error:',
-        error && error.stack ? error.stack : error
-      );
-    }
+    viewOnceSyncs.delete(sync.timestamp);
+    sync.removeFromMessageReceiverCache();
+  } catch (error) {
+    log.error(`${logId} error:`, Errors.toLogFormat(error));
   }
 }

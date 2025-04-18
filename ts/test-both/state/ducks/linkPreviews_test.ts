@@ -8,15 +8,17 @@ import {
   getEmptyState,
   reducer,
 } from '../../../state/ducks/linkPreviews';
-import type { LinkPreviewType } from '../../../types/message/LinkPreviews';
+import type { LinkPreviewForUIType } from '../../../types/message/LinkPreviews';
 
 describe('both/state/ducks/linkPreviews', () => {
-  function getMockLinkPreview(): LinkPreviewType {
+  function getMockLinkPreview(): LinkPreviewForUIType {
     return {
       title: 'Hello World',
       domain: 'signal.org',
+      image: undefined,
       url: 'https://www.signal.org',
       isStickerPack: false,
+      isCallLink: false,
     };
   }
 
@@ -26,9 +28,9 @@ describe('both/state/ducks/linkPreviews', () => {
     it('updates linkPreview', () => {
       const state = getEmptyState();
       const linkPreview = getMockLinkPreview();
-      const nextState = reducer(state, addLinkPreview(linkPreview, 0));
+      const nextState = reducer(state, addLinkPreview(linkPreview, 1));
 
-      assert.strictEqual(nextState.linkPreview, linkPreview);
+      assert.deepEqual(nextState.linkPreview, linkPreview);
     });
   });
 

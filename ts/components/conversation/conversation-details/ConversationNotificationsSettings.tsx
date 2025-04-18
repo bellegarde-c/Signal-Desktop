@@ -1,7 +1,6 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent } from 'react';
 import React, { useMemo } from 'react';
 
 import type { ConversationTypeType } from '../../../state/ducks/conversations';
@@ -15,27 +14,31 @@ import { getMuteOptions } from '../../../util/getMuteOptions';
 import { parseIntOrThrow } from '../../../util/parseIntOrThrow';
 import { useUniqueId } from '../../../hooks/useUniqueId';
 
-type PropsType = {
+export type PropsType = {
+  id: string;
   conversationType: ConversationTypeType;
   dontNotifyForMentionsIfMuted: boolean;
   i18n: LocalizerType;
   muteExpiresAt: undefined | number;
   setDontNotifyForMentionsIfMuted: (
+    conversationId: string,
     dontNotifyForMentionsIfMuted: boolean
   ) => unknown;
-  setMuteExpiration: (muteExpiresAt: undefined | number) => unknown;
+  setMuteExpiration: (
+    conversationId: string,
+    muteExpiresAt: undefined | number
+  ) => unknown;
 };
 
-export const ConversationNotificationsSettings: FunctionComponent<
-  PropsType
-> = ({
+export function ConversationNotificationsSettings({
+  id,
   conversationType,
   dontNotifyForMentionsIfMuted,
   i18n,
   muteExpiresAt,
   setMuteExpiration,
   setDontNotifyForMentionsIfMuted,
-}) => {
+}: PropsType): JSX.Element {
   const muteNotificationsSelectId = useUniqueId();
   const mentionsSelectId = useUniqueId();
   const muteOptions = useMemo(
@@ -45,7 +48,7 @@ export const ConversationNotificationsSettings: FunctionComponent<
         : [
             {
               disabled: true,
-              text: i18n('notMuted'),
+              text: i18n('icu:notMuted'),
               value: -1,
             },
           ]),
@@ -65,11 +68,11 @@ export const ConversationNotificationsSettings: FunctionComponent<
       rawValue,
       'NotificationSettings: mute ms was not an integer'
     );
-    setMuteExpiration(ms);
+    setMuteExpiration(id, ms);
   };
 
   const onChangeDontNotifyForMentionsIfMuted = (rawValue: string) => {
-    setDontNotifyForMentionsIfMuted(rawValue === 'yes');
+    setDontNotifyForMentionsIfMuted(id, rawValue === 'yes');
   };
 
   return (
@@ -78,13 +81,13 @@ export const ConversationNotificationsSettings: FunctionComponent<
         <PanelRow
           icon={
             <ConversationDetailsIcon
-              ariaLabel={i18n('muteNotificationsTitle')}
+              ariaLabel={i18n('icu:muteNotificationsTitle')}
               icon={IconType.mute}
             />
           }
           label={
             <label htmlFor={muteNotificationsSelectId}>
-              {i18n('muteNotificationsTitle')}
+              {i18n('icu:muteNotificationsTitle')}
             </label>
           }
           right={
@@ -101,30 +104,30 @@ export const ConversationNotificationsSettings: FunctionComponent<
             icon={
               <ConversationDetailsIcon
                 ariaLabel={i18n(
-                  'ConversationNotificationsSettings__mentions__label'
+                  'icu:ConversationNotificationsSettings__mentions__label'
                 )}
                 icon={IconType.mention}
               />
             }
             label={
               <label htmlFor={mentionsSelectId}>
-                {i18n('ConversationNotificationsSettings__mentions__label')}
+                {i18n('icu:ConversationNotificationsSettings__mentions__label')}
               </label>
             }
-            info={i18n('ConversationNotificationsSettings__mentions__info')}
+            info={i18n('icu:ConversationNotificationsSettings__mentions__info')}
             right={
               <Select
                 id={mentionsSelectId}
                 options={[
                   {
                     text: i18n(
-                      'ConversationNotificationsSettings__mentions__select__always-notify'
+                      'icu:ConversationNotificationsSettings__mentions__select__always-notify'
                     ),
                     value: 'no',
                   },
                   {
                     text: i18n(
-                      'ConversationNotificationsSettings__mentions__select__dont-notify-for-mentions-if-muted'
+                      'icu:ConversationNotificationsSettings__mentions__select__dont-notify-for-mentions-if-muted'
                     ),
                     value: 'yes',
                   },
@@ -138,4 +141,4 @@ export const ConversationNotificationsSettings: FunctionComponent<
       </PanelSection>
     </div>
   );
-};
+}

@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { isBoolean } from 'lodash';
-
 import { action } from '@storybook/addon-actions';
-import { number } from '@storybook/addon-knobs';
-
-import { setupI18n } from '../../../util/setupI18n';
-import enMessages from '../../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import { getDefaultConversation } from '../../../test-both/helpers/getDefaultConversation';
 import { ThemeType } from '../../../types/Util';
 
@@ -18,19 +13,28 @@ import type {
 } from './ConversationDetailsMembershipList';
 import { ConversationDetailsMembershipList } from './ConversationDetailsMembershipList';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title:
     'Components/Conversation/ConversationDetails/ConversationDetailsMembershipList',
-};
+  argTypes: {},
+  args: {
+    canAddNewMembers: false,
+    conversationId: '123',
+    getPreferredBadge: () => undefined,
+    i18n,
+    memberships: [],
+    showContactModal: action('showContactModal'),
+    startAddingNewMembers: action('startAddingNewMembers'),
+    theme: ThemeType.light,
+  },
+} satisfies Meta<Props>;
 
 const createMemberships = (
   numberOfMemberships = 10
 ): Array<GroupV2Membership> => {
-  return Array.from(
-    new Array(number('number of memberships', numberOfMemberships))
-  ).map(
+  return Array.from(new Array(numberOfMemberships)).map(
     (_, i): GroupV2Membership => ({
       isAdmin: i % 3 === 0,
       member: getDefaultConversation({
@@ -40,81 +44,52 @@ const createMemberships = (
   );
 };
 
-const createProps = (overrideProps: Partial<Props>): Props => ({
-  canAddNewMembers: isBoolean(overrideProps.canAddNewMembers)
-    ? overrideProps.canAddNewMembers
-    : false,
-  conversationId: '123',
-  getPreferredBadge: () => undefined,
-  i18n,
-  memberships: overrideProps.memberships || [],
-  showContactModal: action('showContactModal'),
-  startAddingNewMembers: action('startAddingNewMembers'),
-  theme: ThemeType.light,
-});
-
-export const Few = (): JSX.Element => {
+export function Few(args: Props): JSX.Element {
   const memberships = createMemberships(3);
+  return (
+    <ConversationDetailsMembershipList {...args} memberships={memberships} />
+  );
+}
 
-  const props = createProps({ memberships });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-export const Limit = (): JSX.Element => {
+export function Limit(args: Props): JSX.Element {
   const memberships = createMemberships(5);
+  return (
+    <ConversationDetailsMembershipList {...args} memberships={memberships} />
+  );
+}
 
-  const props = createProps({ memberships });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-export const Limit1 = (): JSX.Element => {
+export function Limit1(args: Props): JSX.Element {
   const memberships = createMemberships(6);
+  return (
+    <ConversationDetailsMembershipList {...args} memberships={memberships} />
+  );
+}
 
-  const props = createProps({ memberships });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-Limit1.story = {
-  name: 'Limit +1',
-};
-
-export const Limit2 = (): JSX.Element => {
+export function Limit2(args: Props): JSX.Element {
   const memberships = createMemberships(7);
+  return (
+    <ConversationDetailsMembershipList {...args} memberships={memberships} />
+  );
+}
 
-  const props = createProps({ memberships });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-Limit2.story = {
-  name: 'Limit +2',
-};
-
-export const Many = (): JSX.Element => {
+export function Many(args: Props): JSX.Element {
   const memberships = createMemberships(100);
+  return (
+    <ConversationDetailsMembershipList {...args} memberships={memberships} />
+  );
+}
 
-  const props = createProps({ memberships });
+export function None(args: Props): JSX.Element {
+  return <ConversationDetailsMembershipList {...args} memberships={[]} />;
+}
 
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-export const None = (): JSX.Element => {
-  const props = createProps({ memberships: [] });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-export const CanAddNewMembers = (): JSX.Element => {
+export function CanAddNewMembers(args: Props): JSX.Element {
   const memberships = createMemberships(10);
-
-  const props = createProps({ canAddNewMembers: true, memberships });
-
-  return <ConversationDetailsMembershipList {...props} />;
-};
-
-CanAddNewMembers.story = {
-  name: 'Can add new members',
-};
+  return (
+    <ConversationDetailsMembershipList
+      {...args}
+      memberships={memberships}
+      canAddNewMembers
+    />
+  );
+}

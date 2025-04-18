@@ -1,9 +1,9 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { RowType } from '../../../components/ConversationList';
+import { RowType, _testHeaderText } from '../../../components/ConversationList';
 import { FindDirection } from '../../../components/leftPane/LeftPaneHelper';
 import { getDefaultConversation } from '../../../test-both/helpers/getDefaultConversation';
 
@@ -14,7 +14,9 @@ describe('LeftPaneInboxHelper', () => {
   const defaultProps: LeftPaneInboxPropsType = {
     archivedConversations: [],
     conversations: [],
-    isAboutToSearchInAConversation: false,
+    filterByUnread: false,
+    isSearchingGlobally: false,
+    isAboutToSearch: false,
     pinnedConversations: [],
     searchConversation: undefined,
     searchDisabled: false,
@@ -65,7 +67,7 @@ describe('LeftPaneInboxHelper', () => {
       assert.strictEqual(helper.getRowCount(), 3);
     });
 
-    it("returns the number of pinned conversations if that's all there is", () => {
+    it("returns the number of pinned conversations + 1 (for the header) if that's all there is", () => {
       const helper = new LeftPaneInboxHelper({
         ...defaultProps,
         pinnedConversations: [
@@ -75,7 +77,7 @@ describe('LeftPaneInboxHelper', () => {
         ],
       });
 
-      assert.strictEqual(helper.getRowCount(), 3);
+      assert.strictEqual(helper.getRowCount(), 3 + 1);
     });
 
     it('adds 2 rows for each header if there are pinned and non-pinned conversations,', () => {
@@ -132,7 +134,7 @@ describe('LeftPaneInboxHelper', () => {
       );
     });
 
-    it("returns the pinned conversation's index if there are only pinned conversations", () => {
+    it("returns the pinned conversation's index + 1 (for the header) if there are only pinned conversations", () => {
       const pinnedConversations = [
         getDefaultConversation(),
         getDefaultConversation(),
@@ -144,11 +146,11 @@ describe('LeftPaneInboxHelper', () => {
 
       assert.strictEqual(
         helper.getRowIndexToScrollTo(pinnedConversations[0].id),
-        0
+        1
       );
       assert.strictEqual(
         helper.getRowIndexToScrollTo(pinnedConversations[1].id),
-        1
+        2
       );
     });
 
@@ -224,7 +226,7 @@ describe('LeftPaneInboxHelper', () => {
       assert.isUndefined(helper.getRow(1));
     });
 
-    it("returns pinned conversations if that's all there are", () => {
+    it("returns header and pinned conversations if that's all there are", () => {
       const pinnedConversations = [
         getDefaultConversation(),
         getDefaultConversation(),
@@ -235,18 +237,22 @@ describe('LeftPaneInboxHelper', () => {
         pinnedConversations,
       });
 
-      assert.deepEqual(helper.getRow(0), {
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:LeftPane--pinned'
+      );
+      assert.deepEqual(helper.getRow(1), {
         type: RowType.Conversation,
         conversation: pinnedConversations[0],
       });
-      assert.deepEqual(helper.getRow(1), {
+      assert.deepEqual(helper.getRow(2), {
         type: RowType.Conversation,
         conversation: pinnedConversations[1],
       });
-      assert.isUndefined(helper.getRow(2));
+      assert.isUndefined(helper.getRow(3));
     });
 
-    it('returns pinned conversations and an archive button if there are no non-pinned conversations', () => {
+    it('returns header, pinned conversations and an archive button if there are no non-pinned conversations', () => {
       const pinnedConversations = [
         getDefaultConversation(),
         getDefaultConversation(),
@@ -258,19 +264,23 @@ describe('LeftPaneInboxHelper', () => {
         archivedConversations: [getDefaultConversation()],
       });
 
-      assert.deepEqual(helper.getRow(0), {
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:LeftPane--pinned'
+      );
+      assert.deepEqual(helper.getRow(1), {
         type: RowType.Conversation,
         conversation: pinnedConversations[0],
       });
-      assert.deepEqual(helper.getRow(1), {
+      assert.deepEqual(helper.getRow(2), {
         type: RowType.Conversation,
         conversation: pinnedConversations[1],
       });
-      assert.deepEqual(helper.getRow(2), {
+      assert.deepEqual(helper.getRow(3), {
         type: RowType.ArchiveButton,
         archivedConversationsCount: 1,
       });
-      assert.isUndefined(helper.getRow(3));
+      assert.isUndefined(helper.getRow(4));
     });
 
     it("returns non-pinned conversations if that's all there are", () => {
@@ -339,10 +349,10 @@ describe('LeftPaneInboxHelper', () => {
         pinnedConversations,
       });
 
-      assert.deepEqual(helper.getRow(0), {
-        type: RowType.Header,
-        i18nKey: 'LeftPane--pinned',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:LeftPane--pinned'
+      );
       assert.deepEqual(helper.getRow(1), {
         type: RowType.Conversation,
         conversation: pinnedConversations[0],
@@ -351,10 +361,10 @@ describe('LeftPaneInboxHelper', () => {
         type: RowType.Conversation,
         conversation: pinnedConversations[1],
       });
-      assert.deepEqual(helper.getRow(3), {
-        type: RowType.Header,
-        i18nKey: 'LeftPane--chats',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(3)),
+        'icu:LeftPane--chats'
+      );
       assert.deepEqual(helper.getRow(4), {
         type: RowType.Conversation,
         conversation: conversations[0],
@@ -388,10 +398,10 @@ describe('LeftPaneInboxHelper', () => {
         archivedConversations: [getDefaultConversation()],
       });
 
-      assert.deepEqual(helper.getRow(0), {
-        type: RowType.Header,
-        i18nKey: 'LeftPane--pinned',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(0)),
+        'icu:LeftPane--pinned'
+      );
       assert.deepEqual(helper.getRow(1), {
         type: RowType.Conversation,
         conversation: pinnedConversations[0],
@@ -400,10 +410,10 @@ describe('LeftPaneInboxHelper', () => {
         type: RowType.Conversation,
         conversation: pinnedConversations[1],
       });
-      assert.deepEqual(helper.getRow(3), {
-        type: RowType.Header,
-        i18nKey: 'LeftPane--chats',
-      });
+      assert.deepEqual(
+        _testHeaderText(helper.getRow(3)),
+        'icu:LeftPane--chats'
+      );
       assert.deepEqual(helper.getRow(4), {
         type: RowType.Conversation,
         conversation: conversations[0],
@@ -616,7 +626,7 @@ describe('LeftPaneInboxHelper', () => {
     it("returns true if we're about to search in a conversation", () => {
       const helper = new LeftPaneInboxHelper({
         ...defaultProps,
-        isAboutToSearchInAConversation: true,
+        isAboutToSearch: true,
       });
 
       assert.isTrue(helper.requiresFullWidth());

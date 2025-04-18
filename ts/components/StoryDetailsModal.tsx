@@ -2,74 +2,84 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
-import formatFileSize from 'filesize';
 import type { LocalizerType } from '../types/Util';
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges';
 import type { StorySendStateType, StoryViewType } from '../types/Stories';
 import { Avatar, AvatarSize } from './Avatar';
 import { ContactName } from './conversation/ContactName';
 import { ContextMenu } from './ContextMenu';
-import { Intl } from './Intl';
+import { I18n } from './I18n';
 import { Modal } from './Modal';
 import { SendStatus } from '../messages/MessageSendState';
 import { Theme } from '../util/theme';
+import { formatDateTimeLong } from '../util/timestamp';
+import { DurationInSeconds } from '../util/durations';
+import type { SaveAttachmentActionCreatorType } from '../state/ducks/conversations';
+import type { AttachmentType } from '../types/Attachment';
 import { ThemeType } from '../types/Util';
 import { Time } from './Time';
-import { formatDateTimeLong } from '../util/timestamp';
 import { groupBy } from '../util/mapUtil';
 import { format as formatRelativeTime } from '../util/expirationTimer';
+import { formatFileSize } from '../util/formatFileSize';
 
 export type PropsType = {
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
+  isInternalUser?: boolean;
   onClose: () => unknown;
+  saveAttachment: SaveAttachmentActionCreatorType;
   sender: StoryViewType['sender'];
   sendState?: Array<StorySendStateType>;
-  size?: number;
+  attachment?: AttachmentType;
   expirationTimestamp: number | undefined;
   timestamp: number;
 };
 
 const contactSortCollator = new window.Intl.Collator();
 
-function getI18nKey(sendStatus: SendStatus | undefined): string {
+function getSendStatusLabel(
+  sendStatus: SendStatus | undefined,
+  i18n: LocalizerType
+): string {
   if (sendStatus === SendStatus.Failed) {
-    return 'MessageDetailsHeader--Failed';
+    return i18n('icu:MessageDetailsHeader--Failed');
   }
 
   if (sendStatus === SendStatus.Viewed) {
-    return 'MessageDetailsHeader--Viewed';
+    return i18n('icu:MessageDetailsHeader--Viewed');
   }
 
   if (sendStatus === SendStatus.Read) {
-    return 'MessageDetailsHeader--Read';
+    return i18n('icu:MessageDetailsHeader--Read');
   }
 
   if (sendStatus === SendStatus.Delivered) {
-    return 'MessageDetailsHeader--Delivered';
+    return i18n('icu:MessageDetailsHeader--Delivered');
   }
 
   if (sendStatus === SendStatus.Sent) {
-    return 'MessageDetailsHeader--Sent';
+    return i18n('icu:MessageDetailsHeader--Sent');
   }
 
   if (sendStatus === SendStatus.Pending) {
-    return 'MessageDetailsHeader--Pending';
+    return i18n('icu:MessageDetailsHeader--Pending');
   }
 
-  return 'from';
+  return i18n('icu:from');
 }
 
-export const StoryDetailsModal = ({
+export function StoryDetailsModal({
+  attachment,
   getPreferredBadge,
   i18n,
+  isInternalUser,
   onClose,
+  saveAttachment,
   sender,
   sendState,
-  size,
   timestamp,
   expirationTimestamp,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   // the sender is included in the sendState data
   // but we don't want to show the sender in the "Sent To" list
   const actualRecipientsSendState = sendState?.filter(
@@ -98,16 +108,19 @@ export const StoryDetailsModal = ({
             return null;
           }
 
-          const i18nKey = getI18nKey(sendStatus);
+          const sendStatusLabel = getSendStatusLabel(sendStatus, i18n);
 
           const sortedContacts = [...contacts].sort((a, b) =>
             contactSortCollator.compare(a.recipient.title, b.recipient.title)
           );
 
           return (
-            <div key={i18nKey} className="StoryDetailsModal__contact-group">
+            <div
+              key={sendStatusLabel}
+              className="StoryDetailsModal__contact-group"
+            >
               <div className="StoryDetailsModal__contact-group__header">
-                {i18n(i18nKey)}
+                {sendStatusLabel}
               </div>
               {sortedContacts.map(status => {
                 const contact = status.recipient;
@@ -115,20 +128,17 @@ export const StoryDetailsModal = ({
                 return (
                   <div key={contact.id} className="StoryDetailsModal__contact">
                     <Avatar
-                      acceptedMessageRequest={contact.acceptedMessageRequest}
-                      avatarPath={contact.avatarPath}
+                      avatarUrl={contact.avatarUrl}
                       badge={getPreferredBadge(contact.badges)}
                       color={contact.color}
                       conversationType="direct"
                       i18n={i18n}
-                      isMe={contact.isMe}
                       phoneNumber={contact.phoneNumber}
                       profileName={contact.profileName}
                       sharedGroupNames={contact.sharedGroupNames}
-                      size={AvatarSize.THIRTY_SIX}
+                      size={AvatarSize.THIRTY_TWO}
                       theme={ThemeType.dark}
                       title={contact.title}
-                      unblurredAvatarPath={contact.unblurredAvatarPath}
                     />
                     <div className="StoryDetailsModal__contact__text">
                       <ContactName title={contact.title} />
@@ -154,20 +164,19 @@ export const StoryDetailsModal = ({
       <div className="StoryDetailsModal__contact-container">
         <div className="StoryDetailsModal__contact-group">
           <div className="StoryDetailsModal__contact-group__header">
-            {i18n('sent')}
+            {i18n('icu:sent')}
           </div>
           <div className="StoryDetailsModal__contact">
             <Avatar
-              acceptedMessageRequest={sender.acceptedMessageRequest}
-              avatarPath={sender.avatarPath}
+              avatarPlaceholderGradient={sender.avatarPlaceholderGradient}
+              avatarUrl={sender.avatarUrl}
               badge={getPreferredBadge(sender.badges)}
               color={sender.color}
               conversationType="direct"
               i18n={i18n}
-              isMe={sender.isMe}
               profileName={sender.profileName}
               sharedGroupNames={sender.sharedGroupNames}
-              size={AvatarSize.THIRTY_SIX}
+              size={AvatarSize.THIRTY_TWO}
               theme={ThemeType.dark}
               title={sender.title}
             />
@@ -189,8 +198,28 @@ export const StoryDetailsModal = ({
   }
 
   const timeRemaining = expirationTimestamp
-    ? expirationTimestamp - Date.now()
+    ? DurationInSeconds.fromMillis(expirationTimestamp - Date.now())
     : undefined;
+
+  const menuOptions = [
+    {
+      icon: 'StoryDetailsModal__copy-icon',
+      label: i18n('icu:StoryDetailsModal__copy-timestamp'),
+      onClick: () => {
+        void window.navigator.clipboard.writeText(String(timestamp));
+      },
+    },
+  ];
+
+  if (isInternalUser && attachment) {
+    menuOptions.push({
+      icon: 'StoryDetailsModal__download-icon',
+      label: i18n('icu:StoryDetailsModal__download-attachment'),
+      onClick: () => {
+        saveAttachment(attachment);
+      },
+    });
+  }
 
   return (
     <Modal
@@ -199,20 +228,11 @@ export const StoryDetailsModal = ({
       i18n={i18n}
       moduleClassName="StoryDetailsModal"
       onClose={onClose}
-      useFocusTrap={false}
       theme={Theme.Dark}
       title={
         <ContextMenu
           i18n={i18n}
-          menuOptions={[
-            {
-              icon: 'StoryDetailsModal__copy-icon',
-              label: i18n('StoryDetailsModal__copy-timestamp'),
-              onClick: () => {
-                window.navigator.clipboard.writeText(String(timestamp));
-              },
-            },
-          ]}
+          menuOptions={menuOptions}
           moduleClassName="StoryDetailsModal__debugger"
           popperOptions={{
             placement: 'bottom',
@@ -221,44 +241,50 @@ export const StoryDetailsModal = ({
           theme={Theme.Dark}
         >
           <div>
-            <Intl
+            <I18n
               i18n={i18n}
-              id="StoryDetailsModal__sent-time"
-              components={[
-                <Time
-                  className="StoryDetailsModal__debugger__button__text"
-                  timestamp={timestamp}
-                >
-                  {formatDateTimeLong(i18n, timestamp)}
-                </Time>,
-              ]}
+              id="icu:StoryDetailsModal__sent-time"
+              components={{
+                time: (
+                  <Time
+                    className="StoryDetailsModal__debugger__button__text"
+                    timestamp={timestamp}
+                  >
+                    {formatDateTimeLong(i18n, timestamp)}
+                  </Time>
+                ),
+              }}
             />
           </div>
-          {size && (
+          {attachment && (
             <div>
-              <Intl
+              <I18n
                 i18n={i18n}
-                id="StoryDetailsModal__file-size"
-                components={[
-                  <span className="StoryDetailsModal__debugger__button__text">
-                    {formatFileSize(size)}
-                  </span>,
-                ]}
+                id="icu:StoryDetailsModal__file-size"
+                components={{
+                  size: (
+                    <span className="StoryDetailsModal__debugger__button__text">
+                      {formatFileSize(attachment.size)}
+                    </span>
+                  ),
+                }}
               />
             </div>
           )}
           {timeRemaining && timeRemaining > 0 && (
             <div>
-              <Intl
+              <I18n
                 i18n={i18n}
-                id="StoryDetailsModal__disappears-in"
-                components={[
-                  <span className="StoryDetailsModal__debugger__button__text">
-                    {formatRelativeTime(i18n, timeRemaining / 1000, {
-                      largest: 2,
-                    })}
-                  </span>,
-                ]}
+                id="icu:StoryDetailsModal__disappears-in"
+                components={{
+                  countdown: (
+                    <span className="StoryDetailsModal__debugger__button__text">
+                      {formatRelativeTime(i18n, timeRemaining, {
+                        largest: 2,
+                      })}
+                    </span>
+                  ),
+                }}
               />
             </div>
           )}
@@ -268,4 +294,4 @@ export const StoryDetailsModal = ({
       {content}
     </Modal>
   );
-};
+}

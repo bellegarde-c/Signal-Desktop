@@ -1,10 +1,10 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import path from 'path';
 import type { AfterPackContext } from 'electron-builder';
 
-import { notarize } from 'electron-notarize';
+import { notarize } from '@electron/notarize';
 
 import * as packageJson from '../../package.json';
 
@@ -59,7 +59,6 @@ export async function afterSign({
   console.log(`  file: ${appPath}`);
 
   await notarize({
-    tool: 'notarytool',
     appBundleId,
     appPath,
     appleId,

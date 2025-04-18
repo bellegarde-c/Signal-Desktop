@@ -3,18 +3,16 @@
 
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import type { Props } from './StickerManager';
 import { StickerManager } from './StickerManager';
-import { createPack, sticker1, sticker2 } from './StickerPicker.stories';
+import { createPack, sticker1, sticker2 } from './mocks';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Stickers/StickerManager',
-};
+} satisfies Meta<Props>;
 
 const receivedPacks = [
   createPack({ id: 'received-pack-1', status: 'downloaded' }, sticker1),
@@ -44,6 +42,7 @@ const knownPacks = [
 
 const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   blessedPacks: overrideProps.blessedPacks || [],
+  closeStickerPackPreview: action('closeStickerPackPreview'),
   downloadStickerPack: action('downloadStickerPack'),
   i18n,
   installStickerPack: action('installStickerPack'),
@@ -53,36 +52,32 @@ const createProps = (overrideProps: Partial<Props> = {}): Props => ({
   uninstallStickerPack: action('uninstallStickerPack'),
 });
 
-export const Full = (): JSX.Element => {
+export function Full(): JSX.Element {
   const props = createProps({ installedPacks, receivedPacks, blessedPacks });
 
   return <StickerManager {...props} />;
-};
+}
 
-export const InstalledPacks = (): JSX.Element => {
+export function InstalledPacks(): JSX.Element {
   const props = createProps({ installedPacks });
 
   return <StickerManager {...props} />;
-};
+}
 
-export const ReceivedPacks = (): JSX.Element => {
+export function ReceivedPacks(): JSX.Element {
   const props = createProps({ receivedPacks });
 
   return <StickerManager {...props} />;
-};
+}
 
-export const InstalledKnownPacks = (): JSX.Element => {
+export function InstalledAndKnownPacks(): JSX.Element {
   const props = createProps({ installedPacks, knownPacks });
 
   return <StickerManager {...props} />;
-};
+}
 
-InstalledKnownPacks.story = {
-  name: 'Installed + Known Packs',
-};
-
-export const Empty = (): JSX.Element => {
+export function Empty(): JSX.Element {
   const props = createProps();
 
   return <StickerManager {...props} />;
-};
+}

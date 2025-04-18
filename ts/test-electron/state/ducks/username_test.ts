@@ -17,15 +17,18 @@ import {
   UsernameReservationError,
 } from '../../../state/ducks/usernameEnums';
 import { actions } from '../../../state/ducks/username';
-import { ToastType } from '../../../state/ducks/toast';
+import { ToastType } from '../../../types/Toast';
 import { noopAction } from '../../../state/ducks/noop';
 import { reducer } from '../../../state/reducer';
-import { ReserveUsernameError } from '../../../types/Username';
+import {
+  ReserveUsernameError,
+  ConfirmUsernameResult,
+} from '../../../types/Username';
 
 const DEFAULT_RESERVATION = {
   username: 'abc.12',
   previousUsername: undefined,
-  reservationToken: 'def',
+  hash: new Uint8Array(),
 };
 
 describe('electron/state/ducks/username', () => {
@@ -113,7 +116,8 @@ describe('electron/state/ducks/username', () => {
       const doReserveUsername = sinon.stub().resolves(DEFAULT_RESERVATION);
       const dispatch = sinon.spy();
 
-      actions.reserveUsername('test', {
+      actions.reserveUsername({
+        nickname: 'test',
         doReserveUsername,
         delay: 1000,
       })(dispatch, () => emptyState, null);
@@ -127,36 +131,6 @@ describe('electron/state/ducks/username', () => {
         sinon.match.has('type', 'username/RESERVE_USERNAME')
       );
     });
-
-    const NICKNAME_ERROR_COMBOS = [
-      ['x', UsernameReservationError.NotEnoughCharacters],
-      ['x'.repeat(128), UsernameReservationError.TooManyCharacters],
-      ['#$&^$)(', UsernameReservationError.CheckCharacters],
-      ['1abcdefg', UsernameReservationError.CheckStartingCharacter],
-    ];
-    for (const [nickname, error] of NICKNAME_ERROR_COMBOS) {
-      // eslint-disable-next-line no-loop-func
-      it(`should dispatch ${error} error for "${nickname}"`, async () => {
-        const clock = sandbox.useFakeTimers();
-
-        const doReserveUsername = sinon.stub().resolves(DEFAULT_RESERVATION);
-        const dispatch = sinon.spy();
-
-        actions.reserveUsername(nickname, {
-          doReserveUsername,
-        })(dispatch, () => emptyState, null);
-
-        await clock.runToLastAsync();
-
-        sinon.assert.calledOnce(dispatch);
-        sinon.assert.calledWith(dispatch, {
-          type: 'username/SET_RESERVATION_ERROR',
-          payload: {
-            error,
-          },
-        });
-      });
-    }
 
     it('should update reservation on success', () => {
       let state = emptyState;
@@ -312,7 +286,7 @@ describe('electron/state/ducks/username', () => {
 
   describe('confirmUsername', () => {
     it('should dispatch promise when reservation is present', () => {
-      const doConfirmUsername = sinon.stub().resolves();
+      const doConfirmUsername = sinon.stub().resolves(ConfirmUsernameResult.Ok);
       const dispatch = sinon.spy();
 
       actions.confirmUsername({
@@ -344,7 +318,7 @@ describe('electron/state/ducks/username', () => {
 
       state = reducer(state, {
         type: 'username/CONFIRM_USERNAME_FULFILLED',
-        payload: undefined,
+        payload: ConfirmUsernameResult.Ok,
         meta: undefined,
       });
 
@@ -387,6 +361,42 @@ describe('electron/state/ducks/username', () => {
       assert.strictEqual(
         getUsernameReservationError(state),
         UsernameReservationError.General
+      );
+    });
+
+    it('should not close modal on "conflict or gone"', () => {
+      let state = stateWithReservation;
+
+      state = reducer(state, {
+        type: 'username/CONFIRM_USERNAME_PENDING',
+        meta: undefined,
+      });
+      assert.strictEqual(
+        getUsernameReservationState(state),
+        UsernameReservationState.Confirming
+      );
+      assert.strictEqual(
+        getUsernameReservationObject(state),
+        DEFAULT_RESERVATION
+      );
+
+      state = reducer(state, {
+        type: 'username/CONFIRM_USERNAME_FULFILLED',
+        payload: ConfirmUsernameResult.ConflictOrGone,
+        meta: undefined,
+      });
+
+      assert.strictEqual(
+        getUsernameReservationState(state),
+        UsernameReservationState.Open
+      );
+      assert.strictEqual(
+        getUsernameReservationObject(state),
+        DEFAULT_RESERVATION
+      );
+      assert.strictEqual(
+        getUsernameReservationError(state),
+        UsernameReservationError.ConflictOrGone
       );
     });
   });
@@ -432,7 +442,6 @@ describe('electron/state/ducks/username', () => {
         type: 'toast/SHOW_TOAST',
         payload: {
           toastType: ToastType.FailedToDeleteUsername,
-          parameters: undefined,
         },
       });
     });

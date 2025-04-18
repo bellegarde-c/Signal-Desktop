@@ -3,16 +3,24 @@
 
 import { ipcRenderer as ipc } from 'electron';
 import * as semver from 'semver';
-import { mapValues, noop } from 'lodash';
+import { mapValues } from 'lodash';
 
+import type { IPCType } from '../../window.d';
 import { parseIntWithFallback } from '../../util/parseIntWithFallback';
-import { UUIDKind } from '../../types/UUID';
+import { getSignalConnections } from '../../util/getSignalConnections';
 import { ThemeType } from '../../types/Util';
-import { getEnvironment, Environment } from '../../environment';
+import { Environment } from '../../environment';
 import { SignalContext } from '../context';
 import * as log from '../../logging/log';
+import { formatCountForLogging } from '../../logging/formatCountForLogging';
+import * as Errors from '../../types/errors';
 
 import { strictAssert } from '../../util/assert';
+import { drop } from '../../util/drop';
+import { DataReader } from '../../sql/Client';
+import type { WindowsNotificationData } from '../../services/notifications';
+import { AggregatedStats } from '../../textsecure/WebsocketResources';
+import { UNAUTHENTICATED_CHANNEL_NAME } from '../../textsecure/SocketManager';
 
 // It is important to call this as early as possible
 window.i18n = SignalContext.i18n;
@@ -21,51 +29,35 @@ window.i18n = SignalContext.i18n;
 const { config } = window.SignalContext;
 
 // Flags for testing
-window.GV2_ENABLE_SINGLE_CHANGE_PROCESSING = true;
-window.GV2_ENABLE_CHANGE_PROCESSING = true;
-window.GV2_ENABLE_STATE_PROCESSING = true;
-window.GV2_ENABLE_PRE_JOIN_FETCH = true;
+const Flags = {
+  GV2_ENABLE_CHANGE_PROCESSING: true,
+  GV2_ENABLE_PRE_JOIN_FETCH: true,
+  GV2_ENABLE_SINGLE_CHANGE_PROCESSING: true,
+  GV2_ENABLE_STATE_PROCESSING: true,
+  GV2_MIGRATION_DISABLE_ADD: false,
+  GV2_MIGRATION_DISABLE_INVITE: false,
+};
 
-window.GV2_MIGRATION_DISABLE_ADD = false;
-window.GV2_MIGRATION_DISABLE_INVITE = false;
+window.Flags = Flags;
 
 window.RETRY_DELAY = false;
 
 window.platform = process.platform;
 window.getTitle = () => title;
-window.getLocale = () => config.locale;
-window.getEnvironment = getEnvironment;
 window.getAppInstance = () => config.appInstance;
 window.getVersion = () => config.version;
 window.getBuildCreation = () => parseIntWithFallback(config.buildCreation, 0);
-window.getExpiration = () => {
-  const sixtyDays = 60 * 86400 * 1000;
-  const remoteBuildExpiration = window.storage.get('remoteBuildExpiration');
-  const { buildExpiration } = config;
-
-  const localBuildExpiration = window.Events.getAutoDownloadUpdate()
-    ? buildExpiration
-    : buildExpiration - sixtyDays;
-
-  if (remoteBuildExpiration) {
-    return remoteBuildExpiration < localBuildExpiration
-      ? remoteBuildExpiration
-      : localBuildExpiration;
-  }
-  return localBuildExpiration;
-};
-window.Accessibility = {
-  reducedMotionSetting: Boolean(config.reducedMotionSetting),
-};
+window.getBuildExpiration = () => config.buildExpiration;
 window.getHostName = () => config.hostname;
 window.getServerTrustRoot = () => config.serverTrustRoot;
 window.getServerPublicParams = () => config.serverPublicParams;
+window.getGenericServerPublicParams = () => config.genericServerPublicParams;
+window.getBackupServerPublicParams = () => config.backupServerPublicParams;
 window.getSfuUrl = () => config.sfuUrl;
-window.isBehindProxy = () => Boolean(config.proxyUrl);
 
 let title = config.name;
-if (getEnvironment() !== Environment.Production) {
-  title += ` - ${getEnvironment()}`;
+if (config.environment !== Environment.PackagedApp) {
+  title += ` - ${config.environment}`;
 }
 if (config.appInstance) {
   title += ` - ${config.appInstance}`;
@@ -77,12 +69,84 @@ if (config.theme === 'light') {
   window.initialTheme = ThemeType.dark;
 }
 
-window.getAutoLaunch = () => {
-  return ipc.invoke('get-auto-launch');
+const IPC: IPCType = {
+  addSetupMenuItems: () => ipc.send('add-setup-menu-items'),
+  clearAllWindowsNotifications: async () => {
+    log.info('show window');
+    return ipc.invoke('windows-notifications:clear-all');
+  },
+  closeAbout: () => ipc.send('close-about'),
+  crashReports: {
+    getCount: () => ipc.invoke('crash-reports:get-count'),
+    writeToLog: () => ipc.invoke('crash-reports:write-to-log'),
+    erase: () => ipc.invoke('crash-reports:erase'),
+  },
+  drawAttention: () => {
+    log.info('draw attention');
+    ipc.send('draw-attention');
+  },
+  getAutoLaunch: () => ipc.invoke('get-auto-launch'),
+  getMediaAccessStatus: mediaType =>
+    ipc.invoke('get-media-access-status', mediaType),
+  openSystemMediaPermissions: mediaType =>
+    ipc.invoke('open-system-media-permissions', mediaType),
+  getMediaPermissions: () => ipc.invoke('settings:get:mediaPermissions'),
+  getMediaCameraPermissions: () =>
+    ipc.invoke('settings:get:mediaCameraPermissions'),
+  logAppLoadedEvent: ({ processedCount }) =>
+    ipc.send('signal-app-loaded', {
+      // Sequence of events:
+      // 1. Preload compile start
+      // 2. Preload start
+      // 3. Preload end
+      //
+      // Compile time is thus: start - compileStart
+      preloadCompileTime:
+        window.preloadStartTime - window.preloadCompileStartTime,
+
+      // Preload time is: end - start
+      preloadTime: window.preloadEndTime - window.preloadStartTime,
+      connectTime: preloadConnectTime - window.preloadEndTime,
+      processedCount,
+    }),
+  readyForUpdates: () => ipc.send('ready-for-updates'),
+  removeSetupMenuItems: () => ipc.send('remove-setup-menu-items'),
+  setAutoHideMenuBar: autoHide => ipc.send('set-auto-hide-menu-bar', autoHide),
+  setAutoLaunch: value => ipc.invoke('set-auto-launch', value),
+  setBadge: badge => ipc.send('set-badge', badge),
+  setMenuBarVisibility: visibility =>
+    ipc.send('set-menu-bar-visibility', visibility),
+  showDebugLog: () => {
+    log.info('showDebugLog');
+    ipc.send('show-debug-log');
+  },
+  showPermissionsPopup: (forCalling, forCamera) =>
+    ipc.invoke('show-permissions-popup', forCalling, forCamera),
+  showSettings: () => ipc.send('show-settings'),
+  showWindow: () => {
+    log.info('show window');
+    ipc.send('show-window');
+  },
+  showWindowsNotification: async (data: WindowsNotificationData) => {
+    return ipc.invoke('windows-notifications:show', data);
+  },
+  shutdown: () => {
+    log.info('shutdown');
+    ipc.send('shutdown');
+  },
+  startTrackingQueryStats: () => {
+    ipc.send('start-tracking-query-stats');
+  },
+  stopTrackingQueryStats: options => {
+    ipc.send('stop-tracking-query-stats', options);
+  },
+  titleBarDoubleClick: () => {
+    ipc.send('title-bar-double-click');
+  },
+  updateTrayIcon: unreadCount => ipc.send('update-tray-icon', unreadCount),
 };
-window.setAutoLaunch = value => {
-  return ipc.invoke('set-auto-launch', value);
-};
+
+window.IPC = IPC;
 
 window.isBeforeVersion = (toCheck, baseVersion) => {
   try {
@@ -90,7 +154,7 @@ window.isBeforeVersion = (toCheck, baseVersion) => {
   } catch (error) {
     log.error(
       `isBeforeVersion error: toCheck: ${toCheck}, baseVersion: ${baseVersion}`,
-      error && error.stack ? error.stack : error
+      Errors.toLogFormat(error)
     );
     return true;
   }
@@ -101,13 +165,11 @@ window.isAfterVersion = (toCheck, baseVersion) => {
   } catch (error) {
     log.error(
       `isBeforeVersion error: toCheck: ${toCheck}, baseVersion: ${baseVersion}`,
-      error && error.stack ? error.stack : error
+      Errors.toLogFormat(error)
     );
     return true;
   }
 };
-
-window.setBadgeCount = count => ipc.send('set-badge-count', count);
 
 let preloadConnectTime = 0;
 window.logAuthenticatedConnect = () => {
@@ -116,65 +178,23 @@ window.logAuthenticatedConnect = () => {
   }
 };
 
-window.logAppLoadedEvent = ({ processedCount }) =>
-  ipc.send('signal-app-loaded', {
-    preloadTime: window.preloadEndTime - window.preloadStartTime,
-    connectTime: preloadConnectTime - window.preloadEndTime,
-    processedCount,
-  });
-
 // We never do these in our code, so we'll prevent it everywhere
 window.open = () => null;
 
 // Playwright uses `eval` for `.evaluate()` API
-if (!config.enableCI && config.environment !== 'test') {
+if (config.ciMode !== 'full' && config.environment !== Environment.Test) {
   // eslint-disable-next-line no-eval, no-multi-assign
   window.eval = global.eval = () => null;
 }
 
-window.drawAttention = () => {
-  log.info('draw attention');
-  ipc.send('draw-attention');
+type NetworkStatistics = {
+  signalConnectionCount?: string;
+  unauthorizedConnectionFailures?: string;
+  unauthorizedRequestsCompared?: string;
+  unauthorizedHealthcheckFailures?: string;
+  unauthorizedHealthcheckBadStatus?: string;
+  unauthorizedIpVersionMismatches?: string;
 };
-window.showWindow = () => {
-  log.info('show window');
-  ipc.send('show-window');
-};
-
-window.titleBarDoubleClick = () => {
-  ipc.send('title-bar-double-click');
-};
-
-window.setAutoHideMenuBar = autoHide =>
-  ipc.send('set-auto-hide-menu-bar', autoHide);
-
-window.setMenuBarVisibility = visibility =>
-  ipc.send('set-menu-bar-visibility', visibility);
-
-window.updateSystemTraySetting = (
-  systemTraySetting /* : Readonly<SystemTraySetting> */
-) => {
-  ipc.invoke('update-system-tray-setting', systemTraySetting);
-};
-
-window.restart = () => {
-  log.info('restart');
-  ipc.send('restart');
-};
-window.shutdown = () => {
-  log.info('shutdown');
-  ipc.send('shutdown');
-};
-window.showDebugLog = () => {
-  log.info('showDebugLog');
-  ipc.send('show-debug-log');
-};
-
-window.closeAbout = () => ipc.send('close-about');
-window.readyForUpdates = () => ipc.send('ready-for-updates');
-
-window.updateTrayIcon = unreadCount =>
-  ipc.send('update-tray-icon', unreadCount);
 
 ipc.on('additional-log-data-request', async event => {
   const ourConversation = window.ConversationController.getOurConversation();
@@ -186,13 +206,40 @@ ipc.on('additional-log-data-request', async event => {
 
   let statistics;
   try {
-    statistics = await window.Signal.Data.getStatisticsForLogging();
+    statistics = await DataReader.getStatisticsForLogging();
   } catch (error) {
     statistics = {};
   }
 
-  const ourUuid = window.textsecure.storage.user.getUuid();
-  const ourPni = window.textsecure.storage.user.getUuid(UUIDKind.PNI);
+  let networkStatistics: NetworkStatistics = {
+    signalConnectionCount: formatCountForLogging(getSignalConnections().length),
+  };
+  const unauthorizedStats = AggregatedStats.loadOrCreateEmpty(
+    UNAUTHENTICATED_CHANNEL_NAME
+  );
+  if (unauthorizedStats.requestsCompared > 0) {
+    networkStatistics = {
+      ...networkStatistics,
+      unauthorizedConnectionFailures: formatCountForLogging(
+        unauthorizedStats.connectionFailures
+      ),
+      unauthorizedRequestsCompared: formatCountForLogging(
+        unauthorizedStats.requestsCompared
+      ),
+      unauthorizedHealthcheckFailures: formatCountForLogging(
+        unauthorizedStats.healthcheckFailures
+      ),
+      unauthorizedHealthcheckBadStatus: formatCountForLogging(
+        unauthorizedStats.healthcheckBadStatus
+      ),
+      unauthorizedIpVersionMismatches: formatCountForLogging(
+        unauthorizedStats.ipVersionMismatches
+      ),
+    };
+  }
+
+  const ourAci = window.textsecure.storage.user.getAci();
+  const ourPni = window.textsecure.storage.user.getPni();
 
   event.sender.send('additional-log-data-response', {
     capabilities: ourCapabilities || {},
@@ -201,12 +248,14 @@ ipc.on('additional-log-data-request', async event => {
       const valueString = value && value !== 'TRUE' ? ` ${value}` : '';
       return `${enableString}${valueString}`;
     }),
-    statistics,
+    statistics: {
+      ...statistics,
+      ...networkStatistics,
+    },
     user: {
       deviceId: window.textsecure.storage.user.getDeviceId(),
-      e164: window.textsecure.storage.user.getNumber(),
-      uuid: ourUuid && ourUuid.toString(),
-      pni: ourPni && ourPni.toString(),
+      uuid: ourAci,
+      pni: ourPni,
       conversationId: ourConversation && ourConversation.id,
     },
   });
@@ -236,11 +285,25 @@ ipc.on('power-channel:lock-screen', () => {
   window.Whisper.events.trigger('powerMonitorLockScreen');
 });
 
+ipc.on(
+  'set-media-playback-disabled',
+  (_event: unknown, playbackDisabled: unknown) => {
+    const { setMediaPlaybackDisabled } = window.Events || {};
+    if (setMediaPlaybackDisabled) {
+      setMediaPlaybackDisabled(Boolean(playbackDisabled));
+    }
+  }
+);
+
 ipc.on('window:set-window-stats', (_event, stats) => {
-  if (!window.Whisper.events) {
+  if (!window.reduxActions) {
     return;
   }
-  window.Whisper.events.trigger('setWindowStats', stats);
+
+  window.reduxActions.user.userChanged({
+    isMainWindowMaximized: stats.isMaximized,
+    isMainWindowFullScreen: stats.isFullScreen,
+  });
 });
 
 ipc.on('window:set-menu-options', (_event, options) => {
@@ -252,27 +315,7 @@ ipc.on('window:set-menu-options', (_event, options) => {
 
 window.sendChallengeRequest = request => ipc.send('challenge:request', request);
 
-{
-  let isFullScreen = Boolean(config.isMainWindowFullScreen);
-  let isMaximized = Boolean(config.isMainWindowMaximized);
-
-  window.isFullScreen = () => isFullScreen;
-  window.isMaximized = () => isMaximized;
-  // This is later overwritten.
-  window.onFullScreenChange = noop;
-
-  ipc.on('window:set-window-stats', (_event, stats) => {
-    isFullScreen = Boolean(stats.isFullScreen);
-    isMaximized = Boolean(stats.isMaximized);
-    window.onFullScreenChange(isFullScreen, isMaximized);
-  });
-}
-
 // Settings-related events
-
-window.showSettings = () => ipc.send('show-settings');
-window.showPermissionsPopup = (forCalling, forCamera) =>
-  ipc.invoke('show-permissions-popup', forCalling, forCamera);
 
 ipc.on('show-keyboard-shortcuts', () => {
   window.Events.showKeyboardShortcuts();
@@ -284,18 +327,6 @@ ipc.on('remove-dark-overlay', () => {
   window.Events.removeDarkOverlay();
 });
 
-window.getBuiltInImages = () =>
-  new Promise((resolve, reject) => {
-    ipc.once('get-success-built-in-images', (_event, error, value) => {
-      if (error) {
-        return reject(new Error(error));
-      }
-
-      return resolve(value);
-    });
-    ipc.send('get-built-in-images');
-  });
-
 ipc.on('delete-all-data', async () => {
   const { deleteAllData } = window.Events;
   if (!deleteAllData) {
@@ -305,33 +336,52 @@ ipc.on('delete-all-data', async () => {
   try {
     await deleteAllData();
   } catch (error) {
-    log.error('delete-all-data: error', error && error.stack);
+    log.error('delete-all-data: error', Errors.toLogFormat(error));
   }
 });
 
 ipc.on('show-sticker-pack', (_event, info) => {
-  const { packId, packKey } = info;
-  const { showStickerPack } = window.Events;
-  if (showStickerPack) {
-    showStickerPack(packId, packKey);
-  }
+  window.Events.showStickerPack?.(info.packId, info.packKey);
 });
 
 ipc.on('show-group-via-link', (_event, info) => {
-  const { hash } = info;
-  const { showGroupViaLink } = window.Events;
-  if (showGroupViaLink) {
-    showGroupViaLink(hash);
-  }
+  strictAssert(typeof info.value === 'string', 'Got an invalid value over IPC');
+  drop(window.Events.showGroupViaLink?.(info.value));
 });
 
+ipc.on('start-call-lobby', (_event, info) => {
+  window.IPC.showWindow();
+  window.Events.startCallingLobbyViaToken(info.token);
+});
+
+ipc.on('start-call-link', (_event, { key }) => {
+  window.reduxActions?.calling?.startCallLinkLobby({
+    rootKey: key,
+  });
+});
+
+ipc.on('show-window', () => {
+  window.IPC.showWindow();
+});
+
+ipc.on('cancel-presenting', () => {
+  window.reduxActions?.calling?.cancelPresenting();
+});
+
+ipc.on('show-conversation-via-token', (_event, token: string) => {
+  const { showConversationViaToken } = window.Events;
+  if (showConversationViaToken) {
+    void showConversationViaToken(token);
+  }
+});
 ipc.on('show-conversation-via-signal.me', (_event, info) => {
-  const { hash } = info;
-  strictAssert(typeof hash === 'string', 'Got an invalid hash over IPC');
+  const { kind, value } = info;
+  strictAssert(typeof kind === 'string', 'Got an invalid kind over IPC');
+  strictAssert(typeof value === 'string', 'Got an invalid value over IPC');
 
   const { showConversationViaSignalDotMe } = window.Events;
   if (showConversationViaSignalDotMe) {
-    showConversationViaSignalDotMe(hash);
+    void showConversationViaSignalDotMe(kind, value);
   }
 });
 
@@ -346,7 +396,7 @@ ipc.on('install-sticker-pack', (_event, info) => {
   const { packId, packKey } = info;
   const { installStickerPack } = window.Events;
   if (installStickerPack) {
-    installStickerPack(packId, packKey);
+    void installStickerPack(packId, packKey);
   }
 });
 
@@ -362,11 +412,21 @@ ipc.on('get-ready-for-shutdown', async () => {
     await shutdown();
     ipc.send('now-ready-for-shutdown');
   } catch (error) {
-    ipc.send(
-      'now-ready-for-shutdown',
-      error && error.stack ? error.stack : error
-    );
+    ipc.send('now-ready-for-shutdown', Errors.toLogFormat(error));
   }
+});
+
+ipc.on('maybe-request-close-confirmation', async () => {
+  const { getIsInCall, requestCloseConfirmation } = window.Events;
+  if (!getIsInCall || !getIsInCall() || !requestCloseConfirmation) {
+    ipc.send('received-close-confirmation', true);
+    return;
+  }
+
+  log.info('Requesting close confirmation.');
+  ipc.send('requested-close-confirmation');
+  const result = await requestCloseConfirmation();
+  ipc.send('received-close-confirmation', result);
 });
 
 ipc.on('show-release-notes', () => {
@@ -376,5 +436,17 @@ ipc.on('show-release-notes', () => {
   }
 });
 
-window.addSetupMenuItems = () => ipc.send('add-setup-menu-items');
-window.removeSetupMenuItems = () => ipc.send('remove-setup-menu-items');
+ipc.on(
+  'art-creator:uploadStickerPack',
+  async (
+    event,
+    {
+      manifest,
+      stickers,
+    }: { manifest: Uint8Array; stickers: ReadonlyArray<Uint8Array> }
+  ) => {
+    const packId = await window.Events?.uploadStickerPack(manifest, stickers);
+
+    event.sender.send('art-creator:uploadStickerPack:done', packId);
+  }
+);

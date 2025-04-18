@@ -9,6 +9,8 @@
 
 export enum ComposerStep {
   StartDirectConversation = 'StartDirectConversation',
+  FindByUsername = 'FindByUsername',
+  FindByPhoneNumber = 'FindByPhoneNumber',
   ChooseGroupMembers = 'ChooseGroupMembers',
   SetGroupMetadata = 'SetGroupMetadata',
 }
@@ -22,4 +24,10 @@ export enum OneTimeModalState {
 export enum ConversationVerificationState {
   PendingVerification = 'PendingVerification',
   VerificationCancelled = 'VerificationCancelled',
+}
+
+export enum TargetedMessageSource {
+  Reset = 'Reset',
+  NavigateToMessage = 'NavigateToMessage',
+  Focus = 'Focus',
 }

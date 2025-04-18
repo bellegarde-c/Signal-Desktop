@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { isEqual } from 'lodash';
-import type {
-  AttachmentWithHydratedData,
-  TextAttachmentType,
-} from '../../types/Attachment';
+import type { UploadedAttachmentType } from '../../types/Attachment';
 import type { ConversationModel } from '../../models/conversations';
 import type {
   ConversationQueueJobBundle,
@@ -13,16 +10,22 @@ import type {
 } from '../conversationJobQueue';
 import type { LoggerType } from '../../types/Logging';
 import type { MessageModel } from '../../models/messages';
-import type { SenderKeyInfoType } from '../../model-types.d';
 import type {
   SendState,
   SendStateByConversationId,
 } from '../../messages/MessageSendState';
-import type { UUIDStringType } from '../../types/UUID';
+import {
+  isSent,
+  SendActionType,
+  sendStateReducer,
+} from '../../messages/MessageSendState';
+import type { ServiceIdString } from '../../types/ServiceId';
+import type { StoryDistributionIdString } from '../../types/StoryDistributionId';
 import * as Errors from '../../types/errors';
-import dataInterface from '../../sql/Client';
+import type { StoryMessageRecipientsType } from '../../types/Stories';
+import { DataReader } from '../../sql/Client';
 import { SignalService as Proto } from '../../protobuf';
-import { getMessageById } from '../../messages/getMessageById';
+import { getMessagesById } from '../../messages/getMessagesById';
 import {
   getSendOptions,
   getSendOptionsForRecipients,
@@ -30,11 +33,18 @@ import {
 import { handleMessageSend } from '../../util/handleMessageSend';
 import { handleMultipleSendErrors } from './handleMultipleSendErrors';
 import { isGroupV2, isMe } from '../../util/whatTypeOfConversation';
-import { isNotNil } from '../../util/isNotNil';
-import { isSent } from '../../messages/MessageSendState';
 import { ourProfileKeyService } from '../../services/ourProfileKey';
 import { sendContentMessageToGroup } from '../../util/sendToGroup';
+import { distributionListToSendTarget } from '../../util/distributionListToSendTarget';
+import { uploadAttachment } from '../../util/uploadAttachment';
 import { SendMessageChallengeError } from '../../textsecure/Errors';
+import type { OutgoingTextAttachmentType } from '../../textsecure/SendMessage';
+import {
+  markFailed,
+  notifyStorySendFailed,
+  saveErrorsOnMessage,
+} from '../../test-node/util/messageFailures';
+import { send } from '../../messages/send';
 
 export async function sendStory(
   conversation: ConversationModel,
@@ -66,49 +76,109 @@ export async function sendStory(
     return;
   }
 
+  const notFound = new Set(messageIds);
+  const messages = (await getMessagesById(messageIds)).filter(message => {
+    notFound.delete(message.id);
+
+    const distributionId = message.get('storyDistributionListId');
+    const logId = `stories.sendStory(${timestamp}/${distributionId})`;
+
+    const messageConversation = window.ConversationController.get(
+      message.get('conversationId')
+    );
+    if (messageConversation !== conversation) {
+      log.error(
+        `${logId}: Message conversation ` +
+          `'${messageConversation?.idForLogging()}' does not match job ` +
+          `conversation ${conversation.idForLogging()}`
+      );
+      return false;
+    }
+
+    if (message.get('timestamp') !== timestamp) {
+      log.error(
+        `${logId}: Message timestamp ${message.get(
+          'timestamp'
+        )} does not match job timestamp`
+      );
+      return false;
+    }
+
+    if (message.get('isErased') || message.get('deletedForEveryone')) {
+      log.info(`${logId}: message was erased. Giving up on sending it`);
+      return false;
+    }
+
+    return true;
+  });
+
+  for (const messageId of notFound) {
+    log.info(
+      `stories.sendStory(${messageId}): message was not found, ` +
+        'maybe because it was deleted. Giving up on sending it'
+    );
+  }
+
   // We want to generate the StoryMessage proto once at the top level so we
   // can reuse it but first we'll need textAttachment | fileAttachment.
   // This function pulls off the attachment and generates the proto from the
   // first message on the list prior to continuing.
-  const originalStoryMessage = await (async (): Promise<
-    Proto.StoryMessage | undefined
-  > => {
-    const [messageId] = messageIds;
-    const message = await getMessageById(messageId);
-    if (!message) {
-      log.info(
-        `stories.sendStory(${messageId}): message was not found, maybe because it was deleted. Giving up on sending it`
-      );
+  let originalStoryMessage: Proto.StoryMessage;
+  {
+    const [originalMessageId] = messageIds;
+    const originalMessage = messages.find(
+      message => message.id === originalMessageId
+    );
+    if (!originalMessage) {
       return;
     }
 
-    const messageConversation = message.getConversation();
-    if (messageConversation !== conversation) {
-      log.error(
-        `stories.sendStory(${timestamp}): Message conversation '${messageConversation?.idForLogging()}' does not match job conversation ${conversation.idForLogging()}`
-      );
-      return;
-    }
-
-    const attachments = message.get('attachments') || [];
+    const attachments = originalMessage.get('attachments') || [];
+    const bodyRanges = originalMessage.get('bodyRanges')?.slice();
     const [attachment] = attachments;
 
     if (!attachment) {
       log.info(
-        `stories.sendStory(${timestamp}): message does not have any attachments to send. Giving up on sending it`
+        `stories.sendStory(${timestamp}): original story message does not ` +
+          'have any attachments to send. Giving up on sending it'
       );
       return;
     }
 
-    let textAttachment: TextAttachmentType | undefined;
-    let fileAttachment: AttachmentWithHydratedData | undefined;
+    let textAttachment: OutgoingTextAttachmentType | undefined;
+    let fileAttachment: UploadedAttachmentType | undefined;
 
     if (attachment.textAttachment) {
-      textAttachment = attachment.textAttachment;
+      const localAttachment = attachment.textAttachment;
+
+      // Pacify typescript
+      if (localAttachment.preview === undefined) {
+        textAttachment = {
+          ...localAttachment,
+          preview: undefined,
+        };
+      } else {
+        const hydratedPreview = (
+          await window.Signal.Migrations.loadPreviewData([
+            localAttachment.preview,
+          ])
+        )[0];
+
+        textAttachment = {
+          ...localAttachment,
+          preview: {
+            ...hydratedPreview,
+            image:
+              hydratedPreview.image &&
+              (await uploadAttachment(hydratedPreview.image)),
+          },
+        };
+      }
     } else {
-      fileAttachment = await window.Signal.Migrations.loadAttachmentData(
-        attachment
-      );
+      const hydratedAttachment =
+        await window.Signal.Migrations.loadAttachmentData(attachment);
+
+      fileAttachment = await uploadAttachment(hydratedAttachment);
     }
 
     const groupV2 = isGroupV2(conversation.attributes)
@@ -118,46 +188,51 @@ export async function sendStory(
     // Some distribution lists need allowsReplies false, some need it set to true
     // we create this proto (for the sync message) and also to re-use some of the
     // attributes inside it.
-    return messaging.getStoryMessage({
+    originalStoryMessage = await messaging.getStoryMessage({
       allowsReplies: true,
+      bodyRanges,
       fileAttachment,
       groupV2,
       textAttachment,
       profileKey,
     });
-  })();
-
-  if (!originalStoryMessage) {
-    return;
   }
 
-  const canReplyUuids = new Set<string>();
-  const recipientsByUuid = new Map<string, Set<string>>();
+  const canReplyServiceIds = new Set<ServiceIdString>();
+  const recipientsByServiceId = new Map<
+    ServiceIdString,
+    Set<StoryDistributionIdString>
+  >();
   const sentConversationIds = new Map<string, SendState>();
-  const sentUuids = new Set<string>();
+  const sentServiceIds = new Set<ServiceIdString>();
 
   // This function is used to keep track of all the recipients so once we're
   // done with our send we can build up the storyMessageRecipients object for
   // sending in the sync message.
-  function addDistributionListToUuidSent(
-    listId: string | undefined,
-    uuid: string,
+  function addDistributionListToServiceIdSent(
+    listId: StoryDistributionIdString | undefined,
+    serviceId: ServiceIdString,
     canReply?: boolean
   ): void {
-    if (conversation.get('uuid') === uuid) {
+    if (conversation.getServiceId() === serviceId) {
       return;
     }
 
-    const distributionListIds = recipientsByUuid.get(uuid) || new Set<string>();
+    const distributionListIds =
+      recipientsByServiceId.get(serviceId) ||
+      new Set<StoryDistributionIdString>();
 
     if (listId) {
-      recipientsByUuid.set(uuid, new Set([...distributionListIds, listId]));
+      recipientsByServiceId.set(
+        serviceId,
+        new Set([...distributionListIds, listId])
+      );
     } else {
-      recipientsByUuid.set(uuid, distributionListIds);
+      recipientsByServiceId.set(serviceId, distributionListIds);
     }
 
     if (canReply) {
-      canReplyUuids.add(uuid);
+      canReplyServiceIds.add(serviceId);
     }
   }
 
@@ -167,54 +242,25 @@ export async function sendStory(
   //   complete, and so we can send a sync message afterwards if we sent the story
   //   successfully to at least one recipient.
   const sendResults = await Promise.allSettled(
-    messageIds.map(async (messageId: string): Promise<void> => {
-      const message = await getMessageById(messageId);
-      if (!message) {
-        log.info(
-          `stories.sendStory(${messageId}): message was not found, maybe because it was deleted. Giving up on sending it`
-        );
-        return;
-      }
-
-      if (message.get('timestamp') !== timestamp) {
-        log.error(
-          `stories.sendStory(${timestamp}): Message timestamp ${message.get(
-            'timestamp'
-          )} does not match job timestamp`
-        );
-        return;
-      }
-
-      const messageConversation = message.getConversation();
-      if (messageConversation !== conversation) {
-        log.error(
-          `stories.sendStory(${timestamp}): Message conversation '${messageConversation?.idForLogging()}' does not match job conversation ${conversation.idForLogging()}`
-        );
-        return;
-      }
-
-      if (message.isErased() || message.get('deletedForEveryone')) {
-        log.info(
-          `stories.sendStory(${timestamp}): message was erased. Giving up on sending it`
-        );
-        return;
-      }
+    messages.map(async (message: MessageModel): Promise<void> => {
+      const distributionId = message.get('storyDistributionListId');
+      const logId = `stories.sendStory(${timestamp}/${distributionId})`;
 
       const listId = message.get('storyDistributionListId');
-      const receiverId = isGroupV2(messageConversation.attributes)
-        ? messageConversation.id
+      const receiverId = isGroupV2(conversation.attributes)
+        ? conversation.id
         : listId;
 
       if (!receiverId) {
         log.info(
-          `stories.sendStory(${timestamp}): did not get a valid recipient ID for message. Giving up on sending it`
+          `${logId}: did not get a valid recipient ID for message. Giving up on sending it`
         );
         return;
       }
 
-      const distributionList = isGroupV2(messageConversation.attributes)
+      const distributionList = isGroupV2(conversation.attributes)
         ? undefined
-        : await dataInterface.getStoryDistributionWithMembers(receiverId);
+        : await DataReader.getStoryDistributionWithMembers(receiverId);
 
       let messageSendErrors: Array<Error> = [];
 
@@ -233,9 +279,7 @@ export async function sendStory(
           };
 
       if (!shouldContinue) {
-        log.info(
-          `stories.sendStory(${timestamp}): ran out of time. Giving up on sending it`
-        );
+        log.info(`${logId}: ran out of time. Giving up on sending it`);
         await markMessageFailed(message, [
           new Error('Message send ran out of time'),
         ]);
@@ -245,35 +289,36 @@ export async function sendStory(
       let originalError: Error | undefined;
 
       const {
-        allRecipientIds,
-        allowedReplyByUuid,
-        pendingSendRecipientIds,
+        allRecipientServiceIds,
+        allowedReplyByServiceId,
+        pendingSendRecipientServiceIds,
         sentRecipientIds,
-        untrustedUuids,
+        untrustedServiceIds,
       } = getMessageRecipients({
         log,
         message,
       });
 
       try {
-        if (untrustedUuids.length) {
+        if (untrustedServiceIds.length) {
           window.reduxActions.conversations.conversationStoppedByMissingVerification(
             {
               conversationId: conversation.id,
-              untrustedUuids,
+              distributionId,
+              untrustedServiceIds,
             }
           );
           throw new Error(
-            `stories.sendStory(${timestamp}): sending blocked because ${untrustedUuids.length} conversation(s) were untrusted. Failing this attempt.`
+            `${logId}: sending blocked because ${untrustedServiceIds.length} conversation(s) were untrusted. Failing this attempt.`
           );
         }
 
-        if (!pendingSendRecipientIds.length) {
-          allRecipientIds.forEach(uuid =>
-            addDistributionListToUuidSent(
+        if (!pendingSendRecipientServiceIds.length) {
+          allRecipientServiceIds.forEach(serviceId =>
+            addDistributionListToServiceIdSent(
               listId,
-              uuid,
-              allowedReplyByUuid.get(uuid)
+              serviceId,
+              allowedReplyByServiceId.get(serviceId)
             )
           );
           return;
@@ -281,10 +326,8 @@ export async function sendStory(
 
         const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
 
-        const recipientsSet = new Set(pendingSendRecipientIds);
-
         const sendOptions = await getSendOptionsForRecipients(
-          pendingSendRecipientIds,
+          pendingSendRecipientServiceIds,
           { story: true }
         );
 
@@ -293,36 +336,20 @@ export async function sendStory(
         );
 
         const storyMessage = new Proto.StoryMessage();
+        storyMessage.bodyRanges = originalStoryMessage.bodyRanges;
         storyMessage.profileKey = originalStoryMessage.profileKey;
         storyMessage.fileAttachment = originalStoryMessage.fileAttachment;
         storyMessage.textAttachment = originalStoryMessage.textAttachment;
         storyMessage.group = originalStoryMessage.group;
         storyMessage.allowsReplies =
-          isGroupV2(messageConversation.attributes) ||
+          isGroupV2(conversation.attributes) ||
           Boolean(distributionList?.allowsReplies);
 
-        let inMemorySenderKeyInfo = distributionList?.senderKeyInfo;
-
         const sendTarget = distributionList
-          ? {
-              getGroupId: () => undefined,
-              getMembers: () =>
-                pendingSendRecipientIds
-                  .map(uuid => window.ConversationController.get(uuid))
-                  .filter(isNotNil),
-              hasMember: (uuid: UUIDStringType) => recipientsSet.has(uuid),
-              idForLogging: () => `dl(${receiverId})`,
-              isGroupV2: () => true,
-              isValid: () => true,
-              getSenderKeyInfo: () => inMemorySenderKeyInfo,
-              saveSenderKeyInfo: async (senderKeyInfo: SenderKeyInfoType) => {
-                inMemorySenderKeyInfo = senderKeyInfo;
-                await dataInterface.modifyStoryDistribution({
-                  ...distributionList,
-                  senderKeyInfo,
-                });
-              },
-            }
+          ? distributionListToSendTarget(
+              distributionList,
+              pendingSendRecipientServiceIds
+            )
           : conversation.toSenderKeyTarget();
 
         const contentMessage = new Proto.Content();
@@ -333,7 +360,7 @@ export async function sendStory(
           contentMessage,
           isPartialSend: false,
           messageId: undefined,
-          recipients: pendingSendRecipientIds,
+          recipients: pendingSendRecipientServiceIds,
           sendOptions,
           sendTarget,
           sendType: 'story',
@@ -343,15 +370,17 @@ export async function sendStory(
         });
 
         // Don't send normal sync messages; a story sync is sent at the end of the process
+        // eslint-disable-next-line no-param-reassign
         message.doNotSendSyncMessage = true;
 
-        const messageSendPromise = message.send(
-          handleMessageSend(innerPromise, {
-            messageIds: [messageId],
+        const messageSendPromise = send(message, {
+          promise: handleMessageSend(innerPromise, {
+            messageIds: [message.id],
             sendType: 'story',
           }),
-          saveErrors
-        );
+          saveErrors,
+          targetTimestamp: message.get('timestamp'),
+        });
 
         // Because message.send swallows and processes errors, we'll await the
         // inner promise to get the SendMessageProtoError, which gives us
@@ -363,7 +392,7 @@ export async function sendStory(
             originalError = error;
           } else {
             log.error(
-              `promiseForError threw something other than an error: ${Errors.toLogFormat(
+              `${logId}: promiseForError threw something other than an error: ${Errors.toLogFormat(
                 error
               )}`
             );
@@ -387,26 +416,26 @@ export async function sendStory(
             const recipient = window.ConversationController.get(
               recipientConversationId
             );
-            const uuid = recipient?.get('uuid');
-            if (!uuid) {
+            const serviceId = recipient?.getServiceId();
+            if (!serviceId) {
               return;
             }
-            sentUuids.add(uuid);
+            sentServiceIds.add(serviceId);
           }
         );
 
-        allRecipientIds.forEach(uuid => {
-          addDistributionListToUuidSent(
+        allRecipientServiceIds.forEach(serviceId => {
+          addDistributionListToServiceIdSent(
             listId,
-            uuid,
-            allowedReplyByUuid.get(uuid)
+            serviceId,
+            allowedReplyByServiceId.get(serviceId)
           );
         });
 
         const didFullySend =
           !messageSendErrors.length || didSendToEveryone(message);
         if (!didFullySend) {
-          throw new Error('message did not fully send');
+          throw new Error(`${logId}: message did not fully send`);
         }
       } catch (thrownError: unknown) {
         const errors = [thrownError, ...messageSendErrors];
@@ -415,7 +444,7 @@ export async function sendStory(
         //   conversationJobQueue.
         errors.forEach(error => {
           if (error instanceof SendMessageChallengeError) {
-            window.Signal.challengeHandler?.register(
+            void window.Signal.challengeHandler?.register(
               {
                 conversationId: conversation.id,
                 createdAt: Date.now(),
@@ -423,7 +452,8 @@ export async function sendStory(
                 token: error.data?.token,
                 reason:
                   'conversationJobQueue.run(' +
-                  `${conversation.idForLogging()}, story, ${timestamp})`,
+                  `${conversation.idForLogging()}, story, ${timestamp}/${distributionId})`,
+                silent: false,
               },
               error.data
             );
@@ -452,14 +482,11 @@ export async function sendStory(
   // messages but we still want to make sure that the sendStateByConversationId
   // is kept in sync across all messages.
   await Promise.all(
-    messageIds.map(async messageId => {
-      const message = await getMessageById(messageId);
-      if (!message) {
-        return;
-      }
-
+    messages.map(async message => {
       const oldSendStateByConversationId =
         message.get('sendStateByConversationId') || {};
+
+      let hasFailedSends = false;
 
       const newSendStateByConversationId = Object.keys(
         oldSendStateByConversationId
@@ -472,40 +499,76 @@ export async function sendStory(
           };
         }
 
-        return acc;
+        const oldSendState = {
+          ...oldSendStateByConversationId[conversationId],
+        };
+        if (!oldSendState) {
+          return acc;
+        }
+
+        const recipient = window.ConversationController.get(conversationId);
+        if (!recipient) {
+          return acc;
+        }
+
+        if (isMe(recipient.attributes)) {
+          return acc;
+        }
+
+        if (recipient.isEverUnregistered()) {
+          if (!isSent(oldSendState.status)) {
+            // We should have filtered this out on initial send, but we'll drop them from
+            //   send list here if needed.
+            return acc;
+          }
+
+          // If a previous send to them did succeed, we'll keep that status around
+          return {
+            ...acc,
+            [conversationId]: oldSendState,
+          };
+        }
+
+        hasFailedSends = true;
+
+        return {
+          ...acc,
+          [conversationId]: sendStateReducer(oldSendState, {
+            type: SendActionType.Failed,
+            updatedAt: Date.now(),
+          }),
+        };
       }, {} as SendStateByConversationId);
+
+      if (hasFailedSends) {
+        notifyStorySendFailed(message);
+      }
 
       if (isEqual(oldSendStateByConversationId, newSendStateByConversationId)) {
         return;
       }
 
-      message.set('sendStateByConversationId', newSendStateByConversationId);
-      return window.Signal.Data.saveMessage(message.attributes, {
-        ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
-      });
+      message.set({ sendStateByConversationId: newSendStateByConversationId });
+      return window.MessageCache.saveMessage(message.attributes);
     })
   );
 
   // Remove any unsent recipients
-  recipientsByUuid.forEach((_value, uuid) => {
-    if (sentUuids.has(uuid)) {
+  recipientsByServiceId.forEach((_value, serviceId) => {
+    if (sentServiceIds.has(serviceId)) {
       return;
     }
 
-    recipientsByUuid.delete(uuid);
+    recipientsByServiceId.delete(serviceId);
   });
 
   // Build up the sync message's storyMessageRecipients and send it
-  const storyMessageRecipients: Array<{
-    destinationUuid: string;
-    distributionListIds: Array<string>;
-    isAllowedToReply: boolean;
-  }> = [];
-  recipientsByUuid.forEach((distributionListIds, destinationUuid) => {
+  const storyMessageRecipients: StoryMessageRecipientsType = [];
+  recipientsByServiceId.forEach((distributionListIds, destinationServiceId) => {
     storyMessageRecipients.push({
-      destinationUuid,
+      destinationServiceId,
       distributionListIds: Array.from(distributionListIds),
-      isAllowedToReply: canReplyUuids.has(destinationUuid),
+      isAllowedToReply: canReplyServiceIds.has(destinationServiceId),
     });
   });
 
@@ -520,8 +583,8 @@ export async function sendStory(
 
     await messaging.sendSyncMessage({
       // Note: these two fields will be undefined if we're sending to a group
-      destination: conversation.get('e164'),
-      destinationUuid: conversation.get('uuid'),
+      destinationE164: conversation.get('e164'),
+      destinationServiceId: conversation.getServiceId(),
       storyMessage: originalStoryMessage,
       storyMessageRecipients,
       expirationStartTimestamp: null,
@@ -551,17 +614,17 @@ function getMessageRecipients({
   log: LoggerType;
   message: MessageModel;
 }>): {
-  allRecipientIds: Array<string>;
-  allowedReplyByUuid: Map<string, boolean>;
-  pendingSendRecipientIds: Array<string>;
+  allRecipientServiceIds: Array<ServiceIdString>;
+  allowedReplyByServiceId: Map<ServiceIdString, boolean>;
+  pendingSendRecipientServiceIds: Array<ServiceIdString>;
   sentRecipientIds: Array<string>;
-  untrustedUuids: Array<string>;
+  untrustedServiceIds: Array<ServiceIdString>;
 } {
-  const allRecipientIds: Array<string> = [];
-  const allowedReplyByUuid = new Map<string, boolean>();
-  const pendingSendRecipientIds: Array<string> = [];
+  const allRecipientServiceIds: Array<ServiceIdString> = [];
+  const allowedReplyByServiceId = new Map<ServiceIdString, boolean>();
+  const pendingSendRecipientServiceIds: Array<ServiceIdString> = [];
   const sentRecipientIds: Array<string> = [];
-  const untrustedUuids: Array<string> = [];
+  const untrustedServiceIds: Array<ServiceIdString> = [];
 
   Object.entries(message.get('sendStateByConversationId') || {}).forEach(
     ([recipientConversationId, sendState]) => {
@@ -578,14 +641,14 @@ function getMessageRecipients({
       }
 
       if (recipient.isUntrusted()) {
-        const uuid = recipient.get('uuid');
-        if (!uuid) {
+        const serviceId = recipient.getServiceId();
+        if (!serviceId) {
           log.error(
-            `stories.sendStory/getMessageRecipients: Untrusted conversation ${recipient.idForLogging()} missing UUID.`
+            `stories.sendStory/getMessageRecipients: Untrusted conversation ${recipient.idForLogging()} missing serviceId.`
           );
           return;
         }
-        untrustedUuids.push(uuid);
+        untrustedServiceIds.push(serviceId);
         return;
       }
       if (recipient.isUnregistered()) {
@@ -597,11 +660,11 @@ function getMessageRecipients({
         return;
       }
 
-      allowedReplyByUuid.set(
+      allowedReplyByServiceId.set(
         recipientSendTarget,
         Boolean(sendState.isAllowedToReplyToStory)
       );
-      allRecipientIds.push(recipientSendTarget);
+      allRecipientServiceIds.push(recipientSendTarget);
 
       if (sendState.isAlreadyIncludedInAnotherDistributionList) {
         return;
@@ -612,16 +675,16 @@ function getMessageRecipients({
         return;
       }
 
-      pendingSendRecipientIds.push(recipientSendTarget);
+      pendingSendRecipientServiceIds.push(recipientSendTarget);
     }
   );
 
   return {
-    allRecipientIds,
-    allowedReplyByUuid,
-    pendingSendRecipientIds,
+    allRecipientServiceIds,
+    allowedReplyByServiceId,
+    pendingSendRecipientServiceIds,
     sentRecipientIds,
-    untrustedUuids,
+    untrustedServiceIds,
   };
 }
 
@@ -629,10 +692,9 @@ async function markMessageFailed(
   message: MessageModel,
   errors: Array<Error>
 ): Promise<void> {
-  message.markFailed();
-  message.saveErrors(errors, { skipSave: true });
-  await window.Signal.Data.saveMessage(message.attributes, {
-    ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
+  markFailed(message);
+  await saveErrorsOnMessage(message, errors, {
+    skipSave: false,
   });
 }
 

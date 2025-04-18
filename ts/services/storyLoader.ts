@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { pick } from 'lodash';
-import type { MessageAttributesType } from '../model-types.d';
+import type { ReadonlyMessageAttributesType } from '../model-types.d';
 import type { StoryDataType } from '../state/ducks/stories';
 import * as durations from '../util/durations';
 import * as log from '../logging/log';
-import dataInterface from '../sql/Client';
+import { DataReader } from '../sql/Client';
+import type { GetAllStoriesResultType } from '../sql/Interface';
 import {
   getAttachmentsForMessage,
   getPropsForAttachment,
@@ -15,51 +16,23 @@ import type { LinkPreviewType } from '../types/message/LinkPreviews';
 import { isNotNil } from '../util/isNotNil';
 import { strictAssert } from '../util/assert';
 import { dropNull } from '../util/dropNull';
-import { isGroup } from '../util/whatTypeOfConversation';
+import { DurationInSeconds } from '../util/durations';
+import { SIGNAL_ACI } from '../types/SignalConversation';
 
-let storyData:
-  | Array<
-      MessageAttributesType & {
-        hasReplies?: boolean;
-        hasRepliesFromSelf?: boolean;
-      }
-    >
-  | undefined;
+let storyData: GetAllStoriesResultType | undefined;
 
 export async function loadStories(): Promise<void> {
-  const stories = await dataInterface.getAllStories({});
-
-  storyData = await Promise.all(
-    stories.map(async story => {
-      const conversation = window.ConversationController.get(
-        story.conversationId
-      );
-
-      if (!isGroup(conversation?.attributes)) {
-        return story;
-      }
-
-      const [hasReplies, hasRepliesFromSelf] = await Promise.all([
-        dataInterface.hasStoryReplies(story.id),
-        dataInterface.hasStoryRepliesFromSelf(story.id),
-      ]);
-
-      return {
-        ...story,
-        hasReplies,
-        hasRepliesFromSelf,
-      };
-    })
-  );
+  storyData = await DataReader.getAllStories({});
 
   await repairUnexpiredStories();
 }
 
 export function getStoryDataFromMessageAttributes(
-  message: MessageAttributesType & {
-    hasReplies?: boolean;
-    hasRepliesFromSelf?: boolean;
-  }
+  message: ReadonlyMessageAttributesType &
+    Readonly<{
+      hasReplies?: boolean;
+      hasRepliesFromSelf?: boolean;
+    }>
 ): StoryDataType | undefined {
   const { attachments, deletedForEveryone } = message;
   const unresolvedAttachment = attachments ? attachments[0] : undefined;
@@ -75,6 +48,10 @@ export function getStoryDataFromMessageAttributes(
       ? getAttachmentsForMessage(message)
       : [unresolvedAttachment];
 
+  // If a story message has a preview property in its attributes then we
+  // rebuild the textAttachment data structure to contain the all the data it
+  // needs to fully render the text attachment including the link preview and
+  // its image.
   let preview: LinkPreviewType | undefined;
   if (message.preview?.length) {
     strictAssert(
@@ -94,18 +71,40 @@ export function getStoryDataFromMessageAttributes(
         ...attachment.textAttachment,
         preview: {
           ...preview,
-          image: preview.image && getPropsForAttachment(preview.image),
+          image:
+            preview.image &&
+            getPropsForAttachment(preview.image, 'preview', message),
         },
       },
     };
   } else if (attachment) {
-    attachment = getPropsForAttachment(attachment);
+    attachment = getPropsForAttachment(attachment, 'attachment', message);
+  }
+
+  // for a story, the message should always include the sourceDevice
+  // but some messages got saved without one in the past (sync-sent)
+  // we default those to some reasonable values that won't break the app
+  let sourceDevice: number;
+  if (message.sourceDevice !== undefined) {
+    sourceDevice = message.sourceDevice;
+  } else {
+    log.error('getStoryDataFromMessageAttributes: undefined sourceDevice');
+    // storage user.getDevice() should always produce a value after registration
+    const ourDeviceId = window.storage.user.getDeviceId() ?? -1;
+    if (message.type === 'outgoing') {
+      sourceDevice = ourDeviceId;
+    } else if (message.type === 'incoming') {
+      sourceDevice = 1;
+    } else {
+      sourceDevice = -1;
+    }
   }
 
   return {
     attachment,
     messageId: message.id,
     ...pick(message, [
+      'bodyRanges',
       'canReplyToStory',
       'conversationId',
       'deletedForEveryone',
@@ -116,11 +115,13 @@ export function getStoryDataFromMessageAttributes(
       'readStatus',
       'sendStateByConversationId',
       'source',
-      'sourceUuid',
+      'sourceServiceId',
       'storyDistributionListId',
+      'storyRecipientsVersion',
       'timestamp',
       'type',
     ]),
+    sourceDevice,
     expireTimer: message.expireTimer,
     expirationStartTimestamp: dropNull(message.expirationStartTimestamp),
   };
@@ -141,21 +142,24 @@ export function getStoriesForRedux(): Array<StoryDataType> {
 async function repairUnexpiredStories(): Promise<void> {
   strictAssert(storyData, 'Could not load stories');
 
-  const DAY_AS_SECONDS = durations.DAY / 1000;
+  const DAY_AS_SECONDS = DurationInSeconds.fromDays(1);
 
   const storiesWithExpiry = storyData
     .filter(
       story =>
-        !story.expirationStartTimestamp ||
-        !story.expireTimer ||
-        story.expireTimer > DAY_AS_SECONDS
+        story.sourceServiceId !== SIGNAL_ACI &&
+        (!story.expirationStartTimestamp ||
+          !story.expireTimer ||
+          story.expireTimer > DAY_AS_SECONDS)
     )
     .map(story => ({
       ...story,
       expirationStartTimestamp: Math.min(story.timestamp, Date.now()),
-      expireTimer: Math.min(
-        Math.floor((story.timestamp + durations.DAY - Date.now()) / 1000),
-        DAY_AS_SECONDS
+      expireTimer: DurationInSeconds.fromMillis(
+        Math.min(
+          Math.floor(story.timestamp + durations.DAY - Date.now()),
+          durations.DAY
+        )
       ),
     }));
 
@@ -170,9 +174,7 @@ async function repairUnexpiredStories(): Promise<void> {
 
   await Promise.all(
     storiesWithExpiry.map(messageAttributes => {
-      return window.Signal.Data.saveMessage(messageAttributes, {
-        ourUuid: window.textsecure.storage.user.getCheckedUuid().toString(),
-      });
+      return window.MessageCache.saveMessage(messageAttributes);
     })
   );
 }

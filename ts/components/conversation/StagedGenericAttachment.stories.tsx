@@ -2,65 +2,62 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
-import { text } from '@storybook/addon-knobs';
 import { action } from '@storybook/addon-actions';
-
+import type { Meta } from '@storybook/react';
 import type { AttachmentType } from '../../types/Attachment';
 import { stringToMIMEType } from '../../types/MIME';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import type { Props } from './StagedGenericAttachment';
 import { StagedGenericAttachment } from './StagedGenericAttachment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/StagedGenericAttachment',
-};
-
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  attachment: overrideProps.attachment || ({} as AttachmentType),
-  i18n,
-  onClose: action('onClose'),
-});
+  argTypes: {},
+  args: {
+    attachment: {
+      contentType: stringToMIMEType(''),
+      fileName: '',
+      url: '',
+      size: 14243,
+    },
+    i18n,
+    onClose: action('onClose'),
+  },
+} satisfies Meta<Props>;
 
 const createAttachment = (
   props: Partial<AttachmentType> = {}
 ): AttachmentType => ({
-  contentType: stringToMIMEType(
-    text('attachment contentType', props.contentType || '')
-  ),
-  fileName: text('attachment fileName', props.fileName || ''),
+  contentType: stringToMIMEType(props.contentType ?? ''),
+  fileName: props.fileName ?? '',
   url: '',
   size: 14243,
 });
 
-export const TextFile = (): JSX.Element => {
+export function TextFile(args: Props): JSX.Element {
   const attachment = createAttachment({
     contentType: stringToMIMEType('text/plain'),
     fileName: 'manifesto.txt',
   });
-  const props = createProps({ attachment });
 
-  return <StagedGenericAttachment {...props} />;
-};
+  return <StagedGenericAttachment {...args} attachment={attachment} />;
+}
 
-export const LongName = (): JSX.Element => {
+export function LongName(args: Props): JSX.Element {
   const attachment = createAttachment({
     contentType: stringToMIMEType('text/plain'),
     fileName: 'this-is-my-very-important-manifesto-you-must-read-it.txt',
   });
-  const props = createProps({ attachment });
 
-  return <StagedGenericAttachment {...props} />;
-};
+  return <StagedGenericAttachment {...args} attachment={attachment} />;
+}
 
-export const LongExtension = (): JSX.Element => {
+export function LongExtension(args: Props): JSX.Element {
   const attachment = createAttachment({
     contentType: stringToMIMEType('text/plain'),
     fileName: 'manifesto.reallylongtxt',
   });
-  const props = createProps({ attachment });
 
-  return <StagedGenericAttachment {...props} />;
-};
+  return <StagedGenericAttachment {...args} attachment={attachment} />;
+}

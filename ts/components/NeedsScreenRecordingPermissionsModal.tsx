@@ -19,11 +19,11 @@ function focusRef(el: HTMLElement | null) {
   }
 }
 
-export const NeedsScreenRecordingPermissionsModal = ({
+export function NeedsScreenRecordingPermissionsModal({
   i18n,
   openSystemPreferencesAction,
   toggleScreenRecordingPermissionsDialog,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   const footer = (
     <>
       <Button
@@ -31,7 +31,7 @@ export const NeedsScreenRecordingPermissionsModal = ({
         ref={focusRef}
         variant={ButtonVariant.Secondary}
       >
-        {i18n('calling__presenting--permission-cancel')}
+        {i18n('icu:calling__presenting--permission-cancel')}
       </Button>
       <Button
         onClick={() => {
@@ -40,7 +40,7 @@ export const NeedsScreenRecordingPermissionsModal = ({
         }}
         variant={ButtonVariant.Primary}
       >
-        {i18n('calling__presenting--permission-open')}
+        {i18n('icu:calling__presenting--permission-open')}
       </Button>
     </>
   );
@@ -48,17 +48,17 @@ export const NeedsScreenRecordingPermissionsModal = ({
     <Modal
       modalName="NeedsScreenRecordingPermissionsModal"
       i18n={i18n}
-      title={i18n('calling__presenting--permission-title')}
+      title={i18n('icu:calling__presenting--permission-title')}
       theme={Theme.Dark}
       onClose={toggleScreenRecordingPermissionsDialog}
       modalFooter={footer}
     >
-      <p>{i18n('calling__presenting--macos-permission-description')}</p>
+      <p>{i18n('icu:calling__presenting--macos-permission-description')}</p>
       <ol style={{ paddingLeft: 16 }}>
-        <li>{i18n('calling__presenting--permission-instruction-step1')}</li>
-        <li>{i18n('calling__presenting--permission-instruction-step2')}</li>
-        <li>{i18n('calling__presenting--permission-instruction-step3')}</li>
+        <li>{i18n('icu:calling__presenting--permission-instruction-step1')}</li>
+        <li>{i18n('icu:calling__presenting--permission-instruction-step2')}</li>
+        <li>{i18n('icu:calling__presenting--permission-instruction-step3')}</li>
       </ol>
     </Modal>
   );
-};
+}

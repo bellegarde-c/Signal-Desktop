@@ -5,18 +5,18 @@ import React from 'react';
 import classNames from 'classnames';
 import { unescape } from 'lodash';
 
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews';
 import type { LocalizerType } from '../types/Util';
 import { CurveType, Image } from './conversation/Image';
 import { isImageAttachment } from '../types/Attachment';
-import { getDomain } from '../types/LinkPreview';
+import { getSafeDomain } from '../types/LinkPreview';
 
-export type Props = LinkPreviewType & {
+export type Props = LinkPreviewForUIType & {
   forceCompactMode?: boolean;
   i18n: LocalizerType;
 };
 
-export const StoryLinkPreview = ({
+export function StoryLinkPreview({
   description,
   domain,
   forceCompactMode,
@@ -24,9 +24,9 @@ export const StoryLinkPreview = ({
   image,
   title,
   url,
-}: Props): JSX.Element => {
+}: Props): JSX.Element {
   const isImage = isImageAttachment(image);
-  const location = domain || getDomain(String(url));
+  const location = domain || getSafeDomain(String(url));
   const isCompact = forceCompactMode || !image;
 
   let content: JSX.Element | undefined;
@@ -73,7 +73,9 @@ export const StoryLinkPreview = ({
       {isImage && image ? (
         <div className="StoryLinkPreview__icon-container">
           <Image
-            alt={i18n('stagedPreviewThumbnail', [location])}
+            alt={i18n('icu:stagedPreviewThumbnail', {
+              domain: location || '',
+            })}
             attachment={image}
             curveBottomLeft={CurveType.Tiny}
             curveBottomRight={CurveType.Tiny}
@@ -90,4 +92,4 @@ export const StoryLinkPreview = ({
       {content}
     </div>
   );
-};
+}

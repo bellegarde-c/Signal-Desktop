@@ -1,109 +1,112 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type Quill from 'quill';
-import Delta from 'quill-delta';
+import type Quill from '@signalapp/quill-cjs';
+import { Delta } from '@signalapp/quill-cjs';
+import { deleteRange } from '@signalapp/quill-cjs/modules/keyboard';
 
-import { getTextFromOps } from '../util';
+import { FormattingMenu, QuillFormattingStyle } from '../formatting/menu';
+import { insertEmojiOps } from '../util';
+import { createEventHandler } from './util';
 
-const getSelectionHTML = () => {
-  const selection = window.getSelection();
-
-  if (selection == null) {
-    return '';
-  }
-
-  const range = selection.getRangeAt(0);
-  const contents = range.cloneContents();
-  const div = document.createElement('div');
-
-  div.appendChild(contents);
-
-  return div.innerHTML;
-};
-
-const replaceAngleBrackets = (text: string) => {
-  const entities: Array<[RegExp, string]> = [
-    [/&/g, '&amp;'],
-    [/</g, '&lt;'],
-    [/>/g, '&gt;'],
-  ];
-
-  return entities.reduce(
-    (acc, [re, replaceValue]) => acc.replace(re, replaceValue),
-    text
-  );
-};
+type ClipboardOptions = Readonly<{
+  isDisabled: boolean;
+}>;
 
 export class SignalClipboard {
   quill: Quill;
+  options: ClipboardOptions;
 
-  constructor(quill: Quill) {
+  constructor(quill: Quill, options: ClipboardOptions) {
     this.quill = quill;
+    this.options = options;
 
-    this.quill.root.addEventListener('copy', e => this.onCaptureCopy(e, false));
-    this.quill.root.addEventListener('cut', e => this.onCaptureCopy(e, true));
     this.quill.root.addEventListener('paste', e => this.onCapturePaste(e));
+    this.quill.root.addEventListener('cut', e => this.onCaptureCut(e));
   }
 
-  onCaptureCopy(event: ClipboardEvent, isCut = false): void {
-    event.preventDefault();
+  updateOptions(options: Partial<ClipboardOptions>): void {
+    this.options = { ...this.options, ...options };
+  }
 
-    if (event.clipboardData == null) {
-      return;
-    }
+  onCaptureCut(event: ClipboardEvent): void {
+    const [range] = this.quill.selection.getRange();
 
-    const range = this.quill.getSelection();
+    // This updates the clipboard with what we want
+    const handler = createEventHandler({ deleteSelection: false });
+    handler(event);
 
-    if (range == null) {
-      return;
-    }
-
-    const contents = this.quill.getContents(range.index, range.length);
-
-    if (contents == null) {
-      return;
-    }
-
-    const { ops } = contents;
-
-    if (ops === undefined) {
-      return;
-    }
-
-    const text = getTextFromOps(ops);
-    const html = getSelectionHTML();
-
-    event.clipboardData.setData('text/plain', text);
-    event.clipboardData.setData('text/signal', html);
-
-    if (isCut) {
-      this.quill.deleteText(range.index, range.length, 'user');
+    // And this updates quill's internal state and the content-editable to reflect the cut
+    if (range) {
+      deleteRange({ range, quill: this.quill });
     }
   }
 
   onCapturePaste(event: ClipboardEvent): void {
-    if (event.clipboardData == null) {
+    if (this.options.isDisabled) {
       return;
     }
 
-    this.quill.focus();
+    if (event.clipboardData == null) {
+      event.preventDefault();
+      event.stopPropagation();
 
-    const clipboard = this.quill.getModule('clipboard');
+      return;
+    }
+
+    const { clipboard } = this.quill;
     const selection = this.quill.getSelection();
+    const text = event.clipboardData.getData('text/plain');
+    const signal = event.clipboardData.getData('text/signal');
+
+    const clipboardContainsFiles = event.clipboardData.files?.length > 0;
+
+    if (clipboardContainsFiles) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
 
     if (selection == null) {
       return;
     }
 
-    const text = event.clipboardData.getData('text/plain');
-    const html = event.clipboardData.getData('text/signal');
+    if (!text && !signal) {
+      return;
+    }
 
-    const clipboardDelta = html
-      ? clipboard.convert(html)
-      : clipboard.convert(replaceAngleBrackets(text));
-
-    const { scrollTop } = this.quill.scrollingContainer;
+    const { ops } = this.quill.getContents(selection.index, selection.length);
+    // Only enable formatting on the pasted text if the entire selection has it enabled!
+    const formats =
+      selection.length === 0
+        ? this.quill.getFormat(selection.index)
+        : {
+            [QuillFormattingStyle.bold]: FormattingMenu.isStyleEnabledForOps(
+              ops,
+              QuillFormattingStyle.bold
+            ),
+            [QuillFormattingStyle.italic]: FormattingMenu.isStyleEnabledForOps(
+              ops,
+              QuillFormattingStyle.italic
+            ),
+            [QuillFormattingStyle.monospace]:
+              FormattingMenu.isStyleEnabledForOps(
+                ops,
+                QuillFormattingStyle.monospace
+              ),
+            [QuillFormattingStyle.spoiler]: FormattingMenu.isStyleEnabledForOps(
+              ops,
+              QuillFormattingStyle.spoiler
+            ),
+            [QuillFormattingStyle.strike]: FormattingMenu.isStyleEnabledForOps(
+              ops,
+              QuillFormattingStyle.strike
+            ),
+          };
+    const clipboardDelta = signal
+      ? clipboard.convert({ html: signal }, formats)
+      : new Delta(insertEmojiOps(clipboard.convert({ text }, formats).ops, {}));
 
     this.quill.selection.update('silent');
 
@@ -111,13 +114,14 @@ export class SignalClipboard {
       setTimeout(() => {
         const delta = new Delta()
           .retain(selection.index)
+          .delete(selection.length)
           .concat(clipboardDelta);
         this.quill.updateContents(delta, 'user');
-        this.quill.setSelection(delta.length(), 0, 'silent');
-        this.quill.scrollingContainer.scrollTop = scrollTop;
+        this.quill.setSelection(delta.length() - selection.length, 0, 'silent');
+        this.quill.scrollSelectionIntoView();
+
+        this.quill.focus();
       }, 1);
     }
-
-    event.preventDefault();
   }
 }

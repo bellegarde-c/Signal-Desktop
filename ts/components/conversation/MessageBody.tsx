@@ -1,64 +1,66 @@
-// Copyright 2018-2021 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { KeyboardEvent } from 'react';
 import React from 'react';
-
 import type { AttachmentType } from '../../types/Attachment';
-import { canBeDownloaded } from '../../types/Attachment';
-import type { SizeClassType } from '../emoji/lib';
-import { getSizeClass } from '../emoji/lib';
-import { AtMentionify } from './AtMentionify';
-import { Emojify } from './Emojify';
-import { AddNewLines } from './AddNewLines';
-import { Linkify } from './Linkify';
+import { canBeDownloaded, isDownloaded } from '../../types/Attachment';
+import type { ShowConversationType } from '../../state/ducks/conversations';
+import type { HydratedBodyRangesType } from '../../types/BodyRange';
+import type { LocalizerType } from '../../types/Util';
+import { MessageTextRenderer } from './MessageTextRenderer';
+import type { RenderLocation } from './MessageTextRenderer';
+import { UserText } from '../UserText';
+import { shouldLinkifyMessage } from '../../types/LinkPreview';
+import { FunJumboEmojiSize } from '../fun/FunEmoji';
+import { getEmojifyData } from '../fun/data/emojis';
 
-import type {
-  BodyRangesType,
-  LocalizerType,
-  RenderTextCallbackType,
-} from '../../types/Util';
-
-type OpenConversationActionType = (
-  conversationId: string,
-  messageId?: string
-) => void;
+function getSizeClass(str: string): FunJumboEmojiSize | null {
+  const emojifyData = getEmojifyData(str);
+  // Do we have non-emoji characters?
+  if (!emojifyData.isEmojiOnlyText) {
+    return null;
+  }
+  if (emojifyData.emojiCount === 1) {
+    return FunJumboEmojiSize.Max;
+  }
+  if (emojifyData.emojiCount === 2) {
+    return FunJumboEmojiSize.ExtraLarge;
+  }
+  if (emojifyData.emojiCount === 3) {
+    return FunJumboEmojiSize.Large;
+  }
+  if (emojifyData.emojiCount === 4) {
+    return FunJumboEmojiSize.Medium;
+  }
+  if (emojifyData.emojiCount === 5) {
+    return FunJumboEmojiSize.Small;
+  }
+  return null;
+}
 
 export type Props = {
-  direction?: 'incoming' | 'outgoing';
-  text: string;
   author?: string;
-  textAttachment?: Pick<AttachmentType, 'pending' | 'digest' | 'key'>;
-  /** If set, all emoji will be the same size. Otherwise, just one emoji will be large. */
+  bodyRanges?: HydratedBodyRangesType;
+  direction?: 'incoming' | 'outgoing';
+  // If set, all emoji will be the same size. Otherwise, just one emoji will be large.
   disableJumbomoji?: boolean;
-  /** If set, links will be left alone instead of turned into clickable `<a>` tags. */
+  // If set, interactive elements will be left as plain text: links, mentions, spoilers
   disableLinks?: boolean;
   i18n: LocalizerType;
-  bodyRanges?: BodyRangesType;
-  onIncreaseTextLength?: () => unknown;
-  openConversation?: OpenConversationActionType;
+  isSpoilerExpanded: Record<string, boolean>;
   kickOffBodyDownload?: () => void;
-};
-
-const renderEmoji = ({
-  text,
-  key,
-  sizeClass,
-  renderNonEmoji,
-}: {
-  i18n: LocalizerType;
+  onExpandSpoiler?: (data: Record<number, boolean>) => unknown;
+  onIncreaseTextLength?: () => unknown;
+  prefix?: string;
+  renderLocation: RenderLocation;
+  showConversation?: ShowConversationType;
   text: string;
-  key: number;
-  sizeClass?: SizeClassType;
-  renderNonEmoji: RenderTextCallbackType;
-}) => (
-  <Emojify
-    key={key}
-    text={text}
-    sizeClass={sizeClass}
-    renderNonEmoji={renderNonEmoji}
-  />
-);
+  textAttachment?: Pick<
+    AttachmentType,
+    'pending' | 'digest' | 'key' | 'wasTooBig' | 'path'
+  >;
+};
 
 /**
  * This component makes it very easy to use all three of our message formatting
@@ -67,62 +69,61 @@ const renderEmoji = ({
  * them for you.
  */
 export function MessageBody({
+  author,
   bodyRanges,
   direction,
   disableJumbomoji,
   disableLinks,
   i18n,
-  onIncreaseTextLength,
-  openConversation,
-  text,
-  author,
-  textAttachment,
+  isSpoilerExpanded,
   kickOffBodyDownload,
+  onExpandSpoiler,
+  onIncreaseTextLength,
+  prefix,
+  renderLocation,
+  showConversation,
+  text,
+  textAttachment,
 }: Props): JSX.Element {
-  const hasReadMore = Boolean(onIncreaseTextLength);
+  const shouldDisableLinks = disableLinks || !shouldLinkifyMessage(text);
   const textWithSuffix =
-    textAttachment?.pending || hasReadMore ? `${text}...` : text;
+    textAttachment?.pending || onIncreaseTextLength || textAttachment?.wasTooBig
+      ? `${text}...`
+      : text;
 
-  const sizeClass = disableJumbomoji ? undefined : getSizeClass(text);
-  const processedText = AtMentionify.preprocessMentions(
-    textWithSuffix,
-    bodyRanges
-  );
+  const sizeClass = disableJumbomoji ? null : getSizeClass(text);
 
-  const renderNewLines: RenderTextCallbackType = ({
-    text: textWithNewLines,
-    key,
-  }) => {
-    return (
-      <AddNewLines
-        key={key}
-        text={textWithNewLines}
-        renderNonNewLine={({ text: innerText, key: innerKey }) => (
-          <AtMentionify
-            key={innerKey}
-            direction={direction}
-            text={innerText}
-            bodyRanges={bodyRanges}
-            openConversation={openConversation}
-          />
-        )}
-      />
+  let endNotification: React.ReactNode;
+  if (onIncreaseTextLength) {
+    endNotification = (
+      <button
+        className="MessageBody__read-more"
+        onClick={() => {
+          onIncreaseTextLength();
+        }}
+        onKeyDown={(ev: KeyboardEvent) => {
+          if (ev.key === 'Space' || ev.key === 'Enter') {
+            onIncreaseTextLength();
+          }
+        }}
+        tabIndex={0}
+        type="button"
+      >
+        {' '}
+        {i18n('icu:MessageBody--read-more')}
+      </button>
     );
-  };
-
-  let pendingContent: React.ReactNode;
-  if (hasReadMore) {
-    pendingContent = null;
   } else if (textAttachment?.pending) {
-    pendingContent = (
-      <span className="MessageBody__highlight"> {i18n('downloading')}</span>
+    endNotification = (
+      <span className="MessageBody__highlight"> {i18n('icu:downloading')}</span>
     );
   } else if (
     textAttachment &&
     canBeDownloaded(textAttachment) &&
+    !isDownloaded(textAttachment) &&
     kickOffBodyDownload
   ) {
-    pendingContent = (
+    endNotification = (
       <span>
         {' '}
         <button
@@ -138,69 +139,53 @@ export function MessageBody({
           tabIndex={0}
           type="button"
         >
-          {i18n('downloadFullMessage')}
+          {i18n('icu:downloadFullMessage')}
         </button>
       </span>
     );
+  } else if (textAttachment?.wasTooBig) {
+    endNotification = (
+      <span className="MessageBody__message-too-long">
+        {' '}
+        {i18n('icu:MessageBody--message-too-long')}
+      </span>
+    );
   }
-
   return (
     <span>
       {author && (
         <>
           <span className="MessageBody__author">
-            {renderEmoji({
-              i18n,
-              text: author,
-              sizeClass,
-              key: 0,
-              renderNonEmoji: renderNewLines,
-            })}
+            <UserText text={author} />
           </span>
           :{' '}
         </>
       )}
-      {disableLinks ? (
-        renderEmoji({
-          i18n,
-          text: processedText,
-          sizeClass,
-          key: 0,
-          renderNonEmoji: renderNewLines,
-        })
-      ) : (
-        <Linkify
-          text={processedText}
-          renderNonLink={({ key, text: nonLinkText }) => {
-            return renderEmoji({
-              i18n,
-              text: nonLinkText,
-              sizeClass,
-              key,
-              renderNonEmoji: renderNewLines,
-            });
-          }}
-        />
+      {prefix && (
+        <>
+          <span className="MessageBody__prefix">
+            <UserText text={prefix} />
+          </span>{' '}
+        </>
       )}
-      {pendingContent}
-      {onIncreaseTextLength ? (
-        <button
-          className="MessageBody__read-more"
-          onClick={() => {
-            onIncreaseTextLength();
-          }}
-          onKeyDown={(ev: KeyboardEvent) => {
-            if (ev.key === 'Space' || ev.key === 'Enter') {
-              onIncreaseTextLength();
-            }
-          }}
-          tabIndex={0}
-          type="button"
-        >
-          {' '}
-          {i18n('MessageBody--read-more')}
-        </button>
-      ) : null}
+
+      <MessageTextRenderer
+        bodyRanges={bodyRanges ?? []}
+        direction={direction}
+        disableLinks={shouldDisableLinks}
+        jumboEmojiSize={sizeClass}
+        i18n={i18n}
+        isSpoilerExpanded={isSpoilerExpanded}
+        messageText={textWithSuffix}
+        onMentionTrigger={conversationId =>
+          showConversation?.({ conversationId })
+        }
+        onExpandSpoiler={onExpandSpoiler}
+        renderLocation={renderLocation}
+        textLength={text.length}
+      />
+
+      {endNotification}
     </span>
   );
 }

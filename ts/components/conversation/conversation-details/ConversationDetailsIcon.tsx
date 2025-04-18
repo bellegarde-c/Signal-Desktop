@@ -8,10 +8,17 @@ import { Spinner } from '../../Spinner';
 import { bemGenerator } from './util';
 
 export enum IconType {
+  'approveAllMembers' = 'approveAllMembers',
+  'bell' = 'bell',
   'block' = 'block',
+  'edit' = 'edit',
   'unblock' = 'unblock',
   'color' = 'color',
   'down' = 'down',
+  'forward' = 'forward',
+  'heart' = 'heart',
+  'help' = 'help',
+  'invite' = 'invite',
   'invites' = 'invites',
   'leave' = 'leave',
   'link' = 'link',
@@ -37,13 +44,13 @@ export type Props = {
 
 const bem = bemGenerator('ConversationDetails-icon');
 
-export const ConversationDetailsIcon: React.ComponentType<Props> = ({
+export function ConversationDetailsIcon({
   ariaLabel,
   disabled,
   icon,
   fakeButton,
   onClick,
-}) => {
+}: Props): JSX.Element {
   let content: React.ReactChild;
 
   if (icon === IconType.spinner) {
@@ -105,4 +112,4 @@ export const ConversationDetailsIcon: React.ComponentType<Props> = ({
   }
 
   return content;
-};
+}

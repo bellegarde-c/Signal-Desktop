@@ -3,9 +3,9 @@
 
 import type { LoggerType } from '../../types/Logging';
 import { waitForOnline } from '../../util/waitForOnline';
-import { sleep } from '../../util/sleep';
 import { exponentialBackoffSleepTime } from '../../util/exponentialBackoff';
 import { isDone as isDeviceLinked } from '../../util/registration';
+import { sleeper } from '../../util/sleeper';
 
 export async function commonShouldJobContinue({
   attempt,
@@ -24,7 +24,7 @@ export async function commonShouldJobContinue({
   }
 
   try {
-    await waitForOnline(window.navigator, window, { timeout: timeRemaining });
+    await waitForOnline({ timeout: timeRemaining });
   } catch (err: unknown) {
     log.info("didn't come online in time, giving up");
     return false;
@@ -44,8 +44,13 @@ export async function commonShouldJobContinue({
   }
 
   const sleepTime = exponentialBackoffSleepTime(attempt);
-  log.info(`sleeping for ${sleepTime}`);
-  await sleep(sleepTime);
+  if (sleepTime > 0) {
+    log.info(`sleeping for ${sleepTime}`);
+    await sleeper.sleep(
+      sleepTime,
+      `commonShouldJobContinue: attempt ${attempt}, skipWait ${skipWait}`
+    );
+  }
 
   return true;
 }

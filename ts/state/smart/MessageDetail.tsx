@@ -1,100 +1,135 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { connect } from 'react-redux';
+import React, { memo, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 
-import type { ExternalProps as MessageDetailProps } from '../../components/conversation/MessageDetail';
+import type { Props as MessageDetailProps } from '../../components/conversation/MessageDetail';
 import { MessageDetail } from '../../components/conversation/MessageDetail';
-
-import { mapDispatchToProps } from '../actions';
-import type { StateType } from '../reducer';
-import { getPreferredBadgeSelector } from '../selectors/badges';
-import { getIntl, getInteractionMode, getTheme } from '../selectors/user';
-import { renderAudioAttachment } from './renderAudioAttachment';
 import { getContactNameColorSelector } from '../selectors/conversations';
-import { markViewed } from '../ducks/conversations';
+import {
+  getIntl,
+  getInteractionMode,
+  getTheme,
+  getPlatform,
+} from '../selectors/user';
+import { getMessageDetails } from '../selectors/message';
+import { getPreferredBadgeSelector } from '../selectors/badges';
+import { renderAudioAttachment } from './renderAudioAttachment';
+import { useAccountsActions } from '../ducks/accounts';
+import { useConversationsActions } from '../ducks/conversations';
+import { useGlobalModalActions } from '../ducks/globalModals';
+import { useLightboxActions } from '../ducks/lightbox';
+import { useStoriesActions } from '../ducks/stories';
 
-export { Contact } from '../../components/conversation/MessageDetail';
-export type OwnProps = Omit<
+export type { Contact } from '../../components/conversation/MessageDetail';
+export type OwnProps = Pick<
   MessageDetailProps,
-  | 'getPreferredBadge'
-  | 'i18n'
-  | 'interactionMode'
-  | 'renderAudioAttachment'
-  | 'renderEmojiPicker'
-  | 'renderReactionPicker'
-  | 'theme'
-  | 'markViewed'
+  'contacts' | 'errors' | 'message' | 'receivedAt'
 >;
 
-const mapStateToProps = (
-  state: StateType,
-  props: OwnProps
-): MessageDetailProps => {
-  const {
-    contacts,
-    errors,
-    message,
-    receivedAt,
-    sentAt,
+export const SmartMessageDetail = memo(
+  function SmartMessageDetail(): JSX.Element | null {
+    const getContactNameColor = useSelector(getContactNameColorSelector);
+    const getPreferredBadge = useSelector(getPreferredBadgeSelector);
+    const i18n = useSelector(getIntl);
+    const platform = useSelector(getPlatform);
+    const interactionMode = useSelector(getInteractionMode);
+    const messageDetails = useSelector(getMessageDetails);
+    const theme = useSelector(getTheme);
+    const { checkForAccount } = useAccountsActions();
+    const {
+      cancelAttachmentDownload,
+      clearTargetedMessage: clearSelectedMessage,
+      doubleCheckMissingQuoteReference,
+      kickOffAttachmentDownload,
+      markAttachmentAsCorrupted,
+      messageExpanded,
+      openGiftBadge,
+      popPanelForConversation,
+      pushPanelForConversation,
+      retryMessageSend,
+      saveAttachment,
+      saveAttachments,
+      showAttachmentDownloadStillInProgressToast,
+      showConversation,
+      showExpiredIncomingTapToViewToast,
+      showExpiredOutgoingTapToViewToast,
+      showMediaNoLongerAvailableToast,
+      showSpoiler,
+      startConversation,
+    } = useConversationsActions();
+    const {
+      showAttachmentNotAvailableModal,
+      showContactModal,
+      showEditHistoryModal,
+      showTapToViewNotAvailableModal,
+      toggleSafetyNumberModal,
+    } = useGlobalModalActions();
+    const { showLightbox, showLightboxForViewOnceMedia } = useLightboxActions();
+    const { viewStory } = useStoriesActions();
 
-    showSafetyNumber,
+    useEffect(() => {
+      if (!messageDetails) {
+        popPanelForConversation();
+      }
+    }, [messageDetails, popPanelForConversation]);
 
-    displayTapToViewMessage,
-    kickOffAttachmentDownload,
-    markAttachmentAsCorrupted,
-    openConversation,
-    openGiftBadge,
-    openLink,
-    showContactDetail,
-    showContactModal,
-    showExpiredIncomingTapToViewToast,
-    showExpiredOutgoingTapToViewToast,
-    showVisualAttachment,
-    startConversation,
-  } = props;
+    if (!messageDetails) {
+      return null;
+    }
 
-  const contactNameColor =
-    message.conversationType === 'group'
-      ? getContactNameColorSelector(state)(
-          message.conversationId,
-          message.author.id
-        )
-      : undefined;
+    const { contacts, errors, message, receivedAt } = messageDetails;
 
-  const getPreferredBadge = getPreferredBadgeSelector(state);
+    const contactNameColor =
+      message.conversationType === 'group'
+        ? getContactNameColor(message.conversationId, message.author.id)
+        : undefined;
 
-  return {
-    contacts,
-    contactNameColor,
-    errors,
-    message,
-    receivedAt,
-    sentAt,
-
-    getPreferredBadge,
-    i18n: getIntl(state),
-    interactionMode: getInteractionMode(state),
-    theme: getTheme(state),
-
-    showSafetyNumber,
-
-    displayTapToViewMessage,
-    kickOffAttachmentDownload,
-    markAttachmentAsCorrupted,
-    markViewed,
-    openConversation,
-    openGiftBadge,
-    openLink,
-    renderAudioAttachment,
-    showContactDetail,
-    showContactModal,
-    showExpiredIncomingTapToViewToast,
-    showExpiredOutgoingTapToViewToast,
-    showVisualAttachment,
-    startConversation,
-  };
-};
-
-const smart = connect(mapStateToProps, mapDispatchToProps);
-export const SmartMessageDetail = smart(MessageDetail);
+    return (
+      <MessageDetail
+        checkForAccount={checkForAccount}
+        clearTargetedMessage={clearSelectedMessage}
+        contactNameColor={contactNameColor}
+        contacts={contacts}
+        doubleCheckMissingQuoteReference={doubleCheckMissingQuoteReference}
+        errors={errors}
+        getPreferredBadge={getPreferredBadge}
+        i18n={i18n}
+        platform={platform}
+        interactionMode={interactionMode}
+        cancelAttachmentDownload={cancelAttachmentDownload}
+        kickOffAttachmentDownload={kickOffAttachmentDownload}
+        markAttachmentAsCorrupted={markAttachmentAsCorrupted}
+        message={message}
+        messageExpanded={messageExpanded}
+        openGiftBadge={openGiftBadge}
+        retryMessageSend={retryMessageSend}
+        pushPanelForConversation={pushPanelForConversation}
+        receivedAt={receivedAt}
+        renderAudioAttachment={renderAudioAttachment}
+        saveAttachment={saveAttachment}
+        saveAttachments={saveAttachments}
+        sentAt={message.timestamp}
+        showContactModal={showContactModal}
+        showConversation={showConversation}
+        showEditHistoryModal={showEditHistoryModal}
+        showAttachmentDownloadStillInProgressToast={
+          showAttachmentDownloadStillInProgressToast
+        }
+        showAttachmentNotAvailableModal={showAttachmentNotAvailableModal}
+        showExpiredIncomingTapToViewToast={showExpiredIncomingTapToViewToast}
+        showExpiredOutgoingTapToViewToast={showExpiredOutgoingTapToViewToast}
+        showLightbox={showLightbox}
+        showLightboxForViewOnceMedia={showLightboxForViewOnceMedia}
+        showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
+        showSpoiler={showSpoiler}
+        showTapToViewNotAvailableModal={showTapToViewNotAvailableModal}
+        startConversation={startConversation}
+        theme={theme}
+        toggleSafetyNumberModal={toggleSafetyNumberModal}
+        viewStory={viewStory}
+      />
+    );
+  }
+);

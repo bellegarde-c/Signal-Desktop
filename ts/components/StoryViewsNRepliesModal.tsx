@@ -9,9 +9,9 @@ import React, {
   useState,
 } from 'react';
 import classNames from 'classnames';
-import { usePopper } from 'react-popper';
-import type { AttachmentType } from '../types/Attachment';
-import type { BodyRangeType, LocalizerType } from '../types/Util';
+import { noop, orderBy } from 'lodash';
+import type { DraftBodyRanges } from '../types/BodyRange';
+import type { LocalizerType } from '../types/Util';
 import type { ConversationType } from '../state/ducks/conversations';
 import type { EmojiPickDataType } from './emoji/EmojiPicker';
 import type { InputApi } from './CompositionInput';
@@ -27,17 +27,20 @@ import { Emojify } from './conversation/Emojify';
 import { Message, TextDirection } from './conversation/Message';
 import { MessageTimestamp } from './conversation/MessageTimestamp';
 import { Modal } from './Modal';
-import { Quote } from './conversation/Quote';
 import { ReactionPicker } from './conversation/ReactionPicker';
 import { Tabs } from './Tabs';
 import { Theme } from '../util/theme';
 import { ThemeType } from '../types/Util';
 import { WidthBreakpoint } from './_util';
 import { getAvatarColor } from '../types/Colors';
-import { getStoryReplyText } from '../util/getStoryReplyText';
 import { shouldNeverBeCalled } from '../util/shouldNeverBeCalled';
 import { ContextMenu } from './ContextMenu';
 import { ConfirmationDialog } from './ConfirmationDialog';
+import type { EmojiSkinTone } from './fun/data/emojis';
+import { isFunPickerEnabled } from './fun/isFunPickerEnabled';
+import { FunEmojiPicker } from './fun/FunEmojiPicker';
+import { FunEmojiPickerButton } from './fun/FunButton';
+import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis';
 
 // Menu is disabled so these actions are inaccessible. We also don't support
 // link previews, tap to view messages, attachments, or gifts. Just regular
@@ -45,29 +48,38 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 const MESSAGE_DEFAULT_PROPS = {
   canDeleteForEveryone: false,
   checkForAccount: shouldNeverBeCalled,
-  clearSelectedMessage: shouldNeverBeCalled,
+  clearTargetedMessage: shouldNeverBeCalled,
   containerWidthBreakpoint: WidthBreakpoint.Medium,
-  displayTapToViewMessage: shouldNeverBeCalled,
   doubleCheckMissingQuoteReference: shouldNeverBeCalled,
-  downloadAttachment: shouldNeverBeCalled,
   isBlocked: false,
   isMessageRequestAccepted: true,
+  isSelected: false,
+  isSelectMode: false,
+  isSMS: false,
+  onToggleSelect: shouldNeverBeCalled,
+  onReplyToMessage: shouldNeverBeCalled,
   kickOffAttachmentDownload: shouldNeverBeCalled,
+  cancelAttachmentDownload: shouldNeverBeCalled,
   markAttachmentAsCorrupted: shouldNeverBeCalled,
-  markViewed: shouldNeverBeCalled,
   messageExpanded: shouldNeverBeCalled,
-  openConversation: shouldNeverBeCalled,
   openGiftBadge: shouldNeverBeCalled,
   openLink: shouldNeverBeCalled,
   previews: [],
+  retryMessageSend: shouldNeverBeCalled,
+  pushPanelForConversation: shouldNeverBeCalled,
   renderAudioAttachment: () => <div />,
+  saveAttachment: shouldNeverBeCalled,
+  saveAttachments: shouldNeverBeCalled,
   scrollToQuotedMessage: shouldNeverBeCalled,
-  showContactDetail: shouldNeverBeCalled,
-  showContactModal: shouldNeverBeCalled,
+  showConversation: noop,
+  showAttachmentDownloadStillInProgressToast: shouldNeverBeCalled,
+  showAttachmentNotAvailableModal: shouldNeverBeCalled,
   showExpiredIncomingTapToViewToast: shouldNeverBeCalled,
   showExpiredOutgoingTapToViewToast: shouldNeverBeCalled,
-  showMessageDetail: shouldNeverBeCalled,
-  showVisualAttachment: shouldNeverBeCalled,
+  showLightbox: shouldNeverBeCalled,
+  showLightboxForViewOnceMedia: shouldNeverBeCalled,
+  showMediaNoLongerAvailableToast: shouldNeverBeCalled,
+  showTapToViewNotAvailableModal: shouldNeverBeCalled,
   startConversation: shouldNeverBeCalled,
   theme: ThemeType.dark,
   viewStory: shouldNeverBeCalled,
@@ -81,62 +93,70 @@ export enum StoryViewsNRepliesTab {
 export type PropsType = {
   authorTitle: string;
   canReply: boolean;
+  deleteGroupStoryReply: (id: string) => void;
+  deleteGroupStoryReplyForEveryone: (id: string) => void;
   getPreferredBadge: PreferredBadgeSelectorType;
+  group: Pick<ConversationType, 'left'> | undefined;
   hasViewReceiptSetting: boolean;
   hasViewsCapability: boolean;
   i18n: LocalizerType;
-  group: Pick<ConversationType, 'left'> | undefined;
+  platform: string;
+  isFormattingEnabled: boolean;
+  isInternalUser?: boolean;
+  onChangeViewTarget: (target: StoryViewTargetType) => unknown;
   onClose: () => unknown;
   onReact: (emoji: string) => unknown;
   onReply: (
     message: string,
-    mentions: Array<BodyRangeType>,
+    bodyRanges: DraftBodyRanges,
     timestamp: number
   ) => unknown;
-  onSetSkinTone: (tone: number) => unknown;
+  onEmojiSkinToneDefaultChange: (emojiSkinTone: EmojiSkinTone) => void;
   onTextTooLong: () => unknown;
   onUseEmoji: (_: EmojiPickDataType) => unknown;
-  preferredReactionEmoji: Array<string>;
-  recentEmojis?: Array<string>;
+  ourConversationId: string | undefined;
+  preferredReactionEmoji: ReadonlyArray<string>;
+  recentEmojis?: ReadonlyArray<string>;
   renderEmojiPicker: (props: RenderEmojiPickerProps) => JSX.Element;
   replies: ReadonlyArray<ReplyType>;
-  skinTone?: number;
-  sortedGroupMembers?: Array<ConversationType>;
-  storyPreviewAttachment?: AttachmentType;
-  views: Array<StorySendStateType>;
+  showContactModal: (contactId: string, conversationId?: string) => void;
+  emojiSkinToneDefault: EmojiSkinTone | null;
+  sortedGroupMembers?: ReadonlyArray<ConversationType>;
+  views: ReadonlyArray<StorySendStateType>;
   viewTarget: StoryViewTargetType;
-  onChangeViewTarget: (target: StoryViewTargetType) => unknown;
-  deleteGroupStoryReply: (id: string) => void;
-  deleteGroupStoryReplyForEveryone: (id: string) => void;
 };
 
-export const StoryViewsNRepliesModal = ({
+export function StoryViewsNRepliesModal({
   authorTitle,
   canReply,
+  deleteGroupStoryReply,
+  deleteGroupStoryReplyForEveryone,
   getPreferredBadge,
+  group,
   hasViewReceiptSetting,
   hasViewsCapability,
   i18n,
-  group,
+  platform,
+  isFormattingEnabled,
+  isInternalUser,
+  onChangeViewTarget,
   onClose,
   onReact,
   onReply,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   onTextTooLong,
   onUseEmoji,
+  ourConversationId,
   preferredReactionEmoji,
   recentEmojis,
   renderEmojiPicker,
   replies,
-  skinTone,
+  showContactModal,
+  emojiSkinToneDefault,
   sortedGroupMembers,
-  storyPreviewAttachment,
-  views,
   viewTarget,
-  onChangeViewTarget,
-  deleteGroupStoryReply,
-  deleteGroupStoryReplyForEveryone,
-}: PropsType): JSX.Element | null => {
+  views,
+}: PropsType): JSX.Element | null {
   const [deleteReplyId, setDeleteReplyId] = useState<string | undefined>(
     undefined
   );
@@ -144,18 +164,30 @@ export const StoryViewsNRepliesModal = ({
     string | undefined
   >(undefined);
 
+  // These states aren't in redux; they are meant to last only as long as this dialog.
+  const [revealedSpoilersById, setRevealedSpoilersById] = useState<
+    Record<string, Record<number, boolean> | undefined>
+  >({});
+  const [displayLimitById, setDisplayLimitById] = useState<
+    Record<string, number | undefined>
+  >({});
+
   const containerElementRef = useRef<HTMLDivElement | null>(null);
   const inputApiRef = useRef<InputApi | undefined>();
   const shouldScrollToBottomRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [messageBodyText, setMessageBodyText] = useState('');
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const currentTab = useMemo<StoryViewsNRepliesTab>(() => {
     return viewTarget === StoryViewTargetType.Replies
       ? StoryViewsNRepliesTab.Replies
       : StoryViewsNRepliesTab.Views;
   }, [viewTarget]);
+
+  const sortedViews = useMemo(() => {
+    return orderBy(views, 'updatedAt', 'desc');
+  }, [views]);
 
   const onTabChange = (tab: string) => {
     onChangeViewTarget(
@@ -164,6 +196,10 @@ export const StoryViewsNRepliesModal = ({
         : StoryViewTargetType.Views
     );
   };
+
+  const handleEmojiPickerOpenChange = useCallback((open: boolean) => {
+    setEmojiPickerOpen(open);
+  }, []);
 
   const focusComposer = useCallback(() => {
     if (inputApiRef.current) {
@@ -181,16 +217,16 @@ export const StoryViewsNRepliesModal = ({
     [inputApiRef, onUseEmoji]
   );
 
-  const [referenceElement, setReferenceElement] =
-    useState<HTMLButtonElement | null>(null);
-  const [popperElement, setPopperElement] = useState<HTMLDivElement | null>(
-    null
+  const handleSelectEmoji = useCallback(
+    (emojiSelection: FunEmojiSelection) => {
+      const data: EmojiPickDataType = {
+        shortName: emojiSelection.englishShortName,
+        skinTone: emojiSelection.skinTone,
+      };
+      insertEmoji(data);
+    },
+    [insertEmoji]
   );
-
-  const { styles, attributes } = usePopper(referenceElement, popperElement, {
-    placement: 'top-start',
-    strategy: 'fixed',
-  });
 
   let composerElement: JSX.Element | undefined;
 
@@ -214,21 +250,19 @@ export const StoryViewsNRepliesModal = ({
   } else if (canReply) {
     composerElement = (
       <>
-        {!group && (
-          <Quote
-            authorTitle={authorTitle}
-            conversationColor="ultramarine"
-            i18n={i18n}
-            isFromMe={false}
-            isGiftBadge={false}
-            isStoryReply
-            isViewOnce={false}
-            moduleClassName="StoryViewsNRepliesModal__quote"
-            rawAttachment={storyPreviewAttachment}
-            referencedMessageNotFound={false}
-            text={getStoryReplyText(i18n, storyPreviewAttachment)}
-          />
-        )}
+        <ReactionPicker
+          i18n={i18n}
+          onPick={emoji => {
+            if (!group) {
+              onClose();
+            }
+            onReact(emoji);
+          }}
+          onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+          preferredReactionEmoji={preferredReactionEmoji}
+          renderEmojiPicker={renderEmojiPicker}
+          theme={ThemeType.dark}
+        />
         <div className="StoryViewsNRepliesModal__compose-container">
           <div className="StoryViewsNRepliesModal__composer">
             <CompositionInput
@@ -236,8 +270,11 @@ export const StoryViewsNRepliesModal = ({
               getPreferredBadge={getPreferredBadge}
               i18n={i18n}
               inputApi={inputApiRef}
+              isActive
+              isFormattingEnabled={isFormattingEnabled}
               moduleClassName="StoryViewsNRepliesModal__input"
-              onEditorStateChange={messageText => {
+              onCloseLinkPreview={noop}
+              onEditorStateChange={({ messageText }) => {
                 setMessageBodyText(messageText);
               }}
               onPickEmoji={onUseEmoji}
@@ -247,61 +284,66 @@ export const StoryViewsNRepliesModal = ({
                 onReply(...args);
               }}
               onTextTooLong={onTextTooLong}
+              ourConversationId={ourConversationId}
               placeholder={
                 group
-                  ? i18n('StoryViewer__reply-group')
-                  : i18n('StoryViewer__reply')
+                  ? i18n('icu:StoryViewer__reply-group')
+                  : i18n('icu:StoryViewer__reply-placeholder', {
+                      firstName: authorTitle,
+                    })
               }
-              sortedGroupMembers={sortedGroupMembers}
+              platform={platform}
+              quotedMessageId={null}
+              sendCounter={0}
+              emojiSkinToneDefault={emojiSkinToneDefault}
+              sortedGroupMembers={sortedGroupMembers ?? null}
               theme={ThemeType.dark}
+              conversationId={null}
+              draftBodyRanges={null}
+              draftEditMessage={null}
+              large={null}
+              shouldHidePopovers={null}
+              linkPreviewResult={null}
             >
-              <EmojiButton
-                className="StoryViewsNRepliesModal__emoji-button"
-                i18n={i18n}
-                onPickEmoji={insertEmoji}
-                onClose={focusComposer}
-                recentEmojis={recentEmojis}
-                skinTone={skinTone}
-                onSetSkinTone={onSetSkinTone}
-              />
+              {!isFunPickerEnabled() && (
+                <EmojiButton
+                  className="StoryViewsNRepliesModal__emoji-button"
+                  i18n={i18n}
+                  onPickEmoji={insertEmoji}
+                  onClose={focusComposer}
+                  recentEmojis={recentEmojis}
+                  emojiSkinToneDefault={emojiSkinToneDefault}
+                  onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+                />
+              )}
+              {isFunPickerEnabled() && (
+                <FunEmojiPicker
+                  open={emojiPickerOpen}
+                  onOpenChange={handleEmojiPickerOpenChange}
+                  onSelectEmoji={handleSelectEmoji}
+                  placement="top"
+                  theme={ThemeType.dark}
+                  closeOnSelect={false}
+                >
+                  <FunEmojiPickerButton i18n={i18n} />
+                </FunEmojiPicker>
+              )}
             </CompositionInput>
           </div>
-          <button
-            aria-label={i18n('StoryViewsNRepliesModal__react')}
-            className="StoryViewsNRepliesModal__react"
-            onClick={() => {
-              setShowReactionPicker(!showReactionPicker);
-            }}
-            ref={setReferenceElement}
-            type="button"
-          />
-          {showReactionPicker && (
-            <div
-              ref={setPopperElement}
-              style={styles.popper}
-              {...attributes.popper}
-            >
-              <ReactionPicker
-                i18n={i18n}
-                onClose={() => {
-                  setShowReactionPicker(false);
-                }}
-                onPick={emoji => {
-                  setShowReactionPicker(false);
-                  onReact(emoji);
-                }}
-                onSetSkinTone={onSetSkinTone}
-                preferredReactionEmoji={preferredReactionEmoji}
-                renderEmojiPicker={renderEmojiPicker}
-              />
-            </div>
-          )}
         </div>
       </>
     );
   }
 
   let repliesElement: JSX.Element | undefined;
+
+  function shouldCollapse(reply: ReplyType, otherReply?: ReplyType) {
+    // deleted reactions get rendered the same as deleted replies
+    return (
+      reply.conversationId === otherReply?.conversationId &&
+      (!otherReply?.reactionEmoji || Boolean(otherReply.deletedForEveryone))
+    );
+  }
 
   if (replies.length) {
     repliesElement = (
@@ -310,32 +352,39 @@ export const StoryViewsNRepliesModal = ({
         ref={containerElementRef}
       >
         {replies.map((reply, index) => {
-          return reply.reactionEmoji ? (
-            <Reaction
+          return (
+            <ReplyOrReactionMessage
               key={reply.id}
-              i18n={i18n}
-              reply={reply}
-              getPreferredBadge={getPreferredBadge}
-            />
-          ) : (
-            <Reply
-              key={reply.id}
-              i18n={i18n}
               containerElementRef={containerElementRef}
-              reply={reply}
               deleteGroupStoryReply={() => setDeleteReplyId(reply.id)}
               deleteGroupStoryReplyForEveryone={() =>
                 setDeleteForEveryoneReplyId(reply.id)
               }
+              displayLimit={displayLimitById[reply.id]}
               getPreferredBadge={getPreferredBadge}
-              shouldCollapseAbove={
-                reply.conversationId === replies[index - 1]?.conversationId &&
-                !replies[index - 1]?.reactionEmoji
-              }
-              shouldCollapseBelow={
-                reply.conversationId === replies[index + 1]?.conversationId &&
-                !replies[index + 1]?.reactionEmoji
-              }
+              i18n={i18n}
+              platform={platform}
+              id={reply.id}
+              isInternalUser={isInternalUser}
+              isSpoilerExpanded={revealedSpoilersById[reply.id] || {}}
+              messageExpanded={(messageId, displayLimit) => {
+                const update = {
+                  ...displayLimitById,
+                  [messageId]: displayLimit,
+                };
+                setDisplayLimitById(update);
+              }}
+              reply={reply}
+              shouldCollapseAbove={shouldCollapse(reply, replies[index - 1])}
+              shouldCollapseBelow={shouldCollapse(reply, replies[index + 1])}
+              showContactModal={showContactModal}
+              showSpoiler={(messageId, data) => {
+                const update = {
+                  ...revealedSpoilersById,
+                  [messageId]: data,
+                };
+                setRevealedSpoilersById(update);
+              }}
             />
           );
         })}
@@ -345,7 +394,7 @@ export const StoryViewsNRepliesModal = ({
   } else if (group) {
     repliesElement = (
       <div className="StoryViewsNRepliesModal__replies--none">
-        {i18n('StoryViewsNRepliesModal__no-replies')}
+        {i18n('icu:StoryViewsNRepliesModal__no-replies')}
       </div>
     );
   }
@@ -354,26 +403,24 @@ export const StoryViewsNRepliesModal = ({
   if (hasViewsCapability && !hasViewReceiptSetting) {
     viewsElement = (
       <div className="StoryViewsNRepliesModal__read-receipts-off">
-        {i18n('StoryViewsNRepliesModal__read-receipts-off')}
+        {i18n('icu:StoryViewsNRepliesModal__read-receipts-off')}
       </div>
     );
-  } else if (views.length) {
+  } else if (sortedViews.length) {
     viewsElement = (
       <div className="StoryViewsNRepliesModal__views">
-        {views.map(view => (
+        {sortedViews.map(view => (
           <div
             className="StoryViewsNRepliesModal__view"
             key={view.recipient.id}
           >
             <div>
               <Avatar
-                acceptedMessageRequest={view.recipient.acceptedMessageRequest}
-                avatarPath={view.recipient.avatarPath}
+                avatarUrl={view.recipient.avatarUrl}
                 badge={undefined}
                 color={getAvatarColor(view.recipient.color)}
                 conversationType="direct"
                 i18n={i18n}
-                isMe={Boolean(view.recipient.isMe)}
                 profileName={view.recipient.profileName}
                 sharedGroupNames={view.recipient.sharedGroupNames || []}
                 size={AvatarSize.TWENTY_EIGHT}
@@ -397,7 +444,7 @@ export const StoryViewsNRepliesModal = ({
   } else if (hasViewsCapability) {
     viewsElement = (
       <div className="StoryViewsNRepliesModal__replies--none">
-        {i18n('StoryViewsNRepliesModal__no-views')}
+        {i18n('icu:StoryViewsNRepliesModal__no-views')}
       </div>
     );
   }
@@ -411,11 +458,11 @@ export const StoryViewsNRepliesModal = ({
         tabs={[
           {
             id: StoryViewsNRepliesTab.Views,
-            label: i18n('StoryViewsNRepliesModal__tab--views'),
+            label: i18n('icu:StoryViewsNRepliesModal__tab--views'),
           },
           {
             id: StoryViewsNRepliesTab.Replies,
-            label: i18n('StoryViewsNRepliesModal__tab--replies'),
+            label: i18n('icu:StoryViewsNRepliesModal__tab--replies'),
           },
         ]}
       >
@@ -442,16 +489,15 @@ export const StoryViewsNRepliesModal = ({
       <Modal
         modalName="StoryViewsNRepliesModal"
         i18n={i18n}
-        moduleClassName="StoryViewsNRepliesModal"
+        moduleClassName={classNames({
+          StoryViewsNRepliesModal: true,
+          'StoryViewsNRepliesModal--group': Boolean(group),
+        })}
         onClose={onClose}
-        useFocusTrap={Boolean(composerElement)}
+        padded={false}
         theme={Theme.Dark}
       >
-        <div
-          className={classNames({
-            'StoryViewsNRepliesModal--group': Boolean(group),
-          })}
-        >
+        <div className="StoryViewsNRepliesModal__content">
           {tabsElement || (
             <>
               {viewsElement || repliesElement}
@@ -467,12 +513,12 @@ export const StoryViewsNRepliesModal = ({
           dialogName="confirmDialog"
           actions={[
             {
-              text: i18n('delete'),
+              text: i18n('icu:delete'),
               action: () => deleteGroupStoryReply(deleteReplyId),
               style: 'negative',
             },
           ]}
-          title={i18n('deleteWarning')}
+          title={i18n('icu:deleteWarning')}
           onClose={() => setDeleteReplyId(undefined)}
           onCancel={() => setDeleteReplyId(undefined)}
         />
@@ -484,151 +530,179 @@ export const StoryViewsNRepliesModal = ({
           dialogName="confirmDialog"
           actions={[
             {
-              text: i18n('delete'),
+              text: i18n('icu:delete'),
               action: () =>
                 deleteGroupStoryReplyForEveryone(deleteForEveryoneReplyId),
               style: 'negative',
             },
           ]}
-          title={i18n('deleteWarning')}
+          title={i18n('icu:deleteWarning')}
           onClose={() => setDeleteForEveryoneReplyId(undefined)}
           onCancel={() => setDeleteForEveryoneReplyId(undefined)}
         >
-          {i18n('deleteForEveryoneWarning')}
+          {i18n('icu:deleteForEveryoneWarning')}
         </ConfirmationDialog>
       )}
     </>
   );
-};
+}
 
-type ReactionProps = {
-  i18n: LocalizerType;
-  reply: ReplyType;
-  getPreferredBadge: PreferredBadgeSelectorType;
-};
-
-const Reaction = ({
-  i18n,
-  reply,
-  getPreferredBadge,
-}: ReactionProps): JSX.Element => {
-  // TODO: DESKTOP-4503 - reactions delete/doe
-  return (
-    <div className="StoryViewsNRepliesModal__reaction" key={reply.id}>
-      <div className="StoryViewsNRepliesModal__reaction--container">
-        <Avatar
-          acceptedMessageRequest={reply.author.acceptedMessageRequest}
-          avatarPath={reply.author.avatarPath}
-          badge={getPreferredBadge(reply.author.badges)}
-          color={getAvatarColor(reply.author.color)}
-          conversationType="direct"
-          i18n={i18n}
-          isMe={Boolean(reply.author.isMe)}
-          profileName={reply.author.profileName}
-          sharedGroupNames={reply.author.sharedGroupNames || []}
-          size={AvatarSize.TWENTY_EIGHT}
-          theme={ThemeType.dark}
-          title={reply.author.title}
-        />
-        <div className="StoryViewsNRepliesModal__reaction--body">
-          <div className="StoryViewsNRepliesModal__reply--title">
-            <ContactName
-              contactNameColor={reply.contactNameColor}
-              title={reply.author.isMe ? i18n('you') : reply.author.title}
-            />
-          </div>
-          {i18n('StoryViewsNRepliesModal__reacted')}
-          <MessageTimestamp
-            i18n={i18n}
-            isRelativeTime
-            module="StoryViewsNRepliesModal__reply--timestamp"
-            timestamp={reply.timestamp}
-          />
-        </div>
-      </div>
-      <Emojify text={reply.reactionEmoji} />
-    </div>
-  );
-};
-
-type ReplyProps = {
-  i18n: LocalizerType;
-  reply: ReplyType;
+type ReplyOrReactionMessageProps = {
+  containerElementRef: React.RefObject<HTMLElement>;
   deleteGroupStoryReply: (replyId: string) => void;
   deleteGroupStoryReplyForEveryone: (replyId: string) => void;
+  displayLimit: number | undefined;
   getPreferredBadge: PreferredBadgeSelectorType;
+  i18n: LocalizerType;
+  platform: string;
+  id: string;
+  isInternalUser?: boolean;
+  isSpoilerExpanded: Record<number, boolean>;
+  onContextMenu?: (ev: React.MouseEvent) => void;
+  reply: ReplyType;
   shouldCollapseAbove: boolean;
   shouldCollapseBelow: boolean;
-  containerElementRef: React.RefObject<HTMLElement>;
+  showContactModal: (contactId: string, conversationId?: string) => void;
+  messageExpanded: (messageId: string, displayLimit: number) => void;
+  showSpoiler: (messageId: string, data: Record<number, boolean>) => void;
 };
 
-const Reply = ({
-  i18n,
-  reply,
+function ReplyOrReactionMessage({
+  containerElementRef,
   deleteGroupStoryReply,
   deleteGroupStoryReplyForEveryone,
+  displayLimit,
   getPreferredBadge,
+  i18n,
+  id,
+  isInternalUser,
+  isSpoilerExpanded,
+  messageExpanded,
+  platform,
+  reply,
   shouldCollapseAbove,
   shouldCollapseBelow,
-  containerElementRef,
-}: ReplyProps): JSX.Element => {
-  const renderMessage = (onContextMenu?: (ev: React.MouseEvent) => void) => (
-    <div key={reply.id}>
-      <Message
-        {...MESSAGE_DEFAULT_PROPS}
-        author={reply.author}
-        bodyRanges={reply.bodyRanges}
-        contactNameColor={reply.contactNameColor}
-        containerElementRef={containerElementRef}
-        conversationColor="ultramarine"
-        conversationId={reply.conversationId}
-        conversationTitle={reply.author.title}
-        conversationType="group"
-        direction="incoming"
-        deletedForEveryone={reply.deletedForEveryone}
-        menu={undefined}
-        onContextMenu={onContextMenu}
-        getPreferredBadge={getPreferredBadge}
-        i18n={i18n}
-        id={reply.id}
-        interactionMode="mouse"
-        readStatus={reply.readStatus}
-        renderingContext="StoryViewsNRepliesModal"
-        shouldCollapseAbove={shouldCollapseAbove}
-        shouldCollapseBelow={shouldCollapseBelow}
-        shouldHideMetadata={false}
-        text={reply.body}
-        textDirection={TextDirection.Default}
-        timestamp={reply.timestamp}
-      />
-    </div>
-  );
+  showContactModal,
+  showSpoiler,
+}: ReplyOrReactionMessageProps) {
+  const renderContent = (onContextMenu?: (ev: React.MouseEvent) => void) => {
+    if (reply.reactionEmoji && !reply.deletedForEveryone) {
+      return (
+        <div
+          className="StoryViewsNRepliesModal__reaction"
+          onContextMenu={onContextMenu}
+          data-id={id}
+        >
+          <div className="StoryViewsNRepliesModal__reaction--container">
+            <Avatar
+              avatarUrl={reply.author.avatarUrl}
+              badge={getPreferredBadge(reply.author.badges)}
+              color={getAvatarColor(reply.author.color)}
+              conversationType="direct"
+              i18n={i18n}
+              profileName={reply.author.profileName}
+              sharedGroupNames={reply.author.sharedGroupNames || []}
+              size={AvatarSize.TWENTY_EIGHT}
+              theme={ThemeType.dark}
+              title={reply.author.title}
+            />
+            <div className="StoryViewsNRepliesModal__reaction--body">
+              <div className="StoryViewsNRepliesModal__reply--title">
+                <ContactName
+                  contactNameColor={reply.contactNameColor}
+                  title={
+                    reply.author.isMe ? i18n('icu:you') : reply.author.title
+                  }
+                />
+              </div>
+              {reply.author.isMe
+                ? i18n('icu:StoryViewsNRepliesModal__reacted--you')
+                : i18n('icu:StoryViewsNRepliesModal__reacted--someone-else')}
+              <MessageTimestamp
+                i18n={i18n}
+                isRelativeTime
+                module="StoryViewsNRepliesModal__reply--timestamp"
+                timestamp={reply.timestamp}
+              />
+            </div>
+          </div>
+          <Emojify text={reply.reactionEmoji} />
+        </div>
+      );
+    }
 
-  return reply.author.isMe ? (
-    <ContextMenu
-      i18n={i18n}
-      key={reply.id}
-      menuOptions={[
-        {
-          icon: 'module-message__context--icon module-message__context__delete-message',
-          label: i18n('icu:StoryViewsNRepliesModal__delete-reply'),
-          onClick: () => deleteGroupStoryReply(reply.id),
-        },
-        {
-          icon: 'module-message__context--icon module-message__context__delete-message-for-everyone',
-          label: i18n('icu:StoryViewsNRepliesModal__delete-reply-for-everyone'),
-          onClick: () => deleteGroupStoryReplyForEveryone(reply.id),
-        },
-      ]}
-    >
-      {({ openMenu, menuNode }) => (
+    return (
+      <div className="StoryViewsNRepliesModal__reply" data-id={id}>
+        <Message
+          {...MESSAGE_DEFAULT_PROPS}
+          author={reply.author}
+          bodyRanges={reply.bodyRanges}
+          contactNameColor={reply.contactNameColor}
+          containerElementRef={containerElementRef}
+          conversationColor="ultramarine"
+          conversationId={reply.conversationId}
+          conversationTitle={reply.author.title}
+          conversationType="group"
+          deletedForEveryone={reply.deletedForEveryone}
+          direction="incoming"
+          displayLimit={displayLimit}
+          getPreferredBadge={getPreferredBadge}
+          i18n={i18n}
+          platform={platform}
+          id={reply.id}
+          interactionMode="mouse"
+          isSpoilerExpanded={isSpoilerExpanded}
+          messageExpanded={messageExpanded}
+          onContextMenu={onContextMenu}
+          readStatus={reply.readStatus}
+          renderingContext="StoryViewsNRepliesModal"
+          renderMenu={undefined}
+          shouldCollapseAbove={shouldCollapseAbove}
+          shouldCollapseBelow={shouldCollapseBelow}
+          shouldHideMetadata={false}
+          showContactModal={showContactModal}
+          showSpoiler={showSpoiler}
+          text={reply.body}
+          textDirection={TextDirection.Default}
+          timestamp={reply.timestamp}
+        />
+      </div>
+    );
+  };
+
+  const menuOptions = [
+    {
+      icon: 'module-message__context--icon module-message__context__delete-message',
+      label: i18n('icu:StoryViewsNRepliesModal__delete-reply'),
+      onClick: () => deleteGroupStoryReply(reply.id),
+    },
+    {
+      icon: 'module-message__context--icon module-message__context__delete-message-for-everyone',
+      label: i18n('icu:StoryViewsNRepliesModal__delete-reply-for-everyone'),
+      onClick: () => deleteGroupStoryReplyForEveryone(reply.id),
+    },
+  ];
+
+  if (isInternalUser) {
+    menuOptions.push({
+      icon: 'module-message__context--icon module-message__context__copy-timestamp',
+      label: i18n('icu:StoryViewsNRepliesModal__copy-reply-timestamp'),
+      onClick: () => {
+        void window.navigator.clipboard.writeText(String(reply.timestamp));
+      },
+    });
+  }
+
+  return reply.author.isMe && !reply.deletedForEveryone ? (
+    <ContextMenu i18n={i18n} key={reply.id} menuOptions={menuOptions}>
+      {({ onClick, menuNode }) => (
         <>
-          {renderMessage(openMenu)}
+          {renderContent(onClick)}
           {menuNode}
         </>
       )}
     </ContextMenu>
   ) : (
-    renderMessage()
+    renderContent()
   );
-};
+}

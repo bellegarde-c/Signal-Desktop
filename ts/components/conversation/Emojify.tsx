@@ -1,78 +1,72 @@
-// Copyright 2018-2021 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
 import React from 'react';
-
-import classNames from 'classnames';
-
 import type { RenderTextCallbackType } from '../../types/Util';
 import { splitByEmoji } from '../../util/emoji';
 import { missingCaseError } from '../../util/missingCaseError';
-import type { SizeClassType } from '../emoji/lib';
-import { emojiToImage } from '../emoji/lib';
-
-// Some of this logic taken from emoji-js/replacement
-// the DOM structure for this getImageTag should match the other emoji implementations:
-// ts/components/emoji/Emoji.tsx
-// ts/quill/emoji/blot.tsx
-function getImageTag({
-  match,
-  sizeClass,
-  key,
-}: {
-  match: string;
-  sizeClass?: SizeClassType;
-  key: string | number;
-}): JSX.Element | string {
-  const img = emojiToImage(match);
-
-  if (!img) {
-    return match;
-  }
-
-  return (
-    <img
-      key={key}
-      src={img}
-      aria-label={match}
-      className={classNames('emoji', sizeClass)}
-      alt={match}
-    />
-  );
-}
+import { FunInlineEmoji } from '../fun/FunEmoji';
+import {
+  getEmojiVariantByKey,
+  getEmojiVariantKeyByValue,
+  isEmojiVariantValue,
+  isEmojiVariantValueNonQualified,
+} from '../fun/data/emojis';
+import * as log from '../../logging/log';
+import { useFunEmojiLocalizer } from '../fun/useFunEmojiLocalizer';
 
 export type Props = {
+  fontSizeOverride?: number | null;
   text: string;
-  /** A class name to be added to the generated emoji images */
-  sizeClass?: SizeClassType;
+  /** When behind a spoiler, this emoji needs to be visibility: hidden */
+  isInvisible?: boolean;
   /** Allows you to customize now non-newlines are rendered. Simplest is just a <span>. */
   renderNonEmoji?: RenderTextCallbackType;
 };
 
-export class Emojify extends React.Component<Props> {
-  public static defaultProps: Partial<Props> = {
-    renderNonEmoji: ({ text }) => text,
-  };
+const defaultRenderNonEmoji: RenderTextCallbackType = ({ text }) => text;
 
-  public override render(): null | Array<JSX.Element | string | null> {
-    const { text, sizeClass, renderNonEmoji } = this.props;
+export function Emojify({
+  fontSizeOverride,
+  text,
+  renderNonEmoji = defaultRenderNonEmoji,
+}: Props): JSX.Element {
+  const emojiLocalizer = useFunEmojiLocalizer();
+  return (
+    <>
+      {splitByEmoji(text).map(({ type, value: match }, index) => {
+        if (type === 'emoji') {
+          // If we don't recognize the emoji, render it as text.
+          if (!isEmojiVariantValue(match)) {
+            log.error(`Found emoji that we did not recognize: ${match}`);
+            return renderNonEmoji({ text: match, key: index });
+          }
 
-    // We have to do this, because renderNonEmoji is not required in our Props object,
-    //  but it is always provided via defaultProps.
-    if (!renderNonEmoji) {
-      return null;
-    }
+          // Render emoji as text if they are a non-qualified emoji value.
+          if (isEmojiVariantValueNonQualified(match)) {
+            return renderNonEmoji({ text: match, key: index });
+          }
 
-    return splitByEmoji(text).map(({ type, value: match }, index) => {
-      if (type === 'emoji') {
-        return getImageTag({ match, sizeClass, key: index });
-      }
+          const variantKey = getEmojiVariantKeyByValue(match);
+          const variant = getEmojiVariantByKey(variantKey);
 
-      if (type === 'text') {
-        return renderNonEmoji({ text: match, key: index });
-      }
+          return (
+            <FunInlineEmoji
+              // eslint-disable-next-line react/no-array-index-key
+              key={index}
+              role="img"
+              aria-label={emojiLocalizer(variantKey)}
+              emoji={variant}
+              size={fontSizeOverride}
+            />
+          );
+        }
 
-      throw missingCaseError(type);
-    });
-  }
+        if (type === 'text') {
+          return renderNonEmoji({ text: match, key: index });
+        }
+
+        throw missingCaseError(type);
+      })}
+    </>
+  );
 }

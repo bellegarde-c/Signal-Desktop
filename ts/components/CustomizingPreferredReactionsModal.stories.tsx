@@ -5,16 +5,17 @@ import type { ComponentProps } from 'react';
 import React from 'react';
 
 import { action } from '@storybook/addon-actions';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
+import { DEFAULT_PREFERRED_REACTION_EMOJI } from '../reactions/constants';
+import type { PropsType } from './CustomizingPreferredReactionsModal';
 import { CustomizingPreferredReactionsModal } from './CustomizingPreferredReactionsModal';
+import { EmojiSkinTone } from './fun/data/emojis';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/CustomizingPreferredReactionsModal',
-};
+} satisfies Meta<PropsType>;
 
 const defaultProps: ComponentProps<typeof CustomizingPreferredReactionsModal> =
   {
@@ -26,40 +27,34 @@ const defaultProps: ComponentProps<typeof CustomizingPreferredReactionsModal> =
     hadSaveError: false,
     i18n,
     isSaving: false,
-    onSetSkinTone: action('onSetSkinTone'),
-    originalPreferredReactions: ['❤️', '👍', '👎', '😂', '😮', '😢'],
+    onEmojiSkinToneDefaultChange: action('onEmojiSkinToneDefaultChange'),
+    originalPreferredReactions: DEFAULT_PREFERRED_REACTION_EMOJI,
     recentEmojis: ['cake'],
     replaceSelectedDraftEmoji: action('replaceSelectedDraftEmoji'),
     resetDraftEmoji: action('resetDraftEmoji'),
     savePreferredReactions: action('savePreferredReactions'),
     selectDraftEmojiToBeReplaced: action('selectDraftEmojiToBeReplaced'),
     selectedDraftEmojiIndex: undefined,
-    skinTone: 4,
+    emojiSkinToneDefault: EmojiSkinTone.Type4,
   };
 
-export const Default = (): JSX.Element => (
-  <CustomizingPreferredReactionsModal {...defaultProps} />
-);
+export function Default(): JSX.Element {
+  return <CustomizingPreferredReactionsModal {...defaultProps} />;
+}
 
-export const DraftEmojiSelected = (): JSX.Element => (
-  <CustomizingPreferredReactionsModal
-    {...defaultProps}
-    selectedDraftEmojiIndex={4}
-  />
-);
+export function DraftEmojiSelected(): JSX.Element {
+  return (
+    <CustomizingPreferredReactionsModal
+      {...defaultProps}
+      selectedDraftEmojiIndex={4}
+    />
+  );
+}
 
-DraftEmojiSelected.story = {
-  name: 'Draft emoji selected',
-};
+export function Saving(): JSX.Element {
+  return <CustomizingPreferredReactionsModal {...defaultProps} isSaving />;
+}
 
-export const Saving = (): JSX.Element => (
-  <CustomizingPreferredReactionsModal {...defaultProps} isSaving />
-);
-
-export const HadError = (): JSX.Element => (
-  <CustomizingPreferredReactionsModal {...defaultProps} hadSaveError />
-);
-
-HadError.story = {
-  name: 'Had error',
-};
+export function HadError(): JSX.Element {
+  return <CustomizingPreferredReactionsModal {...defaultProps} hadSaveError />;
+}

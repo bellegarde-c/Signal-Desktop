@@ -3,25 +3,22 @@
 
 import type { ComponentProps } from 'react';
 import React from 'react';
-
 import { action } from '@storybook/addon-actions';
-
-import { setupI18n } from '../../../util/setupI18n';
-import enMessages from '../../../../_locales/en/messages.json';
+import type { Meta } from '@storybook/react';
 import { EditConversationAttributesModal } from './EditConversationAttributesModal';
 import { RequestState } from './util';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title:
     'Components/Conversation/ConversationDetails/EditConversationAttributesModal',
-};
+} satisfies Meta<PropsType>;
 
 type PropsType = ComponentProps<typeof EditConversationAttributesModal>;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
-  avatarPath: undefined,
+  avatarUrl: undefined,
   conversationId: '123',
   i18n,
   initiallyFocusDescription: false,
@@ -36,52 +33,40 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   ...overrideProps,
 });
 
-export const NoAvatarEmptyTitle = (): JSX.Element => (
-  <EditConversationAttributesModal {...createProps({ title: '' })} />
-);
+export function NoAvatarEmptyTitle(): JSX.Element {
+  return <EditConversationAttributesModal {...createProps({ title: '' })} />;
+}
 
-NoAvatarEmptyTitle.story = {
-  name: 'No avatar, empty title',
-};
+export function AvatarAndTitle(): JSX.Element {
+  return (
+    <EditConversationAttributesModal
+      {...createProps({
+        avatarUrl: '/fixtures/kitten-3-64-64.jpg',
+      })}
+    />
+  );
+}
 
-export const AvatarAndTitle = (): JSX.Element => (
-  <EditConversationAttributesModal
-    {...createProps({
-      avatarPath: '/fixtures/kitten-3-64-64.jpg',
-    })}
-  />
-);
+export function InitiallyFocusingDescription(): JSX.Element {
+  return (
+    <EditConversationAttributesModal
+      {...createProps({ title: 'Has title', initiallyFocusDescription: true })}
+    />
+  );
+}
 
-AvatarAndTitle.story = {
-  name: 'Avatar and title',
-};
+export function RequestActive(): JSX.Element {
+  return (
+    <EditConversationAttributesModal
+      {...createProps({ requestState: RequestState.Active })}
+    />
+  );
+}
 
-export const InitiallyFocusingDescription = (): JSX.Element => (
-  <EditConversationAttributesModal
-    {...createProps({ title: 'Has title', initiallyFocusDescription: true })}
-  />
-);
-
-InitiallyFocusingDescription.story = {
-  name: 'Initially focusing description',
-};
-
-export const RequestActive = (): JSX.Element => (
-  <EditConversationAttributesModal
-    {...createProps({ requestState: RequestState.Active })}
-  />
-);
-
-RequestActive.story = {
-  name: 'Request active',
-};
-
-export const HasError = (): JSX.Element => (
-  <EditConversationAttributesModal
-    {...createProps({ requestState: RequestState.InactiveWithError })}
-  />
-);
-
-HasError.story = {
-  name: 'Has error',
-};
+export function HasError(): JSX.Element {
+  return (
+    <EditConversationAttributesModal
+      {...createProps({ requestState: RequestState.InactiveWithError })}
+    />
+  );
+}

@@ -1,7 +1,8 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useEffect, useRef } from 'react';
+import classNames from 'classnames';
 import type {
   ConversationType,
   ShowConversationType,
@@ -10,35 +11,60 @@ import type { LocalizerType } from '../types/Util';
 import { Avatar, AvatarSize } from './Avatar';
 import { SearchInput } from './SearchInput';
 import { usePrevious } from '../hooks/usePrevious';
+import { Tooltip, TooltipPlacement } from './Tooltip';
+import { Theme } from '../util/theme';
 
-type PropsType = {
+type BasePropsType = {
   clearConversationSearch: () => void;
-  clearSearch: () => void;
+  clearSearchQuery: () => void;
   disabled?: boolean;
+  endConversationSearch: () => void;
+  endSearch: () => void;
   i18n: LocalizerType;
-  searchConversation?: ConversationType;
-  searchTerm: string;
-  startSearchCounter: number;
-  updateSearchTerm: (searchTerm: string) => void;
-  showConversation: ShowConversationType;
+  isSearchingGlobally: boolean;
   onEnterKeyDown?: (
-    clearSearch: () => void,
+    clearSearchQuery: () => void,
     showConversation: ShowConversationType
   ) => void;
+  searchConversation?: ConversationType;
+  searchTerm: string;
+  showConversation: ShowConversationType;
+  startSearchCounter: number;
+  updateSearchTerm: (searchTerm: string) => void;
 };
 
-export const LeftPaneSearchInput = ({
+type NoFilterPropsType = BasePropsType & {
+  filterButtonEnabled?: false;
+  filterPressed?: false;
+  onFilterClick?: () => void;
+};
+
+type WithFilterPropsType = BasePropsType & {
+  filterButtonEnabled: boolean;
+  filterPressed: boolean;
+  onFilterClick: (enabled: boolean) => void;
+};
+
+type PropsType = NoFilterPropsType | WithFilterPropsType;
+
+export function LeftPaneSearchInput({
   clearConversationSearch,
-  clearSearch,
+  clearSearchQuery,
   disabled,
+  endConversationSearch,
+  endSearch,
   i18n,
+  isSearchingGlobally,
+  onEnterKeyDown,
   searchConversation,
   searchTerm,
+  showConversation,
   startSearchCounter,
   updateSearchTerm,
-  showConversation,
-  onEnterKeyDown,
-}: PropsType): JSX.Element => {
+  filterButtonEnabled = false,
+  filterPressed = false,
+  onFilterClick,
+}: PropsType): JSX.Element {
   const inputRef = useRef<null | HTMLInputElement>(null);
 
   const prevSearchConversationId = usePrevious(
@@ -46,6 +72,7 @@ export const LeftPaneSearchInput = ({
     searchConversation?.id
   );
   const prevSearchCounter = usePrevious(startSearchCounter, startSearchCounter);
+  const wasSearchingGlobally = usePrevious(false, isSearchingGlobally);
 
   useEffect(() => {
     // When user chooses to search in a given conversation we focus the field for them
@@ -56,7 +83,10 @@ export const LeftPaneSearchInput = ({
       inputRef.current?.focus();
     }
     // When user chooses to start a new search, we focus the field
-    if (startSearchCounter !== prevSearchCounter) {
+    if (
+      (isSearchingGlobally && !wasSearchingGlobally) ||
+      startSearchCounter !== prevSearchCounter
+    ) {
       inputRef.current?.select();
     }
   }, [
@@ -64,6 +94,8 @@ export const LeftPaneSearchInput = ({
     prevSearchCounter,
     searchConversation,
     startSearchCounter,
+    isSearchingGlobally,
+    wasSearchingGlobally,
   ]);
 
   const changeValue = (nextSearchTerm: string) => {
@@ -71,7 +103,7 @@ export const LeftPaneSearchInput = ({
       if (searchConversation) {
         clearConversationSearch();
       } else {
-        clearSearch();
+        clearSearchQuery();
       }
 
       return;
@@ -82,80 +114,111 @@ export const LeftPaneSearchInput = ({
     }
   };
 
-  const clearAndFocus = () => {
-    clearSearch();
-    inputRef.current?.focus();
-  };
-
-  const label = i18n(searchConversation ? 'searchIn' : 'search');
+  let label: string;
+  if (searchConversation) {
+    label = i18n('icu:searchIn');
+  } else if (filterPressed) {
+    label = i18n('icu:searchUnreadChats');
+  } else {
+    label = i18n('icu:search');
+  }
 
   return (
-    <SearchInput
-      disabled={disabled}
-      label={label}
-      hasSearchIcon={!searchConversation}
-      i18n={i18n}
-      moduleClassName="LeftPaneSearchInput"
-      onBlur={() => {
-        if (!searchConversation && !searchTerm) {
-          clearSearch();
-        }
-      }}
-      onKeyDown={event => {
-        if (onEnterKeyDown && event.key === 'Enter') {
-          onEnterKeyDown(clearSearch, showConversation);
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      }}
-      onChange={event => {
-        changeValue(event.currentTarget.value);
-      }}
-      onClear={() => {
-        if (searchConversation && searchTerm) {
-          changeValue('');
-        } else {
-          clearAndFocus();
-        }
-      }}
-      ref={inputRef}
-      placeholder={label}
-      value={searchTerm}
-    >
-      {searchConversation && (
-        // Clicking the non-X part of the pill should focus the input but have a normal
-        //   cursor. This effectively simulates `pointer-events: none` while still
-        //   letting us change the cursor.
-        // eslint-disable-next-line max-len
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-        <div
-          className="LeftPaneSearchInput__in-conversation-pill"
-          onClick={() => {
+    <>
+      <SearchInput
+        disabled={disabled}
+        label={label}
+        hasSearchIcon={!searchConversation}
+        i18n={i18n}
+        moduleClassName="LeftPaneSearchInput"
+        onBlur={() => {
+          if (!searchConversation && !searchTerm) {
+            endSearch();
+          }
+        }}
+        onKeyDown={event => {
+          if (onEnterKeyDown && event.key === 'Enter') {
+            onEnterKeyDown(clearSearchQuery, showConversation);
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onChange={event => {
+          changeValue(event.currentTarget.value);
+        }}
+        onClear={() => {
+          if (searchTerm) {
+            clearSearchQuery();
             inputRef.current?.focus();
-          }}
+          } else if (searchConversation) {
+            endConversationSearch();
+            inputRef.current?.focus();
+          } else {
+            inputRef.current?.blur();
+          }
+        }}
+        ref={inputRef}
+        placeholder={label}
+        value={searchTerm}
+      >
+        {searchConversation && (
+          // Clicking the non-X part of the pill should focus the input but have a normal
+          //   cursor. This effectively simulates `pointer-events: none` while still
+          //   letting us change the cursor.
+          // eslint-disable-next-line max-len
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+          <div
+            className="LeftPaneSearchInput__in-conversation-pill"
+            onClick={() => {
+              inputRef.current?.focus();
+            }}
+          >
+            <Avatar
+              avatarPlaceholderGradient={
+                searchConversation.avatarPlaceholderGradient
+              }
+              avatarUrl={searchConversation.avatarUrl}
+              badge={undefined}
+              color={searchConversation.color}
+              conversationType={searchConversation.type}
+              hasAvatar={searchConversation.hasAvatar}
+              i18n={i18n}
+              noteToSelf={searchConversation.isMe}
+              sharedGroupNames={searchConversation.sharedGroupNames}
+              size={AvatarSize.TWENTY}
+              title={searchConversation.title}
+            />
+            <button
+              aria-label={i18n('icu:clearSearch')}
+              className="LeftPaneSearchInput__in-conversation-pill__x-button"
+              onClick={endConversationSearch}
+              type="button"
+            />
+          </div>
+        )}
+      </SearchInput>
+      {filterButtonEnabled && (
+        <Tooltip
+          direction={TooltipPlacement.Bottom}
+          content={i18n('icu:filterByUnreadButtonLabel')}
+          theme={Theme.Dark}
+          delay={2000}
+          wrapperClassName="LeftPaneSearchInput__FilterButtonWrapper"
         >
-          <Avatar
-            acceptedMessageRequest={searchConversation.acceptedMessageRequest}
-            avatarPath={searchConversation.avatarPath}
-            badge={undefined}
-            color={searchConversation.color}
-            conversationType={searchConversation.type}
-            i18n={i18n}
-            isMe={searchConversation.isMe}
-            noteToSelf={searchConversation.isMe}
-            sharedGroupNames={searchConversation.sharedGroupNames}
-            size={AvatarSize.SIXTEEN}
-            title={searchConversation.title}
-            unblurredAvatarPath={searchConversation.unblurredAvatarPath}
-          />
           <button
-            aria-label={i18n('clearSearch')}
-            className="LeftPaneSearchInput__in-conversation-pill__x-button"
-            onClick={clearAndFocus}
+            className={classNames('LeftPaneSearchInput__FilterButton', {
+              'LeftPaneSearchInput__FilterButton--pressed': filterPressed,
+            })}
             type="button"
-          />
-        </div>
+            aria-pressed={filterPressed}
+            onClick={() => onFilterClick?.(!filterPressed)}
+          >
+            <span className="LeftPaneSearchInput__FilterLabel">
+              {i18n('icu:filterByUnreadButtonLabel')}
+            </span>
+          </button>
+        </Tooltip>
       )}
-    </SearchInput>
+    </>
   );
-};
+}

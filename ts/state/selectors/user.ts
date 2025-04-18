@@ -1,17 +1,18 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createSelector } from 'reselect';
 
-import type { LocalizerType, ThemeType } from '../../types/Util';
-import type { UUIDStringType } from '../../types/UUID';
+import { type LocalizerType, ThemeType } from '../../types/Util';
+import type { AciString, PniString } from '../../types/ServiceId';
 import type { LocaleMessagesType } from '../../types/I18N';
 import type { MenuOptionsType } from '../../types/menu';
 
 import type { StateType } from '../reducer';
+import type { CallingStateType } from '../ducks/calling';
 import type { UserStateType } from '../ducks/user';
 
-import { isAlpha, isBeta } from '../../util/version';
+import { isNightly, isBeta } from '../../util/version';
 
 export const getUser = (state: StateType): UserStateType => state.user;
 
@@ -37,12 +38,12 @@ export const getUserConversationId = createSelector(
 
 export const getUserACI = createSelector(
   getUser,
-  (state: UserStateType): UUIDStringType | undefined => state.ourACI
+  (state: UserStateType): AciString | undefined => state.ourAci
 );
 
 export const getUserPNI = createSelector(
   getUser,
-  (state: UserStateType): UUIDStringType | undefined => state.ourPNI
+  (state: UserStateType): PniString | undefined => state.ourPni
 );
 
 export const getIntl = createSelector(
@@ -80,9 +81,26 @@ export const getTempPath = createSelector(
   (state: UserStateType): string => state.tempPath
 );
 
-export const getTheme = createSelector(
+export const getPreferredTheme = createSelector(
   getUser,
   (state: UserStateType): ThemeType => state.theme
+);
+
+// Also defined in calling selectors, redefined to avoid circular dependency
+const getIsInFullScreenCall = createSelector(
+  (state: StateType): CallingStateType => state.calling,
+  (state: CallingStateType): boolean =>
+    Boolean(
+      state.activeCallState?.state === 'Active' && !state.activeCallState.pip
+    )
+);
+
+export const getTheme = createSelector(
+  getPreferredTheme,
+  getIsInFullScreenCall,
+  (theme: ThemeType, isInCall: boolean): ThemeType => {
+    return isInCall ? ThemeType.dark : theme;
+  }
 );
 
 const getVersion = createSelector(
@@ -90,7 +108,7 @@ const getVersion = createSelector(
   (state: UserStateType) => state.version
 );
 
-export const getIsAlpha = createSelector(getVersion, isAlpha);
+export const getIsNightly = createSelector(getVersion, isNightly);
 
 export const getIsBeta = createSelector(getVersion, isBeta);
 
@@ -107,4 +125,9 @@ export const getIsMainWindowFullScreen = createSelector(
 export const getMenuOptions = createSelector(
   getUser,
   (state: UserStateType): MenuOptionsType => state.menuOptions
+);
+
+export const getIsMacOS = createSelector(
+  getPlatform,
+  (platform: string): boolean => platform === 'darwin'
 );

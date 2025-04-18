@@ -1,61 +1,75 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import FocusTrap from 'focus-trap-react';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { FocusScope } from 'react-aria';
+import type { UIEvent } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import classNames from 'classnames';
-import type { BodyRangeType, LocalizerType } from '../types/Util';
+import type { DraftBodyRanges } from '../types/BodyRange';
+import type { LocalizerType } from '../types/Util';
 import type { ContextMenuOptionType } from './ContextMenu';
-import type { ConversationType } from '../state/ducks/conversations';
+import type {
+  ConversationType,
+  SaveAttachmentActionCreatorType,
+} from '../state/ducks/conversations';
 import type { EmojiPickDataType } from './emoji/EmojiPicker';
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges';
 import type { RenderEmojiPickerProps } from './conversation/ReactionPicker';
 import type { ReplyStateType, StoryViewType } from '../types/Stories';
-import type { ShowToastActionCreatorType } from '../state/ducks/toast';
+import type { StoryDistributionIdString } from '../types/StoryDistributionId';
+import type { ShowToastAction } from '../state/ducks/toast';
 import type { ViewStoryActionCreatorType } from '../state/ducks/stories';
 import * as log from '../logging/log';
 import { AnimatedEmojiGalore } from './AnimatedEmojiGalore';
 import { Avatar, AvatarSize } from './Avatar';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { ContextMenu } from './ContextMenu';
-import { Emojify } from './conversation/Emojify';
-import { Intl } from './Intl';
+import { I18n } from './I18n';
 import { MessageTimestamp } from './conversation/MessageTimestamp';
 import { SendStatus } from '../messages/MessageSendState';
+import { Spinner } from './Spinner';
 import { StoryDetailsModal } from './StoryDetailsModal';
 import { StoryDistributionListName } from './StoryDistributionListName';
 import { StoryImage } from './StoryImage';
 import {
+  ResolvedSendStatus,
   StoryViewDirectionType,
   StoryViewModeType,
   StoryViewTargetType,
 } from '../types/Stories';
 import { StoryViewsNRepliesModal } from './StoryViewsNRepliesModal';
 import { Theme } from '../util/theme';
-import { ToastType } from '../state/ducks/toast';
+import { ToastType } from '../types/Toast';
 import { getAvatarColor } from '../types/Colors';
 import { getStoryBackground } from '../util/getStoryBackground';
 import { getStoryDuration } from '../util/getStoryDuration';
-import { graphemeAwareSlice } from '../util/graphemeAwareSlice';
 import { isVideoAttachment } from '../types/Attachment';
+import { graphemeAndLinkAwareSlice } from '../util/graphemeAndLinkAwareSlice';
 import { useEscapeHandling } from '../hooks/useEscapeHandling';
+import { useRetryStorySend } from '../hooks/useRetryStorySend';
+import { resolveStorySendStatus } from '../util/resolveStorySendStatus';
 import { strictAssert } from '../util/assert';
+import { MessageBody } from './conversation/MessageBody';
+import { RenderLocation } from './conversation/MessageTextRenderer';
+import { arrow } from '../util/keyboard';
+import { StoryProgressSegment } from './StoryProgressSegment';
+import type { EmojiSkinTone } from './fun/data/emojis';
+
+function renderStrong(parts: Array<JSX.Element | string>) {
+  return <strong>{parts}</strong>;
+}
 
 export type PropsType = {
   currentIndex: number;
+  deleteGroupStoryReply: (id: string) => void;
+  deleteGroupStoryReplyForEveryone: (id: string) => void;
   deleteStoryForEveryone: (story: StoryViewType) => unknown;
-  distributionList?: { id: string; name: string };
+  distributionList?: { id: StoryDistributionIdString; name: string };
   getPreferredBadge: PreferredBadgeSelectorType;
   group?: Pick<
     ConversationType,
     | 'acceptedMessageRequest'
-    | 'avatarPath'
+    | 'avatarUrl'
     | 'color'
     | 'id'
     | 'name'
@@ -66,38 +80,46 @@ export type PropsType = {
     | 'left'
   >;
   hasActiveCall?: boolean;
-  hasAllStoriesMuted: boolean;
+  hasAllStoriesUnmuted: boolean;
   hasViewReceiptSetting: boolean;
   i18n: LocalizerType;
+  isFormattingEnabled: boolean;
+  isInternalUser?: boolean;
+  isSignalConversation?: boolean;
+  isWindowActive: boolean;
   loadStoryReplies: (conversationId: string, messageId: string) => unknown;
   markStoryRead: (mId: string) => unknown;
   numStories: number;
   onGoToConversation: (conversationId: string) => unknown;
   onHideStory: (conversationId: string) => unknown;
-  onSetSkinTone: (tone: number) => unknown;
+  onEmojiSkinToneDefaultChange: (emojiSkinTone: EmojiSkinTone) => unknown;
   onTextTooLong: () => unknown;
   onReactToStory: (emoji: string, story: StoryViewType) => unknown;
   onReplyToStory: (
     message: string,
-    mentions: Array<BodyRangeType>,
+    bodyRanges: DraftBodyRanges,
     timestamp: number,
     story: StoryViewType
   ) => unknown;
   onUseEmoji: (_: EmojiPickDataType) => unknown;
-  preferredReactionEmoji: Array<string>;
+  onMediaPlaybackStart: () => void;
+  ourConversationId: string | undefined;
+  platform: string;
+  preferredReactionEmoji: ReadonlyArray<string>;
   queueStoryDownload: (storyId: string) => unknown;
-  recentEmojis?: Array<string>;
+  recentEmojis?: ReadonlyArray<string>;
   renderEmojiPicker: (props: RenderEmojiPickerProps) => JSX.Element;
   replyState?: ReplyStateType;
-  viewTarget?: StoryViewTargetType;
-  showToast: ShowToastActionCreatorType;
-  skinTone?: number;
+  retryMessageSend: (messageId: string) => unknown;
+  saveAttachment: SaveAttachmentActionCreatorType;
+  setHasAllStoriesUnmuted: (isUnmuted: boolean) => unknown;
+  showContactModal: (contactId: string, conversationId?: string) => void;
+  showToast: ShowToastAction;
+  emojiSkinToneDefault: EmojiSkinTone | null;
   story: StoryViewType;
   storyViewMode: StoryViewModeType;
-  toggleHasAllStoriesMuted: () => unknown;
   viewStory: ViewStoryActionCreatorType;
-  deleteGroupStoryReply: (id: string) => void;
-  deleteGroupStoryReplyForEveryone: (id: string) => void;
+  viewTarget?: StoryViewTargetType;
 };
 
 const CAPTION_BUFFER = 20;
@@ -111,16 +133,22 @@ enum Arrow {
   Right,
 }
 
-export const StoryViewer = ({
+export function StoryViewer({
   currentIndex,
+  deleteGroupStoryReply,
+  deleteGroupStoryReplyForEveryone,
   deleteStoryForEveryone,
   distributionList,
   getPreferredBadge,
   group,
   hasActiveCall,
-  hasAllStoriesMuted,
+  hasAllStoriesUnmuted,
   hasViewReceiptSetting,
   i18n,
+  isFormattingEnabled,
+  isInternalUser,
+  isSignalConversation,
+  isWindowActive,
   loadStoryReplies,
   markStoryRead,
   numStories,
@@ -128,24 +156,28 @@ export const StoryViewer = ({
   onHideStory,
   onReactToStory,
   onReplyToStory,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   onTextTooLong,
   onUseEmoji,
+  onMediaPlaybackStart,
+  ourConversationId,
+  platform,
   preferredReactionEmoji,
   queueStoryDownload,
   recentEmojis,
   renderEmojiPicker,
   replyState,
-  viewTarget,
+  retryMessageSend,
+  saveAttachment,
+  setHasAllStoriesUnmuted,
+  showContactModal,
   showToast,
-  skinTone,
+  emojiSkinToneDefault,
   story,
   storyViewMode,
-  toggleHasAllStoriesMuted,
   viewStory,
-  deleteGroupStoryReply,
-  deleteGroupStoryReplyForEveryone,
-}: PropsType): JSX.Element => {
+  viewTarget,
+}: PropsType): JSX.Element {
   const [isShowingContextMenu, setIsShowingContextMenu] =
     useState<boolean>(false);
   const [storyDuration, setStoryDuration] = useState<number | undefined>();
@@ -157,6 +189,7 @@ export const StoryViewer = ({
 
   const {
     attachment,
+    bodyRanges,
     canReply,
     isHidden,
     messageId,
@@ -165,8 +198,7 @@ export const StoryViewer = ({
     timestamp,
   } = story;
   const {
-    acceptedMessageRequest,
-    avatarPath,
+    avatarUrl,
     color,
     isMe,
     firstName,
@@ -176,6 +208,10 @@ export const StoryViewer = ({
   } = story.sender;
 
   const conversationId = group?.id || story.sender.id;
+
+  const sendStatus = sendState ? resolveStorySendStatus(sendState) : undefined;
+  const { renderAlert, setWasManuallyRetried, wasManuallyRetried } =
+    useRetryStorySend(i18n, sendStatus);
 
   const [currentViewTarget, setCurrentViewTarget] = useState(
     viewTarget ?? null
@@ -203,13 +239,16 @@ export const StoryViewer = ({
 
   // Caption related hooks
   const [hasExpandedCaption, setHasExpandedCaption] = useState<boolean>(false);
+  const [isSpoilerExpanded, setIsSpoilerExpanded] = useState<
+    Record<number, boolean>
+  >({});
 
   const caption = useMemo(() => {
     if (!attachment?.caption) {
       return;
     }
 
-    return graphemeAwareSlice(
+    return graphemeAndLinkAwareSlice(
       attachment.caption,
       hasExpandedCaption ? CAPTION_MAX_LENGTH : CAPTION_INITIAL_LENGTH,
       CAPTION_BUFFER
@@ -219,6 +258,7 @@ export const StoryViewer = ({
   // Reset expansion if messageId changes
   useEffect(() => {
     setHasExpandedCaption(false);
+    setIsSpoilerExpanded({});
   }, [messageId]);
 
   // messageId is set as a dependency so that we can reset the story duration
@@ -226,7 +266,7 @@ export const StoryViewer = ({
   // are sequentially posted.
   useEffect(() => {
     let shouldCancel = false;
-    (async function hydrateStoryDuration() {
+    void (async function hydrateStoryDuration() {
       if (!attachment) {
         return;
       }
@@ -248,62 +288,51 @@ export const StoryViewer = ({
     };
   }, [attachment, messageId]);
 
-  const progressBarRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<Animation | null>(null);
-
-  // Putting this in a ref allows us to call it from the useEffect below without
-  // triggering the effect to re-run every time these values change.
-  const onFinishRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    onFinishRef.current = () => {
-      viewStory({
-        storyId: story.messageId,
-        storyViewMode,
-        viewDirection: StoryViewDirectionType.Next,
-      });
-    };
-  }, [story.messageId, storyViewMode, viewStory]);
-
   // This guarantees that we'll have a valid ref to the animation when we need it
   strictAssert(currentIndex != null, "StoryViewer: currentIndex can't be null");
 
-  // We need to be careful about this effect refreshing, it should only run
-  // every time a story changes or its duration changes.
-  useEffect(() => {
-    if (!storyDuration) {
-      return;
-    }
-
-    strictAssert(
-      progressBarRef.current != null,
-      "progressBarRef can't be null"
-    );
-    const target = progressBarRef.current;
-
-    const animation = target.animate([{ width: '0%' }, { width: '100%' }], {
-      id: 'story-progress-bar',
-      duration: storyDuration,
-      easing: 'linear',
-      fill: 'forwards',
-    });
-
-    animationRef.current = animation;
-
-    function onFinish() {
-      onFinishRef.current?.();
-    }
-
-    animation.addEventListener('finish', onFinish);
-
-    return () => {
-      animation.removeEventListener('finish', onFinish);
-      animation.cancel();
-    };
-  }, [story.messageId, storyDuration]);
-
   const [pauseStory, setPauseStory] = useState(false);
+  const [pressing, setPressing] = useState(false);
+  const [longPress, setLongPress] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+    if (pressing) {
+      timer = setTimeout(() => {
+        setLongPress(true);
+      }, 200);
+    } else {
+      setLongPress(false);
+    }
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [pressing]);
+
+  useEffect(() => {
+    if (!isWindowActive) {
+      setPauseStory(true);
+    }
+  }, [isWindowActive]);
+
+  // Reset the stuff that pauses a story when you switch story views
+  useEffect(() => {
+    setConfirmDeleteStory(undefined);
+    setHasConfirmHideStory(false);
+    setHasExpandedCaption(false);
+    setIsSpoilerExpanded({});
+    setIsShowingContextMenu(false);
+    setPauseStory(false);
+    setStoryDuration(undefined);
+  }, [story.messageId]);
+
+  const alertElement = renderAlert();
 
   const shouldPauseViewing =
+    storyDuration == null ||
+    Boolean(alertElement) ||
     Boolean(confirmDeleteStory) ||
     currentViewTarget != null ||
     hasActiveCall ||
@@ -311,15 +340,8 @@ export const StoryViewer = ({
     hasExpandedCaption ||
     isShowingContextMenu ||
     pauseStory ||
-    Boolean(reactionEmoji);
-
-  useEffect(() => {
-    if (shouldPauseViewing) {
-      animationRef.current?.pause();
-    } else {
-      animationRef.current?.play();
-    }
-  }, [shouldPauseViewing]);
+    Boolean(reactionEmoji) ||
+    pressing;
 
   useEffect(() => {
     markStoryRead(messageId);
@@ -349,7 +371,7 @@ export const StoryViewer = ({
         return;
       }
 
-      if (canNavigateRight && ev.key === 'ArrowRight') {
+      if (canNavigateRight && ev.key === arrow('end')) {
         viewStory({
           storyId: story.messageId,
           storyViewMode,
@@ -357,7 +379,7 @@ export const StoryViewer = ({
         });
         ev.preventDefault();
         ev.stopPropagation();
-      } else if (canNavigateLeft && ev.key === 'ArrowLeft') {
+      } else if (canNavigateLeft && ev.key === arrow('start')) {
         viewStory({
           storyId: story.messageId,
           storyViewMode,
@@ -401,27 +423,41 @@ export const StoryViewer = ({
       return;
     }
 
-    let lastMouseMove: number | undefined;
+    let mouseMoveExpiration: number | undefined;
+    let timer: NodeJS.Timeout | undefined;
 
     function updateLastMouseMove() {
-      lastMouseMove = Date.now();
+      mouseMoveExpiration = Date.now() + MOUSE_IDLE_TIME;
+
+      if (timer === undefined) {
+        checkMouseIdle();
+      }
     }
 
     function checkMouseIdle() {
-      requestAnimationFrame(() => {
-        if (lastMouseMove && Date.now() - lastMouseMove > MOUSE_IDLE_TIME) {
-          setArrowToShow(Arrow.None);
-        } else {
-          checkMouseIdle();
-        }
-      });
+      timer = undefined;
+
+      if (mouseMoveExpiration === undefined) {
+        return;
+      }
+
+      const remaining = mouseMoveExpiration - Date.now();
+      if (remaining <= 0) {
+        setArrowToShow(Arrow.None);
+        return;
+      }
+
+      timer = setTimeout(checkMouseIdle, remaining);
     }
-    checkMouseIdle();
 
     document.addEventListener('mousemove', updateLastMouseMove);
 
     return () => {
-      lastMouseMove = undefined;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      mouseMoveExpiration = undefined;
+      timer = undefined;
       document.removeEventListener('mousemove', updateLastMouseMove);
     };
   }, [arrowToShow]);
@@ -434,71 +470,129 @@ export const StoryViewer = ({
   const replyCount = replies.length;
   const viewCount = views.length;
 
-  const canMuteStory = isVideoAttachment(attachment);
-  const isStoryMuted = hasAllStoriesMuted || !canMuteStory;
+  const hasAudio = isVideoAttachment(attachment);
+  const isStoryMuted = !hasAllStoriesUnmuted || !hasAudio;
 
   let muteClassName: string;
   let muteAriaLabel: string;
-  if (canMuteStory) {
-    muteAriaLabel = hasAllStoriesMuted
-      ? i18n('StoryViewer__unmute')
-      : i18n('StoryViewer__mute');
+  if (hasAudio) {
+    muteAriaLabel = hasAllStoriesUnmuted
+      ? i18n('icu:StoryViewer__mute')
+      : i18n('icu:StoryViewer__unmute');
 
-    muteClassName = hasAllStoriesMuted
-      ? 'StoryViewer__unmute'
-      : 'StoryViewer__mute';
+    muteClassName = hasAllStoriesUnmuted
+      ? 'StoryViewer__mute'
+      : 'StoryViewer__unmute';
   } else {
-    muteAriaLabel = i18n('Stories__toast--hasNoSound');
+    muteAriaLabel = i18n('icu:Stories__toast--hasNoSound');
     muteClassName = 'StoryViewer__soundless';
   }
 
   const isSent = Boolean(sendState);
 
-  const contextMenuOptions: ReadonlyArray<ContextMenuOptionType<unknown>> =
-    isSent
-      ? [
-          {
-            icon: 'StoryListItem__icon--info',
-            label: i18n('StoryListItem__info'),
-            onClick: () => setCurrentViewTarget(StoryViewTargetType.Details),
-          },
-          {
-            icon: 'StoryListItem__icon--delete',
-            label: i18n('StoryListItem__delete'),
-            onClick: () => setConfirmDeleteStory(story),
-          },
-        ]
-      : [
-          {
-            icon: 'StoryListItem__icon--info',
-            label: i18n('StoryListItem__info'),
-            onClick: () => setCurrentViewTarget(StoryViewTargetType.Details),
-          },
-          {
-            icon: 'StoryListItem__icon--hide',
-            label: isHidden
-              ? i18n('StoryListItem__unhide')
-              : i18n('StoryListItem__hide'),
-            onClick: () => {
-              if (isHidden) {
-                onHideStory(conversationId);
-              } else {
-                setHasConfirmHideStory(true);
-              }
-            },
-          },
-          {
-            icon: 'StoryListItem__icon--chat',
-            label: i18n('StoryListItem__go-to-chat'),
-            onClick: () => {
-              onGoToConversation(conversationId);
-            },
-          },
-        ];
+  let contextMenuOptions:
+    | ReadonlyArray<ContextMenuOptionType<unknown>>
+    | undefined;
+
+  if (isSent) {
+    contextMenuOptions = [
+      {
+        icon: 'StoryListItem__icon--info',
+        label: i18n('icu:StoryListItem__info'),
+        onClick: () => setCurrentViewTarget(StoryViewTargetType.Details),
+      },
+      {
+        icon: 'StoryListItem__icon--delete',
+        label: i18n('icu:StoryListItem__delete'),
+        onClick: () => setConfirmDeleteStory(story),
+      },
+    ];
+  } else if (!isSignalConversation) {
+    contextMenuOptions = [
+      {
+        icon: 'StoryListItem__icon--info',
+        label: i18n('icu:StoryListItem__info'),
+        onClick: () => setCurrentViewTarget(StoryViewTargetType.Details),
+      },
+      {
+        icon: isHidden
+          ? 'StoryListItem__icon--unhide'
+          : 'StoryListItem__icon--hide',
+        label: isHidden
+          ? i18n('icu:StoryListItem__unhide')
+          : i18n('icu:StoryListItem__hide'),
+        onClick: () => {
+          if (isHidden) {
+            onHideStory(conversationId);
+          } else {
+            setHasConfirmHideStory(true);
+          }
+        },
+      },
+      {
+        icon: 'StoryListItem__icon--chat',
+        label: i18n('icu:StoryListItem__go-to-chat'),
+        onClick: () => {
+          onGoToConversation(conversationId);
+        },
+      },
+    ];
+  }
+
+  function doRetryMessageSend() {
+    if (wasManuallyRetried) {
+      return;
+    }
+
+    if (
+      sendStatus !== ResolvedSendStatus.Failed &&
+      sendStatus !== ResolvedSendStatus.PartiallySent
+    ) {
+      return;
+    }
+
+    setWasManuallyRetried(true);
+    retryMessageSend(messageId);
+  }
+
+  function isDescendentEvent(event: UIEvent) {
+    // Can occur when the user clicks on the overlay of an open modal
+    return event.currentTarget.contains(event.target as Node);
+  }
+
+  // .StoryViewer has events to pause the story, but certain elements it
+  // contains should not trigger that behavior.
+  const stopPauseBubblingProps = {
+    onMouseDown: (event: UIEvent) => event.stopPropagation(),
+    onKeyDown: (event: UIEvent) => event.stopPropagation(),
+  };
 
   return (
-    <FocusTrap focusTrapOptions={{ clickOutsideDeactivates: true }}>
-      <div className="StoryViewer">
+    <FocusScope contain autoFocus>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div
+        className="StoryViewer"
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        onMouseDown={event => {
+          if (isDescendentEvent(event)) {
+            setPressing(true);
+          }
+        }}
+        onDragStart={() => setPressing(false)}
+        onMouseUp={() => setPressing(false)}
+        onKeyDown={event => {
+          if (isDescendentEvent(event) && event.code === 'Space') {
+            setPressing(true);
+          }
+        }}
+        onKeyUp={event => {
+          if (event.code === 'Space') {
+            setPressing(false);
+          }
+        }}
+      >
+        {alertElement}
         <div
           className="StoryViewer__overlay"
           style={{ background: getStoryBackground(attachment) }}
@@ -506,7 +600,7 @@ export const StoryViewer = ({
         <div className="StoryViewer__content">
           {canNavigateLeft && (
             <button
-              aria-label={i18n('back')}
+              aria-label={i18n('icu:back')}
               className={classNames(
                 'StoryViewer__arrow StoryViewer__arrow--left',
                 {
@@ -525,7 +619,12 @@ export const StoryViewer = ({
             />
           )}
           <div className="StoryViewer__protection StoryViewer__protection--top" />
-          <div className="StoryViewer__container">
+          <div
+            className="StoryViewer__container"
+            onDoubleClick={() =>
+              setCurrentViewTarget(StoryViewTargetType.Replies)
+            }
+          >
             <StoryImage
               attachment={attachment}
               firstName={firstName || title}
@@ -533,10 +632,11 @@ export const StoryViewer = ({
               i18n={i18n}
               isPaused={shouldPauseViewing}
               isMuted={isStoryMuted}
-              label={i18n('lightboxImageAlt')}
+              label={i18n('icu:lightboxImageAlt')}
               moduleClassName="StoryViewer__story"
               queueStoryDownload={queueStoryDownload}
               storyId={messageId}
+              onMediaPlaybackStart={onMediaPlaybackStart}
             >
               {reactionEmoji && (
                 <div className="StoryViewer__animated-emojis">
@@ -551,19 +651,31 @@ export const StoryViewer = ({
             </StoryImage>
             {hasExpandedCaption && (
               <button
-                aria-label={i18n('close-popup')}
-                className="StoryViewer__caption__overlay"
+                aria-label={i18n('icu:close-popup')}
+                className="StoryViewer__CAPTION__overlay"
                 onClick={() => setHasExpandedCaption(false)}
                 type="button"
               />
             )}
           </div>
 
-          <div className="StoryViewer__protection StoryViewer__protection--bottom" />
+          <div
+            className={classNames(
+              'StoryViewer__protection',
+              'StoryViewer__protection--bottom',
+              {
+                'StoryViewer__protection--has-caption': caption != null,
+              }
+            )}
+          />
+
+          {hasExpandedCaption && (
+            <div className="StoryViewer__protection StoryViewer__protection--whole" />
+          )}
 
           {canNavigateRight && (
             <button
-              aria-label={i18n('forward')}
+              aria-label={i18n('icu:forward')}
               className={classNames(
                 'StoryViewer__arrow StoryViewer__arrow--right',
                 {
@@ -585,7 +697,14 @@ export const StoryViewer = ({
           <div className="StoryViewer__meta">
             {caption && (
               <div className="StoryViewer__caption">
-                <Emojify text={caption.text} />
+                <MessageBody
+                  bodyRanges={bodyRanges}
+                  i18n={i18n}
+                  isSpoilerExpanded={isSpoilerExpanded}
+                  onExpandSpoiler={data => setIsSpoilerExpanded(data)}
+                  renderLocation={RenderLocation.StoryViewer}
+                  text={caption.text}
+                />
                 {caption.hasReadMore && !hasExpandedCaption && (
                   <button
                     className="MessageBody__read-more"
@@ -600,7 +719,7 @@ export const StoryViewer = ({
                     type="button"
                   >
                     ...
-                    {i18n('MessageBody--read-more')}
+                    {i18n('icu:MessageBody--read-more')}
                   </button>
                 )}
               </div>
@@ -608,13 +727,11 @@ export const StoryViewer = ({
             <div className="StoryViewer__meta__playback-bar">
               <div className="StoryViewer__meta__playback-bar__container">
                 <Avatar
-                  acceptedMessageRequest={acceptedMessageRequest}
-                  avatarPath={avatarPath}
+                  avatarUrl={avatarUrl}
                   badge={undefined}
                   color={getAvatarColor(color)}
                   conversationType="direct"
                   i18n={i18n}
-                  isMe={Boolean(isMe)}
                   profileName={profileName}
                   sharedGroupNames={sharedGroupNames}
                   size={AvatarSize.TWENTY_EIGHT}
@@ -622,14 +739,12 @@ export const StoryViewer = ({
                 />
                 {group && (
                   <Avatar
-                    acceptedMessageRequest={group.acceptedMessageRequest}
-                    avatarPath={group.avatarPath}
+                    avatarUrl={group.avatarUrl}
                     badge={undefined}
                     className="StoryViewer__meta--group-avatar"
                     color={getAvatarColor(group.color)}
                     conversationType="group"
                     i18n={i18n}
-                    isMe={false}
                     profileName={group.profileName}
                     sharedGroupNames={group.sharedGroupNames}
                     size={AvatarSize.TWENTY_EIGHT}
@@ -639,11 +754,11 @@ export const StoryViewer = ({
                 <div className="StoryViewer__meta--title-container">
                   <div className="StoryViewer__meta--title">
                     {(group &&
-                      i18n('Stories__from-to-group', {
-                        name: isMe ? i18n('you') : title,
+                      i18n('icu:Stories__from-to-group', {
+                        name: isMe ? i18n('icu:you') : title,
                         group: group.title,
                       })) ||
-                      (isMe ? i18n('you') : title)}
+                      (isMe ? i18n('icu:you') : title)}
                   </div>
                   <MessageTimestamp
                     i18n={i18n}
@@ -662,15 +777,20 @@ export const StoryViewer = ({
                   )}
                 </div>
               </div>
-              <div className="StoryViewer__meta__playback-controls">
+              <div
+                className="StoryViewer__meta__playback-controls"
+                {...stopPauseBubblingProps}
+              >
                 <button
                   aria-label={
-                    pauseStory
-                      ? i18n('StoryViewer__play')
-                      : i18n('StoryViewer__pause')
+                    pauseStory || longPress
+                      ? i18n('icu:StoryViewer__play')
+                      : i18n('icu:StoryViewer__pause')
                   }
                   className={
-                    pauseStory ? 'StoryViewer__play' : 'StoryViewer__pause'
+                    pauseStory || longPress
+                      ? 'StoryViewer__play'
+                      : 'StoryViewer__pause'
                   }
                   onClick={() => setPauseStory(!pauseStory)}
                   type="button"
@@ -679,43 +799,74 @@ export const StoryViewer = ({
                   aria-label={muteAriaLabel}
                   className={muteClassName}
                   onClick={
-                    canMuteStory
-                      ? toggleHasAllStoriesMuted
-                      : () => showToast(ToastType.StoryMuted)
+                    hasAudio
+                      ? () => setHasAllStoriesUnmuted(!hasAllStoriesUnmuted)
+                      : () => showToast({ toastType: ToastType.StoryMuted })
                   }
                   type="button"
                 />
-                <ContextMenu
-                  aria-label={i18n('MyStories__more')}
-                  i18n={i18n}
-                  menuOptions={contextMenuOptions}
-                  moduleClassName="StoryViewer__more"
-                  onMenuShowingChanged={setIsShowingContextMenu}
-                  theme={Theme.Dark}
-                />
+                {contextMenuOptions && (
+                  <ContextMenu
+                    aria-label={i18n('icu:MyStories__more')}
+                    i18n={i18n}
+                    menuOptions={contextMenuOptions}
+                    moduleClassName="StoryViewer__more"
+                    onMenuShowingChanged={setIsShowingContextMenu}
+                    theme={Theme.Dark}
+                  />
+                )}
               </div>
             </div>
-            <div className="StoryViewer__progress">
+            <div className="StoryViewer__progress" {...stopPauseBubblingProps}>
               {Array.from(Array(numStories), (_, index) => (
-                <div className="StoryViewer__progress--container" key={index}>
-                  {currentIndex === index ? (
-                    <div
-                      ref={progressBarRef}
-                      className="StoryViewer__progress--bar"
-                    />
-                  ) : (
-                    <div
-                      className="StoryViewer__progress--bar"
-                      style={{
-                        width: currentIndex < index ? '0%' : '100%',
-                      }}
-                    />
-                  )}
-                </div>
+                <StoryProgressSegment
+                  key={`${story.messageId}-${index}-${currentIndex}`}
+                  index={index}
+                  currentIndex={currentIndex}
+                  duration={storyDuration ?? null}
+                  playing={!shouldPauseViewing}
+                  onFinish={() => {
+                    viewStory({
+                      storyId: story.messageId,
+                      storyViewMode,
+                      viewDirection: StoryViewDirectionType.Next,
+                    });
+                  }}
+                />
               ))}
             </div>
-            <div className="StoryViewer__actions">
-              {(canReply || isSent) && (
+            <div className="StoryViewer__actions" {...stopPauseBubblingProps}>
+              {sendStatus === ResolvedSendStatus.Failed &&
+                !wasManuallyRetried && (
+                  <button
+                    className="StoryViewer__actions__failed"
+                    onClick={doRetryMessageSend}
+                    type="button"
+                  >
+                    {i18n('icu:StoryViewer__failed')}
+                  </button>
+                )}
+              {sendStatus === ResolvedSendStatus.PartiallySent &&
+                !wasManuallyRetried && (
+                  <button
+                    className="StoryViewer__actions__failed"
+                    onClick={doRetryMessageSend}
+                    type="button"
+                  >
+                    {i18n('icu:StoryViewer__partial-fail')}
+                  </button>
+                )}
+              {sendStatus === ResolvedSendStatus.Sending && (
+                <div className="StoryViewer__sending">
+                  <Spinner
+                    moduleClassName="StoryViewer__sending__spinner"
+                    svgSize="small"
+                  />
+                  {i18n('icu:StoryViewer__sending')}
+                </div>
+              )}
+              {(canReply ||
+                (isSent && sendStatus === ResolvedSendStatus.Sent)) && (
                 <button
                   className="StoryViewer__reply"
                   onClick={() =>
@@ -724,58 +875,46 @@ export const StoryViewer = ({
                   tabIndex={0}
                   type="button"
                 >
-                  <>
-                    {isSent || replyCount > 0 ? (
-                      <span className="StoryViewer__reply__chevron">
+                  {isSent || replyCount > 0 ? (
+                    <span className="StoryViewer__reply__chevron">
+                      <span>
                         {isSent && !hasViewReceiptSetting && !replyCount && (
-                          <>{i18n('StoryViewer__views-off')}</>
+                          <>{i18n('icu:StoryViewer__views-off')}</>
                         )}
-                        {isSent &&
-                          hasViewReceiptSetting &&
-                          (viewCount === 1 ? (
-                            <Intl
-                              i18n={i18n}
-                              id="MyStories__views--singular"
-                              components={[<strong>{viewCount}</strong>]}
-                            />
-                          ) : (
-                            <Intl
-                              i18n={i18n}
-                              id="MyStories__views--plural"
-                              components={[<strong>{viewCount}</strong>]}
-                            />
-                          ))}
+                        {isSent && hasViewReceiptSetting && (
+                          <I18n
+                            i18n={i18n}
+                            id="icu:MyStories__views--strong"
+                            components={{
+                              views: viewCount,
+                              strong: renderStrong,
+                            }}
+                          />
+                        )}
                         {(isSent || viewCount > 0) && replyCount > 0 && ' '}
-                        {replyCount > 0 &&
-                          (replyCount === 1 ? (
-                            <Intl
-                              i18n={i18n}
-                              id="MyStories__replies--singular"
-                              components={[<strong>{replyCount}</strong>]}
-                            />
-                          ) : (
-                            <Intl
-                              i18n={i18n}
-                              id="MyStories__replies--plural"
-                              components={[<strong>{replyCount}</strong>]}
-                            />
-                          ))}
+                        {replyCount > 0 && (
+                          <I18n
+                            i18n={i18n}
+                            id="icu:MyStories__replies"
+                            components={{ replyCount, strong: renderStrong }}
+                          />
+                        )}
                       </span>
-                    ) : null}
-                    {!isSent && !replyCount && (
-                      <span className="StoryViewer__reply__arrow">
-                        {isGroupStory
-                          ? i18n('StoryViewer__reply-group')
-                          : i18n('StoryViewer__reply')}
-                      </span>
-                    )}
-                  </>
+                    </span>
+                  ) : null}
+                  {!isSent && !replyCount && (
+                    <span className="StoryViewer__reply__arrow">
+                      {isGroupStory
+                        ? i18n('icu:StoryViewer__reply-group')
+                        : i18n('icu:StoryViewer__reply')}
+                    </span>
+                  )}
                 </button>
               )}
             </div>
           </div>
           <button
-            aria-label={i18n('close')}
+            aria-label={i18n('icu:close')}
             className="StoryViewer__close-button"
             onClick={onClose}
             tabIndex={0}
@@ -784,12 +923,14 @@ export const StoryViewer = ({
         </div>
         {currentViewTarget === StoryViewTargetType.Details && (
           <StoryDetailsModal
+            attachment={attachment}
             getPreferredBadge={getPreferredBadge}
             i18n={i18n}
+            isInternalUser={isInternalUser}
             onClose={() => setCurrentViewTarget(null)}
+            saveAttachment={saveAttachment}
             sender={story.sender}
             sendState={sendState}
-            size={attachment?.size}
             timestamp={timestamp}
             expirationTimestamp={story.expirationTimestamp}
           />
@@ -803,33 +944,37 @@ export const StoryViewer = ({
             hasViewReceiptSetting={hasViewReceiptSetting}
             hasViewsCapability={isSent}
             i18n={i18n}
+            platform={platform}
+            isFormattingEnabled={isFormattingEnabled}
+            isInternalUser={isInternalUser}
             group={group}
             onClose={() => setCurrentViewTarget(null)}
             onReact={emoji => {
               onReactToStory(emoji, story);
               if (!isGroupStory) {
                 setCurrentViewTarget(null);
-                showToast(ToastType.StoryReact);
+                showToast({ toastType: ToastType.StoryReact });
               }
               setReactionEmoji(emoji);
             }}
-            onReply={(message, mentions, replyTimestamp) => {
+            onReply={(message, replyBodyRanges, replyTimestamp) => {
               if (!isGroupStory) {
                 setCurrentViewTarget(null);
-                showToast(ToastType.StoryReply);
+                showToast({ toastType: ToastType.StoryReply });
               }
-              onReplyToStory(message, mentions, replyTimestamp, story);
+              onReplyToStory(message, replyBodyRanges, replyTimestamp, story);
             }}
-            onSetSkinTone={onSetSkinTone}
+            onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
             onTextTooLong={onTextTooLong}
             onUseEmoji={onUseEmoji}
+            ourConversationId={ourConversationId}
             preferredReactionEmoji={preferredReactionEmoji}
             recentEmojis={recentEmojis}
             renderEmojiPicker={renderEmojiPicker}
             replies={replies}
-            skinTone={skinTone}
+            showContactModal={showContactModal}
+            emojiSkinToneDefault={emojiSkinToneDefault}
             sortedGroupMembers={group?.sortedGroupMembers}
-            storyPreviewAttachment={attachment}
             views={views}
             viewTarget={currentViewTarget}
             onChangeViewTarget={setCurrentViewTarget}
@@ -847,7 +992,7 @@ export const StoryViewer = ({
                   onClose();
                 },
                 style: 'affirmative',
-                text: i18n('StoryListItem__hide-modal--confirm'),
+                text: i18n('icu:StoryListItem__hide-modal--confirm'),
               },
             ]}
             i18n={i18n}
@@ -855,7 +1000,9 @@ export const StoryViewer = ({
               setHasConfirmHideStory(false);
             }}
           >
-            {i18n('StoryListItem__hide-modal--body', [String(firstName)])}
+            {i18n('icu:StoryListItem__hide-modal--body', {
+              name: String(firstName),
+            })}
           </ConfirmationDialog>
         )}
         {confirmDeleteStory && (
@@ -863,7 +1010,7 @@ export const StoryViewer = ({
             dialogName="StoryViewer.deleteStory"
             actions={[
               {
-                text: i18n('delete'),
+                text: i18n('icu:delete'),
                 action: () => deleteStoryForEveryone(confirmDeleteStory),
                 style: 'negative',
               },
@@ -871,10 +1018,10 @@ export const StoryViewer = ({
             i18n={i18n}
             onClose={() => setConfirmDeleteStory(undefined)}
           >
-            {i18n('MyStories__delete')}
+            {i18n('icu:MyStories__delete')}
           </ConfirmationDialog>
         )}
       </div>
-    </FocusTrap>
+    </FocusScope>
   );
-};
+}

@@ -4,14 +4,12 @@
 import React from 'react';
 
 import { action } from '@storybook/addon-actions';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
-
+import type { Meta } from '@storybook/react';
 import type { PropsType } from './AvatarColorPicker';
 import { AvatarColorPicker } from './AvatarColorPicker';
 import { AvatarColors } from '../types/Colors';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   i18n,
@@ -21,16 +19,18 @@ const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
 
 export default {
   title: 'Components/AvatarColorPicker',
-};
+} satisfies Meta<PropsType>;
 
-export const Default = (): JSX.Element => (
-  <AvatarColorPicker {...createProps()} />
-);
+export function Default(): JSX.Element {
+  return <AvatarColorPicker {...createProps()} />;
+}
 
-export const Selected = (): JSX.Element => (
-  <AvatarColorPicker
-    {...createProps({
-      selectedColor: AvatarColors[7],
-    })}
-  />
-);
+export function Selected(): JSX.Element {
+  return (
+    <AvatarColorPicker
+      {...createProps({
+        selectedColor: AvatarColors[7],
+      })}
+    />
+  );
+}

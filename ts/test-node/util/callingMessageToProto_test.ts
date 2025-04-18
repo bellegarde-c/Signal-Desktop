@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
+import type { CallId } from '@signalapp/ringrtc';
 import {
   CallMessageUrgency,
   CallingMessage,
   HangupMessage,
   HangupType,
   OpaqueMessage,
-} from 'ringrtc';
+} from '@signalapp/ringrtc';
 import { SignalService as Proto } from '../../protobuf';
 
 import { callingMessageToProto } from '../../util/callingMessageToProto';
@@ -23,9 +24,10 @@ describe('callingMessageToProto', () => {
     });
 
     it('attaches the type if provided', () => {
+      const callId: CallId = { high: 0, low: 0, unsigned: false };
+
       const callingMessage = new CallingMessage();
-      callingMessage.hangup = new HangupMessage();
-      callingMessage.hangup.type = HangupType.Busy;
+      callingMessage.hangup = new HangupMessage(callId, HangupType.Busy, 1);
 
       const result = callingMessageToProto(callingMessage);
 
@@ -56,7 +58,7 @@ describe('callingMessageToProto', () => {
       );
       assert.deepEqual(
         droppableResult.opaque?.urgency,
-        Proto.CallingMessage.Opaque.Urgency.DROPPABLE
+        Proto.CallMessage.Opaque.Urgency.DROPPABLE
       );
 
       const urgentResult = callingMessageToProto(
@@ -65,7 +67,7 @@ describe('callingMessageToProto', () => {
       );
       assert.deepEqual(
         urgentResult.opaque?.urgency,
-        Proto.CallingMessage.Opaque.Urgency.HANDLE_IMMEDIATELY
+        Proto.CallMessage.Opaque.Urgency.HANDLE_IMMEDIATELY
       );
     });
 
@@ -82,7 +84,7 @@ describe('callingMessageToProto', () => {
       assert.deepEqual(result.opaque?.data, new Uint8Array([1, 2, 3]));
       assert.deepEqual(
         result.opaque?.urgency,
-        Proto.CallingMessage.Opaque.Urgency.HANDLE_IMMEDIATELY
+        Proto.CallMessage.Opaque.Urgency.HANDLE_IMMEDIATELY
       );
     });
   });

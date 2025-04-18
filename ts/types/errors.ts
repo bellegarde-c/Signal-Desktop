@@ -1,18 +1,21 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { get, has } from 'lodash';
-
 export function toLogFormat(error: unknown): string {
+  let result = '';
   if (error instanceof Error && error.stack) {
-    return error.stack;
+    result = error.stack;
+  } else if (error && typeof error === 'object' && 'message' in error) {
+    result = String(error.message);
+  } else {
+    result = String(error);
   }
 
-  if (has(error, 'message')) {
-    return get(error, 'message');
+  if (error && typeof error === 'object' && 'cause' in error) {
+    result += `\nCaused by: ${String(error.cause)}`;
   }
 
-  return String(error);
+  return result;
 }
 
 export class ProfileDecryptError extends Error {}

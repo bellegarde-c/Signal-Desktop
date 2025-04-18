@@ -1,7 +1,7 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 import * as React from 'react';
 
 import { action } from '@storybook/addon-actions';
@@ -21,64 +21,59 @@ import {
 import type { Props } from './Quote';
 import { Quote } from './Quote';
 import { ReadStatus } from '../../messages/MessageReadStatus';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import { getDefaultConversation } from '../../test-both/helpers/getDefaultConversation';
 import { WidthBreakpoint } from '../_util';
 import { ThemeType } from '../../types/Util';
+import { PaymentEventKind } from '../../types/Payment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   component: Quote,
   title: 'Components/Conversation/Quote',
   argTypes: {
-    authorTitle: {
-      defaultValue: 'Default Sender',
-    },
-    conversationColor: {
-      defaultValue: 'forest',
-    },
-    doubleCheckMissingQuoteReference: { action: true },
-    i18n: {
-      defaultValue: i18n,
-    },
     isFromMe: {
-      control: { type: 'checkbox' },
-      defaultValue: false,
+      control: { type: 'boolean' },
     },
     isGiftBadge: {
-      control: { type: 'checkbox' },
-      defaultValue: false,
+      control: { type: 'boolean' },
     },
     isIncoming: {
-      control: { type: 'checkbox' },
-      defaultValue: false,
+      control: { type: 'boolean' },
     },
     isViewOnce: {
-      control: { type: 'checkbox' },
-      defaultValue: false,
-    },
-    onClick: { action: true },
-    onClose: { action: true },
-    rawAttachment: {
-      defaultValue: undefined,
+      control: { type: 'boolean' },
     },
     referencedMessageNotFound: {
-      control: { type: 'checkbox' },
-      defaultValue: false,
-    },
-    text: {
-      defaultValue: 'A sample message from a pal',
+      control: { type: 'boolean' },
     },
   },
-} as Meta;
+  args: {
+    authorTitle: 'Default Sender',
+    conversationColor: 'forest',
+    doubleCheckMissingQuoteReference: action(
+      'doubleCheckMissingQuoteReference'
+    ),
+    i18n,
+    isFromMe: false,
+    isGiftBadge: false,
+    isIncoming: false,
+    isViewOnce: false,
+    onClick: action('onClick'),
+    onClose: action('onClose'),
+    rawAttachment: undefined,
+    referencedMessageNotFound: false,
+    text: 'A sample message from a pal',
+  },
+} satisfies Meta<Props>;
 
 const defaultMessageProps: TimelineMessagesProps = {
   author: getDefaultConversation({
     id: 'some-id',
     title: 'Person X',
   }),
+  canCopy: true,
+  canEditMessage: true,
   canReact: true,
   canReply: true,
   canRetry: true,
@@ -86,60 +81,73 @@ const defaultMessageProps: TimelineMessagesProps = {
   canDeleteForEveryone: true,
   canDownload: true,
   checkForAccount: action('checkForAccount'),
-  clearSelectedMessage: action('default--clearSelectedMessage'),
+  clearTargetedMessage: action('default--clearTargetedMessage'),
   containerElementRef: React.createRef<HTMLElement>(),
   containerWidthBreakpoint: WidthBreakpoint.Wide,
   conversationColor: 'crimson',
   conversationId: 'conversationId',
   conversationTitle: 'Conversation Title',
   conversationType: 'direct', // override
-  deleteMessage: action('default--deleteMessage'),
-  deleteMessageForEveryone: action('default--deleteMessageForEveryone'),
   direction: 'incoming',
-  displayTapToViewMessage: action('default--displayTapToViewMessage'),
-  downloadAttachment: action('default--downloadAttachment'),
+  showLightboxForViewOnceMedia: action('default--showLightboxForViewOnceMedia'),
   doubleCheckMissingQuoteReference: action(
     'default--doubleCheckMissingQuoteReference'
   ),
   getPreferredBadge: () => undefined,
   i18n,
+  platform: 'darwin',
   id: 'messageId',
   // renderingContext: 'storybook',
   interactionMode: 'keyboard',
   isBlocked: false,
   isMessageRequestAccepted: true,
+  isSelected: false,
+  isSelectMode: false,
+  isSMS: false,
+  isSpoilerExpanded: {},
+  toggleSelectMessage: action('toggleSelectMessage'),
+  cancelAttachmentDownload: action('default--cancelAttachmentDownload'),
   kickOffAttachmentDownload: action('default--kickOffAttachmentDownload'),
   markAttachmentAsCorrupted: action('default--markAttachmentAsCorrupted'),
-  markViewed: action('default--markViewed'),
   messageExpanded: action('default--message-expanded'),
-  openConversation: action('default--openConversation'),
+  showConversation: action('default--showConversation'),
   openGiftBadge: action('openGiftBadge'),
-  openLink: action('default--openLink'),
   previews: [],
   reactToMessage: action('default--reactToMessage'),
   readStatus: ReadStatus.Read,
   renderEmojiPicker: () => <div />,
   renderReactionPicker: () => <div />,
   renderAudioAttachment: () => <div>*AudioAttachment*</div>,
-  replyToMessage: action('default--replyToMessage'),
-  retrySend: action('default--retrySend'),
+  setMessageToEdit: action('setMessageToEdit'),
+  setQuoteByMessageId: action('default--setQuoteByMessageId'),
+  retryMessageSend: action('default--retryMessageSend'),
+  copyMessageText: action('copyMessageText'),
   retryDeleteForEveryone: action('default--retryDeleteForEveryone'),
+  saveAttachment: action('saveAttachment'),
+  saveAttachments: action('saveAttachments'),
   scrollToQuotedMessage: action('default--scrollToQuotedMessage'),
-  selectMessage: action('default--selectMessage'),
+  targetMessage: action('default--targetMessage'),
   shouldCollapseAbove: false,
   shouldCollapseBelow: false,
   shouldHideMetadata: false,
-  showContactDetail: action('default--showContactDetail'),
+  showSpoiler: action('showSpoiler'),
+  pushPanelForConversation: action('default--pushPanelForConversation'),
   showContactModal: action('default--showContactModal'),
+  showAttachmentDownloadStillInProgressToast: action(
+    'showAttachmentDownloadStillInProgressToast'
+  ),
+  showAttachmentNotAvailableModal: action('showAttachmentNotAvailableModal'),
   showExpiredIncomingTapToViewToast: action(
     'showExpiredIncomingTapToViewToast'
   ),
   showExpiredOutgoingTapToViewToast: action(
     'showExpiredOutgoingTapToViewToast'
   ),
-  showForwardMessageModal: action('default--showForwardMessageModal'),
-  showMessageDetail: action('default--showMessageDetail'),
-  showVisualAttachment: action('default--showVisualAttachment'),
+  showMediaNoLongerAvailableToast: action('showMediaNoLongerAvailableToast'),
+  showTapToViewNotAvailableModal: action('showTapToViewNotAvailableModal'),
+  toggleDeleteMessagesModal: action('default--toggleDeleteMessagesModal'),
+  toggleForwardMessagesModal: action('default--toggleForwardMessagesModal'),
+  showLightbox: action('default--showLightbox'),
   startConversation: action('default--startConversation'),
   status: 'sent',
   text: 'This is really interesting.',
@@ -166,6 +174,7 @@ const renderInMessage = ({
       authorId: 'an-author',
       authorTitle,
       conversationColor,
+      conversationTitle: getDefaultConversation().title,
       isFromMe,
       rawAttachment,
       isViewOnce,
@@ -185,23 +194,18 @@ const renderInMessage = ({
   );
 };
 
-const Template: Story<Props> = args => <Quote {...args} />;
-const TemplateInMessage: Story<Props> = args => renderInMessage(args);
+// eslint-disable-next-line react/function-component-definition
+const Template: StoryFn<Props> = args => <Quote {...args} />;
+const TemplateInMessage: StoryFn<Props> = args => renderInMessage(args);
 
 export const OutgoingByAnotherAuthor = Template.bind({});
 OutgoingByAnotherAuthor.args = {
   authorTitle: getDefaultConversation().title,
 };
-OutgoingByAnotherAuthor.story = {
-  name: 'Outgoing by Another Author',
-};
 
 export const OutgoingByMe = Template.bind({});
 OutgoingByMe.args = {
   isFromMe: true,
-};
-OutgoingByMe.story = {
-  name: 'Outgoing by Me',
 };
 
 export const IncomingByAnotherAuthor = Template.bind({});
@@ -209,20 +213,14 @@ IncomingByAnotherAuthor.args = {
   authorTitle: getDefaultConversation().title,
   isIncoming: true,
 };
-IncomingByAnotherAuthor.story = {
-  name: 'Incoming by Another Author',
-};
 
 export const IncomingByMe = Template.bind({});
 IncomingByMe.args = {
   isFromMe: true,
   isIncoming: true,
 };
-IncomingByMe.story = {
-  name: 'Incoming by Me',
-};
 
-export const IncomingOutgoingColors = (args: Props): JSX.Element => {
+export function IncomingOutgoingColors(args: Props): JSX.Element {
   return (
     <>
       {ConversationColors.map(color =>
@@ -230,11 +228,8 @@ export const IncomingOutgoingColors = (args: Props): JSX.Element => {
       )}
     </>
   );
-};
+}
 IncomingOutgoingColors.args = {};
-IncomingOutgoingColors.story = {
-  name: 'Incoming/Outgoing Colors',
-};
 
 export const ImageOnly = Template.bind({});
 ImageOnly.args = {
@@ -247,6 +242,7 @@ ImageOnly.args = {
       contentType: IMAGE_PNG,
       height: 100,
       width: 100,
+      size: 100,
       path: pngUrl,
       objectUrl: pngUrl,
     },
@@ -263,8 +259,42 @@ ImageAttachment.args = {
       contentType: IMAGE_PNG,
       height: 100,
       width: 100,
+      size: 100,
       path: pngUrl,
       objectUrl: pngUrl,
+    },
+  },
+};
+
+export const ImageAttachmentUndownloaded = Template.bind({});
+ImageAttachmentUndownloaded.args = {
+  rawAttachment: {
+    contentType: IMAGE_PNG,
+    fileName: 'sax.png',
+    isVoiceMessage: false,
+    thumbnail: {
+      contentType: IMAGE_PNG,
+      height: 100,
+      width: 100,
+      path: undefined,
+      size: 100000,
+    },
+  },
+};
+export const ImageAttachmentDownloading = Template.bind({});
+ImageAttachmentDownloading.args = {
+  rawAttachment: {
+    contentType: IMAGE_PNG,
+    fileName: 'sax.png',
+    isVoiceMessage: false,
+    thumbnail: {
+      contentType: IMAGE_PNG,
+      height: 100,
+      width: 100,
+      path: undefined,
+      pending: true,
+      size: 100000,
+      totalDownloaded: 75000,
     },
   },
 };
@@ -277,9 +307,6 @@ ImageAttachmentNoThumbnail.args = {
     isVoiceMessage: false,
   },
 };
-ImageAttachmentNoThumbnail.story = {
-  name: 'Image Attachment w/o Thumbnail',
-};
 
 export const ImageTapToView = Template.bind({});
 ImageTapToView.args = {
@@ -290,9 +317,6 @@ ImageTapToView.args = {
     fileName: 'sax.png',
     isVoiceMessage: false,
   },
-};
-ImageTapToView.story = {
-  name: 'Image Tap-to-View',
 };
 
 export const VideoOnly = Template.bind({});
@@ -305,6 +329,7 @@ VideoOnly.args = {
       contentType: IMAGE_PNG,
       height: 100,
       width: 100,
+      size: 100,
       path: pngUrl,
       objectUrl: pngUrl,
     },
@@ -322,8 +347,42 @@ VideoAttachment.args = {
       contentType: IMAGE_PNG,
       height: 100,
       width: 100,
+      size: 100,
       path: pngUrl,
       objectUrl: pngUrl,
+    },
+  },
+};
+
+export const VideoAttachmentUndownloaded = Template.bind({});
+VideoAttachmentUndownloaded.args = {
+  rawAttachment: {
+    contentType: VIDEO_MP4,
+    fileName: 'great-video.mp4',
+    isVoiceMessage: false,
+    thumbnail: {
+      contentType: IMAGE_PNG,
+      height: 100,
+      width: 100,
+      path: undefined,
+      size: 100000,
+    },
+  },
+};
+export const VideoAttachmentDownloading = Template.bind({});
+VideoAttachmentDownloading.args = {
+  rawAttachment: {
+    contentType: VIDEO_MP4,
+    fileName: 'great-video.mp4',
+    isVoiceMessage: false,
+    thumbnail: {
+      contentType: IMAGE_PNG,
+      height: 100,
+      width: 100,
+      path: undefined,
+      pending: true,
+      size: 100000,
+      totalDownloaded: 75000,
     },
   },
 };
@@ -336,9 +395,6 @@ VideoAttachmentNoThumbnail.args = {
     isVoiceMessage: false,
   },
 };
-VideoAttachmentNoThumbnail.story = {
-  name: 'Video Attachment w/o Thumbnail',
-};
 
 export const VideoTapToView = Template.bind({});
 VideoTapToView.args = {
@@ -349,9 +405,6 @@ VideoTapToView.args = {
     fileName: 'great-video.mp4',
     isVoiceMessage: false,
   },
-};
-VideoTapToView.story = {
-  name: 'Video Tap-to-View',
 };
 
 export const GiftBadge = TemplateInMessage.bind({});
@@ -418,9 +471,6 @@ MediaTapToView.args = {
     isVoiceMessage: false,
   },
 };
-MediaTapToView.story = {
-  name: 'Media Tap-to-View',
-};
 
 export const OtherFileAttachment = Template.bind({});
 OtherFileAttachment.args = {
@@ -439,9 +489,6 @@ LongMessageAttachmentShouldBeHidden.args = {
     isVoiceMessage: false,
   },
 };
-LongMessageAttachmentShouldBeHidden.story = {
-  name: 'Long message attachment (should be hidden)',
-};
 
 export const NoCloseButton = Template.bind({});
 NoCloseButton.args = {
@@ -457,26 +504,17 @@ export const MissingTextAttachment = Template.bind({});
 MissingTextAttachment.args = {
   text: undefined,
 };
-MissingTextAttachment.story = {
-  name: 'Missing Text & Attachment',
-};
 
 export const MentionOutgoingAnotherAuthor = Template.bind({});
 MentionOutgoingAnotherAuthor.args = {
   authorTitle: 'Tony Stark',
   text: '@Captain America Lunch later?',
 };
-MentionOutgoingAnotherAuthor.story = {
-  name: '@mention + outgoing + another author',
-};
 
 export const MentionOutgoingMe = Template.bind({});
 MentionOutgoingMe.args = {
   isFromMe: true,
   text: '@Captain America Lunch later?',
-};
-MentionOutgoingMe.story = {
-  name: '@mention + outgoing + me',
 };
 
 export const MentionIncomingAnotherAuthor = Template.bind({});
@@ -485,9 +523,6 @@ MentionIncomingAnotherAuthor.args = {
   isIncoming: true,
   text: '@Tony Stark sure',
 };
-MentionIncomingAnotherAuthor.story = {
-  name: '@mention + incoming + another author',
-};
 
 export const MentionIncomingMe = Template.bind({});
 MentionIncomingMe.args = {
@@ -495,30 +530,29 @@ MentionIncomingMe.args = {
   isIncoming: true,
   text: '@Tony Stark sure',
 };
-MentionIncomingMe.story = {
-  name: '@mention + incoming + me',
-};
 
-export const CustomColor = (args: Props): JSX.Element => (
-  <>
-    <Quote
-      {...args}
-      customColor={{
-        start: { hue: 82, saturation: 35 },
-      }}
-    />
-    <Quote
-      {...args}
-      isIncoming={false}
-      text="A gradient"
-      customColor={{
-        deg: 192,
-        start: { hue: 304, saturation: 85 },
-        end: { hue: 231, saturation: 76 },
-      }}
-    />
-  </>
-);
+export function CustomColor(args: Props): JSX.Element {
+  return (
+    <>
+      <Quote
+        {...args}
+        customColor={{
+          start: { hue: 82, saturation: 35 },
+        }}
+      />
+      <Quote
+        {...args}
+        isIncoming={false}
+        text="A gradient"
+        customColor={{
+          deg: 192,
+          start: { hue: 304, saturation: 85 },
+          end: { hue: 231, saturation: 76 },
+        }}
+      />
+    </>
+  );
+}
 CustomColor.args = {
   isIncoming: true,
   text: 'Solid + Gradient',
@@ -537,9 +571,6 @@ IsStoryReply.args = {
     isVoiceMessage: false,
   },
 };
-IsStoryReply.story = {
-  name: 'isStoryReply',
-};
 
 export const IsStoryReplyEmoji = Template.bind({});
 IsStoryReplyEmoji.args = {
@@ -555,12 +586,19 @@ IsStoryReplyEmoji.args = {
       contentType: IMAGE_PNG,
       height: 100,
       width: 100,
+      size: 100,
       path: pngUrl,
       objectUrl: pngUrl,
     },
   },
   reactionEmoji: '🏋️',
 };
-IsStoryReplyEmoji.story = {
-  name: 'isStoryReply emoji',
+
+export const Payment = Template.bind({});
+Payment.args = {
+  text: '',
+  payment: {
+    kind: PaymentEventKind.Notification,
+    note: null,
+  },
 };

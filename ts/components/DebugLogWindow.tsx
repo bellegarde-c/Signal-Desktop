@@ -1,22 +1,21 @@
-// Copyright 2015-2021 Signal Messenger, LLC
+// Copyright 2015 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { MouseEvent } from 'react';
 import React, { useEffect, useState } from 'react';
 import copyText from 'copy-text-to-clipboard';
+import type { LocalizerType } from '../types/Util';
+import * as Errors from '../types/errors';
+import type { AnyToast } from '../types/Toast';
+import { ToastType } from '../types/Toast';
 import * as log from '../logging/log';
 import { Button, ButtonVariant } from './Button';
-import type { LocalizerType } from '../types/Util';
 import { Spinner } from './Spinner';
-import { ToastDebugLogError } from './ToastDebugLogError';
-import { ToastLinkCopied } from './ToastLinkCopied';
-import { TitleBarContainer } from './TitleBarContainer';
-import type { ExecuteMenuRoleType } from './TitleBarContainer';
-import { ToastLoadingFullLogs } from './ToastLoadingFullLogs';
-import { openLinkInWebBrowser } from '../util/openLinkInWebBrowser';
+import { ToastManager } from './ToastManager';
 import { createSupportUrl } from '../util/createSupportUrl';
+import { shouldNeverBeCalled } from '../util/shouldNeverBeCalled';
+import { openLinkInWebBrowser } from '../util/openLinkInWebBrowser';
 import { useEscapeHandling } from '../hooks/useEscapeHandling';
-import { useTheme } from '../hooks/useTheme';
 
 enum LoadState {
   NotStarted,
@@ -31,32 +30,22 @@ export type PropsType = {
   i18n: LocalizerType;
   fetchLogs: () => Promise<string>;
   uploadLogs: (logs: string) => Promise<string>;
-  hasCustomTitleBar: boolean;
-  executeMenuRole: ExecuteMenuRoleType;
 };
 
-enum ToastType {
-  Copied,
-  Error,
-  Loading,
-}
-
-export const DebugLogWindow = ({
+export function DebugLogWindow({
   closeWindow,
   downloadLog,
   i18n,
   fetchLogs,
   uploadLogs,
-  hasCustomTitleBar,
-  executeMenuRole,
-}: PropsType): JSX.Element => {
+}: PropsType): JSX.Element {
   const [loadState, setLoadState] = useState<LoadState>(LoadState.NotStarted);
   const [logText, setLogText] = useState<string | undefined>();
   const [publicLogURL, setPublicLogURL] = useState<string | undefined>();
-  const [textAreaValue, setTextAreaValue] = useState<string>(i18n('loading'));
-  const [toastType, setToastType] = useState<ToastType | undefined>();
-
-  const theme = useTheme();
+  const [textAreaValue, setTextAreaValue] = useState<string>(
+    i18n('icu:loading')
+  );
+  const [toast, setToast] = useState<AnyToast | undefined>();
 
   useEscapeHandling(closeWindow);
 
@@ -72,7 +61,7 @@ export const DebugLogWindow = ({
         return;
       }
 
-      setToastType(ToastType.Loading);
+      setToast({ toastType: ToastType.LoadingFullLogs });
       setLogText(fetchedLogText);
       setLoadState(LoadState.Loaded);
 
@@ -81,11 +70,11 @@ export const DebugLogWindow = ({
       const linesToShow = Math.ceil(Math.min(window.innerHeight, 2000) / 5);
       const value = fetchedLogText.split(/\n/g, linesToShow).join('\n');
 
-      setTextAreaValue(`${value}\n\n\n${i18n('debugLogLogIsIncomplete')}`);
-      setToastType(undefined);
+      setTextAreaValue(`${value}\n\n\n${i18n('icu:debugLogLogIsIncomplete')}`);
+      setToast(undefined);
     }
 
-    doFetchLogs();
+    void doFetchLogs();
 
     return () => {
       shouldCancel = true;
@@ -107,77 +96,71 @@ export const DebugLogWindow = ({
       const publishedLogURL = await uploadLogs(text);
       setPublicLogURL(publishedLogURL);
     } catch (error) {
-      log.error(
-        'DebugLogWindow error:',
-        error && error.stack ? error.stack : error
-      );
+      log.error('DebugLogWindow error:', Errors.toLogFormat(error));
       setLoadState(LoadState.Loaded);
-      setToastType(ToastType.Error);
+      setToast({ toastType: ToastType.DebugLogError });
     }
   };
 
   function closeToast() {
-    setToastType(undefined);
-  }
-
-  let toastElement: JSX.Element | undefined;
-  if (toastType === ToastType.Loading) {
-    toastElement = <ToastLoadingFullLogs i18n={i18n} onClose={closeToast} />;
-  } else if (toastType === ToastType.Copied) {
-    toastElement = <ToastLinkCopied i18n={i18n} onClose={closeToast} />;
-  } else if (toastType === ToastType.Error) {
-    toastElement = <ToastDebugLogError i18n={i18n} onClose={closeToast} />;
+    setToast(undefined);
   }
 
   if (publicLogURL) {
     const copyLog = (ev: MouseEvent) => {
       ev.preventDefault();
       copyText(publicLogURL);
-      setToastType(ToastType.Copied);
+      setToast({ toastType: ToastType.LinkCopied });
     };
 
     const supportURL = createSupportUrl({
-      locale: i18n.getLocale(),
+      locale: window.SignalContext.getI18nLocale(),
       query: {
         debugLog: publicLogURL,
       },
     });
 
     return (
-      <TitleBarContainer
-        hasCustomTitleBar={hasCustomTitleBar}
-        theme={theme}
-        executeMenuRole={executeMenuRole}
-      >
-        <div className="DebugLogWindow">
-          <div>
-            <div className="DebugLogWindow__title">
-              {i18n('debugLogSuccess')}
-            </div>
-            <p className="DebugLogWindow__subtitle">
-              {i18n('debugLogSuccessNextSteps')}
-            </p>
+      <div className="DebugLogWindow">
+        <div>
+          <div className="DebugLogWindow__title">
+            {i18n('icu:debugLogSuccess')}
           </div>
-          <div className="DebugLogWindow__container">
-            <input
-              className="DebugLogWindow__link"
-              readOnly
-              type="text"
-              value={publicLogURL}
-            />
-          </div>
-          <div className="DebugLogWindow__footer">
-            <Button
-              onClick={() => openLinkInWebBrowser(supportURL)}
-              variant={ButtonVariant.Secondary}
-            >
-              {i18n('reportIssue')}
-            </Button>
-            <Button onClick={copyLog}>{i18n('debugLogCopy')}</Button>
-          </div>
-          {toastElement}
+          <p className="DebugLogWindow__subtitle">
+            {i18n('icu:debugLogSuccessNextSteps')}
+          </p>
         </div>
-      </TitleBarContainer>
+        <div className="DebugLogWindow__container">
+          <input
+            className="DebugLogWindow__link"
+            readOnly
+            type="text"
+            dir="auto"
+            value={publicLogURL}
+          />
+        </div>
+        <div className="DebugLogWindow__footer">
+          <Button
+            onClick={() => openLinkInWebBrowser(supportURL)}
+            variant={ButtonVariant.Secondary}
+          >
+            {i18n('icu:reportIssue')}
+          </Button>
+          <Button onClick={copyLog}>{i18n('icu:debugLogCopy')}</Button>
+        </div>
+        <ToastManager
+          OS="unused"
+          hideToast={closeToast}
+          i18n={i18n}
+          onShowDebugLog={shouldNeverBeCalled}
+          onUndoArchive={shouldNeverBeCalled}
+          openFileInFolder={shouldNeverBeCalled}
+          showAttachmentNotAvailableModal={shouldNeverBeCalled}
+          toast={toast}
+          containerWidthBreakpoint={null}
+          isInFullScreenCall={false}
+        />
+      </div>
     );
   }
 
@@ -187,47 +170,54 @@ export const DebugLogWindow = ({
     loadState === LoadState.Started || loadState === LoadState.Submitting;
 
   return (
-    <TitleBarContainer
-      hasCustomTitleBar={hasCustomTitleBar}
-      theme={theme}
-      executeMenuRole={executeMenuRole}
-    >
-      <div className="DebugLogWindow">
-        <div>
-          <div className="DebugLogWindow__title">{i18n('submitDebugLog')}</div>
-          <p className="DebugLogWindow__subtitle">
-            {i18n('debugLogExplanation')}
-          </p>
+    <div className="DebugLogWindow">
+      <div>
+        <div className="DebugLogWindow__title">
+          {i18n('icu:submitDebugLog')}
         </div>
-        {isLoading ? (
-          <div className="DebugLogWindow__container">
-            <Spinner svgSize="normal" />
-          </div>
-        ) : (
-          <div className="DebugLogWindow__scroll_area">
-            <pre className="DebugLogWindow__scroll_area__text">
-              {textAreaValue}
-            </pre>
-          </div>
-        )}
-        <div className="DebugLogWindow__footer">
-          <Button
-            disabled={!canSave}
-            onClick={() => {
-              if (logText) {
-                downloadLog(logText);
-              }
-            }}
-            variant={ButtonVariant.Secondary}
-          >
-            {i18n('debugLogSave')}
-          </Button>
-          <Button disabled={!canSubmit} onClick={handleSubmit}>
-            {i18n('submit')}
-          </Button>
-        </div>
-        {toastElement}
+        <p className="DebugLogWindow__subtitle">
+          {i18n('icu:debugLogExplanation')}
+        </p>
       </div>
-    </TitleBarContainer>
+      {isLoading ? (
+        <div className="DebugLogWindow__container">
+          <Spinner svgSize="normal" />
+        </div>
+      ) : (
+        <div className="DebugLogWindow__scroll_area">
+          <pre className="DebugLogWindow__scroll_area__text">
+            {textAreaValue}
+          </pre>
+        </div>
+      )}
+      <div className="DebugLogWindow__footer">
+        <Button
+          disabled={!canSave}
+          onClick={() => {
+            if (logText) {
+              downloadLog(logText);
+            }
+          }}
+          variant={ButtonVariant.Secondary}
+        >
+          {i18n('icu:debugLogSave')}
+        </Button>
+        <Button disabled={!canSubmit} onClick={handleSubmit}>
+          {i18n('icu:submit')}
+        </Button>
+      </div>
+      <ToastManager
+        OS="unused"
+        hideToast={closeToast}
+        i18n={i18n}
+        onShowDebugLog={shouldNeverBeCalled}
+        onUndoArchive={shouldNeverBeCalled}
+        openFileInFolder={shouldNeverBeCalled}
+        showAttachmentNotAvailableModal={shouldNeverBeCalled}
+        toast={toast}
+        containerWidthBreakpoint={null}
+        isInFullScreenCall={false}
+      />
+    </div>
   );
-};
+}

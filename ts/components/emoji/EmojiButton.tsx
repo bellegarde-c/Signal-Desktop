@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as React from 'react';
@@ -6,14 +6,19 @@ import type { MutableRefObject } from 'react';
 import classNames from 'classnames';
 import { get, noop } from 'lodash';
 import { Manager, Popper, Reference } from 'react-popper';
-import { createPortal } from 'react-dom';
-import { Emoji } from './Emoji';
 import type { Props as EmojiPickerProps } from './EmojiPicker';
 import { EmojiPicker } from './EmojiPicker';
 import type { LocalizerType } from '../../types/Util';
 import { useRefMerger } from '../../hooks/useRefMerger';
 import { handleOutsideClick } from '../../util/handleOutsideClick';
 import * as KeyboardLayout from '../../services/keyboardLayout';
+import { FunStaticEmoji } from '../fun/FunEmoji';
+import type { EmojiVariantData } from '../fun/data/emojis';
+import {
+  getEmojiVariantByKey,
+  getEmojiVariantKeyByValue,
+  isEmojiVariantValue,
+} from '../fun/data/emojis';
 
 export enum EmojiButtonVariant {
   Normal,
@@ -26,6 +31,7 @@ export type OwnProps = Readonly<{
   emoji?: string;
   i18n: LocalizerType;
   onClose?: () => unknown;
+  onOpen?: () => unknown;
   emojiButtonApi?: MutableRefObject<EmojiButtonAPI | undefined>;
   variant?: EmojiButtonVariant;
 }>;
@@ -33,169 +39,183 @@ export type OwnProps = Readonly<{
 export type Props = OwnProps &
   Pick<
     EmojiPickerProps,
-    'doSend' | 'onPickEmoji' | 'onSetSkinTone' | 'recentEmojis' | 'skinTone'
+    | 'onPickEmoji'
+    | 'onEmojiSkinToneDefaultChange'
+    | 'recentEmojis'
+    | 'emojiSkinToneDefault'
   >;
 
 export type EmojiButtonAPI = Readonly<{
   close: () => void;
 }>;
 
-export const EmojiButton = React.memo(
-  ({
-    className,
-    closeOnPick,
-    emoji,
-    emojiButtonApi,
-    i18n,
-    doSend,
-    onClose,
-    onPickEmoji,
-    skinTone,
-    onSetSkinTone,
-    recentEmojis,
-    variant = EmojiButtonVariant.Normal,
-  }: Props) => {
-    const [open, setOpen] = React.useState(false);
-    const [popperRoot, setPopperRoot] = React.useState<HTMLElement | null>(
-      null
-    );
-    const buttonRef = React.useRef<HTMLButtonElement | null>(null);
-    const refMerger = useRefMerger();
+export const EmojiButton = React.memo(function EmojiButtonInner({
+  className,
+  closeOnPick,
+  emoji,
+  emojiButtonApi,
+  i18n,
+  onClose,
+  onOpen,
+  onPickEmoji,
+  emojiSkinToneDefault,
+  onEmojiSkinToneDefaultChange,
+  recentEmojis,
+  variant = EmojiButtonVariant.Normal,
+}: Props) {
+  const isRTL = i18n.getLocaleDirection() === 'rtl';
 
-    const handleClickButton = React.useCallback(() => {
-      if (popperRoot) {
-        setOpen(false);
-      } else {
-        setOpen(true);
-      }
-    }, [popperRoot, setOpen]);
+  const [open, setOpen] = React.useState(false);
+  const [wasInvokedFromKeyboard, setWasInvokedFromKeyboard] =
+    React.useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
+  const popperRef = React.useRef<HTMLDivElement | null>(null);
+  const refMerger = useRefMerger();
 
-    const handleClose = React.useCallback(() => {
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+    onOpen?.();
+  }, [open, onOpen]);
+
+  const handleClickButton = React.useCallback(() => {
+    setWasInvokedFromKeyboard(false);
+    if (open) {
       setOpen(false);
-      if (onClose) {
-        onClose();
-      }
-    }, [setOpen, onClose]);
+    } else {
+      setOpen(true);
+    }
+  }, [open, setOpen, setWasInvokedFromKeyboard]);
 
-    const api = React.useMemo(
-      () => ({
-        close: () => setOpen(false),
-      }),
-      [setOpen]
-    );
+  const handleClose = React.useCallback(() => {
+    setOpen(false);
+    setWasInvokedFromKeyboard(false);
+    if (onClose) {
+      onClose();
+    }
+  }, [setOpen, setWasInvokedFromKeyboard, onClose]);
 
-    if (emojiButtonApi) {
-      // Using a React.MutableRefObject, so we need to reassign this prop.
-      // eslint-disable-next-line no-param-reassign
-      emojiButtonApi.current = api;
+  const api = React.useMemo(
+    () => ({
+      close: () => {
+        setOpen(false);
+        setWasInvokedFromKeyboard(false);
+      },
+    }),
+    [setOpen, setWasInvokedFromKeyboard]
+  );
+
+  if (emojiButtonApi) {
+    // Using a React.MutableRefObject, so we need to reassign this prop.
+    // eslint-disable-next-line no-param-reassign
+    emojiButtonApi.current = api;
+  }
+
+  React.useEffect(() => {
+    if (!open) {
+      return noop;
     }
 
-    // Create popper root and handle outside clicks
-    React.useEffect(() => {
-      if (open) {
-        const root = document.createElement('div');
-        setPopperRoot(root);
-        document.body.appendChild(root);
-
-        return () => {
-          document.body.removeChild(root);
-          setPopperRoot(null);
-        };
+    return handleOutsideClick(
+      () => {
+        handleClose();
+        return true;
+      },
+      {
+        containerElements: [popperRef, buttonRef],
+        name: 'EmojiButton',
       }
-
-      return noop;
-    }, [open, setOpen, setPopperRoot, handleClose]);
-
-    React.useEffect(() => {
-      if (!open) {
-        return noop;
-      }
-
-      return handleOutsideClick(
-        () => {
-          handleClose();
-          return true;
-        },
-        { containerElements: [popperRoot, buttonRef], name: 'EmojiButton' }
-      );
-    }, [open, handleClose, popperRoot]);
-
-    // Install keyboard shortcut to open emoji picker
-    React.useEffect(() => {
-      const handleKeydown = (event: KeyboardEvent) => {
-        const { ctrlKey, metaKey, shiftKey } = event;
-        const commandKey = get(window, 'platform') === 'darwin' && metaKey;
-        const controlKey = get(window, 'platform') !== 'darwin' && ctrlKey;
-        const commandOrCtrl = commandKey || controlKey;
-        const key = KeyboardLayout.lookup(event);
-
-        // We don't want to open up if the conversation has any panels open
-        const panels = document.querySelectorAll('.conversation .panel');
-        if (panels && panels.length > 1) {
-          return;
-        }
-
-        if (commandOrCtrl && shiftKey && (key === 'j' || key === 'J')) {
-          event.stopPropagation();
-          event.preventDefault();
-
-          setOpen(!open);
-        }
-      };
-      document.addEventListener('keydown', handleKeydown);
-
-      return () => {
-        document.removeEventListener('keydown', handleKeydown);
-      };
-    }, [open, setOpen]);
-
-    return (
-      <Manager>
-        <Reference>
-          {({ ref }) => (
-            <button
-              type="button"
-              ref={refMerger(buttonRef, ref)}
-              onClick={handleClickButton}
-              className={classNames(className, {
-                'module-emoji-button__button': true,
-                'module-emoji-button__button--active': open,
-                'module-emoji-button__button--has-emoji': Boolean(emoji),
-                'module-emoji-button__button--profile-editor':
-                  variant === EmojiButtonVariant.ProfileEditor,
-              })}
-              aria-label={i18n('EmojiButton__label')}
-            >
-              {emoji && <Emoji emoji={emoji} size={24} />}
-            </button>
-          )}
-        </Reference>
-        {open && popperRoot
-          ? createPortal(
-              <Popper placement="top-start" strategy="fixed">
-                {({ ref, style }) => (
-                  <EmojiPicker
-                    ref={ref}
-                    i18n={i18n}
-                    style={style}
-                    onPickEmoji={ev => {
-                      onPickEmoji(ev);
-                      if (closeOnPick) {
-                        handleClose();
-                      }
-                    }}
-                    doSend={doSend}
-                    onClose={handleClose}
-                    skinTone={skinTone}
-                    onSetSkinTone={onSetSkinTone}
-                    recentEmojis={recentEmojis}
-                  />
-                )}
-              </Popper>,
-              popperRoot
-            )
-          : null}
-      </Manager>
     );
+  }, [open, handleClose]);
+
+  // Install keyboard shortcut to open emoji picker
+  React.useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      const { ctrlKey, metaKey, shiftKey } = event;
+      const commandKey = get(window, 'platform') === 'darwin' && metaKey;
+      const controlKey = get(window, 'platform') !== 'darwin' && ctrlKey;
+      const commandOrCtrl = commandKey || controlKey;
+      const key = KeyboardLayout.lookup(event);
+
+      // We don't want to open up if the current conversation panel is hidden
+      const parentPanel = buttonRef.current?.closest('.ConversationPanel');
+      if (parentPanel?.classList.contains('ConversationPanel__hidden')) {
+        return;
+      }
+
+      if (commandOrCtrl && shiftKey && (key === 'j' || key === 'J')) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        setWasInvokedFromKeyboard(true);
+        setOpen(!open);
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeydown);
+    };
+  }, [open, setOpen]);
+
+  let emojiVariant: EmojiVariantData;
+  if (emoji != null && isEmojiVariantValue(emoji)) {
+    const emojiVariantKey = getEmojiVariantKeyByValue(emoji);
+    emojiVariant = getEmojiVariantByKey(emojiVariantKey);
   }
-);
+
+  return (
+    <Manager>
+      <Reference>
+        {({ ref }) => (
+          <button
+            type="button"
+            ref={refMerger(buttonRef, ref)}
+            onClick={handleClickButton}
+            className={classNames(className, {
+              'module-emoji-button__button': true,
+              'module-emoji-button__button--active': open,
+              'module-emoji-button__button--has-emoji': Boolean(emoji),
+              'module-emoji-button__button--profile-editor':
+                variant === EmojiButtonVariant.ProfileEditor,
+            })}
+            aria-label={i18n('icu:EmojiButton__label')}
+          >
+            {emojiVariant && (
+              <FunStaticEmoji
+                role="presentation"
+                emoji={emojiVariant}
+                size={24}
+              />
+            )}
+          </button>
+        )}
+      </Reference>
+      {open ? (
+        <div ref={popperRef}>
+          <Popper placement={isRTL ? 'top-end' : 'top-start'} strategy="fixed">
+            {({ ref, style }) => (
+              <EmojiPicker
+                ref={ref}
+                i18n={i18n}
+                style={style}
+                onPickEmoji={ev => {
+                  onPickEmoji(ev);
+                  if (closeOnPick) {
+                    handleClose();
+                  }
+                }}
+                onClose={handleClose}
+                emojiSkinToneDefault={emojiSkinToneDefault}
+                onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+                wasInvokedFromKeyboard={wasInvokedFromKeyboard}
+                recentEmojis={recentEmojis}
+              />
+            )}
+          </Popper>
+        </div>
+      ) : null}
+    </Manager>
+  );
+});

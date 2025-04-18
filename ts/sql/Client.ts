@@ -1,448 +1,215 @@
-// Copyright 2020-2021 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable no-await-in-loop */
-/* eslint-disable camelcase */
 import { ipcRenderer as ipc } from 'electron';
-import fs from 'fs-extra';
-import pify from 'pify';
-import PQueue from 'p-queue';
+import { groupBy, isTypedArray, last, map, omit } from 'lodash';
 
-import {
-  compact,
-  fromPairs,
-  groupBy,
-  isFunction,
-  isTypedArray,
-  last,
-  map,
-  omit,
-  toPairs,
-  uniq,
-} from 'lodash';
+import type { ReadonlyDeep } from 'type-fest';
+
+// Note: nothing imported here can come back and require Client.ts, and that includes
+// their imports too. That circularity causes problems. Anything that would do that needs
+// to be passed in, like cleanupMessages below.
+import * as Bytes from '../Bytes';
+import * as log from '../logging/log';
+import * as Errors from '../types/errors';
 
 import { deleteExternalFiles } from '../types/Conversation';
-import { expiringMessagesDeletionService } from '../services/expiringMessagesDeletion';
-import { tapToViewMessagesDeletionService } from '../services/tapToViewMessagesDeletionService';
-import * as Bytes from '../Bytes';
-import { CURRENT_SCHEMA_VERSION } from '../types/Message2';
 import { createBatcher } from '../util/batcher';
-import { assertDev, softAssert, strictAssert } from '../util/assert';
+import { assertDev, softAssert } from '../util/assert';
 import { mapObjectWithSpec } from '../util/mapObjectWithSpec';
-import type { ObjectMappingSpecType } from '../util/mapObjectWithSpec';
 import { cleanDataForIpc } from './cleanDataForIpc';
-import type { ReactionType } from '../types/Reactions';
-import type { ConversationColorType, CustomColorType } from '../types/Colors';
-import type { UUIDStringType } from '../types/UUID';
-import type { BadgeType } from '../badges/types';
-import type { ProcessGroupCallRingRequestResult } from '../types/Calling';
-import type { RemoveAllConfiguration } from '../types/RemoveAllConfiguration';
 import createTaskWithTimeout from '../textsecure/TaskWithTimeout';
-import * as log from '../logging/log';
-import { isValidUuid } from '../types/UUID';
-
-import type { StoredJob } from '../jobs/types';
+import { isValidUuid, isValidUuidV7 } from '../util/isValidUuid';
 import { formatJobForInsert } from '../jobs/formatJobForInsert';
-import { cleanupMessage } from '../util/cleanup';
+import { AccessType, ipcInvoke, doShutdown, removeDB } from './channels';
+import { getMessageIdForLogging } from '../util/idForLogging';
+import { incrementMessageCounter } from '../util/incrementMessageCounter';
+import { generateSnippetAroundMention } from '../util/search';
+import { drop } from '../util/drop';
 
+import type { ObjectMappingSpecType } from '../util/mapObjectWithSpec';
+import type { AciString, ServiceIdString } from '../types/ServiceId';
+import type { StoredJob } from '../jobs/types';
 import type {
+  ClientInterfaceWrap,
+  AdjacentMessagesByConversationOptionsType,
   AllItemsType,
-  AttachmentDownloadJobType,
-  ClientInterface,
-  ClientJobType,
+  ServerReadableDirectInterface,
+  ServerWritableDirectInterface,
+  ClientReadableInterface,
+  ClientWritableInterface,
   ClientSearchResultMessageType,
   ConversationType,
-  ConversationMetricsType,
-  DeleteSentProtoRecipientOptionsType,
-  DeleteSentProtoRecipientResultType,
-  EmojiType,
-  GetUnreadByConversationAndMarkReadResultType,
   GetConversationRangeCenteredOnMessageResultType,
+  GetRecentStoryRepliesOptionsType,
   IdentityKeyIdType,
   IdentityKeyType,
   StoredIdentityKeyType,
   ItemKeyType,
   ItemType,
   StoredItemType,
-  ConversationMessageStatsType,
   MessageType,
   MessageTypeUnhydrated,
   PreKeyIdType,
   PreKeyType,
-  ReactionResultType,
   StoredPreKeyType,
-  SenderKeyIdType,
-  SenderKeyType,
-  SentMessageDBType,
-  SentMessagesType,
-  SentProtoType,
-  SentProtoWithMessageIdsType,
-  SentRecipientsDBType,
-  SentRecipientsType,
-  ServerInterface,
   ServerSearchResultMessageType,
-  SessionIdType,
-  SessionType,
   SignedPreKeyIdType,
   SignedPreKeyType,
   StoredSignedPreKeyType,
-  StickerPackStatusType,
-  StickerPackInfoType,
-  StickerPackType,
-  StickerType,
-  StoryDistributionMemberType,
-  StoryDistributionType,
-  StoryDistributionWithMembersType,
-  StoryReadType,
-  UnprocessedType,
-  UnprocessedUpdateType,
-  UninstalledStickerPackType,
+  KyberPreKeyType,
+  StoredKyberPreKeyType,
+  ClientOnlyReadableInterface,
+  ClientOnlyWritableInterface,
 } from './Interface';
-import Server from './Server';
-import { isCorruptionError } from './errors';
-import { MINUTE } from '../util/durations';
-import { getMessageIdForLogging } from '../util/idForLogging';
+import { hydrateMessage } from './hydration';
+import type { MessageAttributesType } from '../model-types';
+import type { AttachmentDownloadJobType } from '../types/AttachmentDownload';
 
-// We listen to a lot of events on ipc, often on the same channel. This prevents
-//   any warnings that might be sent to the console in that case.
-if (ipc && ipc.setMaxListeners) {
-  ipc.setMaxListeners(0);
-} else {
-  log.warn('sql/Client: ipc is not available!');
-}
-
-const getRealPath = pify(fs.realpath);
-
-const MIN_TRACE_DURATION = 10;
-
-const SQL_CHANNEL_KEY = 'sql-channel';
 const ERASE_SQL_KEY = 'erase-sql-key';
 const ERASE_ATTACHMENTS_KEY = 'erase-attachments';
 const ERASE_STICKERS_KEY = 'erase-stickers';
 const ERASE_TEMP_KEY = 'erase-temp';
 const ERASE_DRAFTS_KEY = 'erase-drafts';
+const ERASE_DOWNLOADS_KEY = 'erase-downloads';
 const CLEANUP_ORPHANED_ATTACHMENTS_KEY = 'cleanup-orphaned-attachments';
 const ENSURE_FILE_PERMISSIONS = 'ensure-file-permissions';
+const PAUSE_WRITE_ACCESS = 'pause-sql-writes';
+const RESUME_WRITE_ACCESS = 'resume-sql-writes';
 
-type ClientJobUpdateType = {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  args?: ReadonlyArray<unknown>;
-};
-
-enum RendererState {
-  InMain = 'InMain',
-  Opening = 'Opening',
-  InRenderer = 'InRenderer',
-  Closing = 'Closing',
-}
-
-const _jobs: { [id: string]: ClientJobType } = Object.create(null);
-const _DEBUG = false;
-let _jobCounter = 0;
-let _shuttingDown = false;
-let _shutdownCallback: ((error?: Error) => void) | null = null;
-let _shutdownPromise: Promise<void> | null = null;
-let state = RendererState.InMain;
-const startupQueries = new Map<string, number>();
-
-// Because we can't force this module to conform to an interface, we narrow our exports
-//   to this one default export, which does conform to the interface.
-// Note: In Javascript, you need to access the .default property when requiring it
-// https://github.com/microsoft/TypeScript/issues/420
-const dataInterface: ClientInterface = {
-  close,
-  removeDB,
-  removeIndexedDBFiles,
-
-  createOrUpdateIdentityKey,
+const clientOnlyReadable: ClientOnlyReadableInterface = {
   getIdentityKeyById,
-  bulkAddIdentityKeys,
-  removeIdentityKeyById,
-  removeAllIdentityKeys,
   getAllIdentityKeys,
 
-  createOrUpdatePreKey,
+  getKyberPreKeyById,
+  getAllKyberPreKeys,
+
   getPreKeyById,
-  bulkAddPreKeys,
-  removePreKeyById,
-  removePreKeysByUuid,
-  removeAllPreKeys,
   getAllPreKeys,
 
-  createOrUpdateSignedPreKey,
   getSignedPreKeyById,
-  bulkAddSignedPreKeys,
-  removeSignedPreKeyById,
-  removeSignedPreKeysByUuid,
-  removeAllSignedPreKeys,
   getAllSignedPreKeys,
 
-  createOrUpdateItem,
   getItemById,
-  removeItemById,
-  removeAllItems,
   getAllItems,
 
-  createOrUpdateSenderKey,
-  getSenderKeyById,
-  removeAllSenderKeys,
-  getAllSenderKeys,
-  removeSenderKeyById,
-
-  insertSentProto,
-  deleteSentProtosOlderThan,
-  deleteSentProtoByMessageId,
-  insertProtoRecipients,
-  deleteSentProtoRecipient,
-  getSentProtoByRecipient,
-  removeAllSentProtos,
-  getAllSentProtos,
-  _getAllSentProtoRecipients,
-  _getAllSentProtoMessageIds,
-
-  createOrUpdateSession,
-  createOrUpdateSessions,
-  commitDecryptResult,
-  bulkAddSessions,
-  removeSessionById,
-  removeSessionsByConversation,
-  removeAllSessions,
-  getAllSessions,
-
-  eraseStorageServiceStateFromConversations,
-  getConversationCount,
-  saveConversation,
-  saveConversations,
-  getConversationById,
-  updateConversation,
-  updateConversations,
-  removeConversation,
-  _removeAllConversations,
-  updateAllConversationColors,
-  removeAllProfileKeyCredentials,
-
-  getAllConversations,
-  getAllConversationIds,
-  getAllGroupsInvolvingUuid,
-
   searchMessages,
-  searchMessagesInConversation,
 
-  getMessageCount,
-  getStoryCount,
-  saveMessage,
-  saveMessages,
+  getRecentStoryReplies,
+  getOlderMessagesByConversation,
+  getNewerMessagesByConversation,
+  getConversationRangeCenteredOnMessage,
+};
+
+const clientOnlyWritable: ClientOnlyWritableInterface = {
+  createOrUpdateIdentityKey,
+  bulkAddIdentityKeys,
+
+  createOrUpdateKyberPreKey,
+  bulkAddKyberPreKeys,
+
+  createOrUpdatePreKey,
+  bulkAddPreKeys,
+
+  createOrUpdateSignedPreKey,
+  bulkAddSignedPreKeys,
+
+  createOrUpdateItem,
+
+  updateConversation,
+  removeConversation,
+
   removeMessage,
   removeMessages,
-  getTotalUnreadForConversation,
-  getUnreadByConversationAndMarkRead,
-  getUnreadReactionsAndMarkRead,
-  markReactionAsRead,
-  removeReactionFromConversation,
-  addReaction,
-  _getAllReactions,
-  _removeAllReactions,
-  getMessageBySender,
-  getMessageById,
-  getMessagesById,
-  _getAllMessages,
-  _removeAllMessages,
-  getAllMessageIds,
-  getMessagesBySentAt,
-  getExpiredMessages,
-  getMessagesUnexpectedlyMissingExpirationStartTimestamp,
-  getSoonestMessageExpiry,
-  getNextTapToViewMessageTimestampToAgeOut,
-  getTapToViewMessagesNeedingErase,
-  getOlderMessagesByConversation,
-  getAllStories,
-  hasStoryReplies,
-  hasStoryRepliesFromSelf,
-  getNewerMessagesByConversation,
-  getMessageMetricsForConversation,
-  getConversationRangeCenteredOnMessage,
-  getConversationMessageStats,
-  getLastConversationMessage,
-  hasGroupCallHistoryMessage,
-  migrateConversationMessages,
 
-  getUnprocessedCount,
-  getAllUnprocessedAndIncrementAttempts,
-  getUnprocessedById,
-  updateUnprocessedWithData,
-  updateUnprocessedsWithData,
-  removeUnprocessed,
-  removeAllUnprocessed,
-
-  getAttachmentDownloadJobById,
-  getNextAttachmentDownloadJobs,
-  saveAttachmentDownloadJob,
-  resetAttachmentDownloadPending,
-  setAttachmentDownloadJobPending,
-  removeAttachmentDownloadJob,
-  removeAllAttachmentDownloadJobs,
-
-  createOrUpdateStickerPack,
-  updateStickerPackStatus,
-  updateStickerPackInfo,
-  createOrUpdateSticker,
-  updateStickerLastUsed,
-  addStickerPackReference,
-  deleteStickerPackReference,
-  getStickerCount,
-  deleteStickerPack,
-  getAllStickerPacks,
-  addUninstalledStickerPack,
-  removeUninstalledStickerPack,
-  getInstalledStickerPacks,
-  getUninstalledStickerPacks,
-  installStickerPack,
-  uninstallStickerPack,
-  getStickerPackInfo,
-  getAllStickers,
-  getRecentStickers,
-  clearAllErrorStickerPackAttempts,
-
-  updateEmojiUsage,
-  getRecentEmojis,
-
-  getAllBadges,
-  updateOrCreateBadges,
-  badgeImageFileDownloaded,
-
-  _getAllStoryDistributions,
-  _getAllStoryDistributionMembers,
-  _deleteAllStoryDistributions,
-  createNewStoryDistribution,
-  getAllStoryDistributionsWithMembers,
-  getStoryDistributionWithMembers,
-  modifyStoryDistribution,
-  modifyStoryDistributionMembers,
-  modifyStoryDistributionWithMembers,
-  deleteStoryDistribution,
-
-  _getAllStoryReads,
-  _deleteAllStoryReads,
-  addNewStoryRead,
-  getLastStoryReadsForAuthor,
-  countStoryReadsByConversation,
-
-  removeAll,
-  removeAllConfiguration,
-
-  getMessagesNeedingUpgrade,
-  getMessagesWithVisualMediaAttachments,
-  getMessagesWithFileAttachments,
-  getMessageServerGuidsForSpam,
-
-  getJobsInQueue,
-  insertJob,
-  deleteJob,
-
-  processGroupCallRingRequest,
-  processGroupCallRingCancelation,
-  cleanExpiredGroupCallRings,
-
-  getMaxMessageCounter,
-
-  getStatisticsForLogging,
+  saveMessage,
+  saveMessages,
+  saveMessagesIndividually,
 
   // Client-side only
 
+  flushUpdateConversationBatcher,
+
+  removeDB,
   shutdown,
-  removeAllMessagesInConversation,
+  removeMessagesInConversation,
 
   removeOtherData,
   cleanupOrphanedAttachments,
   ensureFilePermissions,
-
-  // Client-side only, and test-only
-
-  startInRendererProcess,
-  goBackToMainProcess,
-  _jobs,
 };
 
-export default dataInterface;
+type ClientOverridesType = ClientOnlyWritableInterface &
+  Pick<
+    ClientInterfaceWrap<ServerWritableDirectInterface>,
+    'saveAttachmentDownloadJob' | 'updateConversations'
+  >;
 
-async function startInRendererProcess(isTesting = false): Promise<void> {
-  strictAssert(
-    state === RendererState.InMain,
-    `startInRendererProcess: expected ${state} to be ${RendererState.InMain}`
-  );
+const clientOnlyWritableOverrides: ClientOverridesType = {
+  ...clientOnlyWritable,
+  saveAttachmentDownloadJob,
+  updateConversations,
+};
 
-  log.info('data.startInRendererProcess: switching to renderer process');
-  state = RendererState.Opening;
+type ReadableChannelInterface =
+  ClientInterfaceWrap<ServerReadableDirectInterface>;
 
-  if (!isTesting) {
-    ipc.send('database-ready');
-
-    await new Promise<void>(resolve => {
-      ipc.once('database-ready', () => {
-        resolve();
-      });
-    });
+const readableChannel: ReadableChannelInterface = new Proxy(
+  {} as ReadableChannelInterface,
+  {
+    get(_target, name) {
+      return async (...args: ReadonlyArray<unknown>) =>
+        ipcInvoke(AccessType.Read, String(name), args);
+    },
   }
+);
 
-  const configDir = await getRealPath(ipc.sendSync('get-user-data-path'));
-  const key = ipc.sendSync('user-config-key');
+type WritableChannelInterface =
+  ClientInterfaceWrap<ServerWritableDirectInterface>;
 
-  await Server.initializeRenderer({ configDir, key });
-
-  log.info('data.startInRendererProcess: switched to renderer process');
-
-  state = RendererState.InRenderer;
-}
-
-async function goBackToMainProcess(): Promise<void> {
-  if (state === RendererState.InMain) {
-    log.info('goBackToMainProcess: Already in the main process');
-    return;
+const writableChannel: WritableChannelInterface = new Proxy(
+  {} as WritableChannelInterface,
+  {
+    get(_target, name) {
+      return async (...args: ReadonlyArray<unknown>) =>
+        ipcInvoke(AccessType.Write, String(name), args);
+    },
   }
+);
 
-  strictAssert(
-    state === RendererState.InRenderer,
-    `goBackToMainProcess: expected ${state} to be ${RendererState.InRenderer}`
-  );
+export const DataReader: ClientReadableInterface = new Proxy(
+  {
+    ...clientOnlyReadable,
+  } as ClientReadableInterface,
+  {
+    get(target, name) {
+      return async (...args: ReadonlyArray<unknown>) => {
+        if (Reflect.has(target, name)) {
+          return Reflect.get(target, name)(...args);
+        }
 
-  // We don't need to wait for pending queries since they are synchronous.
-  log.info('data.goBackToMainProcess: switching to main process');
-  const closePromise = close();
+        return Reflect.get(readableChannel, name)(...args);
+      };
+    },
+  }
+);
 
-  // It should be the last query we run in renderer process
-  state = RendererState.Closing;
-  await closePromise;
-  state = RendererState.InMain;
+export const DataWriter: ClientWritableInterface = new Proxy(
+  {
+    ...clientOnlyWritableOverrides,
+  } as ClientWritableInterface,
+  {
+    get(target, name) {
+      return async (...args: ReadonlyArray<unknown>) => {
+        if (Reflect.has(target, name)) {
+          return Reflect.get(target, name)(...args);
+        }
 
-  // Print query statistics for whole startup
-  const entries = Array.from(startupQueries.entries());
-  startupQueries.clear();
-
-  // Sort by decreasing duration
-  entries
-    .sort((a, b) => b[1] - a[1])
-    .filter(([_, duration]) => duration > MIN_TRACE_DURATION)
-    .forEach(([query, duration]) => {
-      log.info(`startup query: ${query} ${duration}ms`);
-    });
-
-  log.info('data.goBackToMainProcess: switched to main process');
-}
-
-const channelsAsUnknown = fromPairs(
-  compact(
-    map(toPairs(dataInterface), ([name, value]: [string, unknown]) => {
-      if (isFunction(value)) {
-        return [name, makeChannel(name)];
-      }
-
-      return null;
-    })
-  )
-) as unknown;
-
-const channels: ServerInterface = channelsAsUnknown as ServerInterface;
+        return Reflect.get(writableChannel, name)(...args);
+      };
+    },
+  }
+);
 
 function _cleanData(
   data: unknown
@@ -458,12 +225,14 @@ function _cleanData(
   return cleaned;
 }
 
-export function _cleanMessageData(data: MessageType): MessageType {
+export function _cleanMessageData(
+  data: ReadonlyDeep<MessageType>
+): ReadonlyDeep<MessageType> {
   const result = { ...data };
   // Ensure that all messages have the received_at set properly
   if (!data.received_at) {
     assertDev(false, 'received_at was not set on the message');
-    result.received_at = window.Signal.Util.incrementMessageCounter();
+    result.received_at = incrementMessageCounter();
   }
   if (data.attachments) {
     const logId = getMessageIdForLogging(data);
@@ -475,215 +244,34 @@ export function _cleanMessageData(data: MessageType): MessageType {
         return omit(attachment, ['data']);
       }
 
+      if (attachment.screenshotData) {
+        assertDev(
+          false,
+          `_cleanMessageData/${logId}: Attachment ${index} had screenshotData field; deleting`
+        );
+        return omit(attachment, ['screenshotData']);
+      }
+
+      if (attachment.screenshot?.data) {
+        assertDev(
+          false,
+          `_cleanMessageData/${logId}: Attachment ${index} had screenshot.data field; deleting`
+        );
+        return omit(attachment, ['screenshot.data']);
+      }
+
+      if (attachment.thumbnail?.data) {
+        assertDev(
+          false,
+          `_cleanMessageData/${logId}: Attachment ${index} had thumbnail.data field; deleting`
+        );
+        return omit(attachment, ['thumbnail.data']);
+      }
+
       return attachment;
     });
   }
   return _cleanData(omit(result, ['dataMessage']));
-}
-
-async function _shutdown() {
-  const jobKeys = Object.keys(_jobs);
-  log.info(
-    `data.shutdown: shutdown requested. ${jobKeys.length} jobs outstanding`
-  );
-
-  if (_shutdownPromise) {
-    await _shutdownPromise;
-
-    return;
-  }
-
-  _shuttingDown = true;
-
-  // No outstanding jobs, return immediately
-  if (jobKeys.length === 0 || _DEBUG) {
-    return;
-  }
-
-  // Outstanding jobs; we need to wait until the last one is done
-  _shutdownPromise = new Promise<void>((resolve, reject) => {
-    _shutdownCallback = (error?: Error) => {
-      log.info('data.shutdown: process complete');
-      if (error) {
-        reject(error);
-
-        return;
-      }
-
-      resolve();
-    };
-  });
-
-  await _shutdownPromise;
-}
-
-function _makeJob(fnName: string) {
-  if (_shuttingDown && fnName !== 'close') {
-    throw new Error(
-      `Rejecting SQL channel job (${fnName}); application is shutting down`
-    );
-  }
-
-  _jobCounter += 1;
-  const id = _jobCounter;
-
-  if (_DEBUG) {
-    log.info(`SQL channel job ${id} (${fnName}) started`);
-  }
-  _jobs[id] = {
-    fnName,
-    start: Date.now(),
-  };
-
-  return id;
-}
-
-function _updateJob(id: number, data: ClientJobUpdateType) {
-  const { resolve, reject } = data;
-  const { fnName, start } = _jobs[id];
-
-  _jobs[id] = {
-    ..._jobs[id],
-    ...data,
-    resolve: (value: unknown) => {
-      _removeJob(id);
-      const end = Date.now();
-      if (_DEBUG) {
-        log.info(
-          `SQL channel job ${id} (${fnName}) succeeded in ${end - start}ms`
-        );
-      }
-
-      return resolve(value);
-    },
-    reject: (error: Error) => {
-      _removeJob(id);
-      const end = Date.now();
-      log.info(`SQL channel job ${id} (${fnName}) failed in ${end - start}ms`);
-
-      return reject(error);
-    },
-  };
-}
-
-function _removeJob(id: number) {
-  if (_DEBUG) {
-    _jobs[id].complete = true;
-
-    return;
-  }
-
-  delete _jobs[id];
-
-  if (_shutdownCallback) {
-    const keys = Object.keys(_jobs);
-    if (keys.length === 0) {
-      _shutdownCallback();
-    }
-  }
-}
-
-function _getJob(id: number) {
-  return _jobs[id];
-}
-
-if (ipc && ipc.on) {
-  ipc.on(`${SQL_CHANNEL_KEY}-done`, (_, jobId, errorForDisplay, result) => {
-    const job = _getJob(jobId);
-    if (!job) {
-      throw new Error(
-        `Received SQL channel reply to job ${jobId}, but did not have it in our registry!`
-      );
-    }
-
-    const { resolve, reject, fnName } = job;
-
-    if (!resolve || !reject) {
-      throw new Error(
-        `SQL channel job ${jobId} (${fnName}): didn't have a resolve or reject`
-      );
-    }
-
-    if (errorForDisplay) {
-      return reject(
-        new Error(
-          `Error received from SQL channel job ${jobId} (${fnName}): ${errorForDisplay}`
-        )
-      );
-    }
-
-    return resolve(result);
-  });
-} else {
-  log.warn('sql/Client: ipc.on is not available!');
-}
-
-function makeChannel(fnName: string) {
-  return async (...args: ReadonlyArray<unknown>) => {
-    // During startup we want to avoid the high overhead of IPC so we utilize
-    // the db that exists in the renderer process to be able to boot up quickly
-    // once the app is running we switch back to the main process to avoid the
-    // UI from locking up whenever we do costly db operations.
-    if (state === RendererState.InRenderer) {
-      const serverFnName = fnName as keyof ServerInterface;
-      const serverFn = Server[serverFnName] as (
-        ...fnArgs: ReadonlyArray<unknown>
-      ) => unknown;
-      const start = Date.now();
-
-      try {
-        // Ignoring this error TS2556: Expected 3 arguments, but got 0 or more.
-        return await serverFn(...args);
-      } catch (error) {
-        if (isCorruptionError(error)) {
-          log.error(
-            'Detected sql corruption in renderer process. ' +
-              `Restarting the application immediately. Error: ${error.message}`
-          );
-          ipc?.send('database-error', error.stack);
-        }
-        log.error(
-          `Renderer SQL channel job (${fnName}) error ${error.message}`
-        );
-        throw error;
-      } finally {
-        const duration = Date.now() - start;
-
-        startupQueries.set(
-          serverFnName,
-          (startupQueries.get(serverFnName) || 0) + duration
-        );
-
-        if (duration > MIN_TRACE_DURATION || _DEBUG) {
-          log.info(
-            `Renderer SQL channel job (${fnName}) completed in ${duration}ms`
-          );
-        }
-      }
-    }
-
-    const jobId = _makeJob(fnName);
-
-    return createTaskWithTimeout(
-      () =>
-        new Promise((resolve, reject) => {
-          try {
-            ipc.send(SQL_CHANNEL_KEY, jobId, fnName, ...args);
-
-            _updateJob(jobId, {
-              resolve,
-              reject,
-              args: _DEBUG ? args : undefined,
-            });
-          } catch (error) {
-            _removeJob(jobId);
-
-            reject(error);
-          }
-        }),
-      `SQL channel job ${jobId} (${fnName})`
-    )();
-  };
 }
 
 function specToBytes<Input, Output>(
@@ -710,24 +298,7 @@ async function shutdown(): Promise<void> {
   log.info('Client.shutdown');
 
   // Stop accepting new SQL jobs, flush outstanding queue
-  await _shutdown();
-
-  // Close database
-  await close();
-}
-
-// Note: will need to restart the app after calling this, to set up afresh
-async function close(): Promise<void> {
-  await channels.close();
-}
-
-// Note: will need to restart the app after calling this, to set up afresh
-async function removeDB(): Promise<void> {
-  await channels.removeDB();
-}
-
-async function removeIndexedDBFiles(): Promise<void> {
-  await channels.removeIndexedDBFiles();
+  await doShutdown();
 }
 
 // Identity Keys
@@ -735,12 +306,12 @@ async function removeIndexedDBFiles(): Promise<void> {
 const IDENTITY_KEY_SPEC = ['publicKey'];
 async function createOrUpdateIdentityKey(data: IdentityKeyType): Promise<void> {
   const updated: StoredIdentityKeyType = specFromBytes(IDENTITY_KEY_SPEC, data);
-  await channels.createOrUpdateIdentityKey(updated);
+  await writableChannel.createOrUpdateIdentityKey(updated);
 }
 async function getIdentityKeyById(
   id: IdentityKeyIdType
 ): Promise<IdentityKeyType | undefined> {
-  const data = await channels.getIdentityKeyById(id);
+  const data = await readableChannel.getIdentityKeyById(id);
 
   return specToBytes(IDENTITY_KEY_SPEC, data);
 }
@@ -750,30 +321,55 @@ async function bulkAddIdentityKeys(
   const updated: Array<StoredIdentityKeyType> = map(array, data =>
     specFromBytes(IDENTITY_KEY_SPEC, data)
   );
-  await channels.bulkAddIdentityKeys(updated);
-}
-async function removeIdentityKeyById(id: IdentityKeyIdType): Promise<void> {
-  await channels.removeIdentityKeyById(id);
-}
-async function removeAllIdentityKeys(): Promise<void> {
-  await channels.removeAllIdentityKeys();
+  await writableChannel.bulkAddIdentityKeys(updated);
 }
 async function getAllIdentityKeys(): Promise<Array<IdentityKeyType>> {
-  const keys = await channels.getAllIdentityKeys();
+  const keys = await readableChannel.getAllIdentityKeys();
 
   return keys.map(key => specToBytes(IDENTITY_KEY_SPEC, key));
+}
+
+// Kyber Pre Keys
+
+const KYBER_PRE_KEY_SPEC = ['data'];
+async function createOrUpdateKyberPreKey(data: KyberPreKeyType): Promise<void> {
+  const updated: StoredKyberPreKeyType = specFromBytes(
+    KYBER_PRE_KEY_SPEC,
+    data
+  );
+  await writableChannel.createOrUpdateKyberPreKey(updated);
+}
+async function getKyberPreKeyById(
+  id: PreKeyIdType
+): Promise<KyberPreKeyType | undefined> {
+  const data = await readableChannel.getPreKeyById(id);
+
+  return specToBytes(KYBER_PRE_KEY_SPEC, data);
+}
+async function bulkAddKyberPreKeys(
+  array: Array<KyberPreKeyType>
+): Promise<void> {
+  const updated: Array<StoredKyberPreKeyType> = map(array, data =>
+    specFromBytes(KYBER_PRE_KEY_SPEC, data)
+  );
+  await writableChannel.bulkAddKyberPreKeys(updated);
+}
+async function getAllKyberPreKeys(): Promise<Array<KyberPreKeyType>> {
+  const keys = await readableChannel.getAllKyberPreKeys();
+
+  return keys.map(key => specToBytes(KYBER_PRE_KEY_SPEC, key));
 }
 
 // Pre Keys
 
 async function createOrUpdatePreKey(data: PreKeyType): Promise<void> {
   const updated: StoredPreKeyType = specFromBytes(PRE_KEY_SPEC, data);
-  await channels.createOrUpdatePreKey(updated);
+  await writableChannel.createOrUpdatePreKey(updated);
 }
 async function getPreKeyById(
   id: PreKeyIdType
 ): Promise<PreKeyType | undefined> {
-  const data = await channels.getPreKeyById(id);
+  const data = await readableChannel.getPreKeyById(id);
 
   return specToBytes(PRE_KEY_SPEC, data);
 }
@@ -781,19 +377,10 @@ async function bulkAddPreKeys(array: Array<PreKeyType>): Promise<void> {
   const updated: Array<StoredPreKeyType> = map(array, data =>
     specFromBytes(PRE_KEY_SPEC, data)
   );
-  await channels.bulkAddPreKeys(updated);
-}
-async function removePreKeyById(id: PreKeyIdType): Promise<void> {
-  await channels.removePreKeyById(id);
-}
-async function removePreKeysByUuid(uuid: UUIDStringType): Promise<void> {
-  await channels.removePreKeysByUuid(uuid);
-}
-async function removeAllPreKeys(): Promise<void> {
-  await channels.removeAllPreKeys();
+  await writableChannel.bulkAddPreKeys(updated);
 }
 async function getAllPreKeys(): Promise<Array<PreKeyType>> {
-  const keys = await channels.getAllPreKeys();
+  const keys = await readableChannel.getAllPreKeys();
 
   return keys.map(key => specToBytes(PRE_KEY_SPEC, key));
 }
@@ -805,17 +392,17 @@ async function createOrUpdateSignedPreKey(
   data: SignedPreKeyType
 ): Promise<void> {
   const updated: StoredSignedPreKeyType = specFromBytes(PRE_KEY_SPEC, data);
-  await channels.createOrUpdateSignedPreKey(updated);
+  await writableChannel.createOrUpdateSignedPreKey(updated);
 }
 async function getSignedPreKeyById(
   id: SignedPreKeyIdType
 ): Promise<SignedPreKeyType | undefined> {
-  const data = await channels.getSignedPreKeyById(id);
+  const data = await readableChannel.getSignedPreKeyById(id);
 
   return specToBytes(PRE_KEY_SPEC, data);
 }
 async function getAllSignedPreKeys(): Promise<Array<SignedPreKeyType>> {
-  const keys = await channels.getAllSignedPreKeys();
+  const keys = await readableChannel.getAllSignedPreKeys();
 
   return keys.map(key => specToBytes(PRE_KEY_SPEC, key));
 }
@@ -825,21 +412,13 @@ async function bulkAddSignedPreKeys(
   const updated: Array<StoredSignedPreKeyType> = map(array, data =>
     specFromBytes(PRE_KEY_SPEC, data)
   );
-  await channels.bulkAddSignedPreKeys(updated);
-}
-async function removeSignedPreKeyById(id: SignedPreKeyIdType): Promise<void> {
-  await channels.removeSignedPreKeyById(id);
-}
-async function removeSignedPreKeysByUuid(uuid: UUIDStringType): Promise<void> {
-  await channels.removeSignedPreKeysByUuid(uuid);
-}
-async function removeAllSignedPreKeys(): Promise<void> {
-  await channels.removeAllSignedPreKeys();
+  await writableChannel.bulkAddSignedPreKeys(updated);
 }
 
 // Items
 
 const ITEM_SPECS: Partial<Record<ItemKeyType, ObjectMappingSpecType>> = {
+  defaultWallpaperPhotoPointer: ['value'],
   identityKeyMap: {
     key: 'value',
     valueSpec: {
@@ -851,6 +430,11 @@ const ITEM_SPECS: Partial<Record<ItemKeyType, ObjectMappingSpecType>> = {
   senderCertificate: ['value.serialized'],
   senderCertificateNoE164: ['value.serialized'],
   subscriberId: ['value'],
+  backupsSubscriberId: ['value'],
+  backupEphemeralKey: ['value'],
+  backupMediaRootKey: ['value'],
+  manifestRecordIkm: ['value'],
+  usernameLink: ['value.entropy', 'value.serverId'],
 };
 async function createOrUpdateItem<K extends ItemKeyType>(
   data: ItemType<K>
@@ -867,18 +451,23 @@ async function createOrUpdateItem<K extends ItemKeyType>(
     ? specFromBytes(spec, data)
     : (data as unknown as StoredItemType<K>);
 
-  await channels.createOrUpdateItem(updated);
+  await writableChannel.createOrUpdateItem(updated);
 }
 async function getItemById<K extends ItemKeyType>(
   id: K
 ): Promise<ItemType<K> | undefined> {
   const spec = ITEM_SPECS[id];
-  const data = await channels.getItemById(id);
+  const data = await readableChannel.getItemById(id);
 
-  return spec ? specToBytes(spec, data) : (data as unknown as ItemType<K>);
+  try {
+    return spec ? specToBytes(spec, data) : (data as unknown as ItemType<K>);
+  } catch (error) {
+    log.warn(`getItemById(${id}): Failed to parse item from spec`, error);
+    return undefined;
+  }
 }
 async function getAllItems(): Promise<AllItemsType> {
-  const items = await channels.getAllItems();
+  const items = await readableChannel.getAllItems();
 
   const result = Object.create(null);
 
@@ -888,161 +477,21 @@ async function getAllItems(): Promise<AllItemsType> {
 
     const keys = ITEM_SPECS[key];
 
-    const deserializedValue = keys
-      ? (specToBytes(keys, { value }) as ItemType<typeof key>).value
-      : value;
+    try {
+      const deserializedValue = keys
+        ? (specToBytes(keys, { value }) as ItemType<typeof key>).value
+        : value;
 
-    result[key] = deserializedValue;
+      result[key] = deserializedValue;
+    } catch (error) {
+      log.warn(`getAllItems(${id}): Failed to parse item from spec`, error);
+    }
   }
 
   return result;
 }
-async function removeItemById(id: ItemKeyType): Promise<void> {
-  await channels.removeItemById(id);
-}
-async function removeAllItems(): Promise<void> {
-  await channels.removeAllItems();
-}
-
-// Sender Keys
-
-async function createOrUpdateSenderKey(key: SenderKeyType): Promise<void> {
-  await channels.createOrUpdateSenderKey(key);
-}
-async function getSenderKeyById(
-  id: SenderKeyIdType
-): Promise<SenderKeyType | undefined> {
-  return channels.getSenderKeyById(id);
-}
-async function removeAllSenderKeys(): Promise<void> {
-  await channels.removeAllSenderKeys();
-}
-async function getAllSenderKeys(): Promise<Array<SenderKeyType>> {
-  return channels.getAllSenderKeys();
-}
-async function removeSenderKeyById(id: SenderKeyIdType): Promise<void> {
-  return channels.removeSenderKeyById(id);
-}
-
-// Sent Protos
-
-async function insertSentProto(
-  proto: SentProtoType,
-  options: {
-    messageIds: SentMessagesType;
-    recipients: SentRecipientsType;
-  }
-): Promise<number> {
-  return channels.insertSentProto(proto, {
-    ...options,
-    messageIds: uniq(options.messageIds),
-  });
-}
-async function deleteSentProtosOlderThan(timestamp: number): Promise<void> {
-  await channels.deleteSentProtosOlderThan(timestamp);
-}
-async function deleteSentProtoByMessageId(messageId: string): Promise<void> {
-  await channels.deleteSentProtoByMessageId(messageId);
-}
-
-async function insertProtoRecipients(options: {
-  id: number;
-  recipientUuid: string;
-  deviceIds: Array<number>;
-}): Promise<void> {
-  await channels.insertProtoRecipients(options);
-}
-async function deleteSentProtoRecipient(
-  options:
-    | DeleteSentProtoRecipientOptionsType
-    | ReadonlyArray<DeleteSentProtoRecipientOptionsType>
-): Promise<DeleteSentProtoRecipientResultType> {
-  return channels.deleteSentProtoRecipient(options);
-}
-
-async function getSentProtoByRecipient(options: {
-  now: number;
-  recipientUuid: string;
-  timestamp: number;
-}): Promise<SentProtoWithMessageIdsType | undefined> {
-  return channels.getSentProtoByRecipient(options);
-}
-async function removeAllSentProtos(): Promise<void> {
-  await channels.removeAllSentProtos();
-}
-async function getAllSentProtos(): Promise<Array<SentProtoType>> {
-  return channels.getAllSentProtos();
-}
-
-// Test-only:
-async function _getAllSentProtoRecipients(): Promise<
-  Array<SentRecipientsDBType>
-> {
-  return channels._getAllSentProtoRecipients();
-}
-async function _getAllSentProtoMessageIds(): Promise<Array<SentMessageDBType>> {
-  return channels._getAllSentProtoMessageIds();
-}
-
-// Sessions
-
-async function createOrUpdateSession(data: SessionType): Promise<void> {
-  await channels.createOrUpdateSession(data);
-}
-async function createOrUpdateSessions(
-  array: Array<SessionType>
-): Promise<void> {
-  await channels.createOrUpdateSessions(array);
-}
-async function commitDecryptResult(options: {
-  senderKeys: Array<SenderKeyType>;
-  sessions: Array<SessionType>;
-  unprocessed: Array<UnprocessedType>;
-}): Promise<void> {
-  await channels.commitDecryptResult(options);
-}
-async function bulkAddSessions(array: Array<SessionType>): Promise<void> {
-  await channels.bulkAddSessions(array);
-}
-async function removeSessionById(id: SessionIdType): Promise<void> {
-  await channels.removeSessionById(id);
-}
-
-async function removeSessionsByConversation(
-  conversationId: string
-): Promise<void> {
-  await channels.removeSessionsByConversation(conversationId);
-}
-async function removeAllSessions(): Promise<void> {
-  await channels.removeAllSessions();
-}
-async function getAllSessions(): Promise<Array<SessionType>> {
-  const sessions = await channels.getAllSessions();
-
-  return sessions;
-}
 
 // Conversation
-
-async function getConversationCount(): Promise<number> {
-  return channels.getConversationCount();
-}
-
-async function saveConversation(data: ConversationType): Promise<void> {
-  await channels.saveConversation(data);
-}
-
-async function saveConversations(
-  array: Array<ConversationType>
-): Promise<void> {
-  await channels.saveConversations(array);
-}
-
-async function getConversationById(
-  id: string
-): Promise<ConversationType | undefined> {
-  return channels.getConversationById(id);
-}
 
 const updateConversationBatcher = createBatcher<ConversationType>({
   name: 'sql.Client.updateConversationBatcher',
@@ -1062,8 +511,11 @@ const updateConversationBatcher = createBatcher<ConversationType>({
   },
 });
 
-function updateConversation(data: ConversationType): void {
+async function updateConversation(data: ConversationType): Promise<void> {
   updateConversationBatcher.add(data);
+}
+async function flushUpdateConversationBatcher(): Promise<void> {
+  await updateConversationBatcher.flushAndWait();
 }
 
 async function updateConversations(
@@ -1074,381 +526,251 @@ async function updateConversations(
     !pathsChanged.length,
     `Paths were cleaned: ${JSON.stringify(pathsChanged)}`
   );
-  await channels.updateConversations(cleaned);
+  await writableChannel.updateConversations(cleaned);
 }
 
 async function removeConversation(id: string): Promise<void> {
-  const existing = await getConversationById(id);
+  const existing = await readableChannel.getConversationById(id);
 
   // Note: It's important to have a fully database-hydrated model to delete here because
   //   it needs to delete all associated on-disk files along with the database delete.
   if (existing) {
-    await channels.removeConversation(id);
+    await writableChannel.removeConversation(id);
     await deleteExternalFiles(existing, {
       deleteAttachmentData: window.Signal.Migrations.deleteAttachmentData,
     });
   }
 }
 
-async function _removeAllConversations(): Promise<void> {
-  await channels._removeAllConversations();
-}
-
-async function eraseStorageServiceStateFromConversations(): Promise<void> {
-  await channels.eraseStorageServiceStateFromConversations();
-}
-
-async function getAllConversations(): Promise<Array<ConversationType>> {
-  return channels.getAllConversations();
-}
-
-async function getAllConversationIds(): Promise<Array<string>> {
-  const ids = await channels.getAllConversationIds();
-
-  return ids;
-}
-
-async function getAllGroupsInvolvingUuid(
-  uuid: UUIDStringType
-): Promise<Array<ConversationType>> {
-  return channels.getAllGroupsInvolvingUuid(uuid);
-}
-
 function handleSearchMessageJSON(
   messages: Array<ServerSearchResultMessageType>
 ): Array<ClientSearchResultMessageType> {
-  return messages.map(message => ({
-    json: message.json,
+  return messages.map<ClientSearchResultMessageType>(message => {
+    const parsedMessage = hydrateMessage(message);
+    assertDev(
+      message.ftsSnippet ?? typeof message.mentionStart === 'number',
+      'Neither ftsSnippet nor matching mention returned from message search'
+    );
+    const snippet =
+      message.ftsSnippet ??
+      generateSnippetAroundMention({
+        body: parsedMessage.body || '',
+        mentionStart: message.mentionStart ?? 0,
+        mentionLength: message.mentionLength ?? 1,
+      });
 
-    // Empty array is a default value. `message.json` has the real field
-    bodyRanges: [],
-
-    ...JSON.parse(message.json),
-    snippet: message.snippet,
-  }));
+    return {
+      // Empty array is a default value. `message.json` has the real field
+      bodyRanges: [],
+      ...parsedMessage,
+      snippet,
+    };
+  });
 }
 
-async function searchMessages(
-  query: string,
-  { limit }: { limit?: number } = {}
-): Promise<Array<ClientSearchResultMessageType>> {
-  const messages = await channels.searchMessages(query, { limit });
-
-  return handleSearchMessageJSON(messages);
-}
-
-async function searchMessagesInConversation(
-  query: string,
-  conversationId: string,
-  { limit }: { limit?: number } = {}
-): Promise<Array<ClientSearchResultMessageType>> {
-  const messages = await channels.searchMessagesInConversation(
+async function searchMessages({
+  query,
+  options,
+  contactServiceIdsMatchingQuery,
+  conversationId,
+}: {
+  query: string;
+  options?: { limit?: number };
+  contactServiceIdsMatchingQuery?: Array<ServiceIdString>;
+  conversationId?: string;
+}): Promise<Array<ClientSearchResultMessageType>> {
+  const messages = await readableChannel.searchMessages({
     query,
     conversationId,
-    { limit }
-  );
+    options,
+    contactServiceIdsMatchingQuery,
+  });
 
   return handleSearchMessageJSON(messages);
 }
 
 // Message
 
-async function getMessageCount(conversationId?: string): Promise<number> {
-  return channels.getMessageCount(conversationId);
-}
-
-async function getStoryCount(conversationId: string): Promise<number> {
-  return channels.getStoryCount(conversationId);
-}
-
 async function saveMessage(
-  data: MessageType,
-  options: {
-    jobToInsert?: Readonly<StoredJob>;
+  data: ReadonlyDeep<MessageType>,
+  {
+    forceSave,
+    jobToInsert,
+    ourAci,
+    postSaveUpdates,
+  }: {
     forceSave?: boolean;
-    ourUuid: UUIDStringType;
+    jobToInsert?: Readonly<StoredJob>;
+    ourAci: AciString;
+    postSaveUpdates: () => Promise<void>;
   }
 ): Promise<string> {
-  const id = await channels.saveMessage(_cleanMessageData(data), {
-    ...options,
-    jobToInsert: options.jobToInsert && formatJobForInsert(options.jobToInsert),
+  const id = await writableChannel.saveMessage(_cleanMessageData(data), {
+    forceSave,
+    jobToInsert: jobToInsert && formatJobForInsert(jobToInsert),
+    ourAci,
   });
 
-  softAssert(isValidUuid(id), 'saveMessage: messageId is not a UUID');
+  softAssert(
+    // Older messages still have `UUIDv4` so don't log errors when encountering
+    // it.
+    (!forceSave && isValidUuid(id)) || isValidUuidV7(id),
+    'saveMessage: messageId is not a UUID'
+  );
 
-  expiringMessagesDeletionService.update();
-  tapToViewMessagesDeletionService.update();
+  drop(postSaveUpdates?.());
 
   return id;
 }
 
 async function saveMessages(
-  arrayOfMessages: ReadonlyArray<MessageType>,
-  options: { forceSave?: boolean; ourUuid: UUIDStringType }
-): Promise<void> {
-  await channels.saveMessages(
+  arrayOfMessages: ReadonlyArray<ReadonlyDeep<MessageType>>,
+  {
+    forceSave,
+    ourAci,
+    postSaveUpdates,
+  }: {
+    forceSave?: boolean;
+    ourAci: AciString;
+    postSaveUpdates: () => Promise<void>;
+  }
+): Promise<Array<string>> {
+  const result = await writableChannel.saveMessages(
     arrayOfMessages.map(message => _cleanMessageData(message)),
-    options
+    { forceSave, ourAci }
   );
 
-  expiringMessagesDeletionService.update();
-  tapToViewMessagesDeletionService.update();
+  drop(postSaveUpdates?.());
+
+  return result;
 }
 
-async function removeMessage(id: string): Promise<void> {
-  const message = await getMessageById(id);
+async function saveMessagesIndividually(
+  arrayOfMessages: ReadonlyArray<ReadonlyDeep<MessageType>>,
+  {
+    forceSave,
+    ourAci,
+    postSaveUpdates,
+  }: {
+    forceSave?: boolean;
+    ourAci: AciString;
+    postSaveUpdates: () => Promise<void>;
+  }
+): Promise<{ failedIndices: Array<number> }> {
+  const result = await writableChannel.saveMessagesIndividually(
+    arrayOfMessages,
+    { forceSave, ourAci }
+  );
+
+  drop(postSaveUpdates?.());
+
+  return result;
+}
+
+async function removeMessage(
+  id: string,
+  options: {
+    cleanupMessages: (
+      messages: ReadonlyArray<MessageAttributesType>,
+      options: { fromSync?: boolean }
+    ) => Promise<void>;
+    fromSync?: boolean;
+  }
+): Promise<void> {
+  const message = await readableChannel.getMessageById(id);
 
   // Note: It's important to have a fully database-hydrated model to delete here because
   //   it needs to delete all associated on-disk files along with the database delete.
   if (message) {
-    await channels.removeMessage(id);
-    await cleanupMessage(message);
+    await writableChannel.removeMessage(id);
+    await options.cleanupMessages([message], {
+      fromSync: options.fromSync,
+    });
   }
 }
 
-// Note: this method will not clean up external files, just delete from SQL
-async function removeMessages(ids: Array<string>): Promise<void> {
-  await channels.removeMessages(ids);
-}
-
-async function getMessageById(id: string): Promise<MessageType | undefined> {
-  return channels.getMessageById(id);
-}
-
-async function getMessagesById(
-  messageIds: Array<string>
-): Promise<Array<MessageType>> {
-  if (!messageIds.length) {
-    return [];
-  }
-  return channels.getMessagesById(messageIds);
-}
-
-// For testing only
-async function _getAllMessages(): Promise<Array<MessageType>> {
-  return channels._getAllMessages();
-}
-async function _removeAllMessages(): Promise<void> {
-  await channels._removeAllMessages();
-}
-
-async function getAllMessageIds(): Promise<Array<string>> {
-  const ids = await channels.getAllMessageIds();
-
-  return ids;
-}
-
-async function getMessageBySender({
-  source,
-  sourceUuid,
-  sourceDevice,
-  sent_at,
-}: {
-  source: string;
-  sourceUuid: UUIDStringType;
-  sourceDevice: number;
-  sent_at: number;
-}): Promise<MessageType | undefined> {
-  return channels.getMessageBySender({
-    source,
-    sourceUuid,
-    sourceDevice,
-    sent_at,
-  });
-}
-
-async function getTotalUnreadForConversation(
-  conversationId: string,
+export async function deleteAndCleanup(
+  messages: Array<MessageAttributesType>,
+  logId: string,
   options: {
-    storyId: UUIDStringType | undefined;
-    includeStoryReplies: boolean;
+    fromSync?: boolean;
+    cleanupMessages: (
+      messages: ReadonlyArray<MessageAttributesType>,
+      options: { fromSync?: boolean }
+    ) => Promise<void>;
   }
-): Promise<number> {
-  return channels.getTotalUnreadForConversation(conversationId, options);
+): Promise<void> {
+  const ids = messages.map(message => message.id);
+
+  log.info(`deleteAndCleanup/${logId}: Deleting ${ids.length} messages...`);
+  await writableChannel.removeMessages(ids);
+
+  log.info(`deleteAndCleanup/${logId}: Cleanup for ${ids.length} messages...`);
+  await options.cleanupMessages(messages, {
+    fromSync: Boolean(options.fromSync),
+  });
+
+  log.info(`deleteAndCleanup/${logId}: Complete`);
 }
 
-async function getUnreadByConversationAndMarkRead(options: {
-  conversationId: string;
-  includeStoryReplies: boolean;
-  newestUnreadAt: number;
-  now?: number;
-  readAt?: number;
-  storyId?: UUIDStringType;
-}): Promise<GetUnreadByConversationAndMarkReadResultType> {
-  return channels.getUnreadByConversationAndMarkRead(options);
-}
-
-async function getUnreadReactionsAndMarkRead(options: {
-  conversationId: string;
-  newestUnreadAt: number;
-  storyId?: UUIDStringType;
-}): Promise<Array<ReactionResultType>> {
-  return channels.getUnreadReactionsAndMarkRead(options);
-}
-
-async function markReactionAsRead(
-  targetAuthorUuid: string,
-  targetTimestamp: number
-): Promise<ReactionType | undefined> {
-  return channels.markReactionAsRead(targetAuthorUuid, targetTimestamp);
-}
-
-async function removeReactionFromConversation(reaction: {
-  emoji: string;
-  fromId: string;
-  targetAuthorUuid: string;
-  targetTimestamp: number;
-}): Promise<void> {
-  return channels.removeReactionFromConversation(reaction);
-}
-
-async function addReaction(reactionObj: ReactionType): Promise<void> {
-  return channels.addReaction(reactionObj);
-}
-
-async function _getAllReactions(): Promise<Array<ReactionType>> {
-  return channels._getAllReactions();
-}
-async function _removeAllReactions(): Promise<void> {
-  await channels._removeAllReactions();
+async function removeMessages(
+  messageIds: ReadonlyArray<string>,
+  options: {
+    fromSync?: boolean;
+    cleanupMessages: (
+      messages: ReadonlyArray<MessageAttributesType>,
+      options: { fromSync?: boolean }
+    ) => Promise<void>;
+  }
+): Promise<void> {
+  const messages = await readableChannel.getMessagesById(messageIds);
+  await options.cleanupMessages(messages, {
+    fromSync: Boolean(options.fromSync),
+  });
+  await writableChannel.removeMessages(messageIds);
 }
 
 function handleMessageJSON(
   messages: Array<MessageTypeUnhydrated>
 ): Array<MessageType> {
-  return messages.map(message => JSON.parse(message.json));
-}
-
-async function getOlderMessagesByConversation(
-  conversationId: string,
-  {
-    includeStoryReplies,
-    limit = 100,
-    messageId,
-    receivedAt = Number.MAX_VALUE,
-    sentAt = Number.MAX_VALUE,
-    storyId,
-  }: {
-    includeStoryReplies: boolean;
-    limit?: number;
-    messageId?: string;
-    receivedAt?: number;
-    sentAt?: number;
-    storyId: string | undefined;
-  }
-): Promise<Array<MessageType>> {
-  const messages = await channels.getOlderMessagesByConversation(
-    conversationId,
-    {
-      includeStoryReplies,
-      limit,
-      receivedAt,
-      sentAt,
-      messageId,
-      storyId,
-    }
-  );
-
-  return handleMessageJSON(messages);
-}
-
-async function getAllStories(options: {
-  conversationId?: string;
-  sourceUuid?: UUIDStringType;
-}): Promise<Array<MessageType>> {
-  return channels.getAllStories(options);
-}
-
-async function hasStoryReplies(storyId: string): Promise<boolean> {
-  return channels.hasStoryReplies(storyId);
-}
-
-async function hasStoryRepliesFromSelf(storyId: string): Promise<boolean> {
-  return channels.hasStoryRepliesFromSelf(storyId);
+  return messages.map(message => hydrateMessage(message));
 }
 
 async function getNewerMessagesByConversation(
-  conversationId: string,
-  {
-    includeStoryReplies,
-    limit = 100,
-    receivedAt = 0,
-    sentAt = 0,
-    storyId,
-  }: {
-    includeStoryReplies: boolean;
-    limit?: number;
-    receivedAt?: number;
-    sentAt?: number;
-    storyId: UUIDStringType | undefined;
-  }
+  options: AdjacentMessagesByConversationOptionsType
 ): Promise<Array<MessageType>> {
-  const messages = await channels.getNewerMessagesByConversation(
-    conversationId,
-    {
-      includeStoryReplies,
-      limit,
-      receivedAt,
-      sentAt,
-      storyId,
-    }
+  const messages =
+    await readableChannel.getNewerMessagesByConversation(options);
+
+  return handleMessageJSON(messages);
+}
+
+async function getRecentStoryReplies(
+  storyId: string,
+  options?: GetRecentStoryRepliesOptionsType
+): Promise<Array<MessageType>> {
+  const messages = await readableChannel.getRecentStoryReplies(
+    storyId,
+    options
   );
 
   return handleMessageJSON(messages);
 }
-async function getConversationMessageStats({
-  conversationId,
-  includeStoryReplies,
-  ourUuid,
-}: {
-  conversationId: string;
-  includeStoryReplies: boolean;
-  ourUuid: UUIDStringType;
-}): Promise<ConversationMessageStatsType> {
-  const { preview, activity, hasUserInitiatedMessages } =
-    await channels.getConversationMessageStats({
-      conversationId,
-      includeStoryReplies,
-      ourUuid,
-    });
 
-  return {
-    preview,
-    activity,
-    hasUserInitiatedMessages,
-  };
-}
-async function getLastConversationMessage({
-  conversationId,
-}: {
-  conversationId: string;
-}): Promise<MessageType | undefined> {
-  return channels.getLastConversationMessage({ conversationId });
-}
-async function getMessageMetricsForConversation(
-  conversationId: string,
-  options: {
-    storyId?: UUIDStringType;
-    includeStoryReplies: boolean;
-  }
-): Promise<ConversationMetricsType> {
-  const result = await channels.getMessageMetricsForConversation(
-    conversationId,
-    options
-  );
+async function getOlderMessagesByConversation(
+  options: AdjacentMessagesByConversationOptionsType
+): Promise<Array<MessageType>> {
+  const messages =
+    await readableChannel.getOlderMessagesByConversation(options);
 
-  return result;
+  return handleMessageJSON(messages);
 }
-async function getConversationRangeCenteredOnMessage(options: {
-  conversationId: string;
-  includeStoryReplies: boolean;
-  limit?: number;
-  messageId: string;
-  receivedAt: number;
-  sentAt?: number;
-  storyId: UUIDStringType | undefined;
-}): Promise<GetConversationRangeCenteredOnMessageResultType<MessageType>> {
-  const result = await channels.getConversationRangeCenteredOnMessage(options);
+
+async function getConversationRangeCenteredOnMessage(
+  options: AdjacentMessagesByConversationOptionsType
+): Promise<GetConversationRangeCenteredOnMessageResultType<MessageType>> {
+  const result =
+    await readableChannel.getConversationRangeCenteredOnMessage(options);
 
   return {
     ...result,
@@ -1457,25 +779,21 @@ async function getConversationRangeCenteredOnMessage(options: {
   };
 }
 
-function hasGroupCallHistoryMessage(
-  conversationId: string,
-  eraId: string
-): Promise<boolean> {
-  return channels.hasGroupCallHistoryMessage(conversationId, eraId);
-}
-async function migrateConversationMessages(
-  obsoleteId: string,
-  currentId: string
-): Promise<void> {
-  await channels.migrateConversationMessages(obsoleteId, currentId);
-}
-
-async function removeAllMessagesInConversation(
+async function removeMessagesInConversation(
   conversationId: string,
   {
+    cleanupMessages,
+    fromSync,
     logId,
+    receivedAt,
   }: {
+    cleanupMessages: (
+      messages: ReadonlyArray<MessageAttributesType>,
+      options: { fromSync?: boolean | undefined }
+    ) => Promise<void>;
+    fromSync?: boolean;
     logId: string;
+    receivedAt?: number;
   }
 ): Promise<void> {
   let messages;
@@ -1486,9 +804,12 @@ async function removeAllMessagesInConversation(
     );
     // Yes, we really want the await in the loop. We're deleting a chunk at a
     //   time so we don't use too much memory.
-    messages = await getOlderMessagesByConversation(conversationId, {
+    // eslint-disable-next-line no-await-in-loop
+    messages = await getOlderMessagesByConversation({
+      conversationId,
       limit: chunkSize,
       includeStoryReplies: true,
+      receivedAt,
       storyId: undefined,
     });
 
@@ -1496,489 +817,59 @@ async function removeAllMessagesInConversation(
       return;
     }
 
-    const ids = messages.map(message => message.id);
-
-    log.info(`removeAllMessagesInConversation/${logId}: Cleanup...`);
-    // Note: It's very important that these models are fully hydrated because
-    //   we need to delete all associated on-disk files along with the database delete.
-    const queue = new PQueue({ concurrency: 3, timeout: MINUTE * 30 });
-    queue.addAll(
-      messages.map(
-        (message: MessageType) => async () => cleanupMessage(message)
-      )
-    );
-    await queue.onIdle();
-
-    log.info(`removeAllMessagesInConversation/${logId}: Deleting...`);
-    await channels.removeMessages(ids);
+    // eslint-disable-next-line no-await-in-loop
+    await deleteAndCleanup(messages, logId, { fromSync, cleanupMessages });
   } while (messages.length > 0);
-}
-
-async function getMessagesBySentAt(
-  sentAt: number
-): Promise<Array<MessageType>> {
-  return channels.getMessagesBySentAt(sentAt);
-}
-
-async function getExpiredMessages(): Promise<Array<MessageType>> {
-  return channels.getExpiredMessages();
-}
-
-function getMessagesUnexpectedlyMissingExpirationStartTimestamp(): Promise<
-  Array<MessageType>
-> {
-  return channels.getMessagesUnexpectedlyMissingExpirationStartTimestamp();
-}
-
-function getSoonestMessageExpiry(): Promise<number | undefined> {
-  return channels.getSoonestMessageExpiry();
-}
-
-async function getNextTapToViewMessageTimestampToAgeOut(): Promise<
-  number | undefined
-> {
-  return channels.getNextTapToViewMessageTimestampToAgeOut();
-}
-async function getTapToViewMessagesNeedingErase(): Promise<Array<MessageType>> {
-  return channels.getTapToViewMessagesNeedingErase();
-}
-
-// Unprocessed
-
-async function getUnprocessedCount(): Promise<number> {
-  return channels.getUnprocessedCount();
-}
-
-async function getAllUnprocessedAndIncrementAttempts(): Promise<
-  Array<UnprocessedType>
-> {
-  return channels.getAllUnprocessedAndIncrementAttempts();
-}
-
-async function getUnprocessedById(
-  id: string
-): Promise<UnprocessedType | undefined> {
-  return channels.getUnprocessedById(id);
-}
-
-async function updateUnprocessedWithData(
-  id: string,
-  data: UnprocessedUpdateType
-): Promise<void> {
-  await channels.updateUnprocessedWithData(id, data);
-}
-async function updateUnprocessedsWithData(
-  array: Array<{ id: string; data: UnprocessedUpdateType }>
-): Promise<void> {
-  await channels.updateUnprocessedsWithData(array);
-}
-
-async function removeUnprocessed(id: string | Array<string>): Promise<void> {
-  await channels.removeUnprocessed(id);
-}
-
-async function removeAllUnprocessed(): Promise<void> {
-  await channels.removeAllUnprocessed();
 }
 
 // Attachment downloads
 
-async function getAttachmentDownloadJobById(
-  id: string
-): Promise<AttachmentDownloadJobType | undefined> {
-  return channels.getAttachmentDownloadJobById(id);
-}
-async function getNextAttachmentDownloadJobs(
-  limit?: number,
-  options?: { timestamp?: number }
-): Promise<Array<AttachmentDownloadJobType>> {
-  return channels.getNextAttachmentDownloadJobs(limit, options);
-}
 async function saveAttachmentDownloadJob(
   job: AttachmentDownloadJobType
 ): Promise<void> {
-  await channels.saveAttachmentDownloadJob(_cleanData(job));
-}
-async function setAttachmentDownloadJobPending(
-  id: string,
-  pending: boolean
-): Promise<void> {
-  await channels.setAttachmentDownloadJobPending(id, pending);
-}
-async function resetAttachmentDownloadPending(): Promise<void> {
-  await channels.resetAttachmentDownloadPending();
-}
-async function removeAttachmentDownloadJob(id: string): Promise<void> {
-  await channels.removeAttachmentDownloadJob(id);
-}
-async function removeAllAttachmentDownloadJobs(): Promise<void> {
-  await channels.removeAllAttachmentDownloadJobs();
-}
-
-// Stickers
-
-async function getStickerCount(): Promise<number> {
-  return channels.getStickerCount();
-}
-
-async function createOrUpdateStickerPack(pack: StickerPackType): Promise<void> {
-  await channels.createOrUpdateStickerPack(pack);
-}
-async function updateStickerPackStatus(
-  packId: string,
-  status: StickerPackStatusType,
-  options?: { timestamp: number }
-): Promise<void> {
-  await channels.updateStickerPackStatus(packId, status, options);
-}
-async function updateStickerPackInfo(info: StickerPackInfoType): Promise<void> {
-  await channels.updateStickerPackInfo(info);
-}
-async function createOrUpdateSticker(sticker: StickerType): Promise<void> {
-  await channels.createOrUpdateSticker(sticker);
-}
-async function updateStickerLastUsed(
-  packId: string,
-  stickerId: number,
-  timestamp: number
-): Promise<void> {
-  return channels.updateStickerLastUsed(packId, stickerId, timestamp);
-}
-async function addStickerPackReference(
-  messageId: string,
-  packId: string
-): Promise<void> {
-  await channels.addStickerPackReference(messageId, packId);
-}
-async function deleteStickerPackReference(
-  messageId: string,
-  packId: string
-): Promise<ReadonlyArray<string> | undefined> {
-  return channels.deleteStickerPackReference(messageId, packId);
-}
-async function deleteStickerPack(packId: string): Promise<Array<string>> {
-  return channels.deleteStickerPack(packId);
-}
-async function getAllStickerPacks(): Promise<Array<StickerPackType>> {
-  const packs = await channels.getAllStickerPacks();
-
-  return packs;
-}
-async function addUninstalledStickerPack(
-  pack: UninstalledStickerPackType
-): Promise<void> {
-  return channels.addUninstalledStickerPack(pack);
-}
-async function removeUninstalledStickerPack(packId: string): Promise<void> {
-  return channels.removeUninstalledStickerPack(packId);
-}
-async function getInstalledStickerPacks(): Promise<Array<StickerPackType>> {
-  return channels.getInstalledStickerPacks();
-}
-async function getUninstalledStickerPacks(): Promise<
-  Array<UninstalledStickerPackType>
-> {
-  return channels.getUninstalledStickerPacks();
-}
-async function installStickerPack(
-  packId: string,
-  timestamp: number
-): Promise<void> {
-  return channels.installStickerPack(packId, timestamp);
-}
-async function uninstallStickerPack(
-  packId: string,
-  timestamp: number
-): Promise<void> {
-  return channels.uninstallStickerPack(packId, timestamp);
-}
-async function getStickerPackInfo(
-  packId: string
-): Promise<StickerPackInfoType | undefined> {
-  return channels.getStickerPackInfo(packId);
-}
-async function getAllStickers(): Promise<Array<StickerType>> {
-  const stickers = await channels.getAllStickers();
-
-  return stickers;
-}
-async function getRecentStickers(): Promise<Array<StickerType>> {
-  const recentStickers = await channels.getRecentStickers();
-
-  return recentStickers;
-}
-async function clearAllErrorStickerPackAttempts(): Promise<void> {
-  await channels.clearAllErrorStickerPackAttempts();
-}
-
-// Emojis
-async function updateEmojiUsage(shortName: string): Promise<void> {
-  await channels.updateEmojiUsage(shortName);
-}
-async function getRecentEmojis(limit = 32): Promise<Array<EmojiType>> {
-  return channels.getRecentEmojis(limit);
-}
-
-// Badges
-
-function getAllBadges(): Promise<Array<BadgeType>> {
-  return channels.getAllBadges();
-}
-
-async function updateOrCreateBadges(
-  badges: ReadonlyArray<BadgeType>
-): Promise<void> {
-  if (badges.length) {
-    await channels.updateOrCreateBadges(badges);
-  }
-}
-
-function badgeImageFileDownloaded(
-  url: string,
-  localPath: string
-): Promise<void> {
-  return channels.badgeImageFileDownloaded(url, localPath);
-}
-
-// Story Distributions
-
-async function _getAllStoryDistributions(): Promise<
-  Array<StoryDistributionType>
-> {
-  return channels._getAllStoryDistributions();
-}
-async function _getAllStoryDistributionMembers(): Promise<
-  Array<StoryDistributionMemberType>
-> {
-  return channels._getAllStoryDistributionMembers();
-}
-async function _deleteAllStoryDistributions(): Promise<void> {
-  await channels._deleteAllStoryDistributions();
-}
-async function createNewStoryDistribution(
-  distribution: StoryDistributionWithMembersType
-): Promise<void> {
-  strictAssert(
-    distribution.name,
-    'Distribution list does not have a valid name'
-  );
-  await channels.createNewStoryDistribution(distribution);
-}
-async function getAllStoryDistributionsWithMembers(): Promise<
-  Array<StoryDistributionWithMembersType>
-> {
-  return channels.getAllStoryDistributionsWithMembers();
-}
-async function getStoryDistributionWithMembers(
-  id: string
-): Promise<StoryDistributionWithMembersType | undefined> {
-  return channels.getStoryDistributionWithMembers(id);
-}
-async function modifyStoryDistribution(
-  distribution: StoryDistributionType
-): Promise<void> {
-  if (distribution.deletedAtTimestamp) {
-    strictAssert(
-      !distribution.name,
-      'Attempt to delete distribution list but still has a name'
-    );
-  } else {
-    strictAssert(
-      distribution.name,
-      'Cannot clear distribution list name without deletedAtTimestamp set'
-    );
-  }
-  await channels.modifyStoryDistribution(distribution);
-}
-async function modifyStoryDistributionMembers(
-  id: string,
-  options: {
-    toAdd: Array<UUIDStringType>;
-    toRemove: Array<UUIDStringType>;
-  }
-): Promise<void> {
-  await channels.modifyStoryDistributionMembers(id, options);
-}
-async function modifyStoryDistributionWithMembers(
-  distribution: StoryDistributionType,
-  options: {
-    toAdd: Array<UUIDStringType>;
-    toRemove: Array<UUIDStringType>;
-  }
-): Promise<void> {
-  if (distribution.deletedAtTimestamp) {
-    strictAssert(
-      !distribution.name,
-      'Attempt to delete distribution list but still has a name'
-    );
-  } else {
-    strictAssert(
-      distribution.name,
-      'Cannot clear distribution list name without deletedAtTimestamp set'
-    );
-  }
-  await channels.modifyStoryDistributionWithMembers(distribution, options);
-}
-async function deleteStoryDistribution(id: UUIDStringType): Promise<void> {
-  await channels.deleteStoryDistribution(id);
-}
-
-// Story Reads
-
-async function _getAllStoryReads(): Promise<Array<StoryReadType>> {
-  return channels._getAllStoryReads();
-}
-async function _deleteAllStoryReads(): Promise<void> {
-  await channels._deleteAllStoryReads();
-}
-async function addNewStoryRead(read: StoryReadType): Promise<void> {
-  return channels.addNewStoryRead(read);
-}
-async function getLastStoryReadsForAuthor(options: {
-  authorId: UUIDStringType;
-  conversationId?: UUIDStringType;
-  limit?: number;
-}): Promise<Array<StoryReadType>> {
-  return channels.getLastStoryReadsForAuthor(options);
-}
-async function countStoryReadsByConversation(
-  conversationId: string
-): Promise<number> {
-  return channels.countStoryReadsByConversation(conversationId);
+  await writableChannel.saveAttachmentDownloadJob(_cleanData(job));
 }
 
 // Other
 
-async function removeAll(): Promise<void> {
-  await channels.removeAll();
-}
-
-async function removeAllConfiguration(
-  type?: RemoveAllConfiguration
-): Promise<void> {
-  await channels.removeAllConfiguration(type);
-}
-
 async function cleanupOrphanedAttachments(): Promise<void> {
-  await callChannel(CLEANUP_ORPHANED_ATTACHMENTS_KEY);
+  try {
+    await invokeWithTimeout(CLEANUP_ORPHANED_ATTACHMENTS_KEY);
+  } catch (error) {
+    log.warn(
+      'sql/Client: cleanupOrphanedAttachments failure',
+      Errors.toLogFormat(error)
+    );
+  }
 }
 
 async function ensureFilePermissions(): Promise<void> {
-  await callChannel(ENSURE_FILE_PERMISSIONS);
+  await invokeWithTimeout(ENSURE_FILE_PERMISSIONS);
 }
 
 // Note: will need to restart the app after calling this, to set up afresh
 async function removeOtherData(): Promise<void> {
   await Promise.all([
-    callChannel(ERASE_SQL_KEY),
-    callChannel(ERASE_ATTACHMENTS_KEY),
-    callChannel(ERASE_STICKERS_KEY),
-    callChannel(ERASE_TEMP_KEY),
-    callChannel(ERASE_DRAFTS_KEY),
+    invokeWithTimeout(ERASE_SQL_KEY),
+    invokeWithTimeout(ERASE_ATTACHMENTS_KEY),
+    invokeWithTimeout(ERASE_STICKERS_KEY),
+    invokeWithTimeout(ERASE_TEMP_KEY),
+    invokeWithTimeout(ERASE_DOWNLOADS_KEY),
+    invokeWithTimeout(ERASE_DRAFTS_KEY),
   ]);
 }
 
-async function callChannel(name: string): Promise<void> {
+async function invokeWithTimeout(name: string): Promise<void> {
   return createTaskWithTimeout(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        ipc.send(name);
-        ipc.once(`${name}-done`, (_, error) => {
-          if (error) {
-            reject(error);
-
-            return;
-          }
-
-          resolve();
-        });
-      }),
+    () => ipc.invoke(name),
     `callChannel call to ${name}`
   )();
 }
 
-async function getMessagesNeedingUpgrade(
-  limit: number,
-  { maxVersion = CURRENT_SCHEMA_VERSION }: { maxVersion: number }
-): Promise<Array<MessageType>> {
-  const messages = await channels.getMessagesNeedingUpgrade(limit, {
-    maxVersion,
-  });
-
-  return messages;
+export function pauseWriteAccess(): Promise<void> {
+  return invokeWithTimeout(PAUSE_WRITE_ACCESS);
 }
 
-async function getMessagesWithVisualMediaAttachments(
-  conversationId: string,
-  { limit }: { limit: number }
-): Promise<Array<MessageType>> {
-  return channels.getMessagesWithVisualMediaAttachments(conversationId, {
-    limit,
-  });
-}
-
-async function getMessagesWithFileAttachments(
-  conversationId: string,
-  { limit }: { limit: number }
-): Promise<Array<MessageType>> {
-  return channels.getMessagesWithFileAttachments(conversationId, {
-    limit,
-  });
-}
-
-function getMessageServerGuidsForSpam(
-  conversationId: string
-): Promise<Array<string>> {
-  return channels.getMessageServerGuidsForSpam(conversationId);
-}
-
-function getJobsInQueue(queueType: string): Promise<Array<StoredJob>> {
-  return channels.getJobsInQueue(queueType);
-}
-
-function insertJob(job: Readonly<StoredJob>): Promise<void> {
-  return channels.insertJob(job);
-}
-
-function deleteJob(id: string): Promise<void> {
-  return channels.deleteJob(id);
-}
-
-function processGroupCallRingRequest(
-  ringId: bigint
-): Promise<ProcessGroupCallRingRequestResult> {
-  return channels.processGroupCallRingRequest(ringId);
-}
-
-function processGroupCallRingCancelation(ringId: bigint): Promise<void> {
-  return channels.processGroupCallRingCancelation(ringId);
-}
-
-async function cleanExpiredGroupCallRings(): Promise<void> {
-  await channels.cleanExpiredGroupCallRings();
-}
-
-async function updateAllConversationColors(
-  conversationColor?: ConversationColorType,
-  customColorData?: {
-    id: string;
-    value: CustomColorType;
-  }
-): Promise<void> {
-  return channels.updateAllConversationColors(
-    conversationColor,
-    customColorData
-  );
-}
-
-async function removeAllProfileKeyCredentials(): Promise<void> {
-  return channels.removeAllProfileKeyCredentials();
-}
-
-function getMaxMessageCounter(): Promise<number | undefined> {
-  return channels.getMaxMessageCounter();
-}
-
-function getStatisticsForLogging(): Promise<Record<string, string>> {
-  return channels.getStatisticsForLogging();
+export function resumeWriteAccess(): Promise<void> {
+  return invokeWithTimeout(RESUME_WRITE_ACCESS);
 }

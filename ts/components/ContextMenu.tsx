@@ -1,9 +1,10 @@
-// Copyright 2018-2022 Signal Messenger, LLC
+// Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { Options, VirtualElement } from '@popperjs/core';
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import classNames from 'classnames';
 import { usePopper } from 'react-popper';
 import { noop } from 'lodash';
@@ -24,7 +25,7 @@ export type ContextMenuOptionType<T> = Readonly<{
 }>;
 
 type RenderButtonProps = Readonly<{
-  openMenu: (ev: React.MouseEvent) => void;
+  onClick: (ev: React.MouseEvent) => void;
   onKeyDown: (ev: KeyboardEvent) => void;
   isMenuShowing: boolean;
   ref: React.Ref<HTMLButtonElement> | null;
@@ -42,6 +43,7 @@ export type PropsType<T> = Readonly<{
   onClick?: (ev: React.MouseEvent) => unknown;
   onMenuShowingChanged?: (value: boolean) => unknown;
   popperOptions?: Pick<Options, 'placement' | 'strategy'>;
+  portalToRoot?: boolean;
   theme?: Theme;
   title?: string;
   value?: T;
@@ -54,17 +56,7 @@ let closeCurrentOpenContextMenu: undefined | (() => unknown);
 // right under the mouse cursor.
 function generateVirtualElement(x: number, y: number): VirtualElement {
   return {
-    getBoundingClientRect: () => ({
-      bottom: y,
-      height: 0,
-      left: x,
-      right: x,
-      toJSON: () => ({ x, y }),
-      top: y,
-      width: 0,
-      x,
-      y,
-    }),
+    getBoundingClientRect: () => new DOMRect(x, y),
   };
 }
 
@@ -77,6 +69,7 @@ export function ContextMenu<T>({
   onClick,
   onMenuShowingChanged,
   popperOptions,
+  portalToRoot,
   theme,
   title,
   value,
@@ -104,6 +97,21 @@ export function ContextMenu<T>({
     }
   );
 
+  // In Electron v23+, new elements added to the DOM may not trigger a recalculation of
+  // draggable regions, so if a ContextMenu is shown on top of a draggable region, its
+  // buttons may be unclickable. We add a class so that we can disable those draggable
+  // regions while the context menu is shown. It has the added benefit of ensuring that
+  // click events outside of the context menu onto an otherwise draggable region are
+  // propagated and trigger the menu to close.
+  useEffect(() => {
+    document.body.classList.toggle('context-menu-open', isMenuShowing);
+  }, [isMenuShowing]);
+
+  useEffect(() => {
+    // Remove it on unmount in case the component is unmounted when the menu is open
+    return () => document.body.classList.remove('context-menu-open');
+  }, []);
+
   useEffect(() => {
     if (onMenuShowingChanged) {
       onMenuShowingChanged(isMenuShowing);
@@ -127,6 +135,21 @@ export function ContextMenu<T>({
       }
     );
   }, [isMenuShowing, referenceElement, popperElement]);
+
+  const [portalNode, setPortalNode] = React.useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!portalToRoot || !isMenuShowing) {
+      return noop;
+    }
+
+    const div = document.createElement('div');
+    document.body.appendChild(div);
+    setPortalNode(div);
+
+    return () => {
+      document.body.removeChild(div);
+    };
+  }, [portalToRoot, isMenuShowing]);
 
   const handleKeyDown = (ev: KeyboardEvent) => {
     if ((ev.key === 'Enter' || ev.key === 'Space') && !isMenuShowing) {
@@ -184,10 +207,15 @@ export function ContextMenu<T>({
   };
 
   const handleClick = (ev: React.MouseEvent) => {
-    closeCurrentOpenContextMenu?.();
-    closeCurrentOpenContextMenu = () => setIsMenuShowing(false);
-    virtualElement.current = generateVirtualElement(ev.clientX, ev.clientY);
-    setIsMenuShowing(true);
+    if (isMenuShowing && ev.type !== 'contextmenu') {
+      setIsMenuShowing(false);
+      closeCurrentOpenContextMenu = undefined;
+    } else {
+      closeCurrentOpenContextMenu?.();
+      closeCurrentOpenContextMenu = () => setIsMenuShowing(false);
+      virtualElement.current = generateVirtualElement(ev.clientX, ev.clientY);
+      setIsMenuShowing(true);
+    }
     ev.stopPropagation();
     ev.preventDefault();
   };
@@ -195,6 +223,7 @@ export function ContextMenu<T>({
   const getClassName = getClassNamesFor('ContextMenu', moduleClassName);
 
   const optionElements = new Array<JSX.Element>();
+  const isAnyOptionSelected = typeof value !== 'undefined';
 
   for (const [index, option] of menuOptions.entries()) {
     const previous = menuOptions[index - 1];
@@ -221,6 +250,7 @@ export function ContextMenu<T>({
       closeCurrentOpenContextMenu = undefined;
     };
 
+    const isOptionSelected = isAnyOptionSelected && value === option.value;
     optionElements.push(
       <button
         aria-label={option.label}
@@ -232,7 +262,17 @@ export function ContextMenu<T>({
         type="button"
         onClick={onElementClick}
       >
-        <div className={getClassName('__option--container')}>
+        <div
+          className={classNames(
+            getClassName('__option--container'),
+            isAnyOptionSelected
+              ? getClassName('__option--container--with-selection')
+              : undefined,
+            isOptionSelected
+              ? getClassName('__option--container--selected')
+              : undefined
+          )}
+        >
           {option.icon && (
             <div
               className={classNames(
@@ -252,11 +292,6 @@ export function ContextMenu<T>({
             )}
           </div>
         </div>
-        {typeof value !== 'undefined' &&
-        typeof option.value !== 'undefined' &&
-        value === option.value ? (
-          <div className={getClassName('__option--selected')} />
-        ) : null}
       </button>
     );
   }
@@ -283,23 +318,29 @@ export function ContextMenu<T>({
   let buttonNode: JSX.Element;
 
   if (typeof children === 'function') {
-    buttonNode = (children as (props: RenderButtonProps) => JSX.Element)({
-      openMenu: onClick || handleClick,
-      onKeyDown: handleKeyDown,
-      isMenuShowing,
-      ref: setReferenceElement,
-      menuNode,
-    });
+    buttonNode = (
+      <>
+        {(children as (props: RenderButtonProps) => JSX.Element)({
+          onClick: onClick || handleClick,
+          onKeyDown: handleKeyDown,
+          isMenuShowing,
+          ref: setReferenceElement,
+          menuNode,
+        })}
+        {portalNode ? createPortal(menuNode, portalNode) : menuNode}
+      </>
+    );
   } else {
     buttonNode = (
       <div
         className={classNames(
           getClassName('__container'),
+
           theme ? themeClassName(theme) : undefined
         )}
       >
         <button
-          aria-label={ariaLabel || i18n('ContextMenu--button')}
+          aria-label={ariaLabel || i18n('icu:ContextMenu--button')}
           className={classNames(
             getClassName('__button'),
             isMenuShowing ? getClassName('__button--active') : undefined
@@ -312,7 +353,7 @@ export function ContextMenu<T>({
         >
           {children}
         </button>
-        {menuNode}
+        {portalNode ? createPortal(menuNode, portalNode) : menuNode}
       </div>
     );
   }

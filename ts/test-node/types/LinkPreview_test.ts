@@ -1,46 +1,80 @@
-// Copyright 2019-2022 Signal Messenger, LLC
+// Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
 
 import {
   findLinks,
+  isLinkSneaky,
+  isValidLink,
   shouldLinkifyMessage,
   shouldPreviewHref,
-  isLinkSneaky,
 } from '../../types/LinkPreview';
 
 describe('Link previews', () => {
+  describe('#isValidLink', () => {
+    it('returns false for random, non-https URLs', () => {
+      assert.isFalse(isValidLink(''));
+      assert.isFalse(isValidLink('signal.com'));
+      assert.isFalse(isValidLink('signal.org'));
+      assert.isFalse(isValidLink('https'));
+      assert.isFalse(isValidLink('https://'));
+      assert.isFalse(isValidLink('https://bad url'));
+      assert.isFalse(isValidLink('http://signal.org'));
+    });
+
+    it('returns true for https:// URLs', () => {
+      assert.isTrue(isValidLink('https://signal.org'));
+      assert.isTrue(isValidLink('https://somewhere.someplace.signal.org/'));
+      assert.isTrue(isValidLink('https://signal.org/something/another/#thing'));
+      assert.isTrue(
+        isValidLink(
+          'https://signal.org/something/another/?one=two&three=four#thing'
+        )
+      );
+    });
+  });
+
   describe('#shouldPreviewHref', () => {
     it('returns false for invalid URLs', () => {
       assert.isFalse(shouldPreviewHref(''));
       assert.isFalse(shouldPreviewHref('https'));
       assert.isFalse(shouldPreviewHref('https://'));
       assert.isFalse(shouldPreviewHref('https://bad url'));
-      assert.isFalse(shouldPreviewHref('example.com'));
+      assert.isFalse(shouldPreviewHref('signal.com'));
+      assert.isFalse(shouldPreviewHref('signal.org'));
     });
 
     it('returns false for non-HTTPS URLs', () => {
-      assert.isFalse(shouldPreviewHref('http://example.com'));
-      assert.isFalse(shouldPreviewHref('ftp://example.com'));
-      assert.isFalse(shouldPreviewHref('file://example'));
+      assert.isFalse(shouldPreviewHref('http://signal.org'));
+      assert.isFalse(shouldPreviewHref('ftp://signal.org'));
+      assert.isFalse(shouldPreviewHref('file://signal'));
     });
 
     it('returns false if the link is "sneaky"', () => {
       // See `isLinkSneaky` tests below for more thorough checking.
-      assert.isFalse(shouldPreviewHref('https://user:pass@example.com'));
-      assert.isFalse(shouldPreviewHref('https://aquí.example'));
-      assert.isFalse(shouldPreviewHref('https://aqu%C3%AD.example'));
+      assert.isFalse(shouldPreviewHref('https://user:pass@signal.org'));
+      assert.isFalse(shouldPreviewHref('https://aquí.signal'));
+      assert.isFalse(shouldPreviewHref('https://aqu%C3%AD.signal'));
     });
 
     it('returns false for skipped domains', () => {
       assert.isFalse(shouldPreviewHref('https://debuglogs.org'));
+      assert.isFalse(shouldPreviewHref('https://example.com'));
+      assert.isFalse(shouldPreviewHref('https://new.example'));
+      assert.isFalse(shouldPreviewHref('https://onion'));
+      assert.isFalse(shouldPreviewHref('https://bloomin.onion'));
+      assert.isFalse(shouldPreviewHref('https://localhost'));
+      assert.isFalse(shouldPreviewHref('https://localhost:8080'));
+      assert.isFalse(shouldPreviewHref('https://abcd.test'));
     });
 
     it('returns true for "safe" urls', () => {
-      assert.isTrue(shouldPreviewHref('https://example.com'));
+      assert.isTrue(shouldPreviewHref('https://signal.org'));
+      assert.isTrue(shouldPreviewHref('https://example.signal.org'));
+      assert.isTrue(shouldPreviewHref('https://myexample.com'));
       assert.isTrue(
-        shouldPreviewHref('https://example.com/foo/bar?query=string#hash')
+        shouldPreviewHref('https://signal.org/foo/bar?query=string#hash')
       );
     });
   });
@@ -50,12 +84,6 @@ describe('Link previews', () => {
       assert.isFalse(shouldLinkifyMessage('\u202c'));
       assert.isFalse(shouldLinkifyMessage('\u202d'));
       assert.isFalse(shouldLinkifyMessage('\u202e'));
-    });
-
-    it('returns false for strings with unicode drawing characters', () => {
-      assert.isFalse(shouldLinkifyMessage('\u2500'));
-      assert.isFalse(shouldLinkifyMessage('\u2588'));
-      assert.isFalse(shouldLinkifyMessage('\u25FF'));
     });
 
     it('returns true other strings', () => {
@@ -154,6 +182,21 @@ describe('Link previews', () => {
     it('returns true for =', () => {
       const link = 'r.id=s.id';
       assert.strictEqual(isLinkSneaky(link), true);
+    });
+
+    it('returns true for strings with unicode drawing characters', () => {
+      assert.strictEqual(
+        isLinkSneaky('https://example.com/\u2500/stuff'),
+        true
+      );
+      assert.strictEqual(
+        isLinkSneaky('https://example.com/\u2588/stuff'),
+        true
+      );
+      assert.strictEqual(
+        isLinkSneaky('https://example.com/\u25FF/stuff'),
+        true
+      );
     });
 
     it('returns true for $', () => {

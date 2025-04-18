@@ -2,30 +2,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
+import { v4 as generateUuid } from 'uuid';
 
-import dataInterface from '../../sql/Client';
-import { UUID } from '../../types/UUID';
-import type { UUIDStringType } from '../../types/UUID';
+import { DataReader, DataWriter } from '../../sql/Client';
+import { generateAci } from '../../types/ServiceId';
 
 import type { ReactionType } from '../../types/Reactions';
+import { ReactionReadStatus } from '../../types/Reactions';
+import { DurationInSeconds } from '../../util/durations';
 import type { MessageAttributesType } from '../../model-types.d';
 import { ReadStatus } from '../../messages/MessageReadStatus';
+import { postSaveUpdates } from '../../util/cleanup';
 
+const { _getAllReactions, _getAllMessages, getTotalUnreadForConversation } =
+  DataReader;
 const {
   _removeAllMessages,
   _removeAllReactions,
-  _getAllReactions,
-  _getAllMessages,
   addReaction,
   saveMessages,
-  getTotalUnreadForConversation,
   getUnreadByConversationAndMarkRead,
   getUnreadReactionsAndMarkRead,
-} = dataInterface;
+} = DataWriter;
 
-function getUuid(): UUIDStringType {
-  return UUID.generate().toString();
-}
+const UNREAD_REACTION = { readStatus: ReactionReadStatus.Unread };
 
 describe('sql/markRead', () => {
   beforeEach(async () => {
@@ -38,11 +38,11 @@ describe('sql/markRead', () => {
 
     const start = Date.now();
     const readAt = start + 20;
-    const conversationId = getUuid();
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const ourAci = generateAci();
 
     const oldest: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'incoming',
       conversationId,
@@ -52,7 +52,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Read,
     };
     const oldestUnread: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
@@ -62,17 +62,17 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Unread,
     };
     const unreadInAnotherConvo: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       sent_at: start + 3,
       received_at: start + 3,
       timestamp: start + 3,
       readStatus: ReadStatus.Unread,
     };
     const unread: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -82,7 +82,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Unread,
     };
     const unreadStory: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 5',
       type: 'story',
       conversationId,
@@ -90,10 +90,10 @@ describe('sql/markRead', () => {
       received_at: start + 5,
       timestamp: start + 5,
       readStatus: ReadStatus.Unread,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const unreadStoryReply: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 6',
       type: 'incoming',
       conversationId,
@@ -101,10 +101,10 @@ describe('sql/markRead', () => {
       received_at: start + 6,
       timestamp: start + 6,
       readStatus: ReadStatus.Unread,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const newestUnread: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 7',
       type: 'incoming',
       conversationId,
@@ -126,7 +126,8 @@ describe('sql/markRead', () => {
       ],
       {
         forceSave: true,
-        ourUuid,
+        ourAci,
+        postSaveUpdates,
       }
     );
 
@@ -204,12 +205,12 @@ describe('sql/markRead', () => {
 
     const start = Date.now();
     const readAt = start + 20;
-    const conversationId = getUuid();
-    const storyId = getUuid();
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const storyId = generateUuid();
+    const ourAci = generateAci();
 
     const message1: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'story',
       conversationId,
@@ -220,7 +221,7 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message2: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
@@ -231,7 +232,7 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message3: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
       conversationId,
@@ -239,10 +240,10 @@ describe('sql/markRead', () => {
       received_at: start + 3,
       timestamp: start + 3,
       readStatus: ReadStatus.Unread,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const message4: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -253,7 +254,7 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message5: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 5',
       type: 'incoming',
       conversationId,
@@ -261,10 +262,10 @@ describe('sql/markRead', () => {
       received_at: start + 5,
       timestamp: start + 5,
       readStatus: ReadStatus.Unread,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const message6: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 6',
       type: 'incoming',
       conversationId,
@@ -272,10 +273,10 @@ describe('sql/markRead', () => {
       received_at: start + 6,
       timestamp: start + 6,
       readStatus: ReadStatus.Unread,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const message7: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 7',
       type: 'incoming',
       conversationId,
@@ -290,7 +291,8 @@ describe('sql/markRead', () => {
       [message1, message2, message3, message4, message5, message6, message7],
       {
         forceSave: true,
-        ourUuid,
+        ourAci,
+        postSaveUpdates,
       }
     );
 
@@ -330,12 +332,12 @@ describe('sql/markRead', () => {
 
     const start = Date.now();
     const readAt = start + 20;
-    const conversationId = getUuid();
-    const expireTimer = 15;
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const expireTimer = DurationInSeconds.fromSeconds(15);
+    const ourAci = generateAci();
 
     const message1: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'incoming',
       conversationId,
@@ -347,7 +349,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Read,
     };
     const message2: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
@@ -358,10 +360,10 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Read,
     };
     const message3: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       sent_at: start + 3,
       received_at: start + 3,
       timestamp: start + 3,
@@ -369,7 +371,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Unread,
     };
     const message4: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -380,7 +382,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Unread,
     };
     const message5: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 5',
       type: 'incoming',
       conversationId,
@@ -392,7 +394,8 @@ describe('sql/markRead', () => {
 
     await saveMessages([message1, message2, message3, message4, message5], {
       forceSave: true,
-      ourUuid,
+      ourAci,
+      postSaveUpdates,
     });
 
     assert.strictEqual(
@@ -452,13 +455,13 @@ describe('sql/markRead', () => {
     assert.lengthOf(await _getAllReactions(), 0);
 
     const start = Date.now();
-    const conversationId = getUuid();
-    const storyId = getUuid();
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const storyId = generateUuid();
+    const ourAci = generateAci();
 
     const pad: Array<MessageAttributesType> = Array.from({ length: 4 }, _ => {
       return {
-        id: getUuid(),
+        id: generateUuid(),
         body: 'pad message',
         type: 'incoming',
         conversationId,
@@ -468,7 +471,7 @@ describe('sql/markRead', () => {
       };
     });
     const message1: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'incoming',
       conversationId,
@@ -477,7 +480,7 @@ describe('sql/markRead', () => {
       timestamp: start + 1,
     };
     const message2: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
@@ -487,16 +490,16 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message3: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       sent_at: start + 3,
       received_at: start + 3,
       timestamp: start + 3,
     };
     const message4: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -505,7 +508,7 @@ describe('sql/markRead', () => {
       timestamp: start + 4,
     };
     const message5: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 5',
       type: 'incoming',
       conversationId,
@@ -518,7 +521,8 @@ describe('sql/markRead', () => {
       [...pad, message1, message2, message3, message4, message5],
       {
         forceSave: true,
-        ourUuid,
+        ourAci,
+        postSaveUpdates,
       }
     );
     assert.lengthOf(await _getAllMessages(), pad.length + 5);
@@ -526,54 +530,59 @@ describe('sql/markRead', () => {
     const reaction1: ReactionType = {
       conversationId,
       emoji: '🎉',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message1.id,
       messageReceivedAt: message1.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction2: ReactionType = {
       conversationId,
       emoji: '🚀',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message2.id,
       messageReceivedAt: message2.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction3: ReactionType = {
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       emoji: '☀️',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message3.id,
       messageReceivedAt: message3.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction4: ReactionType = {
       conversationId,
       emoji: '❤️‍🔥',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message4.id,
       messageReceivedAt: message4.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction5: ReactionType = {
       conversationId,
       emoji: '🆒',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message5.id,
       messageReceivedAt: message5.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
 
-    await addReaction(reaction1);
-    await addReaction(reaction2);
-    await addReaction(reaction3);
-    await addReaction(reaction4);
-    await addReaction(reaction5);
+    await addReaction(reaction1, UNREAD_REACTION);
+    await addReaction(reaction2, UNREAD_REACTION);
+    await addReaction(reaction3, UNREAD_REACTION);
+    await addReaction(reaction4, UNREAD_REACTION);
+    await addReaction(reaction5, UNREAD_REACTION);
 
     assert.lengthOf(await _getAllReactions(), 5);
     const markedRead = await getUnreadReactionsAndMarkRead({
@@ -612,12 +621,12 @@ describe('sql/markRead', () => {
     assert.lengthOf(await _getAllReactions(), 0);
 
     const start = Date.now();
-    const conversationId = getUuid();
-    const storyId = getUuid();
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const storyId = generateUuid();
+    const ourAci = generateAci();
 
     const message1: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'incoming',
       conversationId,
@@ -627,26 +636,26 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message2: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
       sent_at: start + 2,
       received_at: start + 2,
       timestamp: start + 2,
-      storyId: getUuid(),
+      storyId: generateUuid(),
     };
     const message3: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       sent_at: start + 3,
       received_at: start + 3,
       timestamp: start + 3,
     };
     const message4: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -656,7 +665,7 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message5: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 5',
       type: 'incoming',
       conversationId,
@@ -668,61 +677,67 @@ describe('sql/markRead', () => {
 
     await saveMessages([message1, message2, message3, message4, message5], {
       forceSave: true,
-      ourUuid,
+      ourAci,
+      postSaveUpdates,
     });
     assert.lengthOf(await _getAllMessages(), 5);
 
     const reaction1: ReactionType = {
       conversationId,
       emoji: '🎉',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message1.id,
       messageReceivedAt: message1.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction2: ReactionType = {
       conversationId,
       emoji: '🚀',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message2.id,
       messageReceivedAt: message2.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction3: ReactionType = {
-      conversationId: getUuid(),
+      conversationId: generateUuid(),
       emoji: '☀️',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message3.id,
       messageReceivedAt: message3.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction4: ReactionType = {
       conversationId,
       emoji: '❤️‍🔥',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message4.id,
       messageReceivedAt: message4.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
     const reaction5: ReactionType = {
       conversationId,
       emoji: '🆒',
-      fromId: getUuid(),
+      fromId: generateUuid(),
       messageId: message5.id,
       messageReceivedAt: message5.received_at,
-      targetAuthorUuid: getUuid(),
+      targetAuthorAci: generateAci(),
       targetTimestamp: start,
+      timestamp: start,
     };
 
-    await addReaction(reaction1);
-    await addReaction(reaction2);
-    await addReaction(reaction3);
-    await addReaction(reaction4);
-    await addReaction(reaction5);
+    await addReaction(reaction1, UNREAD_REACTION);
+    await addReaction(reaction2, UNREAD_REACTION);
+    await addReaction(reaction3, UNREAD_REACTION);
+    await addReaction(reaction4, UNREAD_REACTION);
+    await addReaction(reaction5, UNREAD_REACTION);
 
     assert.lengthOf(await _getAllReactions(), 5);
     const markedRead = await getUnreadReactionsAndMarkRead({
@@ -764,12 +779,12 @@ describe('sql/markRead', () => {
 
     const start = Date.now();
     const readAt = start + 20;
-    const conversationId = getUuid();
-    const storyId = getUuid();
-    const ourUuid = getUuid();
+    const conversationId = generateUuid();
+    const storyId = generateUuid();
+    const ourAci = generateAci();
 
     const message1: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 1',
       type: 'story',
       conversationId,
@@ -779,7 +794,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Read,
     };
     const message2: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 2',
       type: 'incoming',
       conversationId,
@@ -790,7 +805,7 @@ describe('sql/markRead', () => {
       storyId,
     };
     const message3: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 3',
       type: 'incoming',
       conversationId,
@@ -800,7 +815,7 @@ describe('sql/markRead', () => {
       readStatus: ReadStatus.Unread,
     };
     const message4: MessageAttributesType = {
-      id: getUuid(),
+      id: generateUuid(),
       body: 'message 4',
       type: 'incoming',
       conversationId,
@@ -813,7 +828,8 @@ describe('sql/markRead', () => {
 
     await saveMessages([message1, message2, message3, message4], {
       forceSave: true,
-      ourUuid,
+      ourAci,
+      postSaveUpdates,
     });
 
     assert.lengthOf(await _getAllMessages(), 4);

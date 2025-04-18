@@ -3,38 +3,45 @@
 
 import type { ThunkAction } from 'redux-thunk';
 
+import type { ReadonlyDeep } from 'type-fest';
 import * as Errors from '../../types/errors';
 import * as log from '../../logging/log';
 
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
 import type { StateType as RootStateType } from '../reducer';
-import type { UUIDStringType } from '../../types/UUID';
-import { getUuidsForE164s } from '../../util/getUuidsForE164s';
+import type { ServiceIdString } from '../../types/ServiceId';
+import { getServiceIdsForE164s } from '../../util/getServiceIdsForE164s';
+import { useBoundActions } from '../../hooks/useBoundActions';
 
 import type { NoopActionType } from './noop';
 
 // State
 
-export type AccountsStateType = {
-  accounts: Record<string, UUIDStringType | undefined>;
-};
+export type AccountsStateType = ReadonlyDeep<{
+  accounts: Record<string, ServiceIdString | undefined>;
+}>;
 
 // Actions
 
-type AccountUpdateActionType = {
+type AccountUpdateActionType = ReadonlyDeep<{
   type: 'accounts/UPDATE';
   payload: {
     phoneNumber: string;
-    uuid?: UUIDStringType;
+    serviceId?: ServiceIdString;
   };
-};
+}>;
 
-export type AccountsActionType = AccountUpdateActionType;
+export type AccountsActionType = ReadonlyDeep<AccountUpdateActionType>;
 
 // Action Creators
 
 export const actions = {
   checkForAccount,
 };
+
+export const useAccountsActions = (): BoundActionCreatorsMapObject<
+  typeof actions
+> => useBoundActions(actions);
 
 function checkForAccount(
   phoneNumber: string
@@ -55,15 +62,15 @@ function checkForAccount(
     }
 
     const conversation = window.ConversationController.get(phoneNumber);
-    if (conversation && conversation.get('uuid')) {
+    if (conversation && conversation.getServiceId()) {
       log.info(`checkForAccount: found ${phoneNumber} in existing contacts`);
-      const uuid = conversation.get('uuid');
+      const serviceId = conversation.getServiceId();
 
       dispatch({
         type: 'accounts/UPDATE',
         payload: {
           phoneNumber,
-          uuid,
+          serviceId,
         },
       });
       return;
@@ -82,20 +89,24 @@ function checkForAccount(
       return;
     }
 
-    let uuid: UUIDStringType | undefined;
+    let serviceId: ServiceIdString | undefined;
 
     log.info(`checkForAccount: looking ${phoneNumber} up on server`);
     try {
-      const uuidLookup = await getUuidsForE164s(server, [phoneNumber]);
-      const maybePair = uuidLookup.get(phoneNumber);
+      const { entries: serviceIdLookup, transformedE164s } =
+        await getServiceIdsForE164s(server, [phoneNumber]);
+      const phoneNumberToUse = transformedE164s.get(phoneNumber) ?? phoneNumber;
+      const maybePair = serviceIdLookup.get(phoneNumberToUse);
 
       if (maybePair) {
-        uuid = window.ConversationController.maybeMergeContacts({
-          aci: maybePair.aci,
-          pni: maybePair.pni,
-          e164: phoneNumber,
-          reason: 'checkForAccount',
-        })?.get('uuid');
+        const { conversation: maybeMerged } =
+          window.ConversationController.maybeMergeContacts({
+            aci: maybePair.aci,
+            pni: maybePair.pni,
+            e164: phoneNumberToUse,
+            reason: 'checkForAccount',
+          });
+        serviceId = maybeMerged.getServiceId();
       }
     } catch (error) {
       log.error('checkForAccount:', Errors.toLogFormat(error));
@@ -105,7 +116,7 @@ function checkForAccount(
       type: 'accounts/UPDATE',
       payload: {
         phoneNumber,
-        uuid,
+        serviceId,
       },
     });
   };
@@ -129,13 +140,13 @@ export function reducer(
 
   if (action.type === 'accounts/UPDATE') {
     const { payload } = action;
-    const { phoneNumber, uuid } = payload;
+    const { phoneNumber, serviceId } = payload;
 
     return {
       ...state,
       accounts: {
         ...state.accounts,
-        [phoneNumber]: uuid,
+        [phoneNumber]: serviceId,
       },
     };
   }

@@ -1,19 +1,24 @@
-// Copyright 2020-2022 Signal Messenger, LLC
+// Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Buffer } from 'buffer';
 import Long from 'long';
-import { HKDF } from '@signalapp/libsignal-client';
+import { sample } from 'lodash';
+import { Aci, Pni, HKDF } from '@signalapp/libsignal-client';
+import { AccountEntropyPool } from '@signalapp/libsignal-client/dist/AccountKeys';
 
 import * as Bytes from './Bytes';
+import { Crypto } from './context/Crypto';
 import { calculateAgreement, generateKeyPair } from './Curve';
-import * as log from './logging/log';
 import { HashType, CipherType } from './types/Crypto';
+import { AVATAR_COLOR_COUNT, AvatarColors } from './types/Colors';
 import { ProfileDecryptError } from './types/errors';
-import { UUID, UUID_BYTE_SIZE } from './types/UUID';
-import type { UUIDStringType } from './types/UUID';
+import { getBytesSubarray } from './util/uuidToBytes';
+import { logPadSize } from './util/logPadding';
+import { Environment, getEnvironment } from './environment';
+import { toWebSafeBase64 } from './util/webSafeBase64';
 
-export { uuidToBytes } from './util/uuidToBytes';
+import type { AciString, PniString } from './types/ServiceId';
 
 export { HashType, CipherType };
 
@@ -31,6 +36,7 @@ export const PaddedLengths = {
 export type EncryptedAttachment = {
   ciphertext: Uint8Array;
   digest: Uint8Array;
+  plaintextHash: string;
 };
 
 export function generateRegistrationId(): number {
@@ -68,6 +74,26 @@ export function deriveMasterKeyFromGroupV1(groupV1Id: Uint8Array): Uint8Array {
   const [part1] = deriveSecrets(groupV1Id, salt, info);
 
   return part1;
+}
+
+export function hashProfileKey(
+  profileKey: string | undefined,
+  aci: AciString
+): string {
+  if (!profileKey) {
+    return 'none';
+  }
+
+  const profileKeyBytes = Bytes.fromBase64(profileKey);
+  const aciBytes = Aci.parseFromServiceIdString(aci).getRawUuidBytes();
+  const hashBytes = hmacSha256(
+    profileKeyBytes,
+    Bytes.concatenate([Bytes.fromString('profileKeyHash'), aciBytes])
+  );
+
+  const webSafe = toWebSafeBase64(Bytes.toBase64(hashBytes));
+
+  return webSafe.slice(-3);
 }
 
 export function computeHash(data: Uint8Array): string {
@@ -131,6 +157,14 @@ export function decryptDeviceName(
   return Bytes.toString(plaintext);
 }
 
+export function deriveMasterKey(accountEntropyPool: string): Uint8Array {
+  return AccountEntropyPool.deriveSvrKey(accountEntropyPool);
+}
+
+export function deriveStorageServiceKey(masterKey: Uint8Array): Uint8Array {
+  return hmacSha256(masterKey, Bytes.fromString('Storage Service Encryption'));
+}
+
 export function deriveStorageManifestKey(
   storageServiceKey: Uint8Array,
   version: Long = Long.fromNumber(0)
@@ -138,11 +172,36 @@ export function deriveStorageManifestKey(
   return hmacSha256(storageServiceKey, Bytes.fromString(`Manifest_${version}`));
 }
 
-export function deriveStorageItemKey(
-  storageServiceKey: Uint8Array,
-  itemID: string
-): Uint8Array {
-  return hmacSha256(storageServiceKey, Bytes.fromString(`Item_${itemID}`));
+const STORAGE_SERVICE_ITEM_KEY_INFO_PREFIX =
+  '20240801_SIGNAL_STORAGE_SERVICE_ITEM_';
+const STORAGE_SERVICE_ITEM_KEY_LEN = 32;
+
+export type DeriveStorageItemKeyOptionsType = Readonly<{
+  storageServiceKey: Uint8Array;
+  recordIkm: Uint8Array | undefined;
+  key: Uint8Array;
+}>;
+
+export function deriveStorageItemKey({
+  storageServiceKey,
+  recordIkm,
+  key,
+}: DeriveStorageItemKeyOptionsType): Uint8Array {
+  if (recordIkm == null) {
+    const itemID = Bytes.toBase64(key);
+    return hmacSha256(storageServiceKey, Bytes.fromString(`Item_${itemID}`));
+  }
+
+  const hkdf = HKDF.new(3);
+  return hkdf.deriveSecrets(
+    STORAGE_SERVICE_ITEM_KEY_LEN,
+    Buffer.from(recordIkm),
+    Buffer.concat([
+      Buffer.from(STORAGE_SERVICE_ITEM_KEY_INFO_PREFIX),
+      Buffer.from(key),
+    ]),
+    Buffer.alloc(0)
+  );
 }
 
 export function deriveAccessKey(profileKey: Uint8Array): Uint8Array {
@@ -173,8 +232,8 @@ export function verifyAccessKey(
 }
 
 const IV_LENGTH = 16;
-const MAC_LENGTH = 16;
 const NONCE_LENGTH = 16;
+const SYMMETRIC_MAC_LENGTH = 16;
 
 export function encryptSymmetric(
   key: Uint8Array,
@@ -187,7 +246,10 @@ export function encryptSymmetric(
   const macKey = hmacSha256(key, cipherKey);
 
   const ciphertext = encryptAes256CbcPkcsPadding(cipherKey, plaintext, iv);
-  const mac = getFirstBytes(hmacSha256(macKey, ciphertext), MAC_LENGTH);
+  const mac = getFirstBytes(
+    hmacSha256(macKey, ciphertext),
+    SYMMETRIC_MAC_LENGTH
+  );
 
   return Bytes.concatenate([nonce, ciphertext, mac]);
 }
@@ -199,17 +261,24 @@ export function decryptSymmetric(
   const iv = getZeroes(IV_LENGTH);
 
   const nonce = getFirstBytes(data, NONCE_LENGTH);
-  const ciphertext = getBytes(
+  const ciphertext = getBytesSubarray(
     data,
     NONCE_LENGTH,
-    data.byteLength - NONCE_LENGTH - MAC_LENGTH
+    data.byteLength - NONCE_LENGTH - SYMMETRIC_MAC_LENGTH
   );
-  const theirMac = getBytes(data, data.byteLength - MAC_LENGTH, MAC_LENGTH);
+  const theirMac = getBytesSubarray(
+    data,
+    data.byteLength - SYMMETRIC_MAC_LENGTH,
+    SYMMETRIC_MAC_LENGTH
+  );
 
   const cipherKey = hmacSha256(key, nonce);
   const macKey = hmacSha256(key, cipherKey);
 
-  const ourMac = getFirstBytes(hmacSha256(macKey, ciphertext), MAC_LENGTH);
+  const ourMac = getFirstBytes(
+    hmacSha256(macKey, ciphertext),
+    SYMMETRIC_MAC_LENGTH
+  );
   if (!constantTimeEqual(theirMac, ourMac)) {
     throw new Error(
       'decryptSymmetric: Failed to decrypt; MAC verification failed'
@@ -353,52 +422,6 @@ export function getFirstBytes(data: Uint8Array, n: number): Uint8Array {
   return data.subarray(0, n);
 }
 
-export function getBytes(
-  data: Uint8Array,
-  start: number,
-  n: number
-): Uint8Array {
-  return data.subarray(start, start + n);
-}
-
-export function bytesToUuid(bytes: Uint8Array): undefined | UUIDStringType {
-  if (bytes.byteLength !== UUID_BYTE_SIZE) {
-    log.warn(
-      'bytesToUuid: received an Uint8Array of invalid length. ' +
-        'Returning undefined'
-    );
-    return undefined;
-  }
-
-  const uuids = splitUuids(bytes);
-  if (uuids.length === 1) {
-    return uuids[0] || undefined;
-  }
-  return undefined;
-}
-
-export function splitUuids(buffer: Uint8Array): Array<UUIDStringType | null> {
-  const uuids = new Array<UUIDStringType | null>();
-  for (let i = 0; i < buffer.byteLength; i += UUID_BYTE_SIZE) {
-    const bytes = getBytes(buffer, i, UUID_BYTE_SIZE);
-    const hex = Bytes.toHex(bytes);
-    const chunks = [
-      hex.substring(0, 8),
-      hex.substring(8, 12),
-      hex.substring(12, 16),
-      hex.substring(16, 20),
-      hex.substring(20),
-    ];
-    const uuid = chunks.join('-');
-    if (uuid !== '00000000-0000-0000-0000-000000000000') {
-      uuids.push(UUID.cast(uuid));
-    } else {
-      uuids.push(null);
-    }
-  }
-  return uuids;
-}
-
 export function trimForDisplay(padded: Uint8Array): Uint8Array {
   let paddingEnd = 0;
   for (paddingEnd; paddingEnd < padded.length; paddingEnd += 1) {
@@ -421,7 +444,7 @@ function verifyDigest(data: Uint8Array, theirDigest: Uint8Array): void {
   }
 }
 
-export function decryptAttachment(
+export function decryptAttachmentV1(
   encryptedBin: Uint8Array,
   keys: Uint8Array,
   theirDigest?: Uint8Array
@@ -453,23 +476,31 @@ export function decryptAttachment(
   return decryptAes256CbcPkcsPadding(aesKey, ciphertext, iv);
 }
 
-export function encryptAttachment(
-  plaintext: Uint8Array,
-  keys: Uint8Array,
-  iv: Uint8Array
-): EncryptedAttachment {
+export function encryptAttachment({
+  plaintext,
+  keys,
+  dangerousTestOnlyIv,
+}: {
+  plaintext: Readonly<Uint8Array>;
+  keys: Readonly<Uint8Array>;
+  dangerousTestOnlyIv?: Readonly<Uint8Array>;
+}): Omit<EncryptedAttachment, 'plaintextHash'> {
+  const logId = 'encryptAttachment';
   if (!(plaintext instanceof Uint8Array)) {
     throw new TypeError(
-      `\`plaintext\` must be an \`Uint8Array\`; got: ${typeof plaintext}`
+      `${logId}: \`plaintext\` must be an \`Uint8Array\`; got: ${typeof plaintext}`
     );
   }
 
   if (keys.byteLength !== 64) {
-    throw new Error('Got invalid length attachment keys');
+    throw new Error(`${logId}: invalid length attachment keys`);
   }
-  if (iv.byteLength !== 16) {
-    throw new Error('Got invalid length attachment iv');
+
+  if (dangerousTestOnlyIv && getEnvironment() !== Environment.Test) {
+    throw new Error(`${logId}: Used dangerousTestOnlyIv outside tests!`);
   }
+
+  const iv = dangerousTestOnlyIv || getRandomBytes(16);
   const aesKey = keys.slice(0, 32);
   const macKey = keys.slice(32, 64);
 
@@ -485,6 +516,32 @@ export function encryptAttachment(
   return {
     ciphertext: encryptedBin,
     digest,
+  };
+}
+
+export function padAndEncryptAttachment({
+  plaintext,
+  keys,
+  dangerousTestOnlyIv,
+}: {
+  plaintext: Readonly<Uint8Array>;
+  keys: Readonly<Uint8Array>;
+  dangerousTestOnlyIv?: Readonly<Uint8Array>;
+}): EncryptedAttachment {
+  const size = plaintext.byteLength;
+  const paddedSize = logPadSize(size);
+  const padding = getZeroes(paddedSize - size);
+
+  return {
+    ...encryptAttachment({
+      plaintext: Bytes.concatenate([plaintext, padding]),
+      keys,
+      dangerousTestOnlyIv,
+    }),
+    // We generate the plaintext hash here for forwards-compatibility with streaming
+    // attachment encryption, which may be the only place that the whole attachment flows
+    // through memory
+    plaintextHash: Buffer.from(sha256(plaintext)).toString('hex'),
   };
 }
 
@@ -526,7 +583,7 @@ export function decryptProfile(data: Uint8Array, key: Uint8Array): Uint8Array {
 export function encryptProfileItemWithPadding(
   item: Uint8Array,
   profileKey: Uint8Array,
-  paddedLengths: typeof PaddedLengths[keyof typeof PaddedLengths]
+  paddedLengths: (typeof PaddedLengths)[keyof typeof PaddedLengths]
 ): Uint8Array {
   const paddedLength = paddedLengths.find(
     (length: number) => item.byteLength <= length
@@ -573,7 +630,7 @@ export function decryptProfileName(
 // SignalContext APIs
 //
 
-const { crypto } = window.SignalContext;
+const crypto = globalThis.window?.SignalContext.crypto || new Crypto();
 
 export function sign(key: Uint8Array, data: Uint8Array): Uint8Array {
   return crypto.sign(key, data);
@@ -611,4 +668,52 @@ export function constantTimeEqual(
   right: Uint8Array
 ): boolean {
   return crypto.constantTimeEqual(left, right);
+}
+
+export function getIdentifierHash({
+  aci,
+  e164,
+  pni,
+  groupId,
+}: {
+  aci: AciString | undefined;
+  e164: string | undefined;
+  pni: PniString | undefined;
+  groupId: string | undefined;
+}): number | null {
+  let identifier: Uint8Array;
+  if (aci != null) {
+    identifier = Aci.parseFromServiceIdString(aci).getServiceIdBinary();
+  } else if (e164 != null) {
+    identifier = Bytes.fromString(e164);
+  } else if (pni != null) {
+    identifier = Pni.parseFromServiceIdString(pni).getServiceIdBinary();
+  } else if (groupId != null) {
+    identifier = Bytes.fromBase64(groupId);
+  } else {
+    return null;
+  }
+
+  const digest = hash(HashType.size256, identifier);
+  return digest[0];
+}
+
+export function generateAvatarColor({
+  aci,
+  e164,
+  pni,
+  groupId,
+}: {
+  aci: AciString | undefined;
+  e164: string | undefined;
+  pni: PniString | undefined;
+  groupId: string | undefined;
+}): string {
+  const hashValue = getIdentifierHash({ aci, e164, pni, groupId });
+
+  if (hashValue == null) {
+    return sample(AvatarColors) || AvatarColors[0];
+  }
+
+  return AvatarColors[hashValue % AVATAR_COLOR_COUNT];
 }

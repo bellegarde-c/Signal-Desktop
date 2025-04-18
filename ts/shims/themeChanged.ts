@@ -1,11 +1,11 @@
-// Copyright 2021-2022 Signal Messenger, LLC
+// Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { getThemeType } from '../util/getThemeType';
 
-export function themeChanged(): void {
+export async function themeChanged(): Promise<void> {
   if (window.reduxActions && window.reduxActions.user) {
-    const theme = getThemeType();
+    const theme = await getThemeType();
     window.reduxActions.user.userChanged({ theme });
   }
 }
