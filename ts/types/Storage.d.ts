@@ -17,10 +17,22 @@ import type {
   SessionResetsType,
   StorageServiceCredentials,
 } from '../textsecure/Types.d';
-import type { BackupCredentialWrapperType } from './backups';
+import type {
+  BackupCredentialWrapperType,
+  BackupsSubscriptionType,
+  BackupStatusType,
+} from './backups';
 import type { ServiceIdString } from './ServiceId';
 
 import type { RegisteredChallengeType } from '../challenge';
+import type { ServerAlertsType } from '../util/handleServerAlerts';
+
+export type AutoDownloadAttachmentType = {
+  photos: boolean;
+  videos: boolean;
+  audio: boolean;
+  documents: boolean;
+};
 
 export type SerializedCertificateType = {
   expires: number;
@@ -47,6 +59,7 @@ export type StorageAccessType = {
   'always-relay-calls': boolean;
   'audio-notification': boolean;
   'auto-download-update': boolean;
+  'auto-download-attachment': AutoDownloadAttachmentType;
   autoConvertEmoji: boolean;
   'badge-count-muted-conversations': boolean;
   'blocked-groups': ReadonlyArray<string>;
@@ -124,7 +137,6 @@ export type StorageAccessType = {
   phoneNumberDiscoverability: PhoneNumberDiscoverability;
   pinnedConversationIds: ReadonlyArray<string>;
   preferContactAvatars: boolean;
-  primarySendsSms: boolean;
   textFormatting: boolean;
   typingIndicators: boolean;
   sealedSenderIndicators: boolean;
@@ -157,7 +169,7 @@ export type StorageAccessType = {
   setBackupMediaSignatureKey: boolean;
   lastReceivedAtCounter: number;
   preferredReactionEmoji: ReadonlyArray<string>;
-  skinTone: number;
+  emojiSkinToneDefault: EmojiSkinToneDefault;
   unreadCount: number;
   'challenge:conversations': ReadonlyArray<RegisteredChallengeType>;
 
@@ -187,10 +199,12 @@ export type StorageAccessType = {
     entropy: Uint8Array;
     serverId: Uint8Array;
   };
+  serverAlerts: ServerAlertsType;
   needOrphanedAttachmentCheck: boolean;
   observedCapabilities: {
     deleteSync?: true;
     ssre2?: true;
+    attachmentBackfill?: true;
 
     // Note: Upon capability deprecation - change the value type to `never` and
     // remove it in `ts/background.ts`
@@ -206,11 +220,28 @@ export type StorageAccessType = {
   // link-and-sync backup
   backupEphemeralKey: Uint8Array;
 
+  // If present - we are resuming the download of known transfer archive
+  backupTransitArchive: {
+    cdn: number;
+    key: string;
+  };
+
+  backupTier: number | undefined;
+  cloudBackupStatus: BackupStatusType | undefined;
+  backupSubscriptionStatus: BackupsSubscriptionType;
+
   // If true Desktop message history was restored from backup
   isRestoredFromBackup: boolean;
 
   // The `firstAppVersion` present on an BackupInfo from an imported backup.
   restoredBackupFirstAppVersion: string;
+
+  // Stored solely for pesistance during import/export sequence
+  svrPin: string;
+
+  postRegistrationSyncsStatus: 'incomplete' | 'complete';
+
+  avatarsHaveBeenMigrated: boolean;
 
   // Deprecated
   'challenge:retry-message-ids': never;
@@ -226,6 +257,7 @@ export type StorageAccessType = {
   hasRegisterSupportForUnauthenticatedDelivery: never;
   masterKeyLastRequestTime: never;
   versionedExpirationTimer: never;
+  primarySendsSms: never;
 };
 
 export type StorageInterface = {

@@ -12,6 +12,7 @@ import type { GroupListItemConversationType } from '../../components/conversatio
 import { getRandomColor } from './getRandomColor';
 import { ConversationColors } from '../../types/Colors';
 import { StorySendMode } from '../../types/Stories';
+import { getAvatarPlaceholderGradient } from '../../utils/getAvatarPlaceholderGradient';
 
 export const getAvatarPath = (): string =>
   sample([
@@ -27,6 +28,7 @@ export function getDefaultConversation(
   const lastName = casual.last_name;
 
   return {
+    avatarPlaceholderGradient: getAvatarPlaceholderGradient(0),
     acceptedMessageRequest: true,
     avatarUrl: getAvatarPath(),
     badges: [],
@@ -41,6 +43,7 @@ export function getDefaultConversation(
     sharedGroupNames: [],
     title: `${firstName} ${lastName}`,
     titleNoDefault: `${firstName} ${lastName}`,
+    titleShortNoDefault: firstName,
     serviceId: generateAci(),
     ...overrideProps,
     type: 'direct' as const,

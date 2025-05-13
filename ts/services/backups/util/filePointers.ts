@@ -120,15 +120,15 @@ export function convertFilePointerToAttachment(
     };
   }
 
-  if (invalidAttachmentLocator) {
-    return {
-      ...omit(commonProps, 'downloadPath'),
-      error: true,
-      size: 0,
-    };
+  if (!invalidAttachmentLocator) {
+    log.error('convertFilePointerToAttachment: filePointer had no locator');
   }
 
-  throw new Error('convertFilePointerToAttachment: mising locator');
+  return {
+    ...omit(commonProps, 'downloadPath'),
+    error: true,
+    size: 0,
+  };
 }
 
 export function convertBackupMessageAttachmentToAttachment(
@@ -180,9 +180,11 @@ export async function getFilePointerForAttachment({
 }> {
   const filePointerRootProps = new Backups.FilePointer({
     contentType: attachment.contentType,
-    incrementalMac: attachment.incrementalMac
-      ? Bytes.fromBase64(attachment.incrementalMac)
-      : undefined,
+    // Resilience to invalid data in the database from internal testing
+    incrementalMac:
+      typeof attachment.incrementalMac === 'string'
+        ? Bytes.fromBase64(attachment.incrementalMac)
+        : undefined,
     incrementalMacChunkSize: dropZero(attachment.chunkSize),
     fileName: attachment.fileName,
     width: attachment.width,

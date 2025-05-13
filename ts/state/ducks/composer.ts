@@ -22,7 +22,7 @@ import {
 import { DataReader, DataWriter } from '../../sql/Client';
 import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
 import type { DraftBodyRanges } from '../../types/BodyRange';
-import type { LinkPreviewType } from '../../types/message/LinkPreviews';
+import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews';
 import type { ReadonlyMessageAttributesType } from '../../model-types.d';
 import type { NoopActionType } from './noop';
 import type { ShowToastActionType } from './toast';
@@ -69,7 +69,7 @@ import { resolveAttachmentDraftData } from '../../util/resolveAttachmentDraftDat
 import { resolveDraftAttachmentOnDisk } from '../../util/resolveDraftAttachmentOnDisk';
 import { shouldShowInvalidMessageToast } from '../../util/shouldShowInvalidMessageToast';
 import { writeDraftAttachment } from '../../util/writeDraftAttachment';
-import { __DEPRECATED$getMessageById } from '../../messages/getMessageById';
+import { getMessageById } from '../../messages/getMessageById';
 import { canReply, isNormalBubble } from '../selectors/message';
 import { getAuthorId } from '../../messages/helpers';
 import { getConversationSelector } from '../selectors/conversations';
@@ -103,7 +103,7 @@ type ComposerStateByConversationType = {
   focusCounter: number;
   isDisabled: boolean;
   linkPreviewLoading: boolean;
-  linkPreviewResult?: LinkPreviewType;
+  linkPreviewResult?: LinkPreviewForUIType;
   messageCompositionId: string;
   quotedMessage?: QuotedMessageForComposerType;
   sendCounter: number;
@@ -402,6 +402,7 @@ export function saveDraftRecordingIfNeeded(): ThunkAction<
 type WithPreSendChecksOptions = Readonly<{
   message?: string;
   voiceNoteAttachment?: InMemoryAttachmentDraftType;
+  draftAttachments?: ReadonlyArray<AttachmentDraftType>;
 }>;
 
 async function withPreSendChecks(
@@ -416,7 +417,7 @@ async function withPreSendChecks(
 ): Promise<void> {
   const conversation = window.ConversationController.get(conversationId);
   if (!conversation) {
-    throw new Error('sendMultiMediaMessage: No conversation found');
+    throw new Error('withPreSendChecks: No conversation found');
   }
 
   const sendStart = Date.now();
@@ -425,6 +426,8 @@ async function withPreSendChecks(
   ]);
 
   const { message, voiceNoteAttachment } = options;
+  const draftAttachments =
+    options.draftAttachments ?? conversation.attributes.draftAttachments;
 
   try {
     dispatch(setComposerDisabledState(conversationId, true));
@@ -457,7 +460,7 @@ async function withPreSendChecks(
 
     if (
       !message?.length &&
-      !hasDraftAttachments(conversation.attributes.draftAttachments, {
+      !hasDraftAttachments(draftAttachments, {
         includePending: false,
       }) &&
       !voiceNoteAttachment
@@ -730,9 +733,7 @@ export function setQuoteByMessageId(
       return;
     }
 
-    const message = messageId
-      ? await __DEPRECATED$getMessageById(messageId, 'setQuoteByMessageId')
-      : undefined;
+    const message = messageId ? await getMessageById(messageId) : undefined;
     const state = getState();
 
     if (
@@ -951,7 +952,7 @@ function onEditorStateChange({
 
     const conversation = window.ConversationController.get(conversationId);
     if (!conversation) {
-      throw new Error('processAttachments: Unable to find conversation');
+      throw new Error('onEditorStateChange: Unable to find conversation');
     }
 
     const state = getState().composer.conversations[conversationId];
@@ -965,10 +966,6 @@ function onEditorStateChange({
         `but sendCounter doesnt match (old: ${state.sendCounter}, new: ${sendCounter})`
       );
       return;
-    }
-
-    if (messageText.length && conversation.throttledBumpTyping) {
-      conversation.throttledBumpTyping();
     }
 
     debouncedSaveDraft(conversationId, messageText, bodyRanges);
@@ -998,9 +995,11 @@ function onEditorStateChange({
 function processAttachments({
   conversationId,
   files,
+  flags,
 }: {
   conversationId: string;
   files: ReadonlyArray<File>;
+  flags: number | null;
 }): ThunkAction<
   void,
   RootStateType,
@@ -1066,6 +1065,7 @@ function processAttachments({
         try {
           const attachment = await processAttachment(file, {
             generateScreenshot: true,
+            flags,
           });
           if (!attachment) {
             removeAttachment(conversationId, webUtils.getPathForFile(file))(
@@ -1330,6 +1330,10 @@ function saveDraft(
     if (!activeAt) {
       activeAt = now;
       timestamp = now;
+    }
+
+    if (messageText.length && conversation.throttledBumpTyping) {
+      conversation.throttledBumpTyping();
     }
 
     conversation.set({

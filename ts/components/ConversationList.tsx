@@ -194,6 +194,7 @@ export type PropsType = {
   scrollToRowIndex?: number;
   shouldRecomputeRowHeights: boolean;
   scrollable?: boolean;
+  hasDialogPadding?: boolean;
 
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
@@ -241,6 +242,7 @@ export function ConversationList({
   scrollBehavior = ScrollBehavior.Default,
   scrollToRowIndex,
   scrollable = true,
+  hasDialogPadding = false,
   shouldRecomputeRowHeights,
   showChooseGroupMembers,
   showFindByUsername,
@@ -400,12 +402,14 @@ export function ConversationList({
           break;
         case RowType.Conversation: {
           const itemProps = pick(row.conversation, [
+            'avatarPlaceholderGradient',
             'acceptedMessageRequest',
             'avatarUrl',
             'badges',
             'color',
             'draftPreview',
             'groupId',
+            'hasAvatar',
             'id',
             'isBlocked',
             'isMe',
@@ -423,7 +427,6 @@ export function ConversationList({
             'title',
             'type',
             'typingContactIdTimestamps',
-            'unblurredAvatarUrl',
             'unreadCount',
             'unreadMentionsCount',
             'serviceId',
@@ -583,7 +586,8 @@ export function ConversationList({
     <ListView
       className={classNames(
         'module-conversation-list',
-        `module-conversation-list--width-${widthBreakpoint}`
+        `module-conversation-list--width-${widthBreakpoint}`,
+        hasDialogPadding && 'module-conversation-list--has-dialog-padding'
       )}
       width={dimensions.width}
       height={dimensions.height}

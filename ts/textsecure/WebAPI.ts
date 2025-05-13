@@ -9,15 +9,13 @@
 import type { RequestInit, Response } from 'node-fetch';
 import fetch from 'node-fetch';
 import type { Agent } from 'https';
-import { escapeRegExp, isNumber, isString, isObject } from 'lodash';
+import { escapeRegExp, isNumber, isString, isObject, throttle } from 'lodash';
 import PQueue from 'p-queue';
 import { v4 as getGuid } from 'uuid';
 import { z } from 'zod';
 import type { Readable } from 'stream';
 
-import { Net } from '@signalapp/libsignal-client';
 import { assertDev, strictAssert } from '../util/assert';
-import { isRecord } from '../util/isRecord';
 import * as durations from '../util/durations';
 import type { ExplodePromiseResultType } from '../util/explodePromise';
 import { explodePromise } from '../util/explodePromise';
@@ -30,7 +28,6 @@ import { createHTTPSAgent } from '../util/createHTTPSAgent';
 import { createProxyAgent } from '../util/createProxyAgent';
 import type { ProxyAgent } from '../util/createProxyAgent';
 import type { FetchFunctionType } from '../util/uploads/tusProtocol';
-import type { SocketStatus } from '../types/SocketStatus';
 import { VerificationTransport } from '../types/VerificationTransport';
 import { toLogFormat } from '../types/errors';
 import { isPackIdValid, redactPackId } from '../types/Stickers';
@@ -45,14 +42,13 @@ import {
   aciSchema,
   untaggedPniSchema,
 } from '../types/ServiceId';
-import type { DirectoryConfigType } from '../types/RendererConfig';
 import type { BackupPresentationHeadersType } from '../types/backups';
 import * as Bytes from '../Bytes';
 import { randomInt } from '../Crypto';
 import * as linkPreviewFetch from '../linkPreviews/linkPreviewFetch';
 import { isBadgeImageFileUrlValid } from '../badges/isBadgeImageFileUrlValid';
 
-import { SocketManager } from './SocketManager';
+import { SocketManager, type SocketStatuses } from './SocketManager';
 import type { CDSAuthType, CDSResponseType } from './cds/Types.d';
 import { CDSI } from './cds/CDSI';
 import { SignalService as Proto } from '../protobuf';
@@ -70,8 +66,8 @@ import * as log from '../logging/log';
 import { maybeParseUrl, urlPathFromComponents } from '../util/url';
 import { HOUR, MINUTE, SECOND } from '../util/durations';
 import { safeParseNumber } from '../util/numbers';
-import { isStagingServer } from '../util/isStagingServer';
 import type { IWebSocketResource } from './WebsocketResources';
+import { getLibsignalNet } from './preconnect';
 import type { GroupSendToken } from '../types/GroupSendEndorsements';
 import { parseUnknown, safeParseUnknown } from '../util/schemas';
 import type {
@@ -79,54 +75,16 @@ import type {
   ProfileFetchUnauthRequestOptions,
 } from '../services/profiles';
 import { isMockServer } from '../util/isMockServer';
-import { getMockServerPort } from '../util/getMockServerPort';
-import { pemToDer } from '../util/pemToDer';
+import { ToastType } from '../types/Toast';
+import { isProduction } from '../util/version';
+import type { ServerAlert } from '../util/handleServerAlerts';
+import { isAbortError } from '../util/isAbortError';
 
 // Note: this will break some code that expects to be able to use err.response when a
 //   web request fails, because it will force it to text. But it is very useful for
 //   debugging failed requests.
 const DEBUG = false;
 const DEFAULT_TIMEOUT = 30 * SECOND;
-
-// Libsignal has internally configured values for domain names
-// (and other connectivity params) of the services.
-function resolveLibsignalNet(
-  url: string,
-  version: string,
-  certificateAuthority?: string
-): Net.Net {
-  const userAgent = getUserAgent(version);
-  log.info(`libsignal net url: ${url}`);
-  if (isStagingServer(url)) {
-    log.info('libsignal net environment resolved to staging');
-    return new Net.Net({
-      env: Net.Environment.Staging,
-      userAgent,
-    });
-  }
-
-  if (isMockServer(url) && certificateAuthority !== undefined) {
-    const DISCARD_PORT = 9; // Reserved by RFC 863.
-    log.info('libsignal net environment resolved to mock');
-    return new Net.Net({
-      localTestServer: true,
-      userAgent,
-      TESTING_localServer_chatPort: parseInt(getMockServerPort(url), 10),
-      TESTING_localServer_cdsiPort: DISCARD_PORT,
-      TESTING_localServer_svr2Port: DISCARD_PORT,
-      TESTING_localServer_svr3SgxPort: DISCARD_PORT,
-      TESTING_localServer_svr3NitroPort: DISCARD_PORT,
-      TESTING_localServer_svr3Tpm2SnpPort: DISCARD_PORT,
-      TESTING_localServer_rootCertificateDer: pemToDer(certificateAuthority),
-    });
-  }
-
-  log.info('libsignal net environment resolved to prod');
-  return new Net.Net({
-    env: Net.Environment.Production,
-    userAgent,
-  });
-}
 
 function _createRedactor(
   ...toReplace: ReadonlyArray<string | undefined | null>
@@ -194,6 +152,7 @@ type PromiseAjaxOptionsType = {
   socketManager?: SocketManager;
   basicAuth?: string;
   certificateAuthority?: string;
+  chatServiceUrl?: string;
   contentType?: string;
   data?: Uint8Array | (() => Readable) | string;
   disableRetries?: boolean;
@@ -210,10 +169,11 @@ type PromiseAjaxOptionsType = {
     | 'jsonwithdetails'
     | 'bytes'
     | 'byteswithdetails'
+    | 'raw'
     | 'stream'
     | 'streamwithdetails';
-  serverUrl?: string;
   stack?: string;
+  storageUrl?: string;
   timeout?: number;
   type: HTTPCodeType;
   user?: string;
@@ -247,6 +207,33 @@ type StreamWithDetailsType = {
   stream: Readable;
   contentType: string | null;
   response: Response;
+};
+
+type GetAttachmentArgsType = {
+  cdnPath: string;
+  cdnNumber: number;
+  headers?: Record<string, string>;
+  redactor: RedactUrl;
+  options?: {
+    disableRetries?: boolean;
+    timeout?: number;
+    downloadOffset?: number;
+    onProgress?: (currentBytes: number, totalBytes: number) => void;
+    abortSignal?: AbortSignal;
+  };
+};
+
+type GetAttachmentFromBackupTierArgsType = {
+  mediaId: string;
+  backupDir: string;
+  mediaDir: string;
+  cdnNumber: number;
+  headers: Record<string, string>;
+  options?: {
+    disableRetries?: boolean;
+    timeout?: number;
+    downloadOffset?: number;
+  };
 };
 
 export const multiRecipient200ResponseSchema = z.object({
@@ -396,14 +383,43 @@ async function _promiseAjax(
       ? await socketManager.fetch(url, fetchOptions)
       : await fetch(url, fetchOptions);
   } catch (e) {
+    if (isAbortError(e)) {
+      throw e;
+    }
     log.error(logId, 0, 'Error');
     const stack = `${e.stack}\nInitial stack:\n${options.stack}`;
     throw makeHTTPError('promiseAjax catch', 0, {}, e.toString(), stack);
   }
 
+  const urlHostname = getHostname(url);
+
+  if (options.storageUrl && url.startsWith(options.storageUrl)) {
+    // The cloud infrastructure that sits in front of the Storage Service / Groups server
+    // has in the past terminated requests with a 403 before they make it to a Signal
+    // server. That's a problem, since we might take destructive action locally in
+    // response to a 403. Responses from a Signal server should always contain the
+    // `x-signal-timestamp` headers.
+    if (response.headers.get('x-signal-timestamp') == null) {
+      log.error(
+        logId,
+        response.status,
+        'Invalid header: missing required x-signal-timestamp header'
+      );
+
+      onIncorrectHeadersFromStorageService();
+
+      // TODO: DESKTOP-8300
+      if (response.status === 403) {
+        throw new Error(
+          `${logId} ${response.status}: Dropping response, missing required x-signal-timestamp header`
+        );
+      }
+    }
+  }
+
   if (
-    options.serverUrl &&
-    getHostname(options.serverUrl) === getHostname(url)
+    options.chatServiceUrl &&
+    getHostname(options.chatServiceUrl) === urlHostname
   ) {
     await handleStatusCode(response.status);
 
@@ -435,10 +451,15 @@ async function _promiseAjax(
       options.responseType === 'streamwithdetails'
     ) {
       result = response.body;
+    } else if (options.responseType === 'raw') {
+      result = response;
     } else {
       result = await response.textConverted();
     }
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     log.error(logId, response.status, 'Error');
     const stack = `${error.stack}\nInitial stack:\n${options.stack}`;
     throw makeHTTPError(
@@ -587,6 +608,10 @@ function _outerAjax(
 ): Promise<StreamWithDetailsType>;
 function _outerAjax(
   providedUrl: string | null,
+  options: PromiseAjaxOptionsType & { responseType: 'raw' }
+): Promise<Response>;
+function _outerAjax(
+  providedUrl: string | null,
   options: PromiseAjaxOptionsType
 ): Promise<unknown>;
 
@@ -692,7 +717,6 @@ type InitializeOptionsType = {
   contentProxyUrl: string;
   proxyUrl: string | undefined;
   version: string;
-  directoryConfig: DirectoryConfigType;
   disableIPv6: boolean;
 };
 
@@ -755,11 +779,13 @@ export type WebAPIConnectType = {
 export type CapabilitiesType = {
   deleteSync: boolean;
   ssre2: boolean;
+  attachmentBackfill: boolean;
 };
 export type CapabilitiesUploadType = {
   deleteSync: true;
   versionedExpirationTimer: true;
   ssre2: true;
+  attachmentBackfill: true;
 };
 
 type StickerPackManifestType = Uint8Array;
@@ -829,9 +855,11 @@ const remoteConfigResponseZod = z.object({
       value: z.string().or(z.null()).optional(),
     })
     .array(),
-  serverEpochTime: z.number(),
 });
-export type RemoteConfigResponseType = z.infer<typeof remoteConfigResponseZod>;
+export type RemoteConfigResponseType = z.infer<typeof remoteConfigResponseZod> &
+  Readonly<{
+    serverTimestamp: number;
+  }>;
 
 export type ProfileType = Readonly<{
   identityKey?: string;
@@ -885,16 +913,10 @@ export type IceServerGroupType = Readonly<{
   urls?: ReadonlyArray<string>;
   urlsWithIps?: ReadonlyArray<string>;
   hostname?: string;
+  ttl?: number;
 }>;
 
 export type GetSenderCertificateResultType = Readonly<{ certificate: string }>;
-
-export type MakeProxiedRequestResultType =
-  | Uint8Array
-  | {
-      result: BytesWithDetailsType;
-      totalSize: number;
-    };
 
 const whoamiResultZod = z.object({
   uuid: z.string(),
@@ -909,7 +931,6 @@ export type CdsLookupOptionsType = Readonly<{
   e164s: ReadonlyArray<string>;
   acisAndAccessKeys?: ReadonlyArray<{ aci: AciString; accessKey: string }>;
   returnAcisWithoutUaks?: boolean;
-  useLibsignal?: boolean;
 }>;
 
 export type GetGroupCredentialsOptionsType = Readonly<{
@@ -1229,9 +1250,9 @@ export const releaseNoteSchema = z.object({
   bodyRanges: z
     .array(
       z.object({
-        style: z.string(),
-        start: z.number(),
-        length: z.number(),
+        style: z.string().optional(),
+        start: z.number().optional(),
+        length: z.number().optional(),
       })
     )
     .optional(),
@@ -1264,6 +1285,11 @@ export const releaseNotesManifestSchema = z.object({
 export type ReleaseNotesManifestResponseType = z.infer<
   typeof releaseNotesManifestSchema
 >;
+
+export type GetReleaseNoteImageAttachmentResultType = Readonly<{
+  imageData: Uint8Array;
+  contentType: string | null;
+}>;
 
 export type CallLinkCreateAuthResponseType = Readonly<{
   credential: string;
@@ -1310,6 +1336,36 @@ export type GetTransferArchiveOptionsType = Readonly<{
   abortSignal?: AbortSignal;
 }>;
 
+export type ProxiedRequestParams = Readonly<{
+  method: 'GET' | 'HEAD';
+  url: string;
+  headers?: HeaderListType;
+  signal?: AbortSignal;
+}>;
+
+const backupFileHeadersSchema = z.object({
+  'content-length': z.coerce.number(),
+  'last-modified': z.coerce.date(),
+});
+
+type BackupFileHeadersType = z.infer<typeof backupFileHeadersSchema>;
+
+const subscriptionResponseSchema = z.object({
+  subscription: z.object({
+    level: z.number(),
+    billingCycleAnchor: z.coerce.date().optional(),
+    endOfCurrentPeriod: z.coerce.date().optional(),
+    active: z.boolean(),
+    cancelAtPeriodEnd: z.boolean().optional(),
+    currency: z.string().optional(),
+    amount: z.number().nonnegative().optional(),
+  }),
+});
+
+export type SubscriptionResponseType = z.infer<
+  typeof subscriptionResponseSchema
+>;
+
 export type WebAPIType = {
   startRegistration(): unknown;
   finishRegistration(baton: unknown): void;
@@ -1327,19 +1383,9 @@ export type WebAPIType = {
     version: string,
     imageFiles: Array<string>
   ) => Promise<Array<Uint8Array>>;
-  getAttachmentFromBackupTier: (args: {
-    mediaId: string;
-    backupDir: string;
-    mediaDir: string;
-    cdnNumber: number;
-    headers: Record<string, string>;
-    options?: {
-      disableRetries?: boolean;
-      timeout?: number;
-      downloadOffset?: number;
-      abortSignal: AbortSignal;
-    };
-  }) => Promise<Readable>;
+  getAttachmentFromBackupTier: (
+    args: GetAttachmentFromBackupTierArgsType
+  ) => Promise<Readable>;
   getAttachment: (args: {
     cdnKey: string;
     cdnNumber?: number;
@@ -1400,8 +1446,12 @@ export type WebAPIType = {
   getSubscriptionConfiguration: (
     userLanguages: ReadonlyArray<string>
   ) => Promise<unknown>;
+  getSubscription: (
+    subscriberId: Uint8Array
+  ) => Promise<SubscriptionResponseType>;
   getProvisioningResource: (
-    handler: IRequestHandler
+    handler: IRequestHandler,
+    timeout?: number
   ) => Promise<IWebSocketResource>;
   getSenderCertificate: (
     withUuid?: boolean
@@ -1414,6 +1464,9 @@ export type WebAPIType = {
   ) => Promise<string | undefined>;
   getReleaseNotesManifest: () => Promise<ReleaseNotesManifestResponseType>;
   getReleaseNotesManifestHash: () => Promise<string | undefined>;
+  getReleaseNoteImageAttachment: (
+    path: string
+  ) => Promise<GetReleaseNoteImageAttachmentResultType>;
   getSticker: (packId: string, stickerId: number) => Promise<Uint8Array>;
   getStickerPackManifest: (packId: string) => Promise<StickerPackManifestType>;
   getStorageCredentials: MessageSender['getStorageCredentials'];
@@ -1429,10 +1482,12 @@ export type WebAPIType = {
   ) => Promise<null | linkPreviewFetch.LinkPreviewImage>;
   linkDevice: (options: LinkDeviceOptionsType) => Promise<LinkDeviceResultType>;
   unlink: () => Promise<void>;
-  makeProxiedRequest: (
-    targetUrl: string,
-    options?: ProxiedRequestOptionsType
-  ) => Promise<MakeProxiedRequestResultType>;
+  fetchJsonViaProxy: (
+    params: ProxiedRequestParams
+  ) => Promise<JSONWithDetailsType>;
+  fetchBytesViaProxy: (
+    params: ProxiedRequestParams
+  ) => Promise<BytesWithDetailsType>;
   makeSfuRequest: (
     targetUrl: string,
     type: HTTPCodeType,
@@ -1522,6 +1577,12 @@ export type WebAPIType = {
     headers: BackupPresentationHeadersType
   ) => Promise<GetBackupInfoResponseType>;
   getBackupStream: (options: GetBackupStreamOptionsType) => Promise<Readable>;
+  getBackupFileHeaders: (
+    options: Pick<
+      GetBackupStreamOptionsType,
+      'cdn' | 'backupDir' | 'backupName' | 'headers'
+    >
+  ) => Promise<{ 'content-length': number; 'last-modified': Date }>;
   getEphemeralBackupStream: (
     options: GetEphemeralBackupStreamOptionsType
   ) => Promise<Readable>;
@@ -1570,7 +1631,8 @@ export type WebAPIType = {
   getConfig: () => Promise<RemoteConfigResponseType>;
   authenticate: (credentials: WebAPICredentials) => Promise<void>;
   logout: () => Promise<void>;
-  getSocketStatus: () => SocketStatus;
+  getServerAlerts: () => Array<ServerAlert>;
+  getSocketStatus: () => SocketStatuses;
   registerRequestHandler: (handler: IRequestHandler) => void;
   unregisterRequestHandler: (handler: IRequestHandler) => void;
   onHasStoriesDisabledChange: (newValue: boolean) => void;
@@ -1654,19 +1716,19 @@ export type TopLevelType = {
 
 type InflightCallback = (error: Error) => unknown;
 
+const libsignalNet = getLibsignalNet();
+
 // We first set up the data that won't change during this session of the app
 export function initialize({
   chatServiceUrl,
   storageUrl,
   updatesUrl,
   resourcesUrl,
-  directoryConfig,
   cdnUrlObject,
   certificateAuthority,
   contentProxyUrl,
   proxyUrl,
   version,
-  disableIPv6,
 }: InitializeOptionsType): WebAPIConnectType {
   if (!isString(chatServiceUrl)) {
     throw new Error('WebAPI.initialize: Invalid chatServiceUrl');
@@ -1705,16 +1767,9 @@ export function initialize({
     throw new Error('WebAPI.initialize: Invalid version');
   }
 
-  // `libsignalNet` is an instance of a class from libsignal that is responsible
-  // for providing network layer API and related functionality.
-  // It's important to have a single instance of this class as it holds
-  // resources that are shared across all other use cases.
-  const libsignalNet = resolveLibsignalNet(
-    chatServiceUrl,
-    version,
-    certificateAuthority
-  );
-  libsignalNet.setIpv6Enabled(!disableIPv6);
+  // We store server alerts (returned on the WS upgrade response headers) so that the app
+  // can query them later, which is necessary if they arrive before app state is ready
+  let serverAlerts: Array<ServerAlert> = [];
 
   // Thanks to function-hoisting, we can put this return statement before all of the
   //   below function definitions.
@@ -1767,20 +1822,18 @@ export function initialize({
       window.Whisper.events.trigger('firstEnvelope', incoming);
     });
 
+    socketManager.on('serverAlerts', alerts => {
+      log.info(`onServerAlerts: number of alerts received: ${alerts.length}`);
+      serverAlerts = alerts;
+    });
+
     if (useWebSocket) {
       void socketManager.authenticate({ username, password });
     }
 
-    const { directoryUrl, directoryMRENCLAVE } = directoryConfig;
-
     const cds = new CDSI(libsignalNet, {
       logger: log,
       proxyUrl,
-
-      url: directoryUrl,
-      mrenclave: directoryMRENCLAVE,
-      certificateAuthority,
-      version,
 
       async getAuth() {
         return (await _ajax({
@@ -1862,6 +1915,7 @@ export function initialize({
       getBackupCDNCredentials,
       getBackupInfo,
       getBackupStream,
+      getBackupFileHeaders,
       getBackupMediaUploadForm,
       getBackupUploadForm,
       getBadgeImageFile,
@@ -1887,18 +1941,22 @@ export function initialize({
       getReleaseNoteHash,
       getReleaseNotesManifest,
       getReleaseNotesManifestHash,
+      getReleaseNoteImageAttachment,
       getTransferArchive,
       getSenderCertificate,
+      getServerAlerts,
       getSocketStatus,
       getSticker,
       getStickerPackManifest,
       getStorageCredentials,
       getStorageManifest,
       getStorageRecords,
+      getSubscription,
       getSubscriptionConfiguration,
       linkDevice,
       logout,
-      makeProxiedRequest,
+      fetchJsonViaProxy,
+      fetchBytesViaProxy,
       makeSfuRequest,
       modifyGroup,
       modifyStorageRecords,
@@ -1983,6 +2041,7 @@ export function initialize({
         socketManager: useWebSocketForEndpoint ? socketManager : undefined,
         basicAuth: param.basicAuth,
         certificateAuthority,
+        chatServiceUrl,
         contentType: param.contentType || 'application/json; charset=utf-8',
         data:
           param.data ||
@@ -1997,7 +2056,7 @@ export function initialize({
         type: param.httpType,
         user: param.username ?? username,
         redactUrl: param.redactUrl,
-        serverUrl: chatServiceUrl,
+        storageUrl,
         validateResponse: param.validateResponse,
         version,
         unauthenticated: param.unauthenticated,
@@ -2087,8 +2146,12 @@ export function initialize({
       }
     }
 
-    function getSocketStatus(): SocketStatus {
+    function getSocketStatus(): SocketStatuses {
       return socketManager.getStatus();
+    }
+
+    function getServerAlerts(): Array<ServerAlert> {
+      return serverAlerts;
     }
 
     function checkSockets(): void {
@@ -2129,16 +2192,24 @@ export function initialize({
     }
 
     async function getConfig() {
-      const rawRes = await _ajax({
+      const { data, response } = await _ajax({
         call: 'config',
         httpType: 'GET',
-        responseType: 'json',
+        responseType: 'jsonwithdetails',
       });
-      const res = parseUnknown(remoteConfigResponseZod, rawRes);
+      const json = parseUnknown(remoteConfigResponseZod, data);
+
+      const serverTimestamp = safeParseNumber(
+        response.headers.get('x-signal-timestamp') || ''
+      );
+      if (serverTimestamp == null) {
+        throw new Error('Missing required x-signal-timestamp header');
+      }
 
       return {
-        ...res,
-        config: res.config.filter(
+        ...json,
+        serverTimestamp,
+        config: json.config.filter(
           ({ name }: { name: string }) =>
             name.startsWith('desktop.') ||
             name.startsWith('global.') ||
@@ -2244,6 +2315,29 @@ export function initialize({
       }
 
       return etag;
+    }
+
+    async function getReleaseNoteImageAttachment(
+      path: string
+    ): Promise<GetReleaseNoteImageAttachmentResultType> {
+      const { origin: expectedOrigin } = new URL(resourcesUrl);
+      const url = `${resourcesUrl}${path}`;
+      const { origin } = new URL(url);
+      strictAssert(origin === expectedOrigin, `Unexpected origin: ${origin}`);
+
+      const { data: imageData, contentType } = await _outerAjax(url, {
+        certificateAuthority,
+        proxyUrl,
+        responseType: 'byteswithdetails',
+        timeout: 0,
+        type: 'GET',
+        version,
+      });
+
+      return {
+        imageData,
+        contentType,
+      };
     }
 
     async function getStorageManifest(
@@ -2880,6 +2974,7 @@ export function initialize({
         deleteSync: true,
         versionedExpirationTimer: true,
         ssre2: true,
+        attachmentBackfill: true,
       };
 
       const jsonData = {
@@ -2936,6 +3031,7 @@ export function initialize({
         deleteSync: true,
         versionedExpirationTimer: true,
         ssre2: true,
+        attachmentBackfill: true,
       };
 
       const jsonData = {
@@ -3114,6 +3210,25 @@ export function initialize({
           abortSignal,
         },
       });
+    }
+    async function getBackupFileHeaders({
+      headers,
+      cdn,
+      backupDir,
+      backupName,
+    }: Pick<
+      GetBackupStreamOptionsType,
+      'headers' | 'cdn' | 'backupDir' | 'backupName'
+    >): Promise<BackupFileHeadersType> {
+      const result = await _getAttachmentHeaders({
+        cdnPath: `/backups/${encodeURIComponent(backupDir)}/${encodeURIComponent(backupName)}`,
+        cdnNumber: cdn,
+        redactor: _createRedactor(backupDir, backupName),
+        headers,
+      });
+      const responseHeaders = Object.fromEntries(result.entries());
+
+      return parseUnknown(backupFileHeadersSchema, responseHeaders as unknown);
     }
 
     async function getEphemeralBackupStream({
@@ -3845,25 +3960,49 @@ export function initialize({
       cdnNumber,
       headers,
       options,
-    }: {
-      mediaId: string;
-      backupDir: string;
-      mediaDir: string;
-      cdnNumber: number;
-      headers: Record<string, string>;
-      options?: {
-        disableRetries?: boolean;
-        timeout?: number;
-        downloadOffset?: number;
-      };
-    }) {
+    }: GetAttachmentFromBackupTierArgsType) {
       return _getAttachment({
-        cdnPath: `/backups/${backupDir}/${mediaDir}/${mediaId}`,
+        cdnPath: urlPathFromComponents([
+          'backups',
+          backupDir,
+          mediaDir,
+          mediaId,
+        ]),
         cdnNumber,
         headers,
         redactor: _createRedactor(backupDir, mediaDir, mediaId),
         options,
       });
+    }
+
+    function getCheckedCdnUrl(cdnNumber: number, cdnPath: string) {
+      const baseUrl = cdnUrlObject[cdnNumber] ?? cdnUrlObject['0'];
+      const { origin: expectedOrigin } = new URL(baseUrl);
+      const fullCdnUrl = `${baseUrl}${cdnPath}`;
+      const { origin } = new URL(fullCdnUrl);
+
+      strictAssert(origin === expectedOrigin, `Unexpected origin: ${origin}`);
+      return fullCdnUrl;
+    }
+
+    async function _getAttachmentHeaders({
+      cdnPath,
+      cdnNumber,
+      headers = {},
+      redactor,
+    }: Omit<GetAttachmentArgsType, 'options'>): Promise<fetch.Headers> {
+      const fullCdnUrl = getCheckedCdnUrl(cdnNumber, cdnPath);
+      const response = await _outerAjax(fullCdnUrl, {
+        headers,
+        certificateAuthority,
+        proxyUrl,
+        responseType: 'raw',
+        timeout: DEFAULT_TIMEOUT,
+        type: 'HEAD',
+        redactUrl: redactor,
+        version,
+      });
+      return response.headers;
     }
 
     async function _getAttachment({
@@ -3872,21 +4011,8 @@ export function initialize({
       headers = {},
       redactor,
       options,
-    }: {
-      cdnPath: string;
-      cdnNumber: number;
-      headers?: Record<string, string>;
-      redactor: RedactUrl;
-      options?: {
-        disableRetries?: boolean;
-        timeout?: number;
-        downloadOffset?: number;
-        onProgress?: (currentBytes: number, totalBytes: number) => void;
-        abortSignal?: AbortSignal;
-      };
-    }): Promise<Readable> {
+    }: GetAttachmentArgsType): Promise<Readable> {
       const abortController = new AbortController();
-      const cdnUrl = cdnUrlObject[cdnNumber] ?? cdnUrlObject['0'];
 
       let streamWithDetails: StreamWithDetailsType | undefined;
 
@@ -3906,7 +4032,9 @@ export function initialize({
         if (options?.downloadOffset) {
           targetHeaders.range = `bytes=${options.downloadOffset}-`;
         }
-        streamWithDetails = await _outerAjax(`${cdnUrl}${cdnPath}`, {
+        const fullCdnUrl = getCheckedCdnUrl(cdnNumber, cdnPath);
+
+        streamWithDetails = await _outerAjax(fullCdnUrl, {
           headers: targetHeaders,
           certificateAuthority,
           disableRetries: options?.disableRetries,
@@ -3941,7 +4069,7 @@ export function initialize({
           );
           strictAssert(
             !streamWithDetails.contentType?.includes('multipart'),
-            `Expected non-multipart response for ${cdnUrl}${cdnPath}`
+            'Expected non-multipart response'
           );
 
           const range = streamWithDetails.response.headers.get('content-range');
@@ -4146,53 +4274,40 @@ export function initialize({
       );
     }
 
-    async function makeProxiedRequest(
-      targetUrl: string,
-      options: ProxiedRequestOptionsType = {}
-    ): Promise<MakeProxiedRequestResultType> {
-      const { returnUint8Array, start, end } = options;
-      const headers: HeaderListType = {
-        'X-SignalPadding': getHeaderPadding(),
-      };
-
-      if (isNumber(start) && isNumber(end)) {
-        headers.Range = `bytes=${start}-${end}`;
-      }
-
-      const result = await _outerAjax(targetUrl, {
-        responseType: returnUint8Array ? 'byteswithdetails' : undefined,
+    async function fetchJsonViaProxy(
+      params: ProxiedRequestParams
+    ): Promise<JSONWithDetailsType> {
+      return _outerAjax(params.url, {
+        responseType: 'jsonwithdetails',
         proxyUrl: contentProxyUrl,
-        type: 'GET',
+        type: params.method,
         redirect: 'follow',
         redactUrl: () => '[REDACTED_URL]',
-        headers,
+        headers: {
+          'X-SignalPadding': getHeaderPadding(),
+          ...params.headers,
+        },
         version,
+        abortSignal: params.signal,
       });
+    }
 
-      if (!returnUint8Array) {
-        return result as Uint8Array;
-      }
-
-      const { response } = result as BytesWithDetailsType;
-      if (!response.headers || !response.headers.get) {
-        throw new Error('makeProxiedRequest: Problem retrieving header value');
-      }
-
-      const range = response.headers.get('content-range');
-      const match = PARSE_RANGE_HEADER.exec(range || '');
-
-      if (!match || !match[1]) {
-        throw new Error(
-          `makeProxiedRequest: Unable to parse total size from ${range}`
-        );
-      }
-
-      const totalSize = parseInt(match[1], 10);
-
-      return {
-        totalSize,
-        result: result as BytesWithDetailsType,
-      };
+    async function fetchBytesViaProxy(
+      params: ProxiedRequestParams
+    ): Promise<BytesWithDetailsType> {
+      return _outerAjax(params.url, {
+        responseType: 'byteswithdetails',
+        proxyUrl: contentProxyUrl,
+        type: params.method,
+        redirect: 'follow',
+        redactUrl: () => '[REDACTED_URL]',
+        headers: {
+          'X-SignalPadding': getHeaderPadding(),
+          ...params.headers,
+        },
+        version,
+        abortSignal: params.signal,
+      });
     }
 
     async function makeSfuRequest(
@@ -4565,11 +4680,11 @@ export function initialize({
       };
     }
 
-    async function getHasSubscription(
+    async function getSubscription(
       subscriberId: Uint8Array
-    ): Promise<boolean> {
+    ): Promise<SubscriptionResponseType> {
       const formattedId = toWebSafeBase64(Bytes.toBase64(subscriberId));
-      const data = await _ajax({
+      const response = await _ajax({
         call: 'subscriptions',
         httpType: 'GET',
         urlParameters: `/${formattedId}`,
@@ -4580,31 +4695,46 @@ export function initialize({
         redactUrl: _createRedactor(formattedId),
       });
 
-      return (
-        isRecord(data) &&
-        isRecord(data.subscription) &&
-        Boolean(data.subscription.active)
-      );
+      return parseUnknown(subscriptionResponseSchema, response);
+    }
+
+    async function getHasSubscription(
+      subscriberId: Uint8Array
+    ): Promise<boolean> {
+      const data = await getSubscription(subscriberId);
+      return data.subscription.active;
     }
 
     function getProvisioningResource(
-      handler: IRequestHandler
+      handler: IRequestHandler,
+      timeout?: number
     ): Promise<IWebSocketResource> {
-      return socketManager.getProvisioningResource(handler);
+      return socketManager.getProvisioningResource(handler, timeout);
     }
 
     async function cdsLookup({
       e164s,
       acisAndAccessKeys = [],
       returnAcisWithoutUaks,
-      useLibsignal,
     }: CdsLookupOptionsType): Promise<CDSResponseType> {
       return cds.request({
         e164s,
         acisAndAccessKeys,
         returnAcisWithoutUaks,
-        useLibsignal,
       });
     }
   }
 }
+
+// TODO: DESKTOP-8300
+const onIncorrectHeadersFromStorageService = throttle(
+  () => {
+    if (!isProduction(window.getVersion())) {
+      window.reduxActions.toast.showToast({
+        toastType: ToastType.InvalidStorageServiceHeaders,
+      });
+    }
+  },
+  5 * MINUTE,
+  { trailing: false }
+);

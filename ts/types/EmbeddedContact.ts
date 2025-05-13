@@ -10,10 +10,11 @@ import type { ReadonlyMessageAttributesType } from '../model-types.d';
 import { isNotNil } from '../util/isNotNil';
 import {
   format as formatPhoneNumber,
-  parse as parsePhoneNumber,
+  normalize as normalizePhoneNumber,
 } from './PhoneNumber';
 import type {
   AttachmentType,
+  AttachmentForUIType,
   AttachmentWithHydratedData,
   LocalAttachmentV2Type,
   UploadedAttachmentType,
@@ -26,9 +27,9 @@ import { getLocalAttachmentUrl } from '../util/getLocalAttachmentUrl';
 
 type GenericEmbeddedContactType<AvatarType> = {
   name?: Name;
-  number?: Array<Phone>;
-  email?: Array<Email>;
-  address?: Array<PostalAddress>;
+  number?: ReadonlyArray<Phone>;
+  email?: ReadonlyArray<Email>;
+  address?: ReadonlyArray<PostalAddress>;
   avatar?: AvatarType;
   organization?: string;
 
@@ -38,6 +39,7 @@ type GenericEmbeddedContactType<AvatarType> = {
 };
 
 export type EmbeddedContactType = GenericEmbeddedContactType<Avatar>;
+export type EmbeddedContactForUIType = GenericEmbeddedContactType<AvatarForUI>;
 export type EmbeddedContactWithHydratedAvatar =
   GenericEmbeddedContactType<AvatarWithHydratedData>;
 export type EmbeddedContactWithUploadedAvatar =
@@ -95,6 +97,7 @@ type GenericAvatar<Attachment> = {
 };
 
 export type Avatar = GenericAvatar<AttachmentType>;
+export type AvatarForUI = GenericAvatar<AttachmentForUIType>;
 export type AvatarWithHydratedData = GenericAvatar<AttachmentWithHydratedData>;
 export type UploadedAvatar = GenericAvatar<UploadedAttachmentType>;
 
@@ -154,21 +157,25 @@ export function embeddedContactSelector(
     firstNumber?: string;
     serviceId?: ServiceIdString;
   }
-): ReadonlyDeep<EmbeddedContactType> {
+): ReadonlyDeep<EmbeddedContactForUIType> {
   const { firstNumber, serviceId, regionCode } = options;
 
-  let { avatar } = contact;
+  const { avatar } = contact;
+  let avatarForUI: EmbeddedContactForUIType['avatar'];
   if (avatar && avatar.avatar) {
     if (avatar.avatar.error) {
-      avatar = undefined;
+      avatarForUI = undefined;
     } else {
-      avatar = {
+      avatarForUI = {
         ...avatar,
         avatar: {
           ...avatar.avatar,
           path: avatar.avatar.path
             ? getLocalAttachmentUrl(avatar.avatar)
             : undefined,
+
+          // `error` case is handled above
+          isPermanentlyUndownloadable: false,
         },
       };
     }
@@ -178,7 +185,7 @@ export function embeddedContactSelector(
     ...contact,
     firstNumber,
     serviceId,
-    avatar,
+    avatar: avatarForUI,
     number:
       contact.number &&
       contact.number.map(item => ({
@@ -317,7 +324,7 @@ export function _validate(
   return undefined;
 }
 
-function parsePhoneItem(
+export function parsePhoneItem(
   item: Phone,
   { regionCode }: { regionCode: string | undefined }
 ): Phone | undefined {
@@ -325,10 +332,14 @@ function parsePhoneItem(
     return undefined;
   }
 
+  const value = regionCode
+    ? normalizePhoneNumber(item.value, { regionCode })
+    : item.value;
+
   return {
     ...item,
     type: item.type || DEFAULT_PHONE_TYPE,
-    value: parsePhoneNumber(item.value, { regionCode }),
+    value: value ?? item.value,
   };
 }
 

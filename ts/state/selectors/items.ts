@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createSelector } from 'reselect';
-import { isInteger } from 'lodash';
 
 import { ITEM_NAME as UNIVERSAL_EXPIRE_TIMER_ITEM } from '../../util/universalExpireTimer';
 import { innerIsBucketValueEnabled } from '../../RemoteConfig';
@@ -19,6 +18,11 @@ import { getPreferredReactionEmoji as getPreferredReactionEmojiFromStoredValue }
 import { DurationInSeconds } from '../../util/durations';
 import * as Bytes from '../../Bytes';
 import { contactByEncryptedUsernameRoute } from '../../util/signalRoutes';
+import { isNotUpdatable } from '../../util/version';
+import {
+  EmojiSkinTone,
+  isValidEmojiSkinTone,
+} from '../../components/fun/data/emojis';
 
 const DEFAULT_PREFERRED_LEFT_PANE_WIDTH = 320;
 
@@ -152,15 +156,10 @@ export const getCustomColors = createSelector(
     state.customColors?.colors
 );
 
-export const getEmojiSkinTone = createSelector(
+export const getEmojiSkinToneDefault = createSelector(
   getItems,
-  ({ skinTone }: Readonly<ItemsStateType>): number =>
-    typeof skinTone === 'number' &&
-    isInteger(skinTone) &&
-    skinTone >= 0 &&
-    skinTone <= 5
-      ? skinTone
-      : 0
+  ({ emojiSkinToneDefault }: Readonly<ItemsStateType>): EmojiSkinTone | null =>
+    isValidEmojiSkinTone(emojiSkinToneDefault) ? emojiSkinToneDefault : null
 );
 
 export const getPreferredLeftPaneWidth = createSelector(
@@ -174,11 +173,14 @@ export const getPreferredLeftPaneWidth = createSelector(
 
 export const getPreferredReactionEmoji = createSelector(
   getItems,
-  getEmojiSkinTone,
-  (state: Readonly<ItemsStateType>, skinTone: number): Array<string> =>
+  getEmojiSkinToneDefault,
+  (
+    state: Readonly<ItemsStateType>,
+    emojiSkinToneDefault: EmojiSkinTone | null
+  ): Array<string> =>
     getPreferredReactionEmojiFromStoredValue(
       state.preferredReactionEmoji,
-      skinTone
+      emojiSkinToneDefault ?? EmojiSkinTone.None
     )
 );
 
@@ -215,8 +217,13 @@ export const getRemoteBuildExpiration = createSelector(
 
 export const getAutoDownloadUpdate = createSelector(
   getItems,
-  (state: ItemsStateType): boolean =>
-    Boolean(state['auto-download-update'] ?? true)
+  (state: ItemsStateType): boolean => {
+    if (isNotUpdatable(window.getVersion())) {
+      return false;
+    }
+
+    return Boolean(state['auto-download-update'] ?? true);
+  }
 );
 
 export const getTextFormattingEnabled = createSelector(
@@ -268,7 +275,7 @@ export const getBackupMediaDownloadProgress = createSelector(
   })
 );
 
-export const getIsRestoredFromBackup = createSelector(
+export const getServerAlerts = createSelector(
   getItems,
-  (state: ItemsStateType): boolean => state.isRestoredFromBackup === true
+  (state: ItemsStateType) => state.serverAlerts ?? {}
 );

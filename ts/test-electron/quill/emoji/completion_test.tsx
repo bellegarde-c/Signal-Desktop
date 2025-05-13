@@ -5,8 +5,12 @@ import { assert } from 'chai';
 import sinon from 'sinon';
 
 import { EmojiCompletion } from '../../../quill/emoji/completion';
-import type { InsertEmojiOptionsType } from '../../../quill/emoji/completion';
+import type {
+  EmojiCompletionOptions,
+  InsertEmojiOptionsType,
+} from '../../../quill/emoji/completion';
 import { createSearch } from '../../../components/emoji/lib';
+import { EmojiSkinTone } from '../../../components/fun/data/emojis';
 
 describe('emojiCompletion', () => {
   let emojiCompletion: EmojiCompletion;
@@ -25,10 +29,10 @@ describe('emojiCompletion', () => {
       setSelection: sinon.stub(),
       updateContents: sinon.stub(),
     };
-    const options = {
+    const options: EmojiCompletionOptions = {
       onPickEmoji: sinon.stub(),
       setEmojiPickerElement: sinon.stub(),
-      skinTone: 0,
+      emojiSkinToneDefault: EmojiSkinTone.None,
       search: createSearch([
         { shortName: 'smile', tags: [], rank: 0 },
         { shortName: 'smile_cat', tags: [], rank: 0 },
@@ -46,7 +50,7 @@ describe('emojiCompletion', () => {
     it('returns left and right text', () => {
       mockQuill.getSelection.returns({ index: 0, length: 0 });
       const blot = {
-        text: ':smile:',
+        value: () => ':smile:',
       };
       mockQuill.getLeaf.returns([blot, 2]);
       const [leftLeafText, rightLeafText] =
@@ -79,7 +83,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text: 'smi',
+          value: () => 'smi',
         };
         mockQuill.getLeaf.returns([blot, 3]);
 
@@ -99,7 +103,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text: '10:30',
+          value: () => '10:30',
         };
         mockQuill.getLeaf.returns([blot, 5]);
 
@@ -119,7 +123,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text: ':s',
+          value: () => ':s',
         };
         mockQuill.getLeaf.returns([blot, 2]);
 
@@ -139,7 +143,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text: ':smy',
+          value: () => ':smy',
         };
         mockQuill.getLeaf.returns([blot, 4]);
 
@@ -159,7 +163,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text: ':smi',
+          value: () => ':smi',
         };
         mockQuill.getLeaf.returns([blot, 4]);
 
@@ -185,7 +189,7 @@ describe('emojiCompletion', () => {
 
         beforeEach(() => {
           const blot = {
-            text,
+            value: () => text,
           };
           mockQuill.getLeaf.returns([blot, 7]);
 
@@ -210,7 +214,7 @@ describe('emojiCompletion', () => {
 
         beforeEach(() => {
           const blot = {
-            text,
+            value: () => text,
           };
           mockQuill.getSelection.returns({
             index: 13,
@@ -246,7 +250,7 @@ describe('emojiCompletion', () => {
 
         beforeEach(() => {
           const blot = {
-            text,
+            value: () => text,
           };
           mockQuill.getLeaf.returns([blot, 7]);
 
@@ -274,7 +278,7 @@ describe('emojiCompletion', () => {
       describe('and given it matches a short name', () => {
         beforeEach(() => {
           const blot = {
-            text: validEmoji,
+            value: () => validEmoji,
           };
           mockQuill.getLeaf.returns([blot, middleCursorIndex]);
 
@@ -297,7 +301,7 @@ describe('emojiCompletion', () => {
       describe('and given it does not match a short name', () => {
         beforeEach(() => {
           const blot = {
-            text: invalidEmoji,
+            value: () => invalidEmoji,
           };
           mockQuill.getLeaf.returns([blot, middleCursorIndex]);
 
@@ -323,7 +327,7 @@ describe('emojiCompletion', () => {
 
         beforeEach(() => {
           const blot = {
-            text,
+            value: () => text,
           };
           mockQuill.getLeaf.returns([blot, 6]);
 
@@ -365,7 +369,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text,
+          value: () => text,
         };
         mockQuill.getLeaf.returns([blot, index]);
 
@@ -393,7 +397,7 @@ describe('emojiCompletion', () => {
         });
 
         const blot = {
-          text,
+          value: () => text,
         };
         mockQuill.getLeaf.returns([blot, index]);
 

@@ -38,7 +38,6 @@ import type {
   GetGroupLogOptionsType,
   GroupCredentialsType,
   GroupLogResponseType,
-  ProxiedRequestOptionsType,
   WebAPIType,
 } from './WebAPI';
 import createTaskWithTimeout from './TaskWithTimeout';
@@ -82,12 +81,12 @@ import {
 import { missingCaseError } from '../util/missingCaseError';
 import { drop } from '../util/drop';
 import type {
-  ConversationToDelete,
+  ConversationIdentifier,
   DeleteForMeSyncEventData,
   DeleteMessageSyncTarget,
-  MessageToDelete,
+  AddressableMessage,
 } from './messageReceiverEvents';
-import { getConversationFromTarget } from '../util/deleteForMe';
+import { getConversationFromTarget } from '../util/syncIdentifiers';
 import type { CallDetails, CallHistoryDetails } from '../types/CallDisposition';
 import {
   AdhocCallStatus,
@@ -414,7 +413,7 @@ class Message {
       proto.reaction.emoji = this.reaction.emoji || null;
       proto.reaction.remove = this.reaction.remove || false;
       proto.reaction.targetAuthorAci = this.reaction.targetAuthorAci || null;
-      proto.reaction.targetTimestamp =
+      proto.reaction.targetSentTimestamp =
         this.reaction.targetTimestamp === undefined
           ? null
           : Long.fromNumber(this.reaction.targetTimestamp);
@@ -422,7 +421,7 @@ class Message {
 
     if (Array.isArray(this.preview)) {
       proto.preview = this.preview.map(preview => {
-        const item = new Proto.DataMessage.Preview();
+        const item = new Proto.Preview();
         item.title = preview.title;
         item.url = preview.url;
         item.description = preview.description || null;
@@ -504,7 +503,8 @@ class Message {
     }
 
     if (this.quote) {
-      const { BodyRange: ProtoBodyRange, Quote } = Proto.DataMessage;
+      const ProtoBodyRange = Proto.BodyRange;
+      const { Quote } = Proto.DataMessage;
 
       proto.quote = new Quote();
       const { quote } = proto;
@@ -1256,7 +1256,7 @@ export default class MessageSender {
     encodedDataMessage,
     encodedEditMessage,
     timestamp,
-    destination,
+    destinationE164,
     destinationServiceId,
     expirationStartTimestamp,
     conversationIdsSentTo = [],
@@ -1270,7 +1270,7 @@ export default class MessageSender {
     encodedDataMessage?: Uint8Array;
     encodedEditMessage?: Uint8Array;
     timestamp: number;
-    destination: string | undefined;
+    destinationE164: string | undefined;
     destinationServiceId: ServiceIdString | undefined;
     expirationStartTimestamp: number | null;
     conversationIdsSentTo?: Iterable<string>;
@@ -1293,8 +1293,8 @@ export default class MessageSender {
       const dataMessage = Proto.DataMessage.decode(encodedDataMessage);
       sentMessage.message = dataMessage;
     }
-    if (destination) {
-      sentMessage.destination = destination;
+    if (destinationE164) {
+      sentMessage.destinationE164 = destinationE164;
     }
     if (destinationServiceId) {
       sentMessage.destinationServiceId = destinationServiceId;
@@ -1325,10 +1325,6 @@ export default class MessageSender {
             new Proto.SyncMessage.Sent.UnidentifiedDeliveryStatus();
           const conv = window.ConversationController.get(conversationId);
           if (conv) {
-            const e164 = conv.get('e164');
-            if (e164) {
-              status.destination = e164;
-            }
             const serviceId = conv.getServiceId();
             if (serviceId) {
               status.destinationServiceId = serviceId;
@@ -1613,6 +1609,35 @@ export default class MessageSender {
     };
   }
 
+  static getAttachmentBackfillSyncMessage(
+    targetConversation: ConversationIdentifier,
+    targetMessage: AddressableMessage
+  ): SingleProtoJobData {
+    const myAci = window.textsecure.storage.user.getCheckedAci();
+
+    const syncMessage = this.createSyncMessage();
+    syncMessage.attachmentBackfillRequest = {
+      targetMessage: toAddressableMessage(targetMessage),
+      targetConversation: toConversationIdentifier(targetConversation),
+    };
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: myAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'attachmentBackfillRequestSync',
+      urgent: false,
+    };
+  }
+
   static getClearCallHistoryMessage(
     latestCall: CallHistoryDetails
   ): SingleProtoJobData {
@@ -1763,7 +1788,7 @@ export default class MessageSender {
         `syncViewOnceOpen: ${viewOnceOpens.length} opens provided. Can only handle one.`
       );
     }
-    const { senderE164, senderAci, timestamp } = viewOnceOpens[0];
+    const { senderAci, timestamp } = viewOnceOpens[0];
 
     if (!senderAci) {
       throw new Error('syncViewOnceOpen: Missing senderAci');
@@ -1774,9 +1799,6 @@ export default class MessageSender {
     const syncMessage = MessageSender.createSyncMessage();
 
     const viewOnceOpen = new Proto.SyncMessage.ViewOnceOpen();
-    if (senderE164 !== undefined) {
-      viewOnceOpen.sender = senderE164;
-    }
     viewOnceOpen.senderAci = senderAci;
     viewOnceOpen.timestamp = Long.fromNumber(timestamp);
     syncMessage.viewOnceOpen = viewOnceOpen;
@@ -1796,9 +1818,42 @@ export default class MessageSender {
     });
   }
 
+  static getBlockSync(
+    options: Readonly<{
+      e164s: Array<string>;
+      acis: Array<string>;
+      groupIds: Array<Uint8Array>;
+    }>
+  ): SingleProtoJobData {
+    const myAci = window.textsecure.storage.user.getCheckedAci();
+
+    const syncMessage = MessageSender.createSyncMessage();
+
+    const blocked = new Proto.SyncMessage.Blocked();
+    blocked.numbers = options.e164s;
+    blocked.acis = options.acis;
+    blocked.groupIds = options.groupIds;
+    syncMessage.blocked = blocked;
+
+    const contentMessage = new Proto.Content();
+    contentMessage.syncMessage = syncMessage;
+
+    const { ContentHint } = Proto.UnidentifiedSenderMessage.Message;
+
+    return {
+      contentHint: ContentHint.RESENDABLE,
+      serviceId: myAci,
+      isSyncMessage: true,
+      protoBase64: Bytes.toBase64(
+        Proto.Content.encode(contentMessage).finish()
+      ),
+      type: 'blockSync',
+      urgent: false,
+    };
+  }
+
   static getMessageRequestResponseSync(
     options: Readonly<{
-      threadE164?: string;
       threadAci?: AciString;
       groupId?: Uint8Array;
       type: number;
@@ -1809,9 +1864,6 @@ export default class MessageSender {
     const syncMessage = MessageSender.createSyncMessage();
 
     const response = new Proto.SyncMessage.MessageRequestResponse();
-    if (options.threadE164 !== undefined) {
-      response.threadE164 = options.threadE164;
-    }
     if (options.threadAci !== undefined) {
       response.threadAci = options.threadAci;
     }
@@ -1895,9 +1947,6 @@ export default class MessageSender {
 
     const verified = new Proto.Verified();
     verified.state = state;
-    if (destinationE164) {
-      verified.destination = destinationE164;
-    }
     if (destinationAci) {
       verified.destinationAci = destinationAci;
     }
@@ -1928,7 +1977,7 @@ export default class MessageSender {
 
   async sendCallingMessage(
     serviceId: ServiceIdString,
-    callingMessage: Readonly<Proto.ICallingMessage>,
+    callingMessage: Readonly<Proto.ICallMessage>,
     timestamp: number,
     urgent: boolean,
     options?: Readonly<SendOptionsType>
@@ -1936,7 +1985,7 @@ export default class MessageSender {
     const recipients = [serviceId];
 
     const contentMessage = new Proto.Content();
-    contentMessage.callingMessage = callingMessage;
+    contentMessage.callMessage = callingMessage;
 
     const conversation = window.ConversationController.get(serviceId);
 
@@ -1967,7 +2016,7 @@ export default class MessageSender {
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.DELIVERY,
     });
@@ -1981,7 +2030,7 @@ export default class MessageSender {
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.READ,
     });
@@ -1995,13 +2044,13 @@ export default class MessageSender {
       options?: Readonly<SendOptionsType>;
     }>
   ): Promise<CallbackResultType> {
-    return this.sendReceiptMessage({
+    return this.#sendReceiptMessage({
       ...options,
       type: Proto.ReceiptMessage.Type.VIEWED,
     });
   }
 
-  private async sendReceiptMessage({
+  async #sendReceiptMessage({
     senderAci,
     timestamps,
     type,
@@ -2406,13 +2455,6 @@ export default class MessageSender {
     return this.server.fetchLinkPreviewImage(href, abortSignal);
   }
 
-  async makeProxiedRequest(
-    url: string,
-    options?: Readonly<ProxiedRequestOptionsType>
-  ): Promise<ReturnType<WebAPIType['makeProxiedRequest']>> {
-    return this.server.makeProxiedRequest(url, options);
-  }
-
   async getStorageCredentials(): Promise<StorageServiceCredentials> {
     return this.server.getStorageCredentials();
   }
@@ -2452,8 +2494,8 @@ export default class MessageSender {
 
 // Helpers
 
-function toAddressableMessage(message: MessageToDelete) {
-  const targetMessage = new Proto.SyncMessage.DeleteForMe.AddressableMessage();
+function toAddressableMessage(message: AddressableMessage) {
+  const targetMessage = new Proto.AddressableMessage();
   targetMessage.sentTimestamp = Long.fromNumber(message.sentAt);
 
   if (message.type === 'aci') {
@@ -2469,9 +2511,8 @@ function toAddressableMessage(message: MessageToDelete) {
   return targetMessage;
 }
 
-function toConversationIdentifier(conversation: ConversationToDelete) {
-  const targetConversation =
-    new Proto.SyncMessage.DeleteForMe.ConversationIdentifier();
+function toConversationIdentifier(conversation: ConversationIdentifier) {
+  const targetConversation = new Proto.ConversationIdentifier();
 
   if (conversation.type === 'aci') {
     targetConversation.threadServiceId = conversation.aci;

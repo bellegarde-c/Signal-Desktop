@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from '@signalapp/better-sqlite3';
+import type { Database } from '@signalapp/sqlcipher';
 import { keyBy } from 'lodash';
 import { v4 as generateUuid } from 'uuid';
 
@@ -14,7 +14,6 @@ import {
   objectToJSON,
   jsonToObject,
 } from '../util';
-import type { Query, EmptyQuery } from '../util';
 import type { WritableDB } from '../Interface';
 
 import updateToSchemaVersion41 from './41-uuid-keys';
@@ -102,10 +101,19 @@ import { updateToSchemaVersion1220 } from './1220-blob-sessions';
 import { updateToSchemaVersion1230 } from './1230-call-links-admin-key-index';
 import { updateToSchemaVersion1240 } from './1240-defunct-call-links-table';
 import { updateToSchemaVersion1250 } from './1250-defunct-call-links-storage';
+import { updateToSchemaVersion1260 } from './1260-sync-tasks-rowid';
+import { updateToSchemaVersion1270 } from './1270-normalize-messages';
+import { updateToSchemaVersion1280 } from './1280-blob-unprocessed';
+import { updateToSchemaVersion1290 } from './1290-int-unprocessed-source-device';
+import { updateToSchemaVersion1300 } from './1300-sticker-pack-refs';
+import { updateToSchemaVersion1310 } from './1310-muted-fixup';
+import { updateToSchemaVersion1320 } from './1320-unprocessed-received-at-date';
+import { updateToSchemaVersion1330 } from './1330-sync-tasks-type-index';
 import {
-  updateToSchemaVersion1260,
+  updateToSchemaVersion1340,
   version as MAX_VERSION,
-} from './1260-sync-tasks-rowid';
+} from './1340-recent-gifs';
+
 import { DataWriter } from '../Server';
 
 function updateToSchemaVersion1(
@@ -949,10 +957,10 @@ function updateToSchemaVersion20(
     // significantly, so we drop them and recreate them later.
     // Drop triggers
     const triggers = db
-      .prepare<EmptyQuery>(
+      .prepare(
         "SELECT * FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'messages'"
       )
-      .all();
+      .all<{ name: string; sql: string }>();
 
     for (const trigger of triggers) {
       db.exec(`DROP TRIGGER ${trigger.name}`);
@@ -977,28 +985,29 @@ function updateToSchemaVersion20(
 
     // Drop invalid groups and any associated messages
     const maybeInvalidGroups = db
-      .prepare<EmptyQuery>(
+      .prepare(
         "SELECT * FROM conversations WHERE type = 'group' AND members IS NULL;"
       )
-      .all();
+      .all<{ id: string; json: string }>();
     for (const group of maybeInvalidGroups) {
       const json: { id: string; members: Array<unknown> } = JSON.parse(
         group.json
       );
       if (!json.members || !json.members.length) {
-        db.prepare<Query>('DELETE FROM conversations WHERE id = $id;').run({
+        db.prepare('DELETE FROM conversations WHERE id = $id;').run({
           id: json.id,
         });
-        db.prepare<Query>(
-          'DELETE FROM messages WHERE conversationId = $id;'
-        ).run({ id: json.id });
+        db.prepare('DELETE FROM messages WHERE conversationId = $id;').run({
+          id: json.id,
+        });
       }
     }
 
     // Generate new IDs and alter data
-    const allConversations = db
-      .prepare<EmptyQuery>('SELECT * FROM conversations;')
-      .all();
+    const allConversations = db.prepare('SELECT * FROM conversations;').all<{
+      id: string;
+      type: string;
+    }>();
     const allConversationsByOldId = keyBy(allConversations, 'id');
 
     for (const row of allConversations) {
@@ -1015,7 +1024,7 @@ function updateToSchemaVersion20(
       }
       const patch = JSON.stringify(patchObj);
 
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE conversations
         SET id = $newId, json = JSON_PATCH(json, $patch)
@@ -1027,7 +1036,7 @@ function updateToSchemaVersion20(
         patch,
       });
       const messagePatch = JSON.stringify({ conversationId: newId });
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE messages
         SET conversationId = $newId, json = JSON_PATCH(json, $patch)
@@ -1041,7 +1050,7 @@ function updateToSchemaVersion20(
       members: string;
       json: string;
     }> = db
-      .prepare<EmptyQuery>(
+      .prepare(
         `
         SELECT id, members, json FROM conversations WHERE type = 'group';
         `
@@ -1080,7 +1089,7 @@ function updateToSchemaVersion20(
             profileSharing: false,
           };
 
-          db.prepare<Query>(
+          db.prepare(
             `
             UPDATE conversations
             SET
@@ -1105,7 +1114,7 @@ function updateToSchemaVersion20(
         members: newMembers,
       };
       const newMembersValue = newMembers.join(' ');
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE conversations
         SET members = $newMembersValue, json = $newJsonValue
@@ -1119,7 +1128,10 @@ function updateToSchemaVersion20(
     });
 
     // Update sessions to stable IDs
-    const allSessions = db.prepare<EmptyQuery>('SELECT * FROM sessions;').all();
+    const allSessions = db.prepare('SELECT * FROM sessions;').all<{
+      id: string;
+      json: string;
+    }>();
     for (const session of allSessions) {
       // Not using patch here so we can explicitly delete a property rather than
       // implicitly delete via null
@@ -1130,7 +1142,7 @@ function updateToSchemaVersion20(
         newJson.id = `${newJson.conversationId}.${newJson.deviceId}`;
       }
       delete newJson.number;
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE sessions
         SET id = $newId, json = $newJson, conversationId = $newConversationId
@@ -1145,13 +1157,14 @@ function updateToSchemaVersion20(
     }
 
     // Update identity keys to stable IDs
-    const allIdentityKeys = db
-      .prepare<EmptyQuery>('SELECT * FROM identityKeys;')
-      .all();
+    const allIdentityKeys = db.prepare('SELECT * FROM identityKeys;').all<{
+      json: string;
+      id: number;
+    }>();
     for (const identityKey of allIdentityKeys) {
       const newJson = JSON.parse(identityKey.json);
       newJson.id = allConversationsByOldId[newJson.id];
-      db.prepare<Query>(
+      db.prepare(
         `
         UPDATE identityKeys
         SET id = $newId, json = $newJson
@@ -2078,6 +2091,15 @@ export const SCHEMA_VERSIONS = [
   updateToSchemaVersion1240,
   updateToSchemaVersion1250,
   updateToSchemaVersion1260,
+  updateToSchemaVersion1270,
+  updateToSchemaVersion1280,
+  updateToSchemaVersion1290,
+
+  updateToSchemaVersion1300,
+  updateToSchemaVersion1310,
+  updateToSchemaVersion1320,
+  updateToSchemaVersion1330,
+  updateToSchemaVersion1340,
 ];
 
 export class DBVersionFromFutureError extends Error {
@@ -2089,10 +2111,12 @@ export function enableFTS5SecureDelete(db: Database, logger: LoggerType): void {
     db
       .prepare(
         `
-          SELECT v FROM messages_fts_config WHERE k is 'secure-delete';
-        `
+      SELECT v FROM messages_fts_config WHERE k is 'secure-delete';
+    `,
+        {
+          pluck: true,
+        }
       )
-      .pluck()
       .get() === 1;
 
   if (!isEnabled) {

@@ -17,6 +17,7 @@ import {
   mightBeOnBackupTier,
   type AttachmentType,
   AttachmentVariant,
+  AttachmentPermanentlyUndownloadableError,
 } from '../types/Attachment';
 import * as Bytes from '../Bytes';
 import {
@@ -115,9 +116,13 @@ export async function downloadAttachment(
 
   const { digest, incrementalMac, chunkSize, key, size } = attachment;
 
-  strictAssert(digest, `${logId}: missing digest`);
-  strictAssert(key, `${logId}: missing key`);
-  strictAssert(isNumber(size), `${logId}: missing size`);
+  try {
+    strictAssert(digest, `${logId}: missing digest`);
+    strictAssert(key, `${logId}: missing key`);
+    strictAssert(isNumber(size), `${logId}: missing size`);
+  } catch (error) {
+    throw new AttachmentPermanentlyUndownloadableError(error.message);
+  }
 
   const mediaTier =
     options?.mediaTier ??
@@ -126,10 +131,12 @@ export async function downloadAttachment(
   let downloadResult: Awaited<ReturnType<typeof downloadToDisk>>;
 
   let { downloadPath } = attachment;
+  const absoluteDownloadPath = downloadPath
+    ? window.Signal.Migrations.getAbsoluteDownloadsPath(downloadPath)
+    : undefined;
   let downloadOffset = 0;
-  if (downloadPath) {
-    const absoluteDownloadPath =
-      window.Signal.Migrations.getAbsoluteDownloadsPath(downloadPath);
+
+  if (absoluteDownloadPath) {
     try {
       ({ size: downloadOffset } = await stat(absoluteDownloadPath));
     } catch (error) {
@@ -139,7 +146,7 @@ export async function downloadAttachment(
           Errors.toLogFormat(error)
         );
         try {
-          await safeUnlink(downloadPath);
+          await safeUnlink(absoluteDownloadPath);
         } catch {
           downloadPath = undefined;
         }
@@ -148,9 +155,9 @@ export async function downloadAttachment(
   }
 
   // Start over if we go over the size
-  if (downloadOffset >= size && downloadPath) {
+  if (downloadOffset >= size && absoluteDownloadPath) {
     log.warn('downloadAttachment: went over, retrying');
-    await safeUnlink(downloadPath);
+    await safeUnlink(absoluteDownloadPath);
     downloadOffset = 0;
   }
 
@@ -174,6 +181,9 @@ export async function downloadAttachment(
         downloadOffset,
       },
     });
+    log.info(
+      `${logId}: calling downloadToDisk with ${downloadPath ? '' : 'no '}downloadPath`
+    );
     downloadResult = await downloadToDisk({
       downloadOffset,
       downloadPath,

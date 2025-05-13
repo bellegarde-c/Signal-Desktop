@@ -21,7 +21,7 @@ import { getAuthorId } from './messages/helpers';
 import { maybeDeriveGroupV2Id } from './groups';
 import { assertDev, strictAssert } from './util/assert';
 import { drop } from './util/drop';
-import { isGroupV1, isGroupV2 } from './util/whatTypeOfConversation';
+import { isGroup, isGroupV1, isGroupV2 } from './util/whatTypeOfConversation';
 import type { ServiceIdString, AciString, PniString } from './types/ServiceId';
 import {
   isServiceIdString,
@@ -39,6 +39,9 @@ import * as StorageService from './services/storage';
 import type { ConversationPropsForUnreadStats } from './util/countUnreadStats';
 import { countAllConversationsUnreadStats } from './util/countUnreadStats';
 import { isTestOrMockEnvironment } from './environment';
+import { isConversationAccepted } from './util/isConversationAccepted';
+import { areWePending } from './util/groupMembershipUtils';
+import { conversationJobQueue } from './jobs/conversationJobQueue';
 
 type ConvoMatchType =
   | {
@@ -149,17 +152,15 @@ export function start(): void {
 }
 
 export class ConversationController {
-  private _initialFetchComplete = false;
+  #_initialFetchComplete = false;
+  #isReadOnly = false;
 
   private _initialPromise: undefined | Promise<void>;
 
-  private _conversationOpenStart = new Map<string, number>();
-
-  private _hasQueueEmptied = false;
-
-  private _combineConversationsQueue = new PQueue({ concurrency: 1 });
-
-  private _signalConversationId: undefined | string;
+  #_conversationOpenStart = new Map<string, number>();
+  #_hasQueueEmptied = false;
+  #_combineConversationsQueue = new PQueue({ concurrency: 1 });
+  #_signalConversationId: undefined | string;
 
   constructor(private _conversations: ConversationModelCollectionType) {
     const debouncedUpdateUnreadCount = debounce(
@@ -192,7 +193,7 @@ export class ConversationController {
   }
 
   updateUnreadCount(): void {
-    if (!this._hasQueueEmptied) {
+    if (!this.#_hasQueueEmptied) {
       return;
     }
 
@@ -238,12 +239,12 @@ export class ConversationController {
   }
 
   onEmpty(): void {
-    this._hasQueueEmptied = true;
+    this.#_hasQueueEmptied = true;
     this.updateUnreadCount();
   }
 
   get(id?: string | null): ConversationModel | undefined {
-    if (!this._initialFetchComplete) {
+    if (!this.#_initialFetchComplete) {
       throw new Error(
         'ConversationController.get() needs complete initial fetch'
       );
@@ -283,7 +284,7 @@ export class ConversationController {
       );
     }
 
-    if (!this._initialFetchComplete) {
+    if (!this.#_initialFetchComplete) {
       throw new Error(
         'ConversationController.get() needs complete initial fetch'
       );
@@ -292,6 +293,10 @@ export class ConversationController {
     let conversation = this._conversations.get(identifier);
     if (conversation) {
       return conversation;
+    }
+
+    if (this.#isReadOnly) {
+      throw new Error('ConversationController is read-only');
     }
 
     const id = generateUuid();
@@ -460,13 +465,13 @@ export class ConversationController {
       await updateConversation(conversation.attributes);
     }
 
-    this._signalConversationId = conversation.id;
+    this.#_signalConversationId = conversation.id;
 
     return conversation;
   }
 
   isSignalConversationId(conversationId: string): boolean {
-    return this._signalConversationId === conversationId;
+    return this.#_signalConversationId === conversationId;
   }
 
   areWePrimaryDevice(): boolean {
@@ -841,14 +846,14 @@ export class ConversationController {
   }
 
   checkForConflicts(): Promise<void> {
-    return this._combineConversationsQueue.add(() =>
-      this.doCheckForConflicts()
+    return this.#_combineConversationsQueue.add(() =>
+      this.#doCheckForConflicts()
     );
   }
 
   // Note: `doCombineConversations` is directly used within this function since both
   //   run on `_combineConversationsQueue` queue and we don't want deadlocks.
-  private async doCheckForConflicts(): Promise<void> {
+  async #doCheckForConflicts(): Promise<void> {
     log.info('ConversationController.checkForConflicts: starting...');
     const byServiceId = Object.create(null);
     const byE164 = Object.create(null);
@@ -884,7 +889,7 @@ export class ConversationController {
           if (conversation.get('e164')) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: conversation,
               obsolete: existing,
             });
@@ -892,7 +897,7 @@ export class ConversationController {
           } else {
             // Keep existing - note that this applies if neither had an e164
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: existing,
               obsolete: conversation,
             });
@@ -918,7 +923,7 @@ export class ConversationController {
           if (conversation.get('e164') || conversation.getPni()) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: conversation,
               obsolete: existing,
             });
@@ -926,7 +931,7 @@ export class ConversationController {
           } else {
             // Keep existing - note that this applies if neither had an e164
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: existing,
               obsolete: conversation,
             });
@@ -964,7 +969,7 @@ export class ConversationController {
           if (conversation.getServiceId()) {
             // Keep new one
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: conversation,
               obsolete: existing,
             });
@@ -972,7 +977,7 @@ export class ConversationController {
           } else {
             // Keep existing - note that this applies if neither had a service id
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: existing,
               obsolete: conversation,
             });
@@ -1010,14 +1015,14 @@ export class ConversationController {
             !isGroupV2(existing.attributes)
           ) {
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: conversation,
               obsolete: existing,
             });
             byGroupV2Id[groupV2Id] = conversation;
           } else {
             // eslint-disable-next-line no-await-in-loop
-            await this.doCombineConversations({
+            await this.#doCombineConversations({
               current: existing,
               obsolete: conversation,
             });
@@ -1032,12 +1037,12 @@ export class ConversationController {
   async combineConversations(
     options: CombineConversationsParams
   ): Promise<void> {
-    return this._combineConversationsQueue.add(() =>
-      this.doCombineConversations(options)
+    return this.#_combineConversationsQueue.add(() =>
+      this.#doCombineConversations(options)
     );
   }
 
-  private async doCombineConversations({
+  async #doCombineConversations({
     current,
     obsolete,
     obsoleteTitleInfo,
@@ -1302,14 +1307,24 @@ export class ConversationController {
     );
   }
 
+  setReadOnly(value: boolean): void {
+    if (this.#isReadOnly === value) {
+      log.warn(`ConversationController: already at readOnly=${value}`);
+      return;
+    }
+
+    log.info(`ConversationController: readOnly=${value}`);
+    this.#isReadOnly = value;
+  }
+
   reset(): void {
     delete this._initialPromise;
-    this._initialFetchComplete = false;
+    this.#_initialFetchComplete = false;
     this._conversations.reset([]);
   }
 
   load(): Promise<void> {
-    this._initialPromise ||= this.doLoad();
+    this._initialPromise ||= this.#doLoad();
     return this._initialPromise;
   }
 
@@ -1346,17 +1361,63 @@ export class ConversationController {
   }
 
   onConvoOpenStart(conversationId: string): void {
-    this._conversationOpenStart.set(conversationId, Date.now());
+    this.#_conversationOpenStart.set(conversationId, Date.now());
   }
 
   onConvoMessageMount(conversationId: string): void {
-    const loadStart = this._conversationOpenStart.get(conversationId);
+    const loadStart = this.#_conversationOpenStart.get(conversationId);
     if (loadStart === undefined) {
       return;
     }
 
-    this._conversationOpenStart.delete(conversationId);
+    this.#_conversationOpenStart.delete(conversationId);
     this.get(conversationId)?.onOpenComplete(loadStart);
+  }
+
+  migrateAvatarsForNonAcceptedConversations(): void {
+    if (window.storage.get('avatarsHaveBeenMigrated')) {
+      return;
+    }
+    const conversations = this.getAll();
+    let numberOfConversationsMigrated = 0;
+    for (const conversation of conversations) {
+      const attrs = conversation.attributes;
+      if (
+        !isConversationAccepted(attrs) ||
+        (isGroup(attrs) && areWePending(attrs))
+      ) {
+        const avatarPath = attrs.avatar?.path;
+        const profileAvatarPath = attrs.profileAvatar?.path;
+
+        if (avatarPath || profileAvatarPath) {
+          drop(
+            (async () => {
+              const { doesAttachmentExist, deleteAttachmentData } =
+                window.Signal.Migrations;
+              if (avatarPath && (await doesAttachmentExist(avatarPath))) {
+                await deleteAttachmentData(avatarPath);
+              }
+
+              if (
+                profileAvatarPath &&
+                (await doesAttachmentExist(profileAvatarPath))
+              ) {
+                await deleteAttachmentData(profileAvatarPath);
+              }
+            })()
+          );
+        }
+
+        conversation.set('avatar', undefined);
+        conversation.set('profileAvatar', undefined);
+        drop(updateConversation(conversation.attributes));
+        numberOfConversationsMigrated += 1;
+      }
+    }
+    log.info(
+      `ConversationController: unset avatars for ${numberOfConversationsMigrated} unaccepted conversations`
+    );
+    drop(window.storage.put('avatarsHaveBeenMigrated', true));
   }
 
   repairPinnedConversations(): void {
@@ -1424,7 +1485,7 @@ export class ConversationController {
     }
   }
 
-  private async doLoad(): Promise<void> {
+  async #doLoad(): Promise<void> {
     log.info('ConversationController: starting initial fetch');
 
     if (this._conversations.length) {
@@ -1460,7 +1521,7 @@ export class ConversationController {
 
       // It is alright to call it first because the 'add'/'update' events are
       // triggered after updating the collection.
-      this._initialFetchComplete = true;
+      this.#_initialFetchComplete = true;
 
       // Hydrate the final set of conversations
       batchDispatch(() => {
@@ -1519,5 +1580,46 @@ export class ConversationController {
       );
       throw error;
     }
+  }
+  async archiveSessionsForConversation(
+    conversationId: string | undefined
+  ): Promise<void> {
+    const conversation = window.ConversationController.get(conversationId);
+    if (!conversation) {
+      return;
+    }
+
+    const logId = `archiveSessionsForConversation/${conversation.idForLogging()}`;
+
+    log.info(`${logId}: Starting. First archiving sessions...`);
+    const recipients = conversation.getRecipients();
+    const queue = new PQueue({ concurrency: 1 });
+    recipients.forEach(serviceId => {
+      drop(
+        queue.add(async () => {
+          await window.textsecure.storage.protocol.archiveAllSessions(
+            serviceId
+          );
+        })
+      );
+    });
+    await queue.onEmpty();
+
+    if (conversation.get('senderKeyInfo')) {
+      log.info(`${logId}: Next, clearing senderKeyInfo...`);
+      conversation.set({ senderKeyInfo: undefined });
+      await DataWriter.updateConversation(conversation.attributes);
+    }
+
+    log.info(`${logId}: Now queuing null message send...`);
+    const job = await conversationJobQueue.add({
+      type: 'NullMessage',
+      conversationId: conversation.id,
+    });
+
+    log.info(`${logId}: Send queued; waiting for send completion...`);
+    await job.completion;
+
+    log.info(`${logId}: Complete!`);
   }
 }

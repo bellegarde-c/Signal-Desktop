@@ -156,10 +156,10 @@ export class SuccessfulDecryptEvent extends ConfirmableEvent {
 }
 
 export type DecryptionErrorEventData = Readonly<{
-  cipherTextBytes?: Uint8Array;
-  cipherTextType?: number;
-  contentHint?: number;
-  groupId?: string;
+  cipherTextBytes: Uint8Array | undefined;
+  cipherTextType: number | undefined;
+  contentHint: number | undefined;
+  groupId: string | undefined;
   receivedAtCounter: number;
   receivedAtDate: number;
   senderDevice: number;
@@ -208,10 +208,10 @@ export class RetryRequestEvent extends ConfirmableEvent {
 
 export type SentEventData = Readonly<{
   envelopeId: string;
-  destination?: string;
+  destinationE164?: string;
   destinationServiceId?: ServiceIdString;
   timestamp?: number;
-  serverTimestamp?: number;
+  serverTimestamp: number;
   device: number | undefined;
   unidentifiedStatus: ProcessedSent['unidentifiedStatus'];
   message: ProcessedDataMessage;
@@ -254,8 +254,8 @@ export type MessageEventData = Readonly<{
   sourceDevice?: number;
   destinationServiceId: ServiceIdString;
   timestamp: number;
-  serverGuid?: string;
-  serverTimestamp?: number;
+  serverGuid: string;
+  serverTimestamp: number;
   unidentifiedDeliveryReceived: boolean;
   message: ProcessedDataMessage;
   receivedAtCounter: number;
@@ -311,25 +311,21 @@ export class ConfigurationEvent extends ConfirmableEvent {
 }
 
 export type ViewOnceOpenSyncOptions = {
-  source?: string;
   sourceAci?: AciString;
   timestamp?: number;
 };
 
 export class ViewOnceOpenSyncEvent extends ConfirmableEvent {
-  public readonly source?: string;
-
   public readonly sourceAci?: AciString;
 
   public readonly timestamp?: number;
 
   constructor(
-    { source, sourceAci, timestamp }: ViewOnceOpenSyncOptions,
+    { sourceAci, timestamp }: ViewOnceOpenSyncOptions,
     confirm: ConfirmCallback
   ) {
     super('viewOnceOpenSync', confirm);
 
-    this.source = source;
     this.sourceAci = sourceAci;
     this.timestamp = timestamp;
   }
@@ -345,8 +341,6 @@ export type MessageRequestResponseOptions = {
 };
 
 export class MessageRequestResponseEvent extends ConfirmableEvent {
-  public readonly threadE164?: string;
-
   public readonly threadAci?: AciString;
 
   public readonly messageRequestResponseType?: MessageRequestResponseOptions['messageRequestResponseType'];
@@ -360,7 +354,6 @@ export class MessageRequestResponseEvent extends ConfirmableEvent {
   constructor(
     {
       envelopeId,
-      threadE164,
       threadAci,
       messageRequestResponseType,
       groupId,
@@ -371,7 +364,6 @@ export class MessageRequestResponseEvent extends ConfirmableEvent {
     super('messageRequestResponse', confirm);
 
     this.envelopeId = envelopeId;
-    this.threadE164 = threadE164;
     this.threadAci = threadAci;
     this.messageRequestResponseType = messageRequestResponseType;
     this.groupId = groupId;
@@ -499,7 +491,7 @@ export class DeviceNameChangeSyncEvent extends ConfirmableEvent {
   }
 }
 
-const messageToDeleteSchema = z.union([
+const addressableMessageSchema = z.union([
   z.object({
     type: z.literal('aci').readonly(),
     authorAci: z.string().refine(isAciString),
@@ -517,9 +509,9 @@ const messageToDeleteSchema = z.union([
   }),
 ]);
 
-export type MessageToDelete = z.infer<typeof messageToDeleteSchema>;
+export type AddressableMessage = z.infer<typeof addressableMessageSchema>;
 
-const conversationToDeleteSchema = z.union([
+const conversationIdentifierSchema = z.union([
   z.object({
     type: z.literal('aci').readonly(),
     aci: z.string().refine(isAciString),
@@ -538,32 +530,34 @@ const conversationToDeleteSchema = z.union([
   }),
 ]);
 
-export type ConversationToDelete = z.infer<typeof conversationToDeleteSchema>;
+export type ConversationIdentifier = z.infer<
+  typeof conversationIdentifierSchema
+>;
 
 export const deleteMessageSchema = z.object({
   type: z.literal('delete-message').readonly(),
-  conversation: conversationToDeleteSchema,
-  message: messageToDeleteSchema,
+  conversation: conversationIdentifierSchema,
+  message: addressableMessageSchema,
   timestamp: z.number(),
 });
 export type DeleteMessageSyncTarget = z.infer<typeof deleteMessageSchema>;
 export const deleteConversationSchema = z.object({
   type: z.literal('delete-conversation').readonly(),
-  conversation: conversationToDeleteSchema,
-  mostRecentMessages: z.array(messageToDeleteSchema),
-  mostRecentNonExpiringMessages: z.array(messageToDeleteSchema).optional(),
+  conversation: conversationIdentifierSchema,
+  mostRecentMessages: z.array(addressableMessageSchema),
+  mostRecentNonExpiringMessages: z.array(addressableMessageSchema).optional(),
   isFullDelete: z.boolean(),
   timestamp: z.number(),
 });
 export const deleteLocalConversationSchema = z.object({
   type: z.literal('delete-local-conversation').readonly(),
-  conversation: conversationToDeleteSchema,
+  conversation: conversationIdentifierSchema,
   timestamp: z.number(),
 });
 export const deleteAttachmentSchema = z.object({
   type: z.literal('delete-single-attachment').readonly(),
-  conversation: conversationToDeleteSchema,
-  message: messageToDeleteSchema,
+  conversation: conversationIdentifierSchema,
+  message: addressableMessageSchema,
   clientUuid: z.string().optional(),
   fallbackDigest: z.string().optional(),
   fallbackPlaintextHash: z.string().optional(),
@@ -588,6 +582,41 @@ export class DeleteForMeSyncEvent extends ConfirmableEvent {
     confirm: ConfirmCallback
   ) {
     super('deleteForMeSync', confirm);
+  }
+}
+
+export type AttachmentBackfillAttachmentType = Readonly<
+  | {
+      attachment: ProcessedAttachment;
+    }
+  | {
+      status: Proto.SyncMessage.AttachmentBackfillResponse.AttachmentData.Status;
+    }
+>;
+
+export type AttachmentBackfillResponseSyncEventData = Readonly<
+  {
+    targetMessage: AddressableMessage;
+    targetConversation: ConversationIdentifier;
+  } & (
+    | {
+        error: Proto.SyncMessage.AttachmentBackfillResponse.Error;
+      }
+    | {
+        attachments: ReadonlyArray<AttachmentBackfillAttachmentType>;
+        longText: AttachmentBackfillAttachmentType | undefined;
+      }
+  )
+>;
+
+export class AttachmentBackfillResponseSyncEvent extends ConfirmableEvent {
+  constructor(
+    public readonly response: AttachmentBackfillResponseSyncEventData,
+    public readonly timestamp: number,
+    public readonly envelopeId: string,
+    confirm: ConfirmCallback
+  ) {
+    super('attachmentBackfillResponseSync', confirm);
   }
 }
 

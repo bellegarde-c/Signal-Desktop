@@ -70,18 +70,17 @@ type JobType = {
 const OBSERVED_CAPABILITY_KEYS = Object.keys({
   deleteSync: true,
   ssre2: true,
+  attachmentBackfill: true,
 } satisfies CapabilitiesType) as ReadonlyArray<keyof CapabilitiesType>;
 
 export class ProfileService {
-  private jobQueue: PQueue;
-
-  private jobsByConversationId: Map<string, JobType> = new Map();
-
-  private isPaused = false;
+  #jobQueue: PQueue;
+  #jobsByConversationId: Map<string, JobType> = new Map();
+  #isPaused = false;
 
   constructor(private fetchProfile = doGetProfile) {
-    this.jobQueue = new PQueue({ concurrency: 3, timeout: MINUTE * 2 });
-    this.jobsByConversationId = new Map();
+    this.#jobQueue = new PQueue({ concurrency: 3, timeout: MINUTE * 2 });
+    this.#jobsByConversationId = new Map();
 
     log.info('Profile Service initialized');
   }
@@ -102,13 +101,13 @@ export class ProfileService {
       return;
     }
 
-    if (this.isPaused) {
+    if (this.#isPaused) {
       throw new Error(
         `ProfileService.get: Cannot add job to paused queue for conversation ${preCheckConversation.idForLogging()}`
       );
     }
 
-    const existing = this.jobsByConversationId.get(conversationId);
+    const existing = this.#jobsByConversationId.get(conversationId);
     if (existing) {
       return existing.promise;
     }
@@ -135,7 +134,7 @@ export class ProfileService {
       } catch (error) {
         reject(error);
 
-        if (this.isPaused) {
+        if (this.#isPaused) {
           return;
         }
 
@@ -149,7 +148,7 @@ export class ProfileService {
           }
         }
       } finally {
-        this.jobsByConversationId.delete(conversationId);
+        this.#jobsByConversationId.delete(conversationId);
 
         const now = Date.now();
         const delta = now - jobData.startTime;
@@ -158,7 +157,7 @@ export class ProfileService {
             `ProfileServices.get: Job for ${conversation.idForLogging()} finished ${delta}ms after queue`
           );
         }
-        const remainingItems = this.jobQueue.size;
+        const remainingItems = this.#jobQueue.size;
         if (remainingItems && remainingItems % 10 === 0) {
           log.info(
             `ProfileServices.get: ${remainingItems} jobs remaining in the queue`
@@ -167,14 +166,14 @@ export class ProfileService {
       }
     };
 
-    this.jobsByConversationId.set(conversationId, jobData);
-    drop(this.jobQueue.add(job));
+    this.#jobsByConversationId.set(conversationId, jobData);
+    drop(this.#jobQueue.add(job));
 
     return promise;
   }
 
   public clearAll(reason: string): void {
-    if (this.isPaused) {
+    if (this.#isPaused) {
       log.warn(
         `ProfileService.clearAll: Already paused; not clearing; reason: '${reason}'`
       );
@@ -184,10 +183,10 @@ export class ProfileService {
     log.info(`ProfileService.clearAll: Clearing; reason: '${reason}'`);
 
     try {
-      this.isPaused = true;
-      this.jobQueue.pause();
+      this.#isPaused = true;
+      this.#jobQueue.pause();
 
-      this.jobsByConversationId.forEach(job => {
+      this.#jobsByConversationId.forEach(job => {
         job.reject(
           new Error(
             `ProfileService.clearAll: job cancelled because '${reason}'`
@@ -195,33 +194,33 @@ export class ProfileService {
         );
       });
 
-      this.jobsByConversationId.clear();
-      this.jobQueue.clear();
+      this.#jobsByConversationId.clear();
+      this.#jobQueue.clear();
 
-      this.jobQueue.start();
+      this.#jobQueue.start();
     } finally {
-      this.isPaused = false;
+      this.#isPaused = false;
       log.info('ProfileService.clearAll: Done clearing');
     }
   }
 
   public async pause(timeInMS: number): Promise<void> {
-    if (this.isPaused) {
+    if (this.#isPaused) {
       log.warn('ProfileService.pause: Already paused, not pausing again.');
       return;
     }
 
     log.info(`ProfileService.pause: Pausing queue for ${timeInMS}ms`);
 
-    this.isPaused = true;
-    this.jobQueue.pause();
+    this.#isPaused = true;
+    this.#jobQueue.pause();
 
     try {
       await sleep(timeInMS);
     } finally {
       log.info('ProfileService.pause: Restarting queue');
-      this.jobQueue.start();
-      this.isPaused = false;
+      this.#jobQueue.start();
+      this.#isPaused = false;
     }
   }
 }
@@ -773,10 +772,6 @@ async function doGetProfile(
           Errors.toLogFormat(error)
         );
         isSuccessfullyDecrypted = false;
-        c.set({
-          profileName: undefined,
-          profileFamilyName: undefined,
-        });
       }
     }
   } else {
@@ -789,10 +784,10 @@ async function doGetProfile(
   try {
     if (requestDecryptionKey != null) {
       // Note: Fetches avatar
-      await c.setAndMaybeFetchProfileAvatar(
-        profile.avatar,
-        requestDecryptionKey
-      );
+      await c.setAndMaybeFetchProfileAvatar({
+        avatarUrl: profile.avatar,
+        decryptionKey: requestDecryptionKey,
+      });
     }
   } catch (error) {
     if (error instanceof HTTPError) {

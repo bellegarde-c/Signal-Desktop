@@ -29,6 +29,7 @@ import { drop } from '../../util/drop';
 import type { DurationInSeconds } from '../../util/durations';
 import * as universalExpireTimer from '../../util/universalExpireTimer';
 import * as Attachment from '../../types/Attachment';
+import { AttachmentDownloadUrgency } from '../../types/AttachmentDownload';
 import { isFileDangerous } from '../../util/isFileDangerous';
 import { getLocalAttachmentUrl } from '../../util/getLocalAttachmentUrl';
 import { instance as libphonenumberInstance } from '../../util/libphonenumberInstance';
@@ -96,6 +97,7 @@ import {
   getConversationSelector,
   getMe,
   getMessagesByConversation,
+  getPendingAvatarDownloadSelector,
 } from '../selectors/conversations';
 import { getIntl } from '../selectors/user';
 import type {
@@ -126,11 +128,12 @@ import {
   isDirectConversation,
   isGroup,
   isGroupV2,
+  isMe,
 } from '../../util/whatTypeOfConversation';
 import { missingCaseError } from '../../util/missingCaseError';
 import { viewSyncJobQueue } from '../../jobs/viewSyncJobQueue';
 import { ReadStatus } from '../../messages/MessageReadStatus';
-import { isIncoming, processBodyRanges } from '../selectors/message';
+import { isIncoming, isStory, processBodyRanges } from '../selectors/message';
 import { getActiveCall, getActiveCallState } from '../selectors/calling';
 import { sendDeleteForEveryoneMessage } from '../../util/sendDeleteForEveryoneMessage';
 import type { ShowToastActionType } from './toast';
@@ -149,7 +152,7 @@ import {
   buildUpdateAttributesChange,
   initiateMigrationToGroupV2 as doInitiateMigrationToGroupV2,
 } from '../../groups';
-import { __DEPRECATED$getMessageById } from '../../messages/getMessageById';
+import { getMessageById } from '../../messages/getMessageById';
 import type { PanelRenderType, PanelRequestType } from '../../types/Panels';
 import type { ConversationQueueJobData } from '../../jobs/conversationJobQueue';
 import { isOlderThan } from '../../util/timestamp';
@@ -184,26 +187,40 @@ import type { ChangeNavTabActionType } from './nav';
 import { CHANGE_NAV_TAB, NavTab, actions as navActions } from './nav';
 import { sortByMessageOrder } from '../../types/ForwardDraft';
 import { getAddedByForOurPendingInvitation } from '../../util/getAddedByForOurPendingInvitation';
-import { getConversationIdForLogging } from '../../util/idForLogging';
+import {
+  getConversationIdForLogging,
+  getMessageIdForLogging,
+} from '../../util/idForLogging';
 import { singleProtoJobQueue } from '../../jobs/singleProtoJobQueue';
 import MessageSender from '../../textsecure/SendMessage';
-import {
-  AttachmentDownloadManager,
-  AttachmentDownloadUrgency,
-} from '../../jobs/AttachmentDownloadManager';
+import { AttachmentDownloadManager } from '../../jobs/AttachmentDownloadManager';
 import type {
   DeleteForMeSyncEventData,
-  MessageToDelete,
+  AddressableMessage,
 } from '../../textsecure/messageReceiverEvents';
 import {
-  getConversationToDelete,
-  getMessageToDelete,
-} from '../../util/deleteForMe';
+  getConversationIdentifier,
+  getAddressableMessage,
+} from '../../util/syncIdentifiers';
 import { MAX_MESSAGE_COUNT } from '../../util/deleteForMe.types';
 import { markCallHistoryReadInConversation } from './callHistory';
 import type { CapabilitiesType } from '../../textsecure/WebAPI';
 import { actions as searchActions } from './search';
 import type { SearchActionType } from './search';
+import { getNotificationTextForMessage } from '../../util/getNotificationTextForMessage';
+import { doubleCheckMissingQuoteReference as doDoubleCheckMissingQuoteReference } from '../../util/doubleCheckMissingQuoteReference';
+import { queueAttachmentDownloadsForMessage } from '../../util/queueAttachmentDownloads';
+import { markAttachmentAsCorrupted as doMarkAttachmentAsCorrupted } from '../../messageModifiers/AttachmentDownloads';
+import {
+  isSent,
+  SendActionType,
+  sendStateReducer,
+} from '../../messages/MessageSendState';
+import { markFailed } from '../../test-node/util/messageFailures';
+import { cleanupMessages } from '../../util/cleanup';
+import { MessageModel } from '../../models/messages';
+import type { ConversationModel } from '../../models/conversations';
+
 // State
 
 export type DBConversationType = ReadonlyDeep<{
@@ -286,8 +303,9 @@ export type ConversationType = ReadonlyDeep<
     avatarUrl?: string;
     rawAvatarPath?: string;
     avatarHash?: string;
+    avatarPlaceholderGradient?: Readonly<[string, string]>;
     profileAvatarUrl?: string;
-    unblurredAvatarUrl?: string;
+    hasAvatar?: boolean;
     areWeAdmin?: boolean;
     areWePending?: boolean;
     areWePendingApproval?: boolean;
@@ -348,6 +366,7 @@ export type ConversationType = ReadonlyDeep<
     title: string;
     titleNoDefault?: string;
     titleNoNickname?: string;
+    titleShortNoDefault?: string;
     searchableTitle?: string;
     unreadCount?: number;
     unreadMentionsCount?: number;
@@ -562,6 +581,10 @@ export type ConversationsStateType = ReadonlyDeep<{
   messagesLookup: MessageLookupType;
   messagesByConversation: MessagesByConversationType;
 
+  // Map of conversation IDs to a boolean indicating whether an avatar download
+  // was requested
+  pendingRequestedAvatarDownload: Record<string, boolean>;
+
   preloadData?: ConversationPreloadDataType;
 }>;
 
@@ -624,6 +647,8 @@ export const SET_VOICE_NOTE_PLAYBACK_RATE =
   'conversations/SET_VOICE_NOTE_PLAYBACK_RATE';
 export const CONVERSATION_UNLOADED = 'CONVERSATION_UNLOADED';
 export const SHOW_SPOILER = 'conversations/SHOW_SPOILER';
+export const SET_PENDING_REQUESTED_AVATAR_DOWNLOAD =
+  'conversations/SET_PENDING_REQUESTED_AVATAR_DOWNLOAD';
 
 export type CancelVerificationDataByConversationActionType = ReadonlyDeep<{
   type: typeof CANCEL_CONVERSATION_PENDING_VERIFICATION;
@@ -811,6 +836,14 @@ export type ShowSpoilerActionType = ReadonlyDeep<{
   payload: {
     id: string;
     data: Record<number, boolean>;
+  };
+}>;
+
+export type SetPendingRequestedAvatarDownloadActionType = ReadonlyDeep<{
+  type: typeof SET_PENDING_REQUESTED_AVATAR_DOWNLOAD;
+  payload: {
+    conversationId: string;
+    value: boolean;
   };
 }>;
 
@@ -1048,6 +1081,7 @@ export type ConversationActionType =
   | ReplaceAvatarsActionType
   | ReviewConversationNameCollisionActionType
   | ScrollToMessageActionType
+  | SetPendingRequestedAvatarDownloadActionType
   | TargetedConversationChangedActionType
   | SetComposeGroupAvatarActionType
   | SetComposeGroupExpireTimerActionType
@@ -1163,6 +1197,8 @@ export const actions = {
   saveAvatarToDisk,
   scrollToMessage,
   scrollToOldestUnreadMention,
+  setPendingRequestedAvatarDownload,
+  startAvatarDownload,
   showSpoiler,
   targetMessage,
   setAccessControlAddFromInviteLinkSetting,
@@ -1193,6 +1229,7 @@ export const actions = {
   showFindByUsername,
   showFindByPhoneNumber,
   showInbox,
+  showMediaNoLongerAvailableToast,
   startComposing,
   startConversation,
   startSettingGroupMetadata,
@@ -1203,7 +1240,6 @@ export const actions = {
   toggleHideStories,
   toggleSelectMessage,
   toggleSelectMode,
-  unblurAvatar,
   updateConversationModelSharedGroups,
   updateGroupAttributes,
   updateLastMessage,
@@ -1410,10 +1446,7 @@ function markMessageRead(
       return;
     }
 
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'markMessageRead'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`markMessageRead: failed to load message ${messageId}`);
     }
@@ -1451,19 +1484,7 @@ function removeMember(
     payload: null,
   };
 }
-function unblurAvatar(conversationId: string): NoopActionType {
-  const conversation = window.ConversationController.get(conversationId);
-  if (!conversation) {
-    throw new Error('unblurAvatar: Conversation not found!');
-  }
 
-  conversation.unblurAvatar();
-
-  return {
-    type: 'NOOP',
-    payload: null,
-  };
-}
 function updateSharedGroups(conversationId: string): NoopActionType {
   const conversation = window.ConversationController.get(conversationId);
   if (!conversation) {
@@ -1766,11 +1787,8 @@ function deleteMessages({
     const messages = (
       await Promise.all(
         messageIds.map(
-          async (messageId): Promise<MessageToDelete | undefined> => {
-            const message = await __DEPRECATED$getMessageById(
-              messageId,
-              'deleteMessages'
-            );
+          async (messageId): Promise<AddressableMessage | undefined> => {
+            const message = await getMessageById(messageId);
             if (!message) {
               throw new Error(`deleteMessages: Message ${messageId} missing!`);
             }
@@ -1782,7 +1800,7 @@ function deleteMessages({
               );
             }
 
-            return getMessageToDelete(message.attributes);
+            return getAddressableMessage(message.attributes);
           }
         )
       )
@@ -1805,7 +1823,7 @@ function deleteMessages({
     }
 
     await DataWriter.removeMessages(messageIds, {
-      singleProtoJobQueue,
+      cleanupMessages,
     });
 
     popPanelForConversation()(dispatch, getState, undefined);
@@ -1826,7 +1844,7 @@ function deleteMessages({
     }
 
     const chunks = chunk(messages, MAX_MESSAGE_COUNT);
-    const conversationToDelete = getConversationToDelete(
+    const conversationToDelete = getConversationIdentifier(
       conversation.attributes
     );
     const timestamp = Date.now();
@@ -1930,9 +1948,7 @@ function setMessageToEdit(
       return;
     }
 
-    const message = (
-      await __DEPRECATED$getMessageById(messageId, 'setMessageToEdit')
-    )?.attributes;
+    const message = (await getMessageById(messageId))?.attributes;
     if (!message) {
       return;
     }
@@ -2025,10 +2041,7 @@ function generateNewGroupLink(
  * replace it with an actual action that fits in with the redux approach.
  */
 export const markViewed = (messageId: string): void => {
-  const message = window.MessageCache.__DEPRECATED$getById(
-    messageId,
-    'markViewed'
-  );
+  const message = window.MessageCache.getById(messageId);
   if (!message) {
     throw new Error(`markViewed: Message ${messageId} missing!`);
   }
@@ -2051,7 +2064,9 @@ export const markViewed = (messageId: string): void => {
     );
     senderAci = sourceServiceId;
 
-    const convoAttributes = message.getConversation()?.attributes;
+    const convo = window.ConversationController.get(
+      message.get('conversationId')
+    );
     const conversationId = message.get('conversationId');
     drop(
       conversationJobQueue.add({
@@ -2065,8 +2080,8 @@ export const markViewed = (messageId: string): void => {
             senderE164,
             senderAci,
             timestamp,
-            isDirectConversation: convoAttributes
-              ? isDirectConversation(convoAttributes)
+            isDirectConversation: convo
+              ? isDirectConversation(convo.attributes)
               : true,
           },
         ],
@@ -2292,25 +2307,19 @@ function kickOffAttachmentDownload(
   options: Readonly<{ messageId: string }>
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      options.messageId,
-      'kickOffAttachmentDownload'
-    );
+    const message = await getMessageById(options.messageId);
     if (!message) {
       throw new Error(
         `kickOffAttachmentDownload: Message ${options.messageId} missing!`
       );
     }
-    const didUpdateValues = await message.queueAttachmentDownloads(
-      AttachmentDownloadUrgency.IMMEDIATE
-    );
+    const didUpdateValues = await queueAttachmentDownloadsForMessage(message, {
+      urgency: AttachmentDownloadUrgency.IMMEDIATE,
+      isManualDownload: true,
+    });
 
     if (didUpdateValues) {
-      drop(
-        DataWriter.saveMessage(message.attributes, {
-          ourAci: window.textsecure.storage.user.getCheckedAci(),
-        })
-      );
+      drop(window.MessageCache.saveMessage(message.attributes));
     }
 
     dispatch({
@@ -2329,10 +2338,7 @@ function cancelAttachmentDownload({
   NoopActionType
 > {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'cancelAttachmentDownload'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       log.warn(`cancelAttachmentDownload: Message ${messageId} missing!`);
     } else {
@@ -2343,8 +2349,7 @@ function cancelAttachmentDownload({
         })),
       });
 
-      const ourAci = window.textsecure.storage.user.getCheckedAci();
-      await DataWriter.saveMessage(message.attributes, { ourAci });
+      await window.MessageCache.saveMessage(message.attributes);
     }
 
     // A click kicks off downloads for every attachment in a message, so cancel does too
@@ -2370,16 +2375,7 @@ function markAttachmentAsCorrupted(
   options: AttachmentOptions
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      options.messageId,
-      'markAttachmentAsCorrupted'
-    );
-    if (!message) {
-      throw new Error(
-        `markAttachmentAsCorrupted: Message ${options.messageId} missing!`
-      );
-    }
-    message.markAttachmentAsCorrupted(options.attachment);
+    await doMarkAttachmentAsCorrupted(options.messageId, options.attachment);
 
     dispatch({
       type: 'NOOP',
@@ -2392,10 +2388,7 @@ function openGiftBadge(
   messageId: string
 ): ThunkAction<void, RootStateType, unknown, ShowToastActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'openGiftBadge'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`openGiftBadge: Message ${messageId} missing!`);
     }
@@ -2415,14 +2408,102 @@ function retryMessageSend(
   messageId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'retryMessageSend'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`retryMessageSend: Message ${messageId} missing!`);
     }
-    await message.retrySend();
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const conversation = window.ConversationController.get(
+      message.attributes.conversationId
+    )!;
+
+    let currentConversationRecipients: Set<string> | undefined;
+
+    const { storyDistributionListId } = message.attributes;
+
+    if (storyDistributionListId) {
+      const storyDistribution =
+        await DataReader.getStoryDistributionWithMembers(
+          storyDistributionListId
+        );
+
+      if (!storyDistribution) {
+        markFailed(message);
+        return;
+      }
+
+      currentConversationRecipients = new Set(
+        storyDistribution.members
+          .map(serviceId => window.ConversationController.get(serviceId)?.id)
+          .filter(isNotNil)
+      );
+    } else {
+      currentConversationRecipients = conversation.getMemberConversationIds();
+    }
+
+    // Determine retry recipients and get their most up-to-date addressing information
+    const oldSendStateByConversationId =
+      message.get('sendStateByConversationId') || {};
+
+    const newSendStateByConversationId = { ...oldSendStateByConversationId };
+    for (const [conversationId, sendState] of Object.entries(
+      oldSendStateByConversationId
+    )) {
+      if (isSent(sendState.status)) {
+        continue;
+      }
+
+      const recipient = window.ConversationController.get(conversationId);
+      if (
+        !recipient ||
+        (!currentConversationRecipients.has(conversationId) &&
+          !isMe(recipient.attributes))
+      ) {
+        continue;
+      }
+
+      newSendStateByConversationId[conversationId] = sendStateReducer(
+        sendState,
+        {
+          type: SendActionType.ManuallyRetried,
+          updatedAt: Date.now(),
+        }
+      );
+    }
+
+    message.set({ sendStateByConversationId: newSendStateByConversationId });
+
+    if (isStory(message.attributes)) {
+      await conversationJobQueue.add(
+        {
+          type: conversationQueueJobEnum.enum.Story,
+          conversationId: conversation.id,
+          messageIds: [message.id],
+          // using the group timestamp, which will differ from the 1:1 timestamp
+          timestamp: message.attributes.timestamp,
+        },
+        async jobToInsert => {
+          await window.MessageCache.saveMessage(message.attributes, {
+            jobToInsert,
+          });
+        }
+      );
+    } else {
+      await conversationJobQueue.add(
+        {
+          type: conversationQueueJobEnum.enum.NormalMessage,
+          conversationId: conversation.id,
+          messageId: message.id,
+          revision: conversation.get('revision'),
+        },
+        async jobToInsert => {
+          await window.MessageCache.saveMessage(message.attributes, {
+            jobToInsert,
+          });
+        }
+      );
+    }
 
     dispatch({
       type: 'NOOP',
@@ -2435,15 +2516,12 @@ export function copyMessageText(
   messageId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'copyMessageText'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`copy: Message ${messageId} missing!`);
     }
 
-    const body = message.getNotificationText();
+    const body = getNotificationTextForMessage(message.attributes);
     clipboard.writeText(body);
 
     dispatch({
@@ -2457,10 +2535,7 @@ export function retryDeleteForEveryone(
   messageId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
   return async dispatch => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'retryDeleteForEveryone'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`retryDeleteForEveryone: Message ${messageId} missing!`);
     }
@@ -2472,7 +2547,9 @@ export function retryDeleteForEveryone(
     }
 
     try {
-      const conversation = message.getConversation();
+      const conversation = window.ConversationController.get(
+        message.get('conversationId')
+      );
       if (!conversation) {
         throw new Error(
           `retryDeleteForEveryone: Conversation for ${messageId} missing!`
@@ -2489,7 +2566,7 @@ export function retryDeleteForEveryone(
       };
 
       log.info(
-        `retryDeleteForEveryone: Adding job for message ${message.idForLogging()}!`
+        `retryDeleteForEveryone: Adding job for message ${getMessageIdForLogging(message.attributes)}!`
       );
       await conversationJobQueue.add(jobData);
 
@@ -3247,12 +3324,7 @@ function pushPanelForConversation(
 
       const message =
         conversations.messagesLookup[messageId] ||
-        (
-          await __DEPRECATED$getMessageById(
-            messageId,
-            'pushPanelForConversation'
-          )
-        )?.attributes;
+        (await getMessageById(messageId))?.attributes;
       if (!message) {
         throw new Error(
           'pushPanelForConversation: could not find message for MessageDetails'
@@ -3328,17 +3400,16 @@ function deleteMessagesForEveryone(
     await Promise.all(
       messageIds.map(async messageId => {
         try {
-          const message = window.MessageCache.__DEPRECATED$getById(
-            messageId,
-            'deleteMessagesForEveryone'
-          );
+          const message = window.MessageCache.getById(messageId);
           if (!message) {
             throw new Error(
               `deleteMessageForEveryone: Message ${messageId} missing!`
             );
           }
 
-          const conversation = message.getConversation();
+          const conversation = window.ConversationController.get(
+            message.get('conversationId')
+          );
           if (!conversation) {
             throw new Error('deleteMessageForEveryone: no conversation');
           }
@@ -3409,7 +3480,7 @@ function approvePendingMembershipFromGroupV2(
       );
       await modifyGroupV2({
         conversation,
-        usingCredentialsFrom: [pendingMember],
+        usingCredentialsFrom: [],
         createGroupChange: async () => {
           // This user's pending state may have changed in the time between the user's
           //   button press and when we get here. It's especially important to check here
@@ -3515,17 +3586,10 @@ function revokePendingMembershipsFromGroupV2(
 }
 
 async function syncMessageRequestResponse(
-  conversationData: ConversationType,
+  conversation: ConversationModel,
   response: Proto.SyncMessage.MessageRequestResponse.Type,
   { shouldSave = true } = {}
 ): Promise<void> {
-  const conversation = window.ConversationController.get(conversationData.id);
-  if (!conversation) {
-    throw new Error(
-      `syncMessageRequestResponse: No conversation found for conversation ${conversationData.id}`
-    );
-  }
-
   // In GroupsV2, this may modify the server. We only want to continue if those
   //   server updates were successful.
   await conversation.applyMessageRequestResponse(response, { shouldSave });
@@ -3539,11 +3603,18 @@ async function syncMessageRequestResponse(
     return;
   }
 
+  const threadAci = conversation.getAci();
+  if (!threadAci) {
+    log.warn(
+      'syncMessageRequestResponse: No ACI for target conversation, not sending'
+    );
+    return;
+  }
+
   try {
     await singleProtoJobQueue.add(
       MessageSender.getMessageRequestResponseSync({
-        threadE164: conversation.get('e164'),
-        threadAci: conversation.getAci(),
+        threadAci,
         groupId,
         type: response,
       })
@@ -3587,7 +3658,13 @@ function reportSpam(
     }
 
     const conversation = getConversationForReportSpam(conversationOrGroup);
-    if (conversation == null) {
+    const conversationModel = window.ConversationController.get(
+      conversation?.id
+    );
+    if (!conversation || !conversationModel) {
+      log.error(
+        `reportSpam: Conversation for report spam not found ${conversation?.id}. Doing nothing.`
+      );
       return;
     }
 
@@ -3600,7 +3677,10 @@ function reportSpam(
         idForLogging,
         task: async () => {
           await Promise.all([
-            syncMessageRequestResponse(conversation, messageRequestEnum.SPAM),
+            syncMessageRequestResponse(
+              conversationModel,
+              messageRequestEnum.SPAM
+            ),
             addReportSpamJob({
               conversation,
               getMessageServerGuidsForSpam:
@@ -3636,68 +3716,112 @@ function blockAndReportSpam(
 
     const conversationForSpam =
       getConversationForReportSpam(conversationOrGroup);
-
+    const conversationModel = window.ConversationController.get(
+      conversationForSpam?.id
+    );
+    if (!conversationForSpam || !conversationModel) {
+      log.error(
+        `reportSpam: Conversation for report spam not found ${conversationForSpam?.id}. Doing nothing.`
+      );
+      return;
+    }
     const messageRequestEnum = Proto.SyncMessage.MessageRequestResponse.Type;
     const idForLogging = getConversationIdForLogging(conversationOrGroup);
 
-    drop(
-      longRunningTaskWrapper({
-        name: 'blockAndReportSpam',
-        idForLogging,
-        task: async () => {
-          await Promise.all([
-            syncMessageRequestResponse(
-              conversationOrGroup,
-              messageRequestEnum.BLOCK_AND_SPAM
-            ),
-            conversationForSpam != null &&
-              addReportSpamJob({
-                conversation: conversationForSpam,
-                getMessageServerGuidsForSpam:
-                  DataReader.getMessageServerGuidsForSpam,
-                jobQueue: reportSpamJobQueue,
-              }),
-          ]);
+    if (conversationModel.getAci()) {
+      drop(
+        longRunningTaskWrapper({
+          name: 'blockAndReportSpam',
+          idForLogging,
+          task: async () => {
+            await Promise.all([
+              syncMessageRequestResponse(
+                conversationModel,
+                messageRequestEnum.BLOCK_AND_SPAM
+              ),
+              conversationForSpam != null &&
+                addReportSpamJob({
+                  conversation: conversationForSpam,
+                  getMessageServerGuidsForSpam:
+                    DataReader.getMessageServerGuidsForSpam,
+                  jobQueue: reportSpamJobQueue,
+                }),
+            ]);
 
-          dispatch({
-            type: SHOW_TOAST,
-            payload: {
-              toastType: ToastType.ReportedSpamAndBlocked,
-            },
-          });
-        },
-      })
-    );
+            dispatch({
+              type: SHOW_TOAST,
+              payload: {
+                toastType: ToastType.ReportedSpamAndBlocked,
+              },
+            });
+          },
+        })
+      );
+    } else {
+      try {
+        await singleProtoJobQueue.add(
+          MessageSender.getBlockSync(
+            window.textsecure.storage.blocked.getBlockedData()
+          )
+        );
+      } catch (error) {
+        log.error(
+          `blockConversation/${idForLogging}: Failed to queue block sync message`,
+          Errors.toLogFormat(error)
+        );
+      }
+    }
   };
 }
 
 function acceptConversation(
   conversationId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
-  return async (dispatch, getState) => {
-    const conversationSelector = getConversationSelector(getState());
-    const conversationOrGroup = conversationSelector(conversationId);
-    if (!conversationOrGroup) {
+  return async dispatch => {
+    const conversation = window.ConversationController.get(conversationId);
+    if (!conversation) {
       throw new Error(
         'acceptConversation: Expected a conversation to be found. Doing nothing'
       );
     }
 
     const messageRequestEnum = Proto.SyncMessage.MessageRequestResponse.Type;
-    const idForLogging = getConversationIdForLogging(conversationOrGroup);
+    const idForLogging = getConversationIdForLogging(conversation.attributes);
 
-    drop(
-      longRunningTaskWrapper({
-        name: 'acceptConversation',
-        idForLogging,
-        task: async () => {
-          await syncMessageRequestResponse(
-            conversationOrGroup,
-            messageRequestEnum.ACCEPT
-          );
-        },
-      })
-    );
+    if (conversation.getAci()) {
+      drop(
+        longRunningTaskWrapper({
+          name: 'acceptConversation',
+          idForLogging,
+          task: async () => {
+            await syncMessageRequestResponse(
+              conversation,
+              messageRequestEnum.ACCEPT
+            );
+          },
+        })
+      );
+    } else {
+      await conversation.applyMessageRequestResponse(
+        messageRequestEnum.ACCEPT,
+        {
+          shouldSave: true,
+        }
+      );
+
+      try {
+        await singleProtoJobQueue.add(
+          MessageSender.getBlockSync(
+            window.textsecure.storage.blocked.getBlockedData()
+          )
+        );
+      } catch (error) {
+        log.error(
+          `acceptConversation/${idForLogging}: Failed to queue sync message`,
+          Errors.toLogFormat(error)
+        );
+      }
+    }
 
     dispatch({
       type: 'NOOP',
@@ -3730,10 +3854,8 @@ function removeConversation(conversationId: string): ShowToastActionType {
 function blockConversation(
   conversationId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
-  return (dispatch, getState) => {
-    const conversationSelector = getConversationSelector(getState());
-    const conversation = conversationSelector(conversationId);
-
+  return async dispatch => {
+    const conversation = window.ConversationController.get(conversationId);
     if (!conversation) {
       throw new Error(
         'blockConversation: Expected a conversation to be found. Doing nothing'
@@ -3741,20 +3863,41 @@ function blockConversation(
     }
 
     const messageRequestEnum = Proto.SyncMessage.MessageRequestResponse.Type;
-    const idForLogging = getConversationIdForLogging(conversation);
+    const idForLogging = getConversationIdForLogging(conversation.attributes);
 
-    drop(
-      longRunningTaskWrapper({
-        name: 'blockConversation',
-        idForLogging,
-        task: async () => {
-          await syncMessageRequestResponse(
-            conversation,
-            messageRequestEnum.BLOCK
-          );
-        },
-      })
-    );
+    if (conversation.getAci()) {
+      drop(
+        longRunningTaskWrapper({
+          name: 'blockConversation',
+          idForLogging,
+          task: async () => {
+            await syncMessageRequestResponse(
+              conversation,
+              messageRequestEnum.BLOCK
+            );
+          },
+        })
+      );
+    } else {
+      // In GroupsV2, this may modify the server. We only want to continue if those
+      //   server updates were successful.
+      await conversation.applyMessageRequestResponse(messageRequestEnum.BLOCK, {
+        shouldSave: true,
+      });
+
+      try {
+        await singleProtoJobQueue.add(
+          MessageSender.getBlockSync(
+            window.textsecure.storage.blocked.getBlockedData()
+          )
+        );
+      } catch (error) {
+        log.error(
+          `blockConversation/${idForLogging}: Failed to queue block sync message`,
+          Errors.toLogFormat(error)
+        );
+      }
+    }
 
     dispatch({
       type: 'NOOP',
@@ -3766,9 +3909,8 @@ function blockConversation(
 function deleteConversation(
   conversationId: string
 ): ThunkAction<void, RootStateType, unknown, NoopActionType> {
-  return (dispatch, getState) => {
-    const conversationSelector = getConversationSelector(getState());
-    const conversation = conversationSelector(conversationId);
+  return async dispatch => {
+    const conversation = window.ConversationController.get(conversationId);
     if (!conversation) {
       throw new Error(
         'deleteConversation: Expected a conversation to be found. Doing nothing'
@@ -3776,20 +3918,24 @@ function deleteConversation(
     }
 
     const messageRequestEnum = Proto.SyncMessage.MessageRequestResponse.Type;
-    const idForLogging = getConversationIdForLogging(conversation);
+    const idForLogging = getConversationIdForLogging(conversation.attributes);
 
-    drop(
-      longRunningTaskWrapper({
-        name: 'deleteConversation',
-        idForLogging,
-        task: async () => {
-          await syncMessageRequestResponse(
-            conversation,
-            messageRequestEnum.DELETE
-          );
-        },
-      })
-    );
+    if (conversation.getAci()) {
+      drop(
+        longRunningTaskWrapper({
+          name: 'deleteConversation',
+          idForLogging,
+          task: async () => {
+            await syncMessageRequestResponse(
+              conversation,
+              messageRequestEnum.DELETE
+            );
+          },
+        })
+      );
+    } else {
+      await conversation.destroyMessages({ source: 'local-delete' });
+    }
 
     dispatch({
       type: 'NOOP',
@@ -3834,11 +3980,7 @@ function loadRecentMediaItems(
 
     // Cache these messages in memory to ensure Lightbox can find them
     messages.forEach(message => {
-      window.MessageCache.__DEPRECATED$register(
-        message.id,
-        message,
-        'loadRecentMediaItems'
-      );
+      window.MessageCache.register(new MessageModel(message));
     });
 
     let index = 0;
@@ -3913,12 +4055,13 @@ function saveAttachment(
       return;
     }
 
-    const { readAttachmentData, saveAttachmentToDisk } =
+    const { getUnusedFilename, readAttachmentData, saveAttachmentToDisk } =
       window.Signal.Migrations;
 
     const fullPath = await Attachment.save({
       attachment,
       index: index + 1,
+      getUnusedFilename,
       readAttachmentData,
       saveAttachmentToDisk,
       timestamp,
@@ -3979,43 +4122,56 @@ function saveAttachments(
       return;
     }
 
-    const { readAttachmentData, saveAttachmentToDisk } =
+    const { getUnusedFilename, readAttachmentData, saveAttachmentToDisk } =
       window.Signal.Migrations;
 
     let fullPath;
     let index = 0;
-    for (const attachment of attachments) {
-      index += 1;
+    try {
+      for (const attachment of attachments) {
+        index += 1;
 
-      // eslint-disable-next-line no-await-in-loop
-      const result = await Attachment.save({
-        attachment,
-        index,
-        readAttachmentData,
-        saveAttachmentToDisk,
-        timestamp,
-        baseDir: dirPath,
-      });
+        // eslint-disable-next-line no-await-in-loop
+        const result = await Attachment.save({
+          attachment,
+          index,
+          getUnusedFilename,
+          readAttachmentData,
+          saveAttachmentToDisk,
+          timestamp,
+          baseDir: dirPath,
+        });
 
-      if (fullPath === undefined) {
-        fullPath = result;
+        if (fullPath === undefined) {
+          fullPath = result;
+        }
       }
-    }
 
-    if (fullPath == null) {
-      throw new Error('saveAttachments: Returned path to attachment is null!');
-    }
+      if (fullPath == null) {
+        throw new Error(
+          'saveAttachments: Returned path to attachment is null!'
+        );
+      }
 
-    dispatch({
-      type: SHOW_TOAST,
-      payload: {
-        toastType: ToastType.FileSaved,
-        parameters: {
-          countOfFiles: attachments.length,
-          fullPath,
+      dispatch({
+        type: SHOW_TOAST,
+        payload: {
+          toastType: ToastType.FileSaved,
+          parameters: {
+            countOfFiles: attachments.length,
+            fullPath,
+          },
         },
-      },
-    });
+      });
+    } catch (e) {
+      log.error('Error in saveAttachments():', Errors.toLogFormat(e));
+      dispatch({
+        type: SHOW_TOAST,
+        payload: {
+          toastType: ToastType.Error,
+        },
+      });
+    }
   };
 }
 
@@ -4042,10 +4198,7 @@ export function saveAttachmentFromMessage(
   providedAttachment?: AttachmentType
 ): ThunkAction<void, RootStateType, unknown, ShowToastActionType> {
   return async (dispatch, getState) => {
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'saveAttachmentFromMessage'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(
         `saveAttachmentFromMessage: Message ${messageId} missing!`
@@ -4138,10 +4291,7 @@ export function scrollToMessage(
       throw new Error('scrollToMessage: No conversation found');
     }
 
-    const message = await __DEPRECATED$getMessageById(
-      messageId,
-      'scrollToMessage'
-    );
+    const message = await getMessageById(messageId);
     if (!message) {
       throw new Error(`scrollToMessage: failed to load message ${messageId}`);
     }
@@ -4155,12 +4305,7 @@ export function scrollToMessage(
 
     let isInMemory = true;
 
-    if (
-      !window.MessageCache.__DEPRECATED$getById(
-        messageId,
-        'scrollToMessage/notInMemory'
-      )
-    ) {
+    if (!window.MessageCache.getById(messageId)) {
       isInMemory = false;
     }
 
@@ -4502,6 +4647,14 @@ function showInbox(): ShowInboxActionType {
     payload: null,
   };
 }
+function showMediaNoLongerAvailableToast(): ShowToastActionType {
+  return {
+    type: SHOW_TOAST,
+    payload: {
+      toastType: ToastType.MediaNoLongerAvailable,
+    },
+  };
+}
 
 type ShowConversationArgsType = ReadonlyDeep<{
   conversationId?: string;
@@ -4591,10 +4744,7 @@ function onConversationOpened(
     log.info(`${logId}: Updating newly opened conversation state`);
 
     if (messageId) {
-      const message = await __DEPRECATED$getMessageById(
-        messageId,
-        'onConversationOpened'
-      );
+      const message = await getMessageById(messageId);
 
       if (message) {
         drop(conversation.loadAndScroll(messageId));
@@ -4733,17 +4883,81 @@ function showArchivedConversations(): ShowArchivedConversationsActionType {
 }
 
 function doubleCheckMissingQuoteReference(messageId: string): NoopActionType {
-  const message = window.MessageCache.__DEPRECATED$getById(
-    messageId,
-    'doubleCheckMissingQuoteReference'
-  );
+  const message = window.MessageCache.getById(messageId);
   if (message) {
-    void message.doubleCheckMissingQuoteReference();
+    drop(doDoubleCheckMissingQuoteReference(message));
   }
 
   return {
     type: 'NOOP',
     payload: null,
+  };
+}
+
+function setPendingRequestedAvatarDownload(
+  conversationId: string,
+  value: boolean
+): SetPendingRequestedAvatarDownloadActionType {
+  return {
+    type: SET_PENDING_REQUESTED_AVATAR_DOWNLOAD,
+    payload: {
+      conversationId,
+      value,
+    },
+  };
+}
+
+function startAvatarDownload(
+  conversationId: string
+): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  SetPendingRequestedAvatarDownloadActionType
+> {
+  return async (dispatch, getState) => {
+    const isAlreadyLoading =
+      getPendingAvatarDownloadSelector(getState())(conversationId);
+    if (isAlreadyLoading) {
+      return;
+    }
+    dispatch(setPendingRequestedAvatarDownload(conversationId, true));
+
+    try {
+      const conversation = window.ConversationController.get(conversationId);
+      if (!conversation) {
+        throw new Error('startAvatarDownload: Conversation not found');
+      }
+
+      if (!conversation.attributes.remoteAvatarUrl) {
+        throw new Error('startAvatarDownload: no avatar URL');
+      }
+
+      if (isGroup(conversation.attributes)) {
+        const updateAttrs = await groups.applyNewAvatar({
+          newAvatarUrl: conversation.attributes.remoteAvatarUrl,
+          attributes: conversation.attributes,
+          logId: 'startAvatarDownload',
+          forceDownload: true,
+        });
+        conversation.set(updateAttrs);
+      } else {
+        await conversation.setAndMaybeFetchProfileAvatar({
+          avatarUrl: conversation.attributes.remoteAvatarUrl,
+          decryptionKey: null,
+          forceFetch: true,
+        });
+      }
+
+      await DataWriter.updateConversation(conversation.attributes);
+    } catch (error) {
+      log.error(
+        'startAvatarDownload: Failed to download avatar',
+        Errors.toLogFormat(error)
+      );
+    } finally {
+      dispatch(setPendingRequestedAvatarDownload(conversationId, false));
+    }
   };
 }
 
@@ -4766,6 +4980,7 @@ export function getEmptyState(): ConversationsStateType {
     selectedMessageIds: undefined,
     showArchived: false,
     hasContactSpoofingReview: false,
+    pendingRequestedAvatarDownload: {},
     targetedConversationPanels: {
       isAnimating: false,
       wasAnimated: false,
@@ -7102,6 +7317,18 @@ export function reducer(
           ...existingConversation,
           isNearBottom: true,
         },
+      },
+    };
+  }
+
+  if (action.type === SET_PENDING_REQUESTED_AVATAR_DOWNLOAD) {
+    const { conversationId, value } = action.payload;
+
+    return {
+      ...state,
+      pendingRequestedAvatarDownload: {
+        ...state.pendingRequestedAvatarDownload,
+        [conversationId]: value,
       },
     };
   }

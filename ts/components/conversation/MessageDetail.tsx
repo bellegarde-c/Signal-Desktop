@@ -49,7 +49,6 @@ export type Contact = Pick<
   | 'profileName'
   | 'sharedGroupNames'
   | 'title'
-  | 'unblurredAvatarUrl'
 > & {
   status?: SendStatus;
   statusTimestamp?: number;
@@ -101,11 +100,14 @@ export type PropsReduxActions = Pick<
   | 'showConversation'
   | 'showEditHistoryModal'
   | 'showAttachmentDownloadStillInProgressToast'
+  | 'showAttachmentNotAvailableModal'
   | 'showExpiredIncomingTapToViewToast'
   | 'showExpiredOutgoingTapToViewToast'
   | 'showLightbox'
   | 'showLightboxForViewOnceMedia'
+  | 'showMediaNoLongerAvailableToast'
   | 'showSpoiler'
+  | 'showTapToViewNotAvailableModal'
   | 'startConversation'
   | 'viewStory'
 > & {
@@ -148,11 +150,14 @@ export function MessageDetail({
   showConversation,
   showEditHistoryModal,
   showAttachmentDownloadStillInProgressToast,
+  showAttachmentNotAvailableModal,
   showExpiredIncomingTapToViewToast,
   showExpiredOutgoingTapToViewToast,
   showLightbox,
   showLightboxForViewOnceMedia,
+  showMediaNoLongerAvailableToast,
   showSpoiler,
+  showTapToViewNotAvailableModal,
   startConversation,
   theme,
   toggleSafetyNumberModal,
@@ -162,34 +167,28 @@ export function MessageDetail({
 
   function renderAvatar(contact: Contact): JSX.Element {
     const {
-      acceptedMessageRequest,
       avatarUrl,
       badges,
       color,
-      isMe,
       phoneNumber,
       profileName,
       sharedGroupNames,
       title,
-      unblurredAvatarUrl,
     } = contact;
 
     return (
       <Avatar
-        acceptedMessageRequest={acceptedMessageRequest}
         avatarUrl={avatarUrl}
         badge={getPreferredBadge(badges)}
         color={color}
         conversationType="direct"
         i18n={i18n}
-        isMe={isMe}
         phoneNumber={phoneNumber}
         profileName={profileName}
         theme={theme}
         title={title}
         sharedGroupNames={sharedGroupNames}
         size={AvatarSize.THIRTY_TWO}
-        unblurredAvatarUrl={unblurredAvatarUrl}
       />
     );
   }
@@ -368,6 +367,8 @@ export function MessageDetail({
             showAttachmentDownloadStillInProgressToast={
               showAttachmentDownloadStillInProgressToast
             }
+            showAttachmentNotAvailableModal={showAttachmentNotAvailableModal}
+            showTapToViewNotAvailableModal={showTapToViewNotAvailableModal}
             showExpiredIncomingTapToViewToast={
               showExpiredIncomingTapToViewToast
             }
@@ -375,6 +376,7 @@ export function MessageDetail({
               showExpiredOutgoingTapToViewToast
             }
             showLightbox={showLightbox}
+            showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
             startConversation={startConversation}
             theme={theme}
             viewStory={viewStory}

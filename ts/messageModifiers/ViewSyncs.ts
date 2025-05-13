@@ -10,15 +10,13 @@ import { GiftBadgeStates } from '../components/conversation/Message';
 import { ReadStatus } from '../messages/MessageReadStatus';
 import { getMessageIdForLogging } from '../util/idForLogging';
 import { getMessageSentTimestamp } from '../util/getMessageSentTimestamp';
-import { isDownloaded } from '../types/Attachment';
 import { isIncoming } from '../state/selectors/message';
 import { markViewed } from '../services/MessageUpdater';
 import { notificationService } from '../services/notifications';
-import { queueAttachmentDownloads } from '../util/queueAttachmentDownloads';
 import { queueUpdateMessage } from '../util/messageBatcher';
-import { AttachmentDownloadUrgency } from '../jobs/AttachmentDownloadManager';
 import { isAciString } from '../util/isAciString';
 import { DataReader, DataWriter } from '../sql/Client';
+import { MessageModel } from '../models/messages';
 
 export const viewSyncTaskSchema = z.object({
   type: z.literal('ViewSync').readonly(),
@@ -114,27 +112,12 @@ export async function onSync(sync: ViewSyncAttributesType): Promise<void> {
 
     notificationService.removeBy({ messageId: found.id });
 
-    const message = window.MessageCache.__DEPRECATED$register(
-      found.id,
-      found,
-      'ViewSyncs.onSync'
-    );
+    const message = window.MessageCache.register(new MessageModel(found));
     let didChangeMessage = false;
 
     if (message.get('readStatus') !== ReadStatus.Viewed) {
       didChangeMessage = true;
       message.set(markViewed(message.attributes, viewSync.viewedAt));
-
-      const attachments = message.get('attachments');
-      if (!attachments?.every(isDownloaded)) {
-        const updatedFields = await queueAttachmentDownloads(
-          message.attributes,
-          { urgency: AttachmentDownloadUrgency.STANDARD }
-        );
-        if (updatedFields) {
-          message.set(updatedFields);
-        }
-      }
     }
 
     const giftBadge = message.get('giftBadge');

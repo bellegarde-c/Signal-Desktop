@@ -9,13 +9,11 @@ import type { Props } from './Image';
 import { CurveType, Image } from './Image';
 import { IMAGE_PNG } from '../../types/MIME';
 import type { ThemeType } from '../../types/Util';
-import { setupI18n } from '../../util/setupI18n';
-import enMessages from '../../../_locales/en/messages.json';
 import { StorybookThemeContext } from '../../../.storybook/StorybookThemeContext';
 
 import { fakeAttachment } from '../../test-both/helpers/fakeAttachment';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/Conversation/Image',
@@ -166,6 +164,82 @@ export function NotPendingWDownloadProgress(): JSX.Element {
       size: 5300000,
       totalDownloaded: 1230000,
     }),
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function PendingIncrementalNoProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      pending: true,
+      size: 5300000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function PendingIncrementalDownloadProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      pending: true,
+      size: 5300000,
+      totalDownloaded: 1230000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function NotPendingIncrementalNoProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      size: 5300000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
+    blurHash: 'thisisafakeblurhashthatwasmadeup',
+    url: undefined,
+  });
+
+  return <Image {...props} />;
+}
+
+export function NotPendingIncrementalWProgress(): JSX.Element {
+  const props = createProps({
+    attachment: fakeAttachment({
+      contentType: IMAGE_PNG,
+      fileName: 'sax.png',
+      path: undefined,
+      size: 5300000,
+      totalDownloaded: 1230000,
+      incrementalMac: 'something',
+      chunkSize: 100,
+    }),
+    playIconOverlay: true,
     blurHash: 'thisisafakeblurhashthatwasmadeup',
     url: undefined,
   });

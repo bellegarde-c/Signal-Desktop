@@ -1,5 +1,6 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+/* eslint-disable max-classes-per-file */
 
 import moment from 'moment';
 import {
@@ -9,11 +10,13 @@ import {
   isUndefined,
   isString,
   omit,
+  partition,
 } from 'lodash';
 import { blobToArrayBuffer } from 'blob-util';
 
-import type { LinkPreviewType } from './message/LinkPreviews';
+import type { LinkPreviewForUIType } from './message/LinkPreviews';
 import type { LoggerType } from './Logging';
+import * as logging from '../logging/log';
 import * as MIME from './MIME';
 import { toLogFormat } from './errors';
 import { SignalService } from '../protobuf';
@@ -43,6 +46,14 @@ const MIN_HEIGHT = 50;
 // Used for display
 
 export class AttachmentSizeError extends Error {}
+
+// Used for downlaods
+
+export class AttachmentPermanentlyUndownloadableError extends Error {
+  constructor(message: string) {
+    super(`AttachmentPermanentlyUndownloadableError: ${message}`);
+  }
+}
 
 type ScreenshotType = Omit<AttachmentType, 'size'> & {
   height: number;
@@ -86,6 +97,9 @@ export type AttachmentType = {
   data?: Uint8Array;
   textAttachment?: TextAttachmentType;
   wasTooBig?: boolean;
+
+  // If `true` backfill is unavailable
+  backfillError?: boolean;
 
   totalDownloaded?: number;
   incrementalMac?: string;
@@ -139,6 +153,7 @@ export type AddressableAttachmentType = Readonly<{
 }>;
 
 export type AttachmentForUIType = AttachmentType & {
+  isPermanentlyUndownloadable: boolean;
   thumbnailFromBackup?: {
     url?: string;
   };
@@ -175,7 +190,7 @@ export type TextAttachmentType = {
   textStyle?: number | null;
   textForegroundColor?: number | null;
   textBackgroundColor?: number | null;
-  preview?: LinkPreviewType;
+  preview?: LinkPreviewForUIType;
   gradient?: {
     startColor?: number | null;
     endColor?: number | null;
@@ -655,6 +670,20 @@ export function isPlayed(
   return readStatus === ReadStatus.Viewed;
 }
 
+export function canRenderAudio(
+  attachments?: ReadonlyArray<AttachmentType>
+): boolean {
+  const firstAttachment = attachments && attachments[0];
+  if (!firstAttachment) {
+    return false;
+  }
+
+  return (
+    isAudio(attachments) &&
+    (isDownloaded(firstAttachment) || isDownloadable(firstAttachment))
+  );
+}
+
 export function canDisplayImage(
   attachments?: ReadonlyArray<AttachmentType>
 ): boolean {
@@ -772,6 +801,12 @@ function resolveNestedAttachment<
   return attachment;
 }
 
+export function isIncremental(
+  attachment: Pick<AttachmentForUIType, 'incrementalMac' | 'chunkSize'>
+): boolean {
+  return Boolean(attachment.incrementalMac && attachment.chunkSize);
+}
+
 export function isDownloaded(
   attachment?: Pick<AttachmentType, 'path' | 'textAttachment'>
 ): boolean {
@@ -791,7 +826,10 @@ export function isReadyToView(
   }
 
   const resolved = resolveNestedAttachment(attachment);
-  return Boolean(resolved && (resolved.path || resolved.textAttachment));
+  return Boolean(
+    resolved &&
+      (resolved.path || resolved.textAttachment || isIncremental(resolved))
+  );
 }
 
 export function hasNotResolved(attachment?: AttachmentType): boolean {
@@ -996,6 +1034,7 @@ export const isVoiceMessage = (
 export const save = async ({
   attachment,
   index,
+  getUnusedFilename,
   readAttachmentData,
   saveAttachmentToDisk,
   timestamp,
@@ -1003,6 +1042,10 @@ export const save = async ({
 }: {
   attachment: AttachmentType;
   index?: number;
+  getUnusedFilename: (options: {
+    filename: string;
+    baseDir?: string;
+  }) => string;
   readAttachmentData: (
     attachment: Partial<AddressableAttachmentType>
   ) => Promise<Uint8Array>;
@@ -1027,7 +1070,17 @@ export const save = async ({
     throw new Error('Attachment had neither path nor data');
   }
 
-  const name = getSuggestedFilename({ attachment, timestamp, index });
+  const suggestedFilename = getSuggestedFilename({
+    attachment,
+    timestamp,
+    index,
+  });
+
+  /**
+   * When baseDir is provided, saveAttachmentToDisk() will save without prompting
+   * and may overwrite existing files, so we need to append a suffix
+   */
+  const name = getUnusedFilename({ filename: suggestedFilename, baseDir });
 
   const result = await saveAttachmentToDisk({
     data,
@@ -1052,7 +1105,7 @@ export const getSuggestedFilename = ({
   index?: number;
 }): string => {
   const { fileName } = attachment;
-  if (fileName && (!isNumber(index) || index === 1)) {
+  if (fileName) {
     return fileName;
   }
 
@@ -1271,4 +1324,49 @@ export function getAttachmentIdForLogging(attachment: AttachmentType): string {
     return redactGenericText(digest);
   }
   return '[MissingDigest]';
+}
+
+// We now partition out the bodyAttachment on receipt, but older
+// messages may still have a bodyAttachment in the normal attachments field
+export function partitionBodyAndNormalAttachments<
+  T extends Pick<AttachmentType, 'contentType'>,
+>(
+  {
+    attachments,
+    existingBodyAttachment,
+  }: {
+    attachments: ReadonlyArray<T>;
+    existingBodyAttachment?: T;
+  },
+  { logId, logger = logging }: { logId: string; logger?: LoggerType }
+): {
+  bodyAttachment: T | undefined;
+  attachments: Array<T>;
+} {
+  const [bodyAttachments, normalAttachments] = partition(
+    attachments,
+    attachment => MIME.isLongMessage(attachment.contentType)
+  );
+
+  if (bodyAttachments.length > 1) {
+    logger.warn(
+      `${logId}: Received more than one long message attachment, ` +
+        `dropping ${bodyAttachments.length - 1}`
+    );
+  }
+
+  if (bodyAttachments.length > 0) {
+    if (existingBodyAttachment) {
+      logger.warn(`${logId}: there is already an existing body attachment`);
+    } else {
+      logger.info(
+        `${logId}: Moving a long message attachment to message.bodyAttachment`
+      );
+    }
+  }
+
+  return {
+    bodyAttachment: existingBodyAttachment ?? bodyAttachments[0],
+    attachments: normalAttachments,
+  };
 }

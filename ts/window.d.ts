@@ -5,6 +5,7 @@
 
 import type { Store } from 'redux';
 import type * as Backbone from 'backbone';
+import type { SystemPreferences } from 'electron';
 import type PQueue from 'p-queue/dist';
 import type { assert } from 'chai';
 import type { PhoneNumber, PhoneNumberFormat } from 'google-libphonenumber';
@@ -32,14 +33,12 @@ import type { Receipt } from './types/Receipt';
 import type { ConversationController } from './ConversationController';
 import type { ReduxActions } from './state/types';
 import type { createApp } from './state/roots/createApp';
-import type { MessageModel } from './models/messages';
 import type { ConversationModel } from './models/conversations';
 import type { BatcherType } from './util/batcher';
 import type { ConfirmationDialog } from './components/ConfirmationDialog';
 import type { SignalProtocolStore } from './SignalProtocolStore';
 import type { SocketStatus } from './types/SocketStatus';
 import type { ScreenShareStatus } from './types/Calling';
-import type SyncRequest from './textsecure/SyncRequest';
 import type { MessageCache } from './services/MessageCache';
 import type { StateType } from './state/reducer';
 import type { Address } from './types/Address';
@@ -53,6 +52,7 @@ import type { RetryPlaceholders } from './util/retryPlaceholders';
 import type { PropsPreloadType as PreferencesPropsType } from './components/Preferences';
 import type { WindowsNotificationData } from './services/notifications';
 import type { QueryStatsOptions } from './sql/main';
+import type { SocketStatuses } from './textsecure/SocketManager';
 
 export { Long } from 'long';
 
@@ -69,8 +69,11 @@ export type IPCType = {
   getAutoLaunch: () => Promise<boolean>;
   getMediaAccessStatus: (
     mediaType: 'screen' | 'microphone' | 'camera'
-  ) => Promise<string | undefined>;
-  getMediaCameraPermissions: () => Promise<boolean>;
+  ) => Promise<ReturnType<SystemPreferences['getMediaAccessStatus']>>;
+  getMediaCameraPermissions: () => Promise<boolean | undefined>;
+  openSystemMediaPermissions: (
+    mediaType: 'microphone' | 'camera' | 'screenCapture'
+  ) => Promise<void>;
   getMediaPermissions: () => Promise<boolean>;
   logAppLoadedEvent?: (options: { processedCount?: number }) => void;
   readyForUpdates: () => void;
@@ -148,7 +151,10 @@ export type SignalCoreType = {
     calling: CallingClass;
     backups: BackupsService;
     initializeGroupCredentialFetcher: () => Promise<void>;
-    initializeNetworkObserver: (network: ReduxActions['network']) => void;
+    initializeNetworkObserver: (
+      network: ReduxActions['network'],
+      getAuthSocketStatus: () => SocketStatus
+    ) => void;
     initializeUpdateListener: (updates: ReduxActions['updates']) => void;
     retryPlaceholders?: RetryPlaceholders;
     lightSessionResetQueue?: PQueue;
@@ -203,8 +209,7 @@ declare global {
     getBackupServerPublicParams: () => string;
     getSfuUrl: () => string;
     getIceServerOverride: () => string;
-    getSocketStatus: () => SocketStatus;
-    getSyncRequest: (timeoutMillis?: number) => SyncRequest;
+    getSocketStatus: () => SocketStatuses;
     getTitle: () => string;
     waitForEmptyEventQueue: () => Promise<void>;
     getVersion: () => string;
@@ -276,6 +281,7 @@ declare global {
     SignalContext: SignalContextType;
 
     // Used only in preload to calculate load time
+    preloadCompileStartTime: number;
     preloadStartTime: number;
     preloadEndTime: number;
 
@@ -319,7 +325,6 @@ declare global {
 export type WhisperType = {
   Conversation: typeof ConversationModel;
   ConversationCollection: typeof ConversationModelCollectionType;
-  Message: typeof MessageModel;
 
   deliveryReceiptQueue: PQueue;
   deliveryReceiptBatcher: BatcherType<Receipt>;

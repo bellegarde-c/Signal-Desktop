@@ -133,6 +133,7 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     showConversation,
     showExpiredIncomingTapToViewToast,
     showExpiredOutgoingTapToViewToast,
+    showMediaNoLongerAvailableToast,
     showSpoiler,
     startConversation,
     targetMessage,
@@ -143,8 +144,10 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     useComposerActions();
 
   const {
+    showAttachmentNotAvailableModal,
     showContactModal,
     showEditHistoryModal,
+    showTapToViewNotAvailableModal,
     toggleMessageRequestActionsConfirmation,
     toggleDeleteMessagesModal,
     toggleEditNicknameAndNoteModal,
@@ -232,11 +235,14 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
       showAttachmentDownloadStillInProgressToast={
         showAttachmentDownloadStillInProgressToast
       }
+      showAttachmentNotAvailableModal={showAttachmentNotAvailableModal}
       showExpiredIncomingTapToViewToast={showExpiredIncomingTapToViewToast}
       showExpiredOutgoingTapToViewToast={showExpiredOutgoingTapToViewToast}
       showLightbox={showLightbox}
       showLightboxForViewOnceMedia={showLightboxForViewOnceMedia}
+      showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
       showSpoiler={showSpoiler}
+      showTapToViewNotAvailableModal={showTapToViewNotAvailableModal}
       startConversation={startConversation}
       toggleDeleteMessagesModal={toggleDeleteMessagesModal}
       toggleForwardMessagesModal={toggleForwardMessagesModal}

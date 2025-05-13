@@ -8,12 +8,15 @@ import { Blurhash } from 'react-blurhash';
 
 import { Spinner } from '../Spinner';
 import type { LocalizerType, ThemeType } from '../../types/Util';
-import type {
-  AttachmentForUIType,
-  AttachmentType,
+import type { AttachmentForUIType } from '../../types/Attachment';
+import {
+  defaultBlurHash,
+  isIncremental,
+  isReadyToView,
 } from '../../types/Attachment';
-import { defaultBlurHash, isReadyToView } from '../../types/Attachment';
 import { ProgressCircle } from '../ProgressCircle';
+import { useUndownloadableMediaHandler } from '../../hooks/useUndownloadableMediaHandler';
+import { roundFractionForProgressBar } from '../../util/numbers';
 
 export enum CurveType {
   None = 0,
@@ -51,10 +54,11 @@ export type Props = {
 
   i18n: LocalizerType;
   theme?: ThemeType;
-  showVisualAttachment?: (attachment: AttachmentType) => void;
+  showMediaNoLongerAvailableToast?: () => void;
+  showVisualAttachment?: (attachment: AttachmentForUIType) => void;
   cancelDownload?: () => void;
   startDownload?: () => void;
-  onClickClose?: (attachment: AttachmentType) => void;
+  onClickClose?: (attachment: AttachmentForUIType) => void;
   onError?: () => void;
 };
 
@@ -74,6 +78,7 @@ export function Image({
   i18n,
   noBackground,
   noBorder,
+  showMediaNoLongerAvailableToast,
   showVisualAttachment,
   startDownload,
   cancelDownload,
@@ -160,6 +165,9 @@ export function Image({
     },
     [startDownload]
   );
+  const undownloadableClick = useUndownloadableMediaHandler(
+    showMediaNoLongerAvailableToast
+  );
 
   const imageOrBlurHash = url ? (
     <img
@@ -180,7 +188,7 @@ export function Image({
   );
 
   const startDownloadButton =
-    startDownload && !attachment.path && !attachment.pending ? (
+    !attachment.path && !attachment.pending && !isIncremental(attachment) ? (
       <button
         type="button"
         className="module-image__overlay-circle"
@@ -193,15 +201,35 @@ export function Image({
       </button>
     ) : undefined;
 
-  const spinner = !cancelDownload
-    ? undefined
-    : getSpinner({
-        attachment,
-        i18n,
-        cancelDownloadClick,
-        cancelDownloadKeyDown,
-        tabIndex,
-      });
+  const isUndownloadable = attachment.isPermanentlyUndownloadable;
+
+  // eslint-disable-next-line no-nested-ternary
+  const startDownloadOrUnavailableButton = startDownload ? (
+    isUndownloadable ? (
+      <button
+        type="button"
+        className="module-image__overlay-circle module-image__overlay-circle--undownloadable"
+        aria-label={i18n('icu:mediaNotAvailable')}
+        onClick={undownloadableClick}
+        tabIndex={tabIndex}
+      >
+        <div className="module-image__undownloadable-icon" />
+      </button>
+    ) : (
+      startDownloadButton
+    )
+  ) : null;
+
+  const spinner =
+    isIncremental(attachment) || !cancelDownload
+      ? undefined
+      : getSpinner({
+          attachment,
+          i18n,
+          cancelDownloadClick,
+          cancelDownloadKeyDown,
+          tabIndex,
+        });
 
   return (
     <div
@@ -218,7 +246,7 @@ export function Image({
       }}
     >
       {imageOrBlurHash}
-      {startDownloadButton}
+      {startDownloadOrUnavailableButton}
       {spinner}
 
       {attachment.caption ? (
@@ -237,7 +265,9 @@ export function Image({
           }}
         />
       ) : null}
-      {attachment.path && playIconOverlay ? (
+      {(attachment.path || isIncremental(attachment)) &&
+      !isUndownloadable &&
+      playIconOverlay ? (
         <div className="module-image__overlay-circle">
           <div className="module-image__play-icon" />
         </div>
@@ -308,8 +338,13 @@ export function getSpinner({
   tabIndex: number | undefined;
 }): JSX.Element | undefined {
   const downloadFraction =
-    attachment.pending && attachment.size && attachment.totalDownloaded
-      ? attachment.totalDownloaded / attachment.size
+    attachment.pending &&
+    !isIncremental(attachment) &&
+    attachment.size &&
+    attachment.totalDownloaded
+      ? roundFractionForProgressBar(
+          attachment.totalDownloaded / attachment.size
+        )
       : undefined;
 
   if (downloadFraction) {
