@@ -48,6 +48,10 @@ export type LocalizerType = {
   getLocaleMessages(): LocaleMessagesType;
   getLocaleDirection(): LocaleDirection;
   getHourCyclePreference(): HourCyclePreference;
+
+  // Storybook
+  trackUsage(): void;
+  stopTrackingUsage(): Array<[string, string]>;
 };
 
 export enum SentMediaQualityType {
@@ -58,6 +62,11 @@ export enum SentMediaQualityType {
 export enum ThemeType {
   'light' = 'light',
   'dark' = 'dark',
+}
+
+export enum SystemThemeType {
+  light = 'light',
+  dark = 'dark',
 }
 
 // These are strings so they can be interpolated into class names.

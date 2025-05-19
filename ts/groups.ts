@@ -12,7 +12,7 @@ import {
 } from 'lodash';
 import Long from 'long';
 import type { ClientZkGroupCipher } from '@signalapp/libsignal-client/zkgroup';
-import LRU from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import * as log from './logging/log';
 import {
   getCheckedGroupCredentialsForToday,
@@ -102,6 +102,10 @@ import {
 } from './util/groupSendEndorsements';
 import { getProfile } from './util/getProfile';
 import { generateMessageId } from './util/generateMessageId';
+import { postSaveUpdates } from './util/cleanup';
+import { MessageModel } from './models/messages';
+import { areWePending } from './util/groupMembershipUtils';
+import { isConversationAccepted } from './util/isConversationAccepted';
 
 type AccessRequiredEnum = Proto.AccessControl.AccessRequired;
 
@@ -253,7 +257,7 @@ export type GroupV2ChangeDetailType =
 
 export type GroupV2ChangeType = {
   from?: ServiceIdString;
-  details: Array<GroupV2ChangeDetailType>;
+  details: ReadonlyArray<GroupV2ChangeDetailType>;
 };
 
 export type GroupFields = {
@@ -264,7 +268,7 @@ export type GroupFields = {
 
 const MAX_CACHED_GROUP_FIELDS = 100;
 
-const groupFieldsCache = new LRU<string, GroupFields>({
+const groupFieldsCache = new LRUCache<string, GroupFields>({
   max: MAX_CACHED_GROUP_FIELDS,
 });
 
@@ -2016,7 +2020,7 @@ export async function createGroupV2(
     revision: groupV2Info.revision,
   });
 
-  const createdTheGroupMessage: MessageAttributesType = {
+  const createdTheGroupMessage = new MessageModel({
     ...generateMessageId(incrementMessageCounter()),
 
     schemaVersion: MAX_MESSAGE_SCHEMA,
@@ -2032,17 +2036,12 @@ export async function createGroupV2(
       from: ourAci,
       details: [{ type: 'create' }],
     },
-  };
-  await DataWriter.saveMessages([createdTheGroupMessage], {
-    forceSave: true,
-    ourAci,
   });
-  window.MessageCache.__DEPRECATED$register(
-    createdTheGroupMessage.id,
-    new window.Whisper.Message(createdTheGroupMessage),
-    'createGroupV2'
-  );
-  conversation.trigger('newmessage', createdTheGroupMessage);
+  await window.MessageCache.saveMessage(createdTheGroupMessage, {
+    forceSave: true,
+  });
+  window.MessageCache.register(createdTheGroupMessage);
+  drop(conversation.onNewMessage(createdTheGroupMessage));
 
   if (expireTimer) {
     await conversation.updateExpirationTimer(expireTimer, {
@@ -3157,7 +3156,12 @@ async function updateGroup(
   // By updating activeAt we force this conversation into the left panel. We don't want
   //   all groups to show up on link, and we don't want Unknown Group in the left pane.
   let activeAt = conversation.get('active_at') || null;
-  if (!viaFirstStorageSync && newAttributes.name) {
+  const justDiscoveredGroupName =
+    !conversation.get('name') && newAttributes.name;
+  if (
+    !viaFirstStorageSync &&
+    (justDiscoveredGroupName || groupChangeMessages.length)
+  ) {
     activeAt = initialSentAt;
   }
 
@@ -3223,30 +3227,52 @@ async function updateGroup(
       item => item.serviceId === ourAci || item.serviceId === ourPni
     )?.addedByUserId || newAttributes.addedBy;
 
-  if (justAdded && addedBy) {
+  if (justAdded) {
     const adder = window.ConversationController.get(addedBy);
+
+    // Wait for empty queue to make it more likely the group update succeeds
+    const waitThenLeave = async (reason: string) => {
+      log.warn(
+        `waitThenLeave/${logId}/${reason}: Waiting for empty event queue.`
+      );
+      await window.waitForEmptyEventQueue();
+      log.warn(
+        `waitThenLeave/${logId}/${reason}: Empty event queue, starting group leave.`
+      );
+
+      // We're guaranteed to fail if we're not up to date in the group, which we won't be
+      // if we're dropping updates. So we prepare for failure.
+      try {
+        await conversation.leaveGroupV2();
+        log.warn(`waitThenLeave/${logId}/${reason}: Leave complete.`);
+      } catch (error) {
+        log.error(
+          `waitThenLeave/${logId}/${reason}: Failed to leave group.`,
+          Errors.toLogFormat(error)
+        );
+      }
+    };
 
     if (adder && adder.isBlocked()) {
       log.warn(
         `updateGroup/${logId}: Added to group by blocked user ${adder.idForLogging()}. Scheduling group leave.`
       );
 
-      // Wait for empty queue to make it more likely the group update succeeds
-      const waitThenLeave = async () => {
-        log.warn(`waitThenLeave/${logId}: Waiting for empty event queue.`);
-        await window.waitForEmptyEventQueue();
-        log.warn(
-          `waitThenLeave/${logId}: Empty event queue, starting group leave.`
-        );
-
-        await conversation.leaveGroupV2();
-        log.warn(`waitThenLeave/${logId}: Leave complete.`);
-      };
-
       // Cannot await here, would infinitely block queue
-      drop(waitThenLeave());
+      drop(waitThenLeave('added by blocked user'));
 
       // Return early to discard group changes resulting from the blocked user's action.
+      return;
+    }
+    if (conversation.isBlocked()) {
+      log.warn(
+        `updateGroup/${logId}: We were added to a group we blocked. Scheduling group leave.`
+      );
+
+      // Cannot await here, would infinitely block queue
+      drop(waitThenLeave('group is blocked'));
+
+      // Return early to discard group changes resulting from unwanted group add
       return;
     }
   }
@@ -3311,7 +3337,10 @@ export function _mergeGroupChangeMessages(
   let isApprovalPending: boolean;
   if (secondDetail.type === 'admin-approval-add-one') {
     isApprovalPending = true;
-  } else if (secondDetail.type === 'admin-approval-remove-one') {
+  } else if (
+    secondDetail.type === 'admin-approval-remove-one' &&
+    (secondChange.from == null || secondChange.from === secondDetail.aci)
+  ) {
     isApprovalPending = false;
   } else {
     return undefined;
@@ -3435,9 +3464,7 @@ async function appendChangeMessages(
     strictAssert(first !== undefined, 'First message must be there');
 
     log.info(`appendChangeMessages/${logId}: updating ${first.id}`);
-    await DataWriter.saveMessage(first, {
-      ourAci,
-
+    await window.MessageCache.saveMessage(first, {
       // We don't use forceSave here because this is an update of existing
       // message.
     });
@@ -3448,6 +3475,7 @@ async function appendChangeMessages(
     await DataWriter.saveMessages(rest, {
       ourAci,
       forceSave: true,
+      postSaveUpdates,
     });
   } else {
     log.info(
@@ -3456,12 +3484,13 @@ async function appendChangeMessages(
     await DataWriter.saveMessages(mergedMessages, {
       ourAci,
       forceSave: true,
+      postSaveUpdates,
     });
   }
 
   let newMessages = 0;
   for (const changeMessage of mergedMessages) {
-    const existing = window.MessageCache.__DEPRECATED$getById(changeMessage.id);
+    const existing = window.MessageCache.getById(changeMessage.id);
 
     // Update existing message
     if (existing) {
@@ -3473,12 +3502,8 @@ async function appendChangeMessages(
       continue;
     }
 
-    window.MessageCache.__DEPRECATED$register(
-      changeMessage.id,
-      new window.Whisper.Message(changeMessage),
-      'appendChangeMessages'
-    );
-    conversation.trigger('newmessage', changeMessage);
+    const model = window.MessageCache.register(new MessageModel(changeMessage));
+    drop(conversation.onNewMessage(model));
     newMessages += 1;
   }
 
@@ -3536,7 +3561,10 @@ async function getGroupUpdates({
       groupChange.changeEpoch <= SUPPORTED_CHANGE_EPOCH;
 
     if (isChangeSupported) {
-      if (!wrappedGroupChange.isTrusted) {
+      const { isTrusted } = wrappedGroupChange;
+      let isUntrustedChangeVerified = false;
+
+      if (!isTrusted) {
         strictAssert(
           groupChange.serverSignature,
           'Server signature must be present in untrusted group change'
@@ -3563,13 +3591,34 @@ async function getGroupUpdates({
             newProfileKeys: new Map(),
           };
         }
+
+        const { groupId: groupIdBytes } = Proto.GroupChange.Actions.decode(
+          groupChange.actions || new Uint8Array(0)
+        );
+        const actionsGroupId: string | undefined =
+          groupIdBytes && groupIdBytes.length !== 0
+            ? Bytes.toBase64(groupIdBytes)
+            : undefined;
+        if (actionsGroupId && actionsGroupId === group.groupId) {
+          isUntrustedChangeVerified = true;
+        } else if (!actionsGroupId) {
+          log.warn(
+            `getGroupUpdates/${logId}: Missing groupId in group change actions`
+          );
+        } else {
+          log.warn(
+            `getGroupUpdates/${logId}: Incorrect groupId in group change actions`
+          );
+        }
       }
 
-      return updateGroupViaSingleChange({
-        group,
-        newRevision,
-        groupChange,
-      });
+      if (isTrusted || isUntrustedChangeVerified) {
+        return updateGroupViaSingleChange({
+          group,
+          newRevision,
+          groupChange,
+        });
+      }
     }
 
     log.info(
@@ -3745,11 +3794,11 @@ async function updateGroupViaPreJoinInfo({
 
   newAttributes = {
     ...newAttributes,
-    ...(await applyNewAvatar(
-      dropNull(preJoinInfo.avatar),
-      newAttributes,
-      logId
-    )),
+    ...(await applyNewAvatar({
+      newAvatarUrl: dropNull(preJoinInfo.avatar),
+      attributes: newAttributes,
+      logId,
+    })),
   };
 
   return {
@@ -4513,6 +4562,10 @@ async function integrateGroupChange({
   };
 }
 
+function normalizeTextField(text: string | null | undefined): string {
+  return text?.trim() ?? '';
+}
+
 function extractDiffs({
   current,
   dropInitialJoinMessage,
@@ -4617,11 +4670,12 @@ function extractDiffs({
   }
 
   // name
-
-  if (old.name !== current.name) {
+  const oldName = normalizeTextField(old.name);
+  const newName = normalizeTextField(current.name);
+  if (oldName !== newName) {
     details.push({
       type: 'title',
-      newTitle: current.name,
+      newTitle: newName,
     });
   }
 
@@ -4640,11 +4694,13 @@ function extractDiffs({
   }
 
   // description
-  if (old.description !== current.description) {
+  const oldDescription = normalizeTextField(old.description);
+  const newDescription = normalizeTextField(current.description);
+  if (oldDescription !== newDescription) {
     details.push({
       type: 'description',
-      removed: !current.description,
-      description: current.description,
+      removed: !newDescription,
+      description: newDescription,
     });
   }
 
@@ -5373,7 +5429,7 @@ async function applyGroupChange({
   if (actions.modifyTitle) {
     const { title } = actions.modifyTitle;
     if (title && title.content === 'title') {
-      result.name = dropNull(title.title);
+      result.name = dropNull(title.title)?.trim();
     } else {
       log.warn(
         `applyGroupChange/${logId}: Clearing group title due to missing data.`
@@ -5387,7 +5443,11 @@ async function applyGroupChange({
     const { avatar } = actions.modifyAvatar;
     result = {
       ...result,
-      ...(await applyNewAvatar(dropNull(avatar), result, logId)),
+      ...(await applyNewAvatar({
+        newAvatarUrl: dropNull(avatar),
+        attributes: result,
+        logId,
+      })),
     };
   }
 
@@ -5575,7 +5635,7 @@ async function applyGroupChange({
   if (actions.modifyDescription) {
     const { descriptionBytes } = actions.modifyDescription;
     if (descriptionBytes && descriptionBytes.content === 'descriptionText') {
-      result.description = dropNull(descriptionBytes.descriptionText);
+      result.description = dropNull(descriptionBytes.descriptionText)?.trim();
     } else {
       log.warn(
         `applyGroupChange/${logId}: Clearing group description due to missing data.`
@@ -5667,13 +5727,23 @@ export async function decryptGroupAvatar(
 
 // Overwriting result.avatar as part of functionality
 export async function applyNewAvatar(
-  newAvatarUrl: string | undefined,
-  attributes: Readonly<
-    Pick<ConversationAttributesType, 'avatar' | 'secretParams'>
-  >,
-  logId: string
-): Promise<Pick<ConversationAttributesType, 'avatar'>> {
-  const result: Pick<ConversationAttributesType, 'avatar'> = {};
+  options:
+    | {
+        newAvatarUrl?: string | undefined;
+        attributes: Pick<ConversationAttributesType, 'avatar' | 'secretParams'>;
+        logId: string;
+        forceDownload: true;
+      }
+    | {
+        newAvatarUrl?: string | undefined;
+        attributes: ConversationAttributesType;
+        logId: string;
+        forceDownload?: false | undefined;
+      }
+): Promise<Pick<ConversationAttributesType, 'avatar' | 'remoteAvatarUrl'>> {
+  const { newAvatarUrl, attributes, logId, forceDownload } = options;
+  const result: Pick<ConversationAttributesType, 'avatar' | 'remoteAvatarUrl'> =
+    {};
   try {
     // Avatar has been dropped
     if (!newAvatarUrl && attributes.avatar) {
@@ -5685,19 +5755,34 @@ export async function applyNewAvatar(
       result.avatar = undefined;
     }
 
+    const avatarUrlToUse =
+      newAvatarUrl ||
+      ('remoteAvatarUrl' in attributes
+        ? attributes.remoteAvatarUrl
+        : undefined);
+
     // Group has avatar; has it changed?
     if (
-      newAvatarUrl &&
-      (!attributes.avatar?.path || attributes.avatar.url !== newAvatarUrl)
+      avatarUrlToUse &&
+      (!attributes.avatar?.path || attributes.avatar.url !== avatarUrlToUse)
     ) {
       if (!attributes.secretParams) {
         throw new Error('applyNewAvatar: group was missing secretParams!');
       }
 
-      const data = await decryptGroupAvatar(
-        newAvatarUrl,
+      if (
+        !forceDownload &&
+        (areWePending(attributes) || !isConversationAccepted(attributes))
+      ) {
+        result.remoteAvatarUrl = avatarUrlToUse;
+        return result;
+      }
+
+      const data: Uint8Array = await decryptGroupAvatar(
+        avatarUrlToUse,
         attributes.secretParams
       );
+
       const hash = computeHash(data);
 
       if (attributes.avatar?.hash === hash) {
@@ -5706,7 +5791,7 @@ export async function applyNewAvatar(
         );
         result.avatar = {
           ...attributes.avatar,
-          url: newAvatarUrl,
+          url: avatarUrlToUse,
         };
         return result;
       }
@@ -5716,10 +5801,9 @@ export async function applyNewAvatar(
           attributes.avatar.path
         );
       }
-
       const local = await window.Signal.Migrations.writeNewAttachmentData(data);
       result.avatar = {
-        url: newAvatarUrl,
+        url: avatarUrlToUse,
         ...local,
         hash,
       };
@@ -5809,16 +5893,10 @@ async function applyGroupState({
   // Note: During decryption, title becomes a GroupAttributeBlob
   const { title } = groupState;
   if (title && title.content === 'title') {
-    result.name = dropNull(title.title);
+    result.name = dropNull(title.title)?.trim();
   } else {
     result.name = undefined;
   }
-
-  // avatar
-  result = {
-    ...result,
-    ...(await applyNewAvatar(dropNull(groupState.avatar), result, logId)),
-  };
 
   // disappearingMessagesTimer
   // Note: during decryption, disappearingMessageTimer becomes a GroupAttributeBlob
@@ -6019,7 +6097,7 @@ async function applyGroupState({
   // descriptionBytes
   const { descriptionBytes } = groupState;
   if (descriptionBytes && descriptionBytes.content === 'descriptionText') {
-    result.description = dropNull(descriptionBytes.descriptionText);
+    result.description = dropNull(descriptionBytes.descriptionText)?.trim();
   } else {
     result.description = undefined;
   }
@@ -6042,6 +6120,16 @@ async function applyGroupState({
 
     return member;
   });
+
+  // avatar
+  result = {
+    ...result,
+    ...(await applyNewAvatar({
+      newAvatarUrl: dropNull(groupState.avatar),
+      attributes: result,
+      logId,
+    })),
+  };
 
   if (result.left) {
     result.addedBy = undefined;

@@ -43,6 +43,7 @@ import { getKeysForServiceId } from './getKeysForServiceId';
 import { SignalService as Proto } from '../protobuf';
 import * as log from '../logging/log';
 import type { GroupSendToken } from '../types/GroupSendEndorsements';
+import { isSignalServiceId } from '../util/isSignalConversation';
 
 export const enum SenderCertificateMode {
   WithE164,
@@ -444,7 +445,6 @@ export default class OutgoingMessage {
 
         return window.textsecure.storage.protocol.enqueueSessionJob<MessageType>(
           address,
-          `doSendMessage(${address.toString()}, ${this.timestamp})`,
           async () => {
             const protocolAddress = ProtocolAddress.new(
               serviceId,
@@ -640,7 +640,7 @@ export default class OutgoingMessage {
         ) {
           newError = new OutgoingIdentityKeyError(serviceId, error);
           log.error(
-            'Got "key changed" error from encrypt - no identityKey for application layer',
+            'UntrustedIdentityKeyError from decrypt!',
             serviceId,
             deviceIds
           );
@@ -686,6 +686,15 @@ export default class OutgoingMessage {
   }
 
   async sendToServiceId(serviceId: ServiceIdString): Promise<void> {
+    if (isSignalServiceId(serviceId)) {
+      this.registerError(
+        serviceId,
+        'Failed to send to Signal serviceId',
+        new Error("Can't send to Signal serviceId")
+      );
+      return;
+    }
+
     try {
       const ourAci = window.textsecure.storage.user.getCheckedAci();
       const deviceIds = await window.textsecure.storage.protocol.getDeviceIds({

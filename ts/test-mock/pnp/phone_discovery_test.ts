@@ -46,7 +46,6 @@ describe('pnp/phone discovery', function (this: Mocha.Suite) {
 
     state = state.updateAccount({
       profileKey: phone.profileKey.serialize(),
-      e164: phone.device.number,
     });
 
     state = state.addContact(
@@ -103,7 +102,7 @@ describe('pnp/phone discovery', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'Hello PNI');
+      await typeIntoInput(compositionInput, 'Hello PNI', '');
       await compositionInput.press('Enter');
     }
 

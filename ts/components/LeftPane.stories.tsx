@@ -18,9 +18,7 @@ import { DialogUpdate } from './DialogUpdate';
 import { UnsupportedOSDialog } from './UnsupportedOSDialog';
 import type { ConversationType } from '../state/ducks/conversations';
 import { MessageSearchResult } from './conversationList/MessageSearchResult';
-import { setupI18n } from '../util/setupI18n';
 import { DurationInSeconds, DAY } from '../util/durations';
-import enMessages from '../../_locales/en/messages.json';
 import { LeftPaneMode } from '../types/leftPane';
 import { ThemeType } from '../types/Util';
 import {
@@ -35,8 +33,9 @@ import {
   useUuidFetchState,
 } from '../test-both/helpers/fakeLookupConversationWithoutServiceId';
 import type { GroupListItemConversationType } from './conversationList/GroupListItem';
+import { ServerAlert } from '../util/handleServerAlerts';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 type OverridePropsType = Partial<PropsType> & {
   dialogNetworkStatus?: Partial<DialogNetworkStatusPropsType>;
@@ -62,6 +61,7 @@ const defaultConversations: Array<ConversationType> = [
 ];
 
 const defaultSearchProps = {
+  filterByUnread: false,
   isSearchingGlobally: true,
   searchConversation: undefined,
   searchDisabled: false,
@@ -110,6 +110,7 @@ const pinnedConversations: Array<ConversationType> = [
 
 const defaultModeSpecificProps = {
   ...defaultSearchProps,
+  filterByUnread: false,
   mode: LeftPaneMode.Inbox as const,
   pinnedConversations,
   conversations: defaultConversations,
@@ -153,7 +154,7 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
     },
     clearConversationSearch: action('clearConversationSearch'),
     clearGroupCreationError: action('clearGroupCreationError'),
-    clearSearch: action('clearSearch'),
+    clearSearchQuery: action('clearSearchQuery'),
     closeMaximumGroupSizeModal: action('closeMaximumGroupSizeModal'),
     closeRecommendedGroupSizeModal: action('closeRecommendedGroupSizeModal'),
     composeDeleteAvatarFromDisk: action('composeDeleteAvatarFromDisk'),
@@ -173,6 +174,7 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
     hasPendingUpdate: false,
     i18n,
     isMacOS: false,
+    isOnline: true,
     preferredWidthFromStorage: 320,
     challengeStatus: 'idle',
     crashReportCount: 0,
@@ -285,6 +287,9 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
         onShowDebugLog={action('onShowDebugLog')}
         onUndoArchive={action('onUndoArchive')}
         openFileInFolder={action('openFileInFolder')}
+        showAttachmentNotAvailableModal={action(
+          'showAttachmentNotAvailableModal'
+        )}
         toast={undefined}
         megaphone={undefined}
         containerWidthBreakpoint={containerWidthBreakpoint}
@@ -316,6 +321,7 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
     ),
     toggleNavTabsCollapse: action('toggleNavTabsCollapse'),
     toggleProfileEditor: action('toggleProfileEditor'),
+    updateFilterByUnread: action('updateFilterByUnread'),
     updateSearchTerm: action('updateSearchTerm'),
 
     ...overrideProps,
@@ -382,6 +388,46 @@ export function InboxBackupMediaDownloadWithDialogsAndUnpinnedConversations(): J
           conversations: defaultConversations,
           archivedConversations: [],
           isAboutToSearch: false,
+        },
+      })}
+    />
+  );
+}
+export function InboxCriticalIdlePrimaryDeviceAlert(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.CRITICAL_IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now(),
+          },
+        },
+      })}
+    />
+  );
+}
+export function InboxIdlePrimaryDeviceAlert(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now(),
+          },
+        },
+      })}
+    />
+  );
+}
+export function InboxIdlePrimaryDeviceAlertNonDismissable(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        serverAlerts: {
+          [ServerAlert.IDLE_PRIMARY_DEVICE]: {
+            firstReceivedAt: Date.now() - 10 * DAY,
+            dismissedAt: Date.now() - 8 * DAY,
+          },
         },
       })}
     />
@@ -558,24 +604,6 @@ export function SearchNoResultsWhenSearchingEverywhere(): JSX.Element {
           conversationResults: emptySearchResultsGroup,
           contactResults: emptySearchResultsGroup,
           messageResults: emptySearchResultsGroup,
-          primarySendsSms: false,
-        },
-      })}
-    />
-  );
-}
-
-export function SearchNoResultsWhenSearchingEverywhereSms(): JSX.Element {
-  return (
-    <LeftPaneInContainer
-      {...useProps({
-        modeSpecificProps: {
-          ...defaultSearchProps,
-          mode: LeftPaneMode.Search,
-          conversationResults: emptySearchResultsGroup,
-          contactResults: emptySearchResultsGroup,
-          messageResults: emptySearchResultsGroup,
-          primarySendsSms: true,
         },
       })}
     />
@@ -593,7 +621,41 @@ export function SearchNoResultsWhenSearchingInAConversation(): JSX.Element {
           contactResults: emptySearchResultsGroup,
           messageResults: emptySearchResultsGroup,
           searchConversationName: 'Bing Bong',
-          primarySendsSms: false,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchNoResultsUnreadFilterAndQuery(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchNoResultsUnreadFilterWithoutQuery(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          searchTerm: '',
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: emptySearchResultsGroup,
+          contactResults: emptySearchResultsGroup,
+          messageResults: emptySearchResultsGroup,
         },
       })}
     />
@@ -610,7 +672,6 @@ export function SearchAllResultsLoading(): JSX.Element {
           conversationResults: { isLoading: true },
           contactResults: { isLoading: true },
           messageResults: { isLoading: true },
-          primarySendsSms: false,
         },
       })}
     />
@@ -630,7 +691,6 @@ export function SearchSomeResultsLoading(): JSX.Element {
           },
           contactResults: { isLoading: true },
           messageResults: { isLoading: true },
-          primarySendsSms: false,
         },
       })}
     />
@@ -650,7 +710,6 @@ export function SearchHasConversationsAndContactsButNotMessages(): JSX.Element {
           },
           contactResults: { isLoading: false, results: defaultConversations },
           messageResults: { isLoading: false, results: [] },
-          primarySendsSms: false,
         },
       })}
     />
@@ -676,7 +735,29 @@ export function SearchAllResults(): JSX.Element {
               { id: 'msg2', type: 'incoming', conversationId: 'bar' },
             ],
           },
-          primarySendsSms: false,
+        },
+      })}
+    />
+  );
+}
+
+export function SearchAllResultsUnreadFilter(): JSX.Element {
+  return (
+    <LeftPaneInContainer
+      {...useProps({
+        modeSpecificProps: {
+          ...defaultSearchProps,
+          filterByUnread: true,
+          mode: LeftPaneMode.Search,
+          conversationResults: {
+            isLoading: false,
+            results: defaultConversations,
+          },
+          contactResults: { isLoading: false, results: [] },
+          messageResults: {
+            isLoading: false,
+            results: [],
+          },
         },
       })}
     />

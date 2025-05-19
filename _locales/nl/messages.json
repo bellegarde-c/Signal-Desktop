@@ -38,6 +38,9 @@
   "icu:Preferences__sent-media-quality": {
     "messageformat": "Media-verzendkwaliteit"
   },
+  "icu:Preferences__sent-media-quality__description": {
+    "messageformat": "Als je media in hoge kwaliteit verzendt, verbruik je meer data."
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "Standaard"
   },
@@ -50,8 +53,14 @@
   "icu:privacyPolicy": {
     "messageformat": "Voorwaarden & privacybeleid"
   },
-  "icu:appleSilicon": {
-    "messageformat": "Apple silicon"
+  "icu:About__AppEnvironment": {
+    "messageformat": "{appEnv}"
+  },
+  "icu:About__AppEnvironment--AppleSilicon": {
+    "messageformat": "{appEnv} (Apple silicon)"
+  },
+  "icu:About__AppEnvironment--AppleIntel": {
+    "messageformat": "{appEnv} (Intel)"
   },
   "icu:copyErrorAndQuit": {
     "messageformat": "Foutmelding kopiëren en afsluiten"
@@ -59,23 +68,29 @@
   "icu:unknownContact": {
     "messageformat": "Onbekend contact"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "Onbekend"
+  },
   "icu:unknownGroup": {
     "messageformat": "Onbekende groep"
   },
+  "icu:cantOpenSignalError": {
+    "messageformat": "Kan Signal niet openen"
+  },
+  "icu:cantOpenSignalError__detail": {
+    "messageformat": "Volg de herstelhandleiding op de ondersteuningspagina of neem contact op met Signal Support om het probleem op te lossen.\n\nHeb je Signal direct nodig? Dan kun je je gegevens wissen en deze desktop opnieuw koppelen. Je hebt de mogelijkheid om je chatgeschiedenis over te zetten van je telefoon."
+  },
   "icu:databaseError": {
     "messageformat": "Databasefout"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "Er is een databasefout opgetreden. Je kunt de foutmelding kopiëren en contact opnemen met Signal Support om het probleem op te lossen. Heb je Signal direct nodig? Dan kun je je gegevens wissen en Signal opnieuw opstarten.\n\nGa naar {link} voor contact met support"
   },
   "icu:deleteAndRestart": {
     "messageformat": "Gegevens wissen en opnieuw opstarten"
   },
   "icu:databaseError__deleteDataConfirmation": {
-    "messageformat": "Alle gegevens definitief wissen?"
+    "messageformat": "Alle gegevens permanent wissen"
   },
   "icu:databaseError__deleteDataConfirmation__detail": {
-    "messageformat": "Je chatgeschiedenis en media worden permanent van dit apparaat verwijderd. Je kunt Signal op dit apparaat gebruiken nadat je het opnieuw hebt gekoppeld. Er worden geen gegevens van je telefoon verwijderd."
+    "messageformat": "Je chatgeschiedenis en media worden permanent van dit apparaat verwijderd. Er worden geen gegevens van je telefoon verwijderd.\n\nJe kunt Signal op dit apparaat gebruiken nadat je het opnieuw hebt gekoppeld. Je hebt de mogelijkheid om je chatgeschiedenis over te zetten van je telefoon."
   },
   "icu:databaseError__startOldVersion": {
     "messageformat": "De versie van je database komt niet overeen met deze versie van Signal. Zorg ervoor dat je de nieuwste versie van Signal op je computer opent."
@@ -93,7 +108,7 @@
     "messageformat": "Stickerpakket maken/uploaden"
   },
   "icu:mainMenuEdit": {
-    "messageformat": "&Bewerken"
+    "messageformat": "B&ewerken"
   },
   "icu:mainMenuView": {
     "messageformat": "&Weergave"
@@ -208,9 +223,6 @@
   },
   "icu:optimizingApplication": {
     "messageformat": "Applicatie aan het optimaliseren…"
-  },
-  "icu:migratingToSQLCipher": {
-    "messageformat": "Bezig met optimaliseren van berichten… {status} voltooid."
   },
   "icu:archivedConversations": {
     "messageformat": "Gearchiveerde chats"
@@ -401,9 +413,6 @@
   "icu:unreadMessages": {
     "messageformat": "{count, plural, one {{count,number} ongelezen bericht} other {{count,number} ongelezen berichten}}"
   },
-  "icu:messageHistoryUnsynced": {
-    "messageformat": "Om veiligheidsredenen wordt je chatgeschiedenis niet overgezet naar nieuwe gekoppelde apparaten."
-  },
   "icu:youMarkedAsVerified": {
     "messageformat": "Je hebt het veiligheidsnummer met {name} gemarkeerd als geverifieerd."
   },
@@ -453,7 +462,7 @@
     "messageformat": "Acties voor verhaal {story}"
   },
   "icu:sendAnyway": {
-    "messageformat": "Toch verzenden"
+    "messageformat": "Toch versturen"
   },
   "icu:safetyNumberChangeDialog_send": {
     "messageformat": "Verzenden"
@@ -581,6 +590,12 @@
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
   },
+  "icu:Toast--InvalidStorageServiceHeaders": {
+    "messageformat": "Ongeldige reactie van de opslagservice ontvangen. Deel alsjeblieft je logs."
+  },
+  "icu:Toast--FailedToImportBackup": {
+    "messageformat": "Failed to process some frames during backup import. Please share your logs."
+  },
   "icu:cannotSelectPhotosAndVideosAlongWithFiles": {
     "messageformat": "Je kunt geen foto's en video's samen met bestanden selecteren."
   },
@@ -677,8 +692,11 @@
   "icu:search": {
     "messageformat": "Zoeken"
   },
+  "icu:searchUnreadChats": {
+    "messageformat": "Ongelezen chats zoeken"
+  },
   "icu:clearSearch": {
-    "messageformat": "Wis zoekopdracht"
+    "messageformat": "Zoekopdracht wissen"
   },
   "icu:searchIn": {
     "messageformat": "Chat doorzoeken"
@@ -686,11 +704,23 @@
   "icu:noSearchResults": {
     "messageformat": "Geen resultaten voor ‘{searchTerm}’"
   },
-  "icu:noSearchResults--sms-only": {
-    "messageformat": "SMS/MMS-contacten zijn niet beschikbaar in Signal Desktop."
+  "icu:noSearchResultsWithUnreadFilter": {
+    "messageformat": "Geen resultaten voor ‘{searchTerm}’ in ongelezen chats"
+  },
+  "icu:noSearchResultsOnlyUnreadFilter": {
+    "messageformat": "Geen ongelezen chats"
   },
   "icu:noSearchResultsInConversation": {
     "messageformat": "Geen resultaten voor ‘{searchTerm}’ in ‘{conversationName}’"
+  },
+  "icu:conversationsUnreadHeader": {
+    "messageformat": "Gefilterd op ongelezen"
+  },
+  "icu:filterByUnreadButtonLabel": {
+    "messageformat": "Filteren op ongelezen"
+  },
+  "icu:clearFilterButton": {
+    "messageformat": "Filter verwijderen"
   },
   "icu:conversationsHeader": {
     "messageformat": "Chats"
@@ -785,17 +815,14 @@
   "icu:voiceNoteError": {
     "messageformat": "Er is een fout opgetreden bij de audio-opname."
   },
-  "icu:attachmentSaved": {
-    "messageformat": "Bijlage opgeslagen."
-  },
   "icu:attachmentSavedPlural": {
-    "messageformat": "{count, plural, one {Attachment saved} other {{count,number} attachments saved}}"
+    "messageformat": "{count, plural, one {Bijlage opgeslagen} other {{count,number} bijlagen opgeslagen}}"
   },
   "icu:attachmentSavedShow": {
     "messageformat": "In map weergeven"
   },
   "icu:attachmentStillDownloading": {
-    "messageformat": "{count, plural, one {Can't save attachment, since it hasn't finished downloading yet} other {Can't save attachments, since {count,number} haven't finished downloading yet}}"
+    "messageformat": "{count, plural, one {Kan de bijlage niet opslaan, omdat deze nog niet is gedownload} other {Kan de bijlagen niet opslaan, omdat {count,number} bijlagen nog niet zijn gedownload}}"
   },
   "icu:you": {
     "messageformat": "Jij"
@@ -906,7 +933,7 @@
     "messageformat": "Ontvangen"
   },
   "icu:sendMessage": {
-    "messageformat": "Bericht verzenden"
+    "messageformat": "Bericht"
   },
   "icu:showMembers": {
     "messageformat": "Leden weergeven"
@@ -994,18 +1021,6 @@
   },
   "icu:MessageContextMenu__info": {
     "messageformat": "Bericht­details"
-  },
-  "icu:deleteMessagesInConversation": {
-    "messageformat": "Berichten verwijderen"
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__title": {
-    "messageformat": "Berichten verwijderen?"
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description": {
-    "messageformat": "Alle berichten in deze chat worden verwijderd van dit apparaat. Je kunt nog steeds naar deze chat zoeken nadat je berichten hebt verwijderd."
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description-with-sync": {
-    "messageformat": "Alle berichten in deze chat worden verwijderd van al je apparaten. Je kunt nog steeds naar deze chat zoeken nadat je berichten hebt verwijderd."
   },
   "icu:deleteConversation": {
     "messageformat": "Verwijderen"
@@ -1109,8 +1124,92 @@
   "icu:lightboxImageAlt": {
     "messageformat": "Afbeelding verstuurd in chat"
   },
+  "icu:lightBoxDownloading": {
+    "messageformat": "{downloaded} van {total} aan het downloaden"
+  },
   "icu:imageCaptionIconAlt": {
     "messageformat": "Icoon dat laat zien dat deze afbeelding een bijschrift heeft"
+  },
+  "icu:imageOpenAlt": {
+    "messageformat": "Open deze bijlage in een grotere weergave"
+  },
+  "icu:startDownload": {
+    "messageformat": "Download starten"
+  },
+  "icu:cancelDownload": {
+    "messageformat": "Download annuleren"
+  },
+  "icu:downloadNItems": {
+    "messageformat": "{count, plural, one {{count,number} item} other {{count,number} items}}"
+  },
+  "icu:mediaNotAvailable": {
+    "messageformat": "Dit mediabestand is niet beschikbaar"
+  },
+  "icu:attachmentNoLongerAvailable__learnMore": {
+    "messageformat": "Meer informatie"
+  },
+  "icu:attachmentNotAvailable__file": {
+    "messageformat": "Bestand niet beschikbaar"
+  },
+  "icu:attachmentNotAvailable__longMessage": {
+    "messageformat": "Dit bericht is onvolledig"
+  },
+  "icu:attachmentNotAvailable__sticker": {
+    "messageformat": "Sticker niet beschikbaar"
+  },
+  "icu:attachmentNotAvailable__voice": {
+    "messageformat": "Spraakbericht niet beschikbaar"
+  },
+  "icu:attachmentNotAvailable__tapToView": {
+    "messageformat": "Eenmaligeweergave-media is niet beschikbaar"
+  },
+  "icu:attachmentNotAvailable__tapToViewCannotDownload": {
+    "messageformat": "Kan eenmaligeweergave-media niet downloaden."
+  },
+  "icu:AttachmentNotAvailableModal__title--file": {
+    "messageformat": "Bestand niet beschikbaar"
+  },
+  "icu:AttachmentNotAvailableModal__title--long-text": {
+    "messageformat": "Volledig bericht niet beschikbaar"
+  },
+  "icu:AttachmentNotAvailableModal__title--media": {
+    "messageformat": "Media niet beschikbaar"
+  },
+  "icu:AttachmentNotAvailableModal__title--sticker": {
+    "messageformat": "Sticker niet beschikbaar"
+  },
+  "icu:AttachmentNotAvailableModal__title--voice-message": {
+    "messageformat": "Spraakbericht niet beschikbaar"
+  },
+  "icu:AttachmentNotAvailableModal__body--file": {
+    "messageformat": "Dit bestand is niet overgezet van je telefoon toen dit apparaat werd gekoppeld. Media en bestanden die ouder zijn dan 45 dagen op het moment dat het apparaat wordt gekoppeld, kunnen niet worden gesynchroniseerd."
+  },
+  "icu:AttachmentNotAvailableModal__body--long-text": {
+    "messageformat": "Van dit bericht is niet de volledige tekst overgezet van je telefoon toen dit apparaat werd gekoppeld. Lange tekstberichten die ouder zijn dan 45 dagen op het moment dat een apparaat wordt gekoppeld, kunnen niet worden gesynchroniseerd."
+  },
+  "icu:AttachmentNotAvailableModal__body--media": {
+    "messageformat": "Dit bestand is niet overgezet van je telefoon toen dit apparaat werd gekoppeld. Bestanden ouder dan 45 dagen op het moment dat het apparaat wordt gekoppeld, kunnen niet worden gesynchroniseerd."
+  },
+  "icu:AttachmentNotAvailableModal__body--sticker": {
+    "messageformat": "Deze sticker is niet overgezet van je telefoon toen dit apparaat werd gekoppeld. Media en bestanden die ouder zijn dan 45 dagen op het moment dat het apparaat wordt gekoppeld, kunnen niet worden gesynchroniseerd."
+  },
+  "icu:AttachmentNotAvailableModal__body--voice-message": {
+    "messageformat": "Dit spraakbericht is niet overgezet van je telefoon toen dit apparaat werd gekoppeld. Media en bestanden die ouder zijn dan 45 dagen op het moment dat het apparaat wordt gekoppeld, kunnen niet worden gesynchroniseerd."
+  },
+  "icu:TapToViewNotAvailableModal__body--expired": {
+    "messageformat": "Deze eenmaligeweergave-media is niet langer beschikbaar om te downloaden. Vraag {name} om het opnieuw te verzenden."
+  },
+  "icu:TapToViewNotAvailableModal__body--error": {
+    "messageformat": "Kan eenmaligeweergave-media niet downloaden. {name} zal het opnieuw moeten verzenden."
+  },
+  "icu:BackfillFailureModal__title": {
+    "messageformat": "Kan media niet downloaden"
+  },
+  "icu:BackfillFailureModal__body--timeout": {
+    "messageformat": "Controleer de internetverbinding van je desktop en telefoon. Open Signal op je telefoon en probeer opnieuw te downloaden."
+  },
+  "icu:BackfillFailureModal__body--not-found": {
+    "messageformat": "Dit bestand is niet meer beschikbaar op je telefoon en kan niet worden gedownload."
   },
   "icu:save": {
     "messageformat": "Opslaan"
@@ -1154,17 +1253,14 @@
   "icu:Install__qr-failed-load__retry": {
     "messageformat": "Opnieuw proberen"
   },
+  "icu:Install__qr-max-rotations__retry": {
+    "messageformat": "QR-code vernieuwen"
+  },
   "icu:Install__qr-failed-load__get-help": {
     "messageformat": "Hulp vragen"
   },
   "icu:Install__support-link": {
     "messageformat": "Hulp nodig?"
-  },
-  "icu:Install__choose-device-name__description": {
-    "messageformat": "Je zult deze naam zien in het menu ‘Gekoppelde apparaten’ in de Signal-app op je telefoon."
-  },
-  "icu:Install__choose-device-name__placeholder": {
-    "messageformat": "Mijn computer"
   },
   "icu:Preferences--phone-number": {
     "messageformat": "Telefoonnummer"
@@ -1172,11 +1268,11 @@
   "icu:Preferences--device-name": {
     "messageformat": "Apparaatnaam"
   },
-  "icu:chooseDeviceName": {
-    "messageformat": "Kies de naam van dit apparaat"
+  "icu:Preferences--device-name__description": {
+    "messageformat": "Om de naam van dit apparaat te wijzigen, open de Signal-app op je mobiele telefoon en navigeer naar Instellingen > Gekoppelde apparaten"
   },
-  "icu:finishLinkingPhone": {
-    "messageformat": "Koppelen van telefoon voltooien"
+  "icu:Preferences__EmojiSkinToneDefaultSetting__Label": {
+    "messageformat": "Emoji-huidskleur"
   },
   "icu:initialSync": {
     "messageformat": "Contacten en groepen worden gesynchroniseerd"
@@ -1347,7 +1443,7 @@
     "messageformat": "{count, plural, one {{count,number} persoon wordt niet toegevoegd aan de oproep.} other {{count,number} personen worden niet toegevoegd aan de oproep.}}"
   },
   "icu:CallingPendingParticipants__RequestsToJoin": {
-    "messageformat": "{count, plural, one {{count,number} verzoek om deel te nemen aan de oproep} other {{count,number} verzoeken om deel te nemen aan de oproep}}"
+    "messageformat": "{count, plural, one {{count,number} deelnameverzoek} other {{count,number} deelnameverzoeken}}"
   },
   "icu:CallingPendingParticipants__WouldLikeToJoin": {
     "messageformat": "Wil graag deelnemen…"
@@ -1356,7 +1452,7 @@
     "messageformat": "{count, plural, one {+ {count,number} verzoek} other {+ {count,number} verzoeken}}"
   },
   "icu:CallingPendingParticipants__Toast--added-users-to-call": {
-    "messageformat": "{count, plural, one {{count,number} persoon is toegevoegd aan de oproep } other {{count,number} personen zijn toegevoegd aan de oproep}}"
+    "messageformat": "{count, plural, one {{count,number} persoon is toegevoegd aan de oproep} other {{count,number} personen zijn toegevoegd aan de oproep}}"
   },
   "icu:CallingRaisedHandsList__Title": {
     "messageformat": "{count, plural, one {{count,number} opgestoken hand} other {{count,number} opgestoken handen}}"
@@ -1387,6 +1483,9 @@
   },
   "icu:calling__pre-call-info--many-people-in-call": {
     "messageformat": "{others, plural, one {{first}, {second} en {others,number} ander zijn in deze oproep aanwezig} other {{first}, {second} en {others,number} anderen zijn in deze oproep aanwezig}}"
+  },
+  "icu:calling__pre-call-info--only-unknown-contacts-in-call": {
+    "messageformat": "{count, plural, one {{count,number} persoon is in deze oproep aanwezig} other {{count,number} personen zijn in deze oproep aanwezig}}"
   },
   "icu:calling__pre-call-info--will-ring-1": {
     "messageformat": "Als je doorgaat zal Signal {person} bellen"
@@ -1485,7 +1584,7 @@
     "messageformat": "Open de systeemvoorkeuren."
   },
   "icu:calling__presenting--permission-instruction-step2": {
-    "messageformat": "Klik op het pictogram van een hangslot linksonder en voer vervolgens het wachtwoord van je computer in."
+    "messageformat": "Klik op het hangslot-icoon linksonder en voer vervolgens het wachtwoord van je computer in."
   },
   "icu:calling__presenting--permission-instruction-step3": {
     "messageformat": "Vink het selectievakje naast Signal aan aan de rechterkant van het scherm. Als je Signal niet in de lijst ziet, klik dan op het ‘+’-symbool om Signal aan de lijst toe te voegen."
@@ -1545,10 +1644,10 @@
     "messageformat": "Alle gegevens wissen?"
   },
   "icu:deleteAllDataBody": {
-    "messageformat": "Alle gegevens en berichten wissen uit deze versie van Signal Desktop? Je kunt dit apparaat altijd opnieuw koppelen, maar je berichten worden niet hersteld. Je Signal-account en gegevens op je telefoon of andere gekoppelde apparaten worden niet gewist."
+    "messageformat": "Alle gegevens en berichten wissen uit deze versie van Signal Desktop? Je Signal-account en gegevens op je telefoon of andere gekoppelde apparaten worden niet gewist."
   },
   "icu:deleteAllDataProgress": {
-    "messageformat": "Aan het ontkoppelen en alle gegevens aan het wissen"
+    "messageformat": "Aan het ontkoppelen en alle gegevens aan het wissen…"
   },
   "icu:deleteOldIndexedDBData": {
     "messageformat": "Je hebt nog verouderde gegevens op je apparaat van een eerdere installatie van Signal Desktop. Als je ervoor kiest om verder te gaan, dan zullen alle gegevens worden gewist en zal je met een schone installatie van Signal Desktop beginnen."
@@ -1724,6 +1823,12 @@
   "icu:ConversationDetails__HeaderButton--Message": {
     "messageformat": "Bericht"
   },
+  "icu:ConversationDetails--help-section": {
+    "messageformat": "Hulp"
+  },
+  "icu:ConversationDetails--support-center": {
+    "messageformat": "Ondersteuningscentrum"
+  },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "Veiligheidsnummer weergeven"
   },
@@ -1783,6 +1888,9 @@
   },
   "icu:Toast--failed-to-fetch-phone-number": {
     "messageformat": "Het ophalen van het telefoonnummer is mislukt. Controleer je internetverbinding en probeer het opnieuw."
+  },
+  "icu:Toast--download-failed": {
+    "messageformat": "Downloaden mislukt"
   },
   "icu:ToastManager__CannotEditMessage_24": {
     "messageformat": "Berichten kunnen alleen binnen 24 uur na verzenden bewerkt worden."
@@ -2162,6 +2270,210 @@
   "icu:EmojiPicker__button--flag": {
     "messageformat": "Vlaggen"
   },
+  "icu:FunPicker__Tab--Emojis": {
+    "messageformat": "Emoji"
+  },
+  "icu:FunPicker__Tab--Stickers": {
+    "messageformat": "Stickers"
+  },
+  "icu:FunPicker__Tab--Gifs": {
+    "messageformat": "GIF's"
+  },
+  "icu:FunPanelEmojis__SearchLabel": {
+    "messageformat": "Emoji zoeken"
+  },
+  "icu:FunPanelEmojis__SearchPlaceholder": {
+    "messageformat": "Emoji zoeken"
+  },
+  "icu:FunPanelEmojis__SubNavLabel": {
+    "messageformat": "Emoji-categorieën"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Recents": {
+    "messageformat": "Onlangs gebruikt"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--SmileysAndPeople": {
+    "messageformat": "Smileys & mensen"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--AnimalsAndNature": {
+    "messageformat": "Dieren & natuur"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--FoodAndDrink": {
+    "messageformat": "Eten & drinken"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Activities": {
+    "messageformat": "Activiteiten"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--TravelAndPlaces": {
+    "messageformat": "Reizen & plaatsen"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Objects": {
+    "messageformat": "Objecten"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Symbols": {
+    "messageformat": "Symbolen"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Flags": {
+    "messageformat": "Vlaggen"
+  },
+  "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
+    "messageformat": "Geen emoji gevonden"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "Kies huidskleur voor {emojiName}"
+  },
+  "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
+    "messageformat": "Wijzig de huidskleurvoorkeur"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "Ingedrukt houden om een huidskleur te kiezen"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
+    "messageformat": "Kies je standaard huidskleur"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SearchResults": {
+    "messageformat": "Zoekresultaten"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Recents": {
+    "messageformat": "Onlangs gebruikt"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SmileysAndPeople": {
+    "messageformat": "Smileys & mensen"
+  },
+  "icu:FunPanelEmojis__SectionTitle--AnimalsAndNature": {
+    "messageformat": "Dieren & natuur"
+  },
+  "icu:FunPanelEmojis__SectionTitle--FoodAndDrink": {
+    "messageformat": "Eten & drinken"
+  },
+  "icu:FunPanelEmojis__SectionTitle--TravelAndPlaces": {
+    "messageformat": "Reizen & plaatsen"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Activities": {
+    "messageformat": "Activiteiten"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Objects": {
+    "messageformat": "Objecten"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Symbols": {
+    "messageformat": "Symbolen"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Flags": {
+    "messageformat": "Vlaggen"
+  },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "Reactiebalk personaliseren"
+  },
+  "icu:FunPanelStickers__SearchLabel": {
+    "messageformat": "Stickers zoeken"
+  },
+  "icu:FunPanelStickers__SearchPlaceholder": {
+    "messageformat": "Stickers zoeken"
+  },
+  "icu:FunPanelSticker__SubNavLabel": {
+    "messageformat": "Stickerpakketten"
+  },
+  "icu:FunPanelStickers__SubNavCategoryLabel--Recents": {
+    "messageformat": "Onlangs gebruikt"
+  },
+  "icu:FunPanelStickers__SectionTitle--SearchResults": {
+    "messageformat": "Zoekresultaten"
+  },
+  "icu:FunPanelStickers__SectionTitle--Recents": {
+    "messageformat": "Onlangs gebruikt"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "Uitgelicht"
+  },
+  "icu:FunPanelStickers__SearchResults__EmptyHeading": {
+    "messageformat": "Geen stickers gevonden"
+  },
+  "icu:FunPanelStickers__LightboxDialog__Label": {
+    "messageformat": "Stickervoorbeeld"
+  },
+  "icu:FunPanelGifs__SearchLabel--Tenor": {
+    "messageformat": "GIF's zoeken via Tenor"
+  },
+  "icu:FunPanelGifs__SearchPlaceholder--Tenor": {
+    "messageformat": "Zoeken in Tenor"
+  },
+  "icu:FunPanelGifs__SubNavLabel": {
+    "messageformat": "GIF-categorieën"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Recents": {
+    "messageformat": "Onlangs gebruikt"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Trending": {
+    "messageformat": "Trending"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Celebrate": {
+    "messageformat": "Vieren"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Love": {
+    "messageformat": "Liefde"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--ThumbsUp": {
+    "messageformat": "Duimpje omhoog"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Surprised": {
+    "messageformat": "Verbaasd"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Excited": {
+    "messageformat": "Blij"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Sad": {
+    "messageformat": "Verdrietig"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Angry": {
+    "messageformat": "Boos"
+  },
+  "icu:FunPanelGifs__SearchResults__LoadingLabel": {
+    "messageformat": "GIF's aan het laden"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorHeading": {
+    "messageformat": "Kan GIF's niet laden. Controleer je internetverbinding en probeer het opnieuw"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorRetryButton": {
+    "messageformat": "Opnieuw proberen"
+  },
+  "icu:FunPanelGifs__SearchResults__EmptyHeading": {
+    "messageformat": "Geen GIF's gevonden"
+  },
+  "icu:FunPanelGifs__LightboxDialog__Label": {
+    "messageformat": "GIF-voorbeeld"
+  },
+  "icu:FunSearch__ClearButtonLabel": {
+    "messageformat": "Zoekopdracht wissen"
+  },
+  "icu:FunSkinTones__List": {
+    "messageformat": "Huidskleur"
+  },
+  "icu:FunSkinTones__ListItem--None": {
+    "messageformat": "Geen"
+  },
+  "icu:FunSkinTones__ListItem--Light": {
+    "messageformat": "Lichte huidskleur"
+  },
+  "icu:FunSkinTones__ListItem--MediumLight": {
+    "messageformat": "Lichtgetinte huidskleur"
+  },
+  "icu:FunSkinTones__ListItem--Medium": {
+    "messageformat": "Getinte huidskleur"
+  },
+  "icu:FunSkinTones__ListItem--MediumDark": {
+    "messageformat": "Donkergetinte huidskleur"
+  },
+  "icu:FunSkinTones__ListItem--Dark": {
+    "messageformat": "Donkere huidskleur"
+  },
+  "icu:FunButton__Label--FunPicker": {
+    "messageformat": "Een emoji, sticker of GIF toevoegen"
+  },
+  "icu:FunButton__Label--EmojiPicker": {
+    "messageformat": "Een emoji toevoegen"
+  },
+  "icu:FunButton__Label--StickerPicker": {
+    "messageformat": "Een sticker toevoegen"
+  },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "Annuleren"
   },
@@ -2198,11 +2510,11 @@
   "icu:Message--update-signal": {
     "messageformat": "Signal bijwerken"
   },
-  "icu:Message--tap-to-view-expired": {
+  "icu:Message--tap-to-view--viewed": {
     "messageformat": "Gezien"
   },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "Media"
+  "icu:Message--tap-to-view--media": {
+    "messageformat": "Eenmaligeweergave-media"
   },
   "icu:Message--tap-to-view--incoming--expired-toast": {
     "messageformat": "Je hebt dit bericht al bekeken."
@@ -2210,11 +2522,14 @@
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "Eenmalig te bekijken berichten worden niet opgeslagen in je chatgeschiedenis."
   },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "Foto weergeven"
+  "icu:Message--tap-to-view--video": {
+    "messageformat": "Eenmaligeweergave-video"
   },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "Video weergeven"
+  "icu:Message--tap-to-view--photo": {
+    "messageformat": "Eenmaligeweergave-afbeelding"
+  },
+  "icu:Message--tap-to-view--helper-text": {
+    "messageformat": "Klik om te bekijken"
   },
   "icu:Conversation--getDraftPreview--attachment": {
     "messageformat": "(bijlage)"
@@ -2408,6 +2723,9 @@
   "icu:Keyboard--toggle-video": {
     "messageformat": "Camera aan- of uitzetten"
   },
+  "icu:Keyboard--toggle-preview": {
+    "messageformat": "Gemaximaliseerd voorbeeld in- en uitschakelen"
+  },
   "icu:Keyboard--accept-video-call": {
     "messageformat": "Oproep beantwoorden met video (alleen video-oproepen)"
   },
@@ -2470,6 +2788,12 @@
   },
   "icu:SafetyTipsModal__Description": {
     "messageformat": "Wees voorzichtig met het accepteren van gespreksverzoeken van mensen die je niet kent. Kijk uit voor:"
+  },
+  "icu:SafetyTipsModal__TipTitle--Fake": {
+    "messageformat": "Valse namen en accounts"
+  },
+  "icu:SafetyTipsModal__TipDescription--Fake": {
+    "messageformat": "Signal neemt nooit contact met je op om je registratie- of pincode te vragen. Wees voorzichtig met verzoeken waarin iemand zich voordoet als iemand anders. Profielnamen worden gekozen door de eigenaar van het account en worden niet geverifieerd."
   },
   "icu:SafetyTipsModal__TipTitle--Crypto": {
     "messageformat": "Crypto- of geldscams"
@@ -2603,6 +2927,12 @@
   "icu:MessageRequests--accept": {
     "messageformat": "Accepteren"
   },
+  "icu:MessageRequests--accept-confirm-title": {
+    "messageformat": "Verzoek accepteren?"
+  },
+  "icu:MessageRequests--accept-confirm-body": {
+    "messageformat": "Beoordeel verzoeken zorgvuldig. Profielnamen worden gekozen door de eigenaar van het account en worden niet geverifieerd."
+  },
   "icu:MessageRequests--continue": {
     "messageformat": "Doorgaan"
   },
@@ -2614,6 +2944,51 @@
   },
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, one {{count,number} lid} other {{count,number} leden}}"
+  },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, one {{memberList} (+{invitesCount,number} uitgenodigd)} other {{memberList} (+{invitesCount,number} uitgenodigd)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "Geen groepsleden"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "Nog geen andere groepsleden"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} en jij"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} en {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}, {member2} en jij"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2} en {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3} en <clickable>{remainingCount,number} ander</clickable>} other {{member1}, {member2}, {member3} en <clickable>{remainingCount,number} anderen</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3} en <clickable>{remainingCount,number} ander</clickable>} other {{member1}, {member2}, {member3} en <clickable>{remainingCount,number} anderen</clickable>}}"
+  },
+  "icu:ConversationHero--review-carefully": {
+    "messageformat": "Beoordeel zorgvuldig"
+  },
+  "icu:ConversationHero--group-names": {
+    "messageformat": "<clickable>Groepsnamen</clickable> zijn niet geverifieerd"
+  },
+  "icu:ConversationHero--profile-names": {
+    "messageformat": "<clickable>Profielnamen</clickable> zijn niet geverifieerd"
+  },
+  "icu:ConversationHero--signal-official-chat": {
+    "messageformat": "Dit is de officiële en enige chat van Signal"
+  },
+  "icu:ConversationHero--release-notes": {
+    "messageformat": "Blijf op de hoogte van nieuws en uitgaveopmerkingen."
   },
   "icu:member-of-1-group": {
     "messageformat": "Lid van {group}"
@@ -2708,6 +3083,9 @@
   "icu:incomingGroupCall__ringing-many": {
     "messageformat": "{remaining, plural, one {{ringer} belt jou, {first}, {second} en {remaining,number} ander} other {{ringer} belt jou, {first}, {second} en {remaining,number} anderen}}"
   },
+  "icu:outgoingCallConnecting": {
+    "messageformat": "Aan het verbinden…"
+  },
   "icu:outgoingCallRinging": {
     "messageformat": "Gaat over…"
   },
@@ -2747,11 +3125,23 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "Verlaten"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "Oproep beëindigen"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "Oproep verlaten"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "Microfoon uit"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "Microfoon aan"
+  },
+  "icu:CallControls__LowerHandSuggestionToast": {
+    "messageformat": "Hand omlaag doen?"
+  },
+  "icu:CallControls__LowerHandSuggestionToast--button": {
+    "messageformat": "Omlaag doen"
   },
   "icu:CallControls__RingingToast--ringing-on": {
     "messageformat": "Bellen aan"
@@ -2808,7 +3198,7 @@
     "messageformat": "{name} is een video-oproep gestart"
   },
   "icu:calling__in-another-call-tooltip": {
-    "messageformat": "Je neemt op dit moment al aan een oproep deel"
+    "messageformat": "Je neemt op dit moment al deel aan een oproep"
   },
   "icu:calling__call-notification__button__call-full-tooltip": {
     "messageformat": "De oproep heeft het maximale aantal van {max,number} deelnemers bereikt"
@@ -2818,6 +3208,12 @@
   },
   "icu:calling__pip--off": {
     "messageformat": "Oproep in volledig scherm"
+  },
+  "icu:calling__preview--maximize": {
+    "messageformat": "Voorbeeld maximaliseren"
+  },
+  "icu:calling__preview--minimize": {
+    "messageformat": "Voorbeeld minimaliseren"
   },
   "icu:calling__change-view": {
     "messageformat": "Weergave wijzigen"
@@ -3321,13 +3717,13 @@
     "messageformat": "Een beheerder heeft voor één persoon de groepsuitnodiging van {memberName} ingetrokken."
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--one--other": {
-    "messageformat": "{adminName} heeft de groepsuitnodiging die je naar {inviteeName} hebt verzonden, ingetrokken."
+    "messageformat": "{adminName} heeft de groepsuitnodiging die je naar {inviteeName} hebt gestuurd, ingetrokken."
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--one--you": {
     "messageformat": "Je hebt je groepsuitnodiging voor {inviteeName} ingetrokken."
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--one--unknown": {
-    "messageformat": "Een beheerder heeft de groepsuitnodiging die je naar {inviteeName} hebt verzonden, ingetrokken."
+    "messageformat": "Een beheerder heeft de groepsuitnodiging die je naar {inviteeName} hebt gestuurd, ingetrokken."
   },
   "icu:GroupV2--pending-remove--revoke-invite-from--many--other": {
     "messageformat": "{count, plural, one {{adminName} heeft voor {count,number} persoon de groepsuitnodiging van {memberName} ingetrokken.} other {{adminName} heeft voor {count,number} personen de groepsuitnodiging van {memberName} ingetrokken.}}"
@@ -3339,13 +3735,13 @@
     "messageformat": "{count, plural, one {Een beheerder heeft voor {count,number} persoon de groepsuitnodiging van {memberName} ingetrokken.} other {Een beheerder heeft voor {count,number} personen de groepsuitnodiging van {memberName} ingetrokken.}}"
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--many--other": {
-    "messageformat": "{count, plural, one {{adminName} heeft de groepsuitnodiging die je naar {count,number} persoon hebt verzonden, ingetrokken.} other {{adminName} heeft de groepsuitnodiging die je naar {count,number} personen hebt verzonden, ingetrokken.}}"
+    "messageformat": "{count, plural, one {{adminName} heeft de groepsuitnodiging die je naar {count,number} persoon hebt gestuurd, ingetrokken.} other {{adminName} heeft de groepsuitnodiging die je naar {count,number} personen hebt gestuurd, ingetrokken.}}"
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--many--you": {
     "messageformat": "{count, plural, one {Je hebt je groepsuitnodiging voor {count,number} persoon ingetrokken.} other {Je hebt je groepsuitnodiging voor {count,number} personen ingetrokken.}}"
   },
   "icu:GroupV2--pending-remove--revoke-invite-from-you--many--unknown": {
-    "messageformat": "{count, plural, one {Een beheerder heeft de groepsuitnodiging die je naar {count,number} persoon hebt verzonden, ingetrokken.} other {Een beheerder heeft de groepsuitnodiging die je naar {count,number} personen hebt verzonden, ingetrokken.}}"
+    "messageformat": "{count, plural, one {Een beheerder heeft de groepsuitnodiging die je naar {count,number} persoon hebt gestuurd, ingetrokken.} other {Een beheerder heeft de groepsuitnodiging die je naar {count,number} personen hebt gestuurd, ingetrokken.}}"
   },
   "icu:GroupV2--admin-approval-add-one--you": {
     "messageformat": "Je hebt een verzoek verstuurd om lid te worden van de groep."
@@ -3530,6 +3926,9 @@
   "icu:next": {
     "messageformat": "Volgende"
   },
+  "icu:ClearingData__description": {
+    "messageformat": "Dit kan enkele minuten duren"
+  },
   "icu:BadgeDialog__become-a-sustainer-button": {
     "messageformat": "Aan Signal doneren"
   },
@@ -3557,26 +3956,32 @@
   "icu:BackupImportScreen__progressbar-hint--processing": {
     "messageformat": "Berichtoverdracht aan het afronden..."
   },
+  "icu:BackupImportScreen__progressbar-hint--canceling": {
+    "messageformat": "Annuleren..."
+  },
   "icu:BackupImportScreen__progressbar-hint--preparing": {
     "messageformat": "Download voorbereiden..."
   },
   "icu:BackupImportScreen__description": {
-    "messageformat": "Dit kan enkele minuten duren, afhankelijk van de grootte van je back-up"
+    "messageformat": "Dit kan enkele minuten duren"
   },
   "icu:BackupImportScreen__cancel": {
-    "messageformat": "Overzetten annuleren"
+    "messageformat": "Annuleren"
+  },
+  "icu:BackupImportScreen__security-description": {
+    "messageformat": "Berichten en chatgegevens worden beschermd door end-to-end-versleuteling, ook tijdens het synchronisatieproces. <learnMoreLink>Meer informatie</learnMoreLink>"
   },
   "icu:BackupImportScreen__cancel-confirmation__title": {
-    "messageformat": "Overzetten annuleren?"
+    "messageformat": "Koppelen van apparaat annuleren?"
   },
   "icu:BackupImportScreen__cancel-confirmation__body": {
-    "messageformat": "Het herstellen van je berichten en media is nog niet voltooid. Als je besluit te annuleren, kun je opnieuw overzetten via Instellingen."
+    "messageformat": "Als je ervoor kiest om te annuleren, wordt je apparaat niet gekoppeld en worden berichten en media niet overgezet."
   },
   "icu:BackupImportScreen__cancel-confirmation__cancel": {
-    "messageformat": "Doorgaan met overzetten"
+    "messageformat": "Doorgaan met koppelen"
   },
   "icu:BackupImportScreen__cancel-confirmation__confirm": {
-    "messageformat": "Overzetten annuleren"
+    "messageformat": "Koppelen annuleren"
   },
   "icu:BackupImportScreen__error__title": {
     "messageformat": "Fout bij het overzetten van je berichten"
@@ -3584,26 +3989,29 @@
   "icu:BackupImportScreen__error__body": {
     "messageformat": "Je berichten konden niet worden overgezet. Controleer je internetverbinding en probeer het opnieuw."
   },
+  "icu:BackupImportScreen__error-fatal__body": {
+    "messageformat": "Je berichten konden niet worden overgezet vanwege een fout. Probeer het opnieuw door deze desktop opnieuw te koppelen."
+  },
   "icu:BackupImportScreen__error__confirm": {
     "messageformat": "Opnieuw proberen"
-  },
-  "icu:BackupImportScreen__skip": {
-    "messageformat": "Overslaan"
-  },
-  "icu:BackupImportScreen__skip-confirmation__title": {
-    "messageformat": "Berichtoverdracht overslaan?"
-  },
-  "icu:BackupImportScreen__skip-confirmation__body": {
-    "messageformat": "Als je besluit dit over te slaan, heb je geen toegang tot je berichten of media op dit apparaat. Je kunt een nieuwe overdracht starten nadat je deze hebt overgeslagen via Instellingen > Chats > Overzetten."
-  },
-  "icu:BackupImportScreen__skip-confirmation__cancel": {
-    "messageformat": "Annuleren"
   },
   "icu:BackupMediaDownloadProgress__title-in-progress": {
     "messageformat": "Media aan het herstellen"
   },
   "icu:BackupMediaDownloadProgress__title-paused": {
     "messageformat": "Herstellen gepauzeerd"
+  },
+  "icu:BackupMediaDownloadProgress__title-idle": {
+    "messageformat": "{currentSize} van {totalSize} hersteld"
+  },
+  "icu:BackupMediaDownloadProgress__description-idle": {
+    "messageformat": "Media worden op de achtergrond verder gedownload"
+  },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "Media herstellen gepauzeerd"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "Wachten op internetverbinding…"
   },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "Overzetten pauzeren"
@@ -3635,6 +4043,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "Overzetten annuleren"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "Accountactie vereist"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "Open Signal op je telefoon om dit account te kunnen blijven gebruiken. Als je Signal niet opent op je telefoon wordt je account binnenkort verwijderd. <learnMoreLink>Meer informatie</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "Kan media niet herstellen"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "Je apparaat heeft niet genoeg vrije ruimte. Maak {diskSpaceAmount} ruimte vrij om je media te herstellen."
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "Vergroten"
   },
@@ -3655,6 +4075,18 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "Bewerkt bericht versturen"
+  },
+  "icu:CompositionArea__FunButtonLabel": {
+    "messageformat": "Een emoji, sticker of GIF toevoegen"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Title": {
+    "messageformat": "Bijlage vervangen?"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Body": {
+    "messageformat": "Als je deze GIF toevoegt, wordt het item in je huidige conceptbericht vervangen."
+  },
+  "icu:CompositionArea__ConfirmGifSelection__ReplaceButton": {
+    "messageformat": "Vervangen"
   },
   "icu:CompositionInput__editing-message": {
     "messageformat": "Bericht bewerken"
@@ -3678,7 +4110,7 @@
     "messageformat": "De beheerdersbevoegdheden van {contact} intrekken?"
   },
   "icu:ContactModal--add-to-group": {
-    "messageformat": "Aan nog een andere groep toevoegen"
+    "messageformat": "Aan een andere groep toevoegen"
   },
   "icu:ContactModal--remove-from-group": {
     "messageformat": "Uit de groep verwijderen"
@@ -3871,6 +4303,9 @@
   },
   "icu:GroupLinkManagement--approve-info": {
     "messageformat": "Vereis voor iedere persoon die via de groepslink lid wil worden eerst goedkeuring van een beheerder"
+  },
+  "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
+    "messageformat": "Signal-groepslink kopiëren naar klembord"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "Verzoeken ({count,number})"
@@ -4076,17 +4511,8 @@
   "icu:ShareCallLinkViaSignal__DraftMessageText": {
     "messageformat": "Gebruik deze link om deel te nemen aan een Signal-oproep: {url}"
   },
-  "icu:MessageRequestWarning__learn-more": {
-    "messageformat": "Meer informatie"
-  },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "Veiligheidstips"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "Je hebt geen gemeenschappelijke groep met deze persoon. Overweeg zorgvuldig of je dit gespreksverzoek wilt accepteren om ongewenste berichten te vermijden."
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "Over gespreksverzoeken"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "Beoordeel verzoeken zorgvuldig. Signal heeft een ander contact gevonden met dezelfde naam. <reviewRequestLink>Personen vergelijken</reviewRequestLink>"
@@ -4232,6 +4658,9 @@
   "icu:GradientDial__knob-end": {
     "messageformat": "Einde verloop"
   },
+  "icu:GIF--download": {
+    "messageformat": "Download GIF-bijlage"
+  },
   "icu:customDisappearingTimeOption": {
     "messageformat": "Zelfgekozen tijd"
   },
@@ -4317,7 +4746,7 @@
     "messageformat": "In afwachting"
   },
   "icu:MessageDetailsHeader--Sent": {
-    "messageformat": "Verzonden aan"
+    "messageformat": "Verstuurd naar"
   },
   "icu:MessageDetailsHeader--Delivered": {
     "messageformat": "Afgeleverd aan"
@@ -4487,12 +4916,6 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "Je profiel kon niet worden bijgewerkt. Probeer het opnieuw."
   },
-  "icu:ProfileEditor__invalid-about__title": {
-    "messageformat": "Ongeldige karakters"
-  },
-  "icu:ProfileEditor__invalid-about__body": {
-    "messageformat": "Een of meer karakters die je hebt ingevoerd, kunnen niet worden gebruikt. Probeer het opnieuw."
-  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "Bericht sturen naar een beheerder"
   },
@@ -4507,6 +4930,12 @@
   },
   "icu:AvatarColorPicker--choose": {
     "messageformat": "Kies een kleur"
+  },
+  "icu:AttachmentDetailPill__retryDownload": {
+    "messageformat": "Download opnieuw proberen"
+  },
+  "icu:AttachmentDetailPill__retryDownloadShort": {
+    "messageformat": "Opnieuw proberen"
   },
   "icu:LeftPaneSetGroupMetadataHelper__avatar-modal-title": {
     "messageformat": "Groepsafbeelding"
@@ -4534,6 +4963,39 @@
   },
   "icu:Preferences__button--privacy": {
     "messageformat": "Privacy"
+  },
+  "icu:Preferences__button--data-usage": {
+    "messageformat": "Datagebruik"
+  },
+  "icu:Preferences__media-auto-download": {
+    "messageformat": "Media automatisch downloaden"
+  },
+  "icu:Preferences__media-auto-download__photos": {
+    "messageformat": "Afbeeldingen"
+  },
+  "icu:Preferences__media-auto-download__videos": {
+    "messageformat": "Video's"
+  },
+  "icu:Preferences__media-auto-download__audio": {
+    "messageformat": "Audio"
+  },
+  "icu:Preferences__media-auto-download__documents": {
+    "messageformat": "Documenten"
+  },
+  "icu:Preferences__media-auto-download__description": {
+    "messageformat": "Spraakberichten en stickers worden altijd automatisch gedownload."
+  },
+  "icu:Preferences__button--backups": {
+    "messageformat": "Back-ups"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "Intern"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "Versleutelde back-up exporteren naar geheugen en de validatiesuite erop uitvoeren"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "Valideren"
   },
   "icu:Preferences--lastSynced": {
     "messageformat": "Laatst geïmporteerd op {date} om {time}"
@@ -4564,6 +5026,51 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "Geblokkeerd"
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "Back-updetails"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "Tekstberichten + alle media"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "Je abonnement is niet gevonden. Vernieuw je Signal back-upabonnement om Signal back-ups te blijven gebruiken."
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, one {Tekstberichten + {mediaDayCount,number} dag media} other {Tekstberichten + {mediaDayCount,number} dagen media}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "Je back-upabonnement is gratis"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "Verlengt op {date}"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "Verloopt op {date}"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "Abonnement opgezegd"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "Je Signal back-upabonnement kun je beheren of annuleren op je telefoon."
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "Signal back-ups kun je beheren of upgraden op je telefoon."
+  },
+  "icu:Preferences--backup-plan__not-found": {
+    "messageformat": "Je abonnement is niet gevonden. Vernieuw je Signal back-upabonnement om Signal back-ups te blijven gebruiken."
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "Je Signal back-upabonnement kun je beheren of verlengen op je telefoon."
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "Laatste back-up"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "Je telefoon"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "Back-upgrootte"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, one {{num,number} contact} other {{num,number} contacten}}"
@@ -4691,8 +5198,29 @@
   "icu:DialogUpdate__downloaded": {
     "messageformat": "Update gedownload"
   },
+  "icu:CriticalIdlePrimaryDevice__title": {
+    "messageformat": "Open de Signal-app op je telefoon"
+  },
+  "icu:CriticalIdlePrimaryDevice__body": {
+    "messageformat": "Je account wordt binnenkort verwijderd, tenzij je Signal op je telefoon opent. Dit bericht verdwijnt als dit is gelukt. <learnMoreLink>Meer informatie</learnMoreLink>"
+  },
+  "icu:IdlePrimaryDevice__body": {
+    "messageformat": "Open Signal op je telefoon om je account actief te houden"
+  },
+  "icu:IdlePrimaryDevice__learnMore": {
+    "messageformat": "Meer informatie"
+  },
   "icu:DialogNetworkStatus__outage": {
     "messageformat": "Signal ondervindt momenteel technische problemen. We zijn hard aan het werk om de service zo snel mogelijk te herstellen."
+  },
+  "icu:InstallScreenUpdateDialog--update-required__title": {
+    "messageformat": "Update vereist"
+  },
+  "icu:InstallScreenUpdateDialog--update-required__body": {
+    "messageformat": "Om het synchroniseren van je berichten te kunnen voltooien, moet je Signal Desktop nu bijwerken."
+  },
+  "icu:InstallScreenUpdateDialog--update-required__action-update": {
+    "messageformat": "Bijwerken"
   },
   "icu:InstallScreenUpdateDialog--unsupported-os__title": {
     "messageformat": "Update vereist"
@@ -4823,6 +5351,30 @@
   "icu:MediaEditor__crop-preset--9-16": {
     "messageformat": "9:16"
   },
+  "icu:MediaPermissionsModal__title--microphone": {
+    "messageformat": "Toegang tot je microfoon toestaan"
+  },
+  "icu:MediaPermissionsModal__title--camera": {
+    "messageformat": "Toegang tot je camera toestaan"
+  },
+  "icu:MediaPermissionsModal__subtitle--call": {
+    "messageformat": "Om deel te nemen aan een oproep of om een oproep te starten:"
+  },
+  "icu:MediaPermissionsModal__subtitle--call--camera": {
+    "messageformat": "Om video in te schakelen:"
+  },
+  "icu:MediaPermissionsModal__subtitle--voice-note": {
+    "messageformat": "Om spraakberichten te versturen:"
+  },
+  "icu:MediaPermissionsModal__step-1": {
+    "messageformat": "Klik hieronder op ‘{buttonName}’"
+  },
+  "icu:MediaPermissionsModal__step-2": {
+    "messageformat": "Schakel ‘Signal’ in"
+  },
+  "icu:MediaPermissionsModal__open": {
+    "messageformat": "Ga naar instellingen"
+  },
   "icu:MyStories__title": {
     "messageformat": "Mijn verhalen"
   },
@@ -4893,7 +5445,7 @@
     "messageformat": "Je hebt deze persoon geblokkeerd"
   },
   "icu:MessageRequestResponseNotification__Message--Blocked--Group": {
-    "messageformat": "Je hebt de groep geblokkeerd "
+    "messageformat": "Je hebt de groep geblokkeerd"
   },
   "icu:MessageRequestResponseNotification__Message--Unblocked": {
     "messageformat": "Je hebt deze persoon gedeblokkeerd"
@@ -4962,7 +5514,7 @@
     "messageformat": "Nieuwe updates verschijnen hier."
   },
   "icu:Stories__list--sending": {
-    "messageformat": "Versturen…"
+    "messageformat": "Verzenden…"
   },
   "icu:Stories__list--send_failed": {
     "messageformat": "Verzenden is mislukt"
@@ -4983,16 +5535,16 @@
     "messageformat": "{name} naar {group}"
   },
   "icu:Stories__toast--sending-reply": {
-    "messageformat": "Antwoord verzenden…"
+    "messageformat": "Privéreactie aan het verzenden…"
   },
   "icu:Stories__toast--sending-reaction": {
-    "messageformat": "Reactie versturen…"
+    "messageformat": "Reactie verzenden…"
   },
   "icu:Stories__toast--hasNoSound": {
     "messageformat": "Dit verhaal heeft geen geluid"
   },
   "icu:Stories__failed-send": {
-    "messageformat": "Dit verhaal kon niet naar iedereen worden verstuurd. Controleer je internetverbinding en probeer het opnieuw."
+    "messageformat": "Dit verhaal kon niet naar iedereen worden verzonden. Controleer je internetverbinding en probeer het opnieuw."
   },
   "icu:StoriesSettings__title": {
     "messageformat": "Verhaalprivacy"
@@ -5169,7 +5721,7 @@
     "messageformat": "Reageren op {firstName}"
   },
   "icu:StoryViewer__reply-group": {
-    "messageformat": "Naar de groep reageren"
+    "messageformat": "Reageren op groepsverhaal"
   },
   "icu:StoryViewer__mute": {
     "messageformat": "Dempen"
@@ -5181,7 +5733,7 @@
     "messageformat": "Weergaven uit"
   },
   "icu:StoryViewer__sending": {
-    "messageformat": "Versturen…"
+    "messageformat": "Verzenden…"
   },
   "icu:StoryViewer__failed": {
     "messageformat": "Verzenden is mislukt. Klik om opnieuw te proberen"
@@ -5325,10 +5877,10 @@
     "messageformat": "Een link delen met de kijkers van je verhaal"
   },
   "icu:Stories__failed-send--full": {
-    "messageformat": "Verhaal kan niet worden verstuurd"
+    "messageformat": "Verhaal kan niet worden verzonden"
   },
   "icu:Stories__failed-send--partial": {
-    "messageformat": "Het verhaal kon niet naar alle ontvangers worden verstuurd"
+    "messageformat": "Het verhaal kon niet naar alle ontvangers worden verzonden"
   },
   "icu:TextAttachment__placeholder": {
     "messageformat": "Tekst toevoegen"
@@ -5481,11 +6033,20 @@
   "icu:MessageMetadata__edited": {
     "messageformat": "Bewerkt"
   },
+  "icu:DraftGifMessageSendModal__Title": {
+    "messageformat": "Bericht toevoegen"
+  },
+  "icu:DraftGifMessageSendModal__SendButtonLabel": {
+    "messageformat": "Verzenden"
+  },
+  "icu:DraftGifMessageSendModal__CancelButtonLabel": {
+    "messageformat": "Annuleren"
+  },
   "icu:EditHistoryMessagesModal__title": {
     "messageformat": "Bewerkingsgeschiedenis"
   },
   "icu:ResendMessageEdit__body": {
-    "messageformat": "Deze bewerking kan niet worden verstuurd. Controleer je internetverbinding en probeer het opnieuw"
+    "messageformat": "Deze bewerking kan niet worden verzonden. Controleer je internetverbinding en probeer het opnieuw"
   },
   "icu:ResendMessageEdit__button": {
     "messageformat": "Opnieuw verzenden"
@@ -5515,7 +6076,7 @@
     "messageformat": "Hiermee wordt de oproepgeschiedenis voorgoed gewist."
   },
   "icu:CallsTab__ConfirmClearCallHistory__Body--call-links": {
-    "messageformat": "Hiermee wordt de oproepgeschiedenis voorgoed gewist. Deze oproeplinks zullen niet langer werken voor personen die ze al hebben ontvangen. "
+    "messageformat": "Hiermee wordt de oproepgeschiedenis voorgoed gewist. Oproeplinks die jij hebt gemaakt, zullen niet langer werken voor personen die ze al hebben ontvangen. "
   },
   "icu:CallsTab__ConfirmClearCallHistory__ConfirmButton": {
     "messageformat": "Wissen"
@@ -5532,8 +6093,14 @@
   "icu:CallsTab__EmptyStateText--with-icon-2": {
     "messageformat": "Klik op <newCallButtonIcon></newCallButtonIcon> om een nieuwe spraak- of video-oproep te starten."
   },
+  "icu:CallsList__SearchInputPlaceholder--missed-calls": {
+    "messageformat": "Gemiste oproepen zoeken"
+  },
   "icu:CallsList__SearchInputPlaceholder": {
     "messageformat": "Zoeken"
+  },
+  "icu:CallsList__FilteredByMissedHeader": {
+    "messageformat": "Gefilterd op gemist"
   },
   "icu:CallsList__ToggleFilterByMissedLabel": {
     "messageformat": "Filteren op gemist"
@@ -5547,14 +6114,14 @@
   "icu:CallsList__EmptyState--noQuery__subtitle": {
     "messageformat": "Recente oproepen verschijnen hier."
   },
-  "icu:CallsList__EmptyState--noQuery--missed__title": {
-    "messageformat": "Geen gemiste oproepen"
-  },
-  "icu:CallsList__EmptyState--noQuery--missed__subtitle": {
-    "messageformat": "Gemiste oproepen verschijnen hier."
-  },
   "icu:CallsList__EmptyState--hasQuery": {
     "messageformat": "Geen resultaten voor ‘{query}’"
+  },
+  "icu:CallsList__EmptyState--hasQueryAndMissedCalls": {
+    "messageformat": "Geen resultaten voor ‘{query}’ in gemiste oproepen"
+  },
+  "icu:CallsList__EmptyState--missedCalls": {
+    "messageformat": "Geen gemiste oproepen"
   },
   "icu:CallsList__CreateCallLink": {
     "messageformat": "Oproeplink maken"
@@ -5694,6 +6261,30 @@
   "icu:WhoCanFindMeReadOnlyToast": {
     "messageformat": "Om deze instelling te wijzigen, stel je ‘Wie kan mijn nummer zien’ in op ‘Niemand’."
   },
+  "icu:ProfileNameWarningModal__description--direct": {
+    "messageformat": "Op Signal worden profielnamen gekozen door de eigenaar van het account:"
+  },
+  "icu:ProfileNameWarningModal__list--item1--direct": {
+    "messageformat": "Profielnamen zijn niet geverifieerd"
+  },
+  "icu:ProfileNameWarningModal__list--item2--direct": {
+    "messageformat": "Wees voorzichtig met accounts die zich voordoen als andere personen"
+  },
+  "icu:ProfileNameWarningModal__list--item3--direct": {
+    "messageformat": "Deel geen persoonlijke informatie met mensen die je niet kent"
+  },
+  "icu:ProfileNameWarningModal__description--group": {
+    "messageformat": "Groepsnamen worden gekozen door leden van de groep."
+  },
+  "icu:ProfileNameWarningModal__list--item1--group": {
+    "messageformat": "Wees voorzichtig met groepen die zich voordoen als organisaties en bedrijven"
+  },
+  "icu:ProfileNameWarningModal__list--item2--group": {
+    "messageformat": "Profielnamen van leden in groepen worden niet geverifieerd"
+  },
+  "icu:ProfileNameWarningModal__list--item3--group": {
+    "messageformat": "Deel geen persoonlijke informatie met mensen die je niet kent"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "Wat er nieuw is"
   },
@@ -5725,22 +6316,13 @@
     "messageformat": "Kleine aanpassingen, bugfixes en prestatieverbeteringen. Bedankt dat je Signal gebruikt!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.29--0": {
-    "messageformat": "Deze update verbetert de opstartsnelheid met ongeveer 5%. Start Signal snel op om het te ervaren."
+  "icu:WhatsNew__v7.51--0": {
+    "messageformat": "Je kunt nu ook in Signal Desktop geanimeerde GIF's zoeken. Met een gloednieuwe selectie-interface vind je snel een emoji, sticker of geanimeerde GIF die perfect past bij het moment."
   },
-  "icu:WhatsNew__v7.30--header": {
-    "messageformat": "Maak kennis met oproeplinks: de ontbrekende schakel voor agenda-uitnodigingen en spontane bijeenkomsten."
+  "icu:WhatsNew__v7.51--1": {
+    "messageformat": "Bovendien hebben we het formaat van het beeld-in-beeld-venster aangepast en handige nieuwe snelkoppelingen toegevoegd om de microfoon of camera aan/uit te zetten als een oproep is geminimaliseerd."
   },
-  "icu:WhatsNew__v7.30--0": {
-    "messageformat": "Je kunt nu snel en gemakkelijk een link maken die iedereen op Signal kan gebruiken om deel te nemen aan een groepsoproep zonder eerst lid te worden van een Signal-groepschat."
-  },
-  "icu:WhatsNew__v7.30--1": {
-    "messageformat": "Oproeplinks kun je steeds opnieuw gebruiken. Ze zijn ideaal voor al die gesprekken met je beste vrienden of wekelijkse check-ins met je collega's."
-  },
-  "icu:WhatsNew__v7.30--2": {
-    "messageformat": "Via het tabblad Oproepen kun je oproeplinks en goedkeuringsinstellingen beheren en links kopiëren om gemakkelijk te delen."
-  },
-  "icu:WhatsNew__v7.31--0": {
-    "messageformat": "Now you can quickly download every photo in an album when you receive a message with multiple attachments. But if you were a gallery curator with impeccable taste in another life, you can still save them individually too. Thanks, <linkMajorMayer>@major-mayer</linkMajorMayer>!"
+  "icu:WhatsNew__v7.54--0": {
+    "messageformat": "Een glimlach is in elke taal hetzelfde, maar nu de emoji-snelkoppelingen in Signal Desktop volledig zijn vertaald, kun je ook <code>:glimlachen:</code> of <code>:sourire:</code> of <code>:微笑:</code> in elke ondersteunde taal."
   }
 }

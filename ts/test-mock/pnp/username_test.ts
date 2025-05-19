@@ -48,7 +48,6 @@ describe('pnp/username', function (this: Mocha.Suite) {
 
     state = state.updateAccount({
       profileKey: phone.profileKey.serialize(),
-      e164: phone.device.number,
     });
 
     state = state.addContact(usernameContact, {
@@ -103,7 +102,7 @@ describe('pnp/username', function (this: Mocha.Suite) {
       {
         const compositionInput = await waitForEnabledComposer(window);
 
-        await typeIntoInput(compositionInput, 'Hello username');
+        await typeIntoInput(compositionInput, 'Hello username', '');
         await compositionInput.press('Enter');
       }
 
@@ -195,7 +194,7 @@ describe('pnp/username', function (this: Mocha.Suite) {
 
     debug('entering new username');
     const usernameField = profileEditor.locator('.Input__input');
-    await typeIntoInput(usernameField, NICKNAME);
+    await typeIntoInput(usernameField, NICKNAME, '');
 
     debug('waiting for generated discriminator');
     const discriminator = profileEditor.locator(
@@ -312,7 +311,7 @@ describe('pnp/username', function (this: Mocha.Suite) {
     await window.getByRole('button', { name: 'New chat' }).click();
 
     const searchInput = window.locator('.module-SearchInput__container input');
-    await typeIntoInput(searchInput, CARL_USERNAME);
+    await typeIntoInput(searchInput, CARL_USERNAME, '');
 
     debug('starting lookup');
     await window
@@ -323,7 +322,7 @@ describe('pnp/username', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'Hello Carl');
+      await typeIntoInput(compositionInput, 'Hello Carl', '');
       await compositionInput.press('Enter');
 
       const { body, source } = await carl.waitForMessage();
@@ -380,7 +379,7 @@ describe('pnp/username', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'Hello Carl');
+      await typeIntoInput(compositionInput, 'Hello Carl', '');
       await compositionInput.press('Enter');
 
       const { body, source } = await carl.waitForMessage();

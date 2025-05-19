@@ -33,14 +33,8 @@ export function ExternalLink(props: {
   );
 }
 
-function linkMajorMayer(
-  children: ReadonlyArray<string | JSX.Element>
-): JSX.Element {
-  return (
-    <ExternalLink href="https://github.com/major-mayer">
-      {children}
-    </ExternalLink>
-  );
+function renderCode(parts: Array<string | JSX.Element>): JSX.Element {
+  return <code>{parts}</code>;
 }
 
 export function WhatsNewModal({
@@ -55,10 +49,8 @@ export function WhatsNewModal({
     features: [
       <I18n
         i18n={i18n}
-        id="icu:WhatsNew__v7.31--0"
-        components={{
-          linkMajorMayer,
-        }}
+        id="icu:WhatsNew__v7.54--0"
+        components={{ code: renderCode }}
       />,
     ],
   };

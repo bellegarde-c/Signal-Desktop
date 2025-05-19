@@ -1,7 +1,6 @@
 // Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { get } from 'lodash';
 import React, { memo } from 'react';
 import { useSelector } from 'react-redux';
 import type { PropsType as DialogExpiredBuildPropsType } from '../../components/DialogExpiredBuild';
@@ -61,15 +60,19 @@ import {
   getBackupMediaDownloadProgress,
   getNavTabsCollapsed,
   getPreferredLeftPaneWidth,
+  getServerAlerts,
   getUsernameCorrupted,
   getUsernameLinkCorrupted,
 } from '../selectors/items';
 import {
   getChallengeStatus,
   hasNetworkDialog as getHasNetworkDialog,
+  getNetworkIsOnline,
 } from '../selectors/network';
 import {
+  getFilterByUnread,
   getHasSearchQuery,
+  getIsActivelySearching,
   getIsSearching,
   getIsSearchingGlobally,
   getQuery,
@@ -122,7 +125,6 @@ function renderUpdateDialog(
 ): JSX.Element {
   return <SmartUpdateDialog {...props} />;
 }
-
 function renderCaptchaDialog({ onSkip }: { onSkip(): void }): JSX.Element {
   return <SmartCaptchaDialog onSkip={onSkip} />;
 }
@@ -172,15 +174,10 @@ const getModeSpecificProps = (
           ...(searchConversation && searchTerm ? getSearchResults(state) : {}),
         };
       }
-      if (getHasSearchQuery(state)) {
-        const primarySendsSms = Boolean(
-          get(state.items, ['primarySendsSms'], false)
-        );
-
+      if (getIsActivelySearching(state)) {
         return {
           mode: LeftPaneMode.Search,
           isSearchingGlobally: getIsSearchingGlobally(state),
-          primarySendsSms,
           searchConversation: getSearchConversation(state),
           searchDisabled: state.network.challengeStatus !== 'idle',
           startSearchCounter: getStartSearchCounter(state),
@@ -195,6 +192,7 @@ const getModeSpecificProps = (
         searchDisabled: state.network.challengeStatus !== 'idle',
         searchTerm: getQuery(state),
         startSearchCounter: getStartSearchCounter(state),
+        filterByUnread: getFilterByUnread(state),
         ...getLeftPaneLists(state),
       };
     case ComposerStep.StartDirectConversation:
@@ -300,6 +298,10 @@ export const SmartLeftPane = memo(function SmartLeftPane({
   const backupMediaDownloadProgress = useSelector(
     getBackupMediaDownloadProgress
   );
+  const isOnline = useSelector(getNetworkIsOnline);
+
+  const serverAlerts = useSelector(getServerAlerts);
+
   const {
     blockConversation,
     clearGroupCreationError,
@@ -329,12 +331,13 @@ export const SmartLeftPane = memo(function SmartLeftPane({
   } = useConversationsActions();
   const {
     clearConversationSearch,
-    clearSearch,
+    clearSearchQuery,
     endConversationSearch,
     endSearch,
     searchInConversation,
     startSearch,
     updateSearchTerm,
+    updateFilterByUnread,
   } = useSearchActions();
   const {
     onOutgoingAudioCallInConversation,
@@ -376,7 +379,7 @@ export const SmartLeftPane = memo(function SmartLeftPane({
       challengeStatus={challengeStatus}
       clearConversationSearch={clearConversationSearch}
       clearGroupCreationError={clearGroupCreationError}
-      clearSearch={clearSearch}
+      clearSearchQuery={clearSearchQuery}
       closeMaximumGroupSizeModal={closeMaximumGroupSizeModal}
       closeRecommendedGroupSizeModal={closeRecommendedGroupSizeModal}
       composeDeleteAvatarFromDisk={composeDeleteAvatarFromDisk}
@@ -396,6 +399,7 @@ export const SmartLeftPane = memo(function SmartLeftPane({
       hasUpdateDialog={hasUpdateDialog}
       i18n={i18n}
       isMacOS={isMacOS}
+      isOnline={isOnline}
       isUpdateDownloaded={isUpdateDownloaded}
       lookupConversationWithoutServiceId={lookupConversationWithoutServiceId}
       modeSpecificProps={modeSpecificProps}
@@ -421,6 +425,7 @@ export const SmartLeftPane = memo(function SmartLeftPane({
       savePreferredLeftPaneWidth={savePreferredLeftPaneWidth}
       searchInConversation={searchInConversation}
       selectedConversationId={selectedConversationId}
+      serverAlerts={serverAlerts}
       setChallengeStatus={setChallengeStatus}
       setComposeGroupAvatar={setComposeGroupAvatar}
       setComposeGroupExpireTimer={setComposeGroupExpireTimer}
@@ -448,6 +453,7 @@ export const SmartLeftPane = memo(function SmartLeftPane({
       updateSearchTerm={updateSearchTerm}
       usernameCorrupted={usernameCorrupted}
       usernameLinkCorrupted={usernameLinkCorrupted}
+      updateFilterByUnread={updateFilterByUnread}
     />
   );
 });

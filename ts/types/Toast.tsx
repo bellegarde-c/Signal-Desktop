@@ -6,6 +6,7 @@ export enum ToastType {
   AddedUsersToCall = 'AddedUsersToCall',
   AlreadyGroupMember = 'AlreadyGroupMember',
   AlreadyRequestedToJoin = 'AlreadyRequestedToJoin',
+  AttachmentDownloadFailed = 'AttachmentDownloadFailed',
   AttachmentDownloadStillInProgress = 'AttachmentDownloadStillInProgress',
   Blocked = 'Blocked',
   BlockedGroup = 'BlockedGroup',
@@ -35,14 +36,17 @@ export enum ToastType {
   FailedToFetchPhoneNumber = 'FailedToFetchPhoneNumber',
   FailedToFetchUsername = 'FailedToFetchUsername',
   FailedToSendWithEndorsements = 'FailedToSendWithEndorsements',
+  FailedToImportBackup = 'FailedToImportBackup',
   FileSaved = 'FileSaved',
   FileSize = 'FileSize',
   GroupLinkCopied = 'GroupLinkCopied',
   InvalidConversation = 'InvalidConversation',
+  InvalidStorageServiceHeaders = 'InvalidStorageServiceHeaders',
   LeftGroup = 'LeftGroup',
   LinkCopied = 'LinkCopied',
   LoadingFullLogs = 'LoadingFullLogs',
   MaxAttachments = 'MaxAttachments',
+  MediaNoLongerAvailable = 'MediaNoLongerAvailable',
   MessageBodyTooLong = 'MessageBodyTooLong',
   MessageLoop = 'MessageLoop',
   OriginalMessageNotFound = 'OriginalMessageNotFound',
@@ -80,6 +84,10 @@ export type AnyToast =
   | { toastType: ToastType.AlreadyGroupMember }
   | { toastType: ToastType.AlreadyRequestedToJoin }
   | {
+      toastType: ToastType.AttachmentDownloadFailed;
+      parameters: { messageId: string };
+    }
+  | {
       toastType: ToastType.AttachmentDownloadStillInProgress;
       parameters: { count: number };
     }
@@ -113,6 +121,7 @@ export type AnyToast =
   | { toastType: ToastType.FailedToFetchPhoneNumber }
   | { toastType: ToastType.FailedToFetchUsername }
   | { toastType: ToastType.FailedToSendWithEndorsements }
+  | { toastType: ToastType.FailedToImportBackup }
   | {
       toastType: ToastType.FileSaved;
       parameters: { fullPath: string; countOfFiles?: number };
@@ -130,10 +139,12 @@ export type AnyToast =
       };
     }
   | { toastType: ToastType.InvalidConversation }
+  | { toastType: ToastType.InvalidStorageServiceHeaders }
   | { toastType: ToastType.LeftGroup }
   | { toastType: ToastType.LinkCopied }
   | { toastType: ToastType.LoadingFullLogs }
   | { toastType: ToastType.MaxAttachments }
+  | { toastType: ToastType.MediaNoLongerAvailable }
   | { toastType: ToastType.MessageBodyTooLong }
   | { toastType: ToastType.MessageLoop }
   | { toastType: ToastType.OriginalMessageNotFound }

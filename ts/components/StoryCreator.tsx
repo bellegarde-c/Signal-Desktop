@@ -10,7 +10,7 @@ import type {
   InMemoryAttachmentDraftType,
 } from '../types/Attachment';
 import type { LinkPreviewSourceType } from '../types/LinkPreview';
-import type { LinkPreviewType } from '../types/message/LinkPreviews';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews';
 import type { LocalizerType, ThemeType } from '../types/Util';
 import type { Props as StickerButtonProps } from './stickers/StickerButton';
 import type { PropsType as SendStoryModalPropsType } from './SendStoryModal';
@@ -51,7 +51,7 @@ export type PropsType = {
   file?: File;
   i18n: LocalizerType;
   isSending: boolean;
-  linkPreview?: LinkPreviewType;
+  linkPreview?: LinkPreviewForUIType;
   onClose: () => unknown;
   onSend: (
     listIds: Array<StoryDistributionIdString>,
@@ -92,7 +92,10 @@ export type PropsType = {
   > &
   Pick<
     TextStoryCreatorPropsType,
-    'onUseEmoji' | 'skinTone' | 'onSetSkinTone' | 'recentEmojis'
+    | 'onUseEmoji'
+    | 'emojiSkinToneDefault'
+    | 'onEmojiSkinToneDefaultChange'
+    | 'recentEmojis'
   > &
   Pick<
     MediaEditorPropsType,
@@ -130,7 +133,7 @@ export function StoryCreator({
   onRepliesNReactionsChanged,
   onSelectedStoryList,
   onSend,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   onTextTooLong,
   onUseEmoji,
   onViewersUpdated,
@@ -142,7 +145,7 @@ export function StoryCreator({
   sendStoryModalOpenStateChanged,
   setMyStoriesToAllSignalConnections,
   signalConnections,
-  skinTone,
+  emojiSkinToneDefault,
   sortedGroupMembers,
   theme,
   toggleGroupsForStorySend,
@@ -274,9 +277,10 @@ export function StoryCreator({
               }}
               onPickEmoji={onPickEmoji}
               onTextTooLong={onTextTooLong}
+              ourConversationId={ourConversationId}
               platform={platform}
               recentStickers={recentStickers}
-              skinTone={skinTone}
+              emojiSkinToneDefault={emojiSkinToneDefault}
               sortedGroupMembers={sortedGroupMembers}
               draftText={null}
               draftBodyRanges={null}
@@ -298,9 +302,9 @@ export function StoryCreator({
                 setIsReadyToSend(true);
               }}
               onUseEmoji={onUseEmoji}
-              onSetSkinTone={onSetSkinTone}
+              onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
               recentEmojis={recentEmojis}
-              skinTone={skinTone}
+              emojiSkinToneDefault={emojiSkinToneDefault}
             />
           )}
         </>,

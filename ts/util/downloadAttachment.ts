@@ -5,30 +5,33 @@ import {
   type AttachmentType,
   mightBeOnBackupTier,
   AttachmentVariant,
+  AttachmentPermanentlyUndownloadableError,
+  getAttachmentIdForLogging,
 } from '../types/Attachment';
 import { downloadAttachment as doDownloadAttachment } from '../textsecure/downloadAttachment';
 import { MediaTier } from '../types/AttachmentDownload';
 import * as log from '../logging/log';
-import { redactGenericText } from './privacy';
 import { HTTPError } from '../textsecure/Errors';
 import { toLogFormat } from '../types/errors';
 import type { ReencryptedAttachmentV2 } from '../AttachmentCrypto';
 
-export class AttachmentPermanentlyUndownloadableError extends Error {}
-
 export async function downloadAttachment({
   attachment,
-  variant = AttachmentVariant.Default,
+  options: { variant = AttachmentVariant.Default, onSizeUpdate, abortSignal },
   dependencies = { downloadAttachmentFromServer: doDownloadAttachment },
 }: {
   attachment: AttachmentType;
-  variant?: AttachmentVariant;
+  options: {
+    variant?: AttachmentVariant;
+    onSizeUpdate: (totalBytes: number) => void;
+    abortSignal: AbortSignal;
+  };
   dependencies?: { downloadAttachmentFromServer: typeof doDownloadAttachment };
 }): Promise<ReencryptedAttachmentV2> {
-  const redactedDigest = redactGenericText(attachment.digest ?? '');
+  const attachmentId = getAttachmentIdForLogging(attachment);
   const variantForLogging =
     variant !== AttachmentVariant.Default ? `[${variant}]` : '';
-  const dataId = `${redactedDigest}${variantForLogging}`;
+  const dataId = `${attachmentId}${variantForLogging}`;
   const logId = `downloadAttachmentUtil(${dataId})`;
 
   const { server } = window.textsecure;
@@ -54,9 +57,11 @@ export async function downloadAttachment({
         server,
         migratedAttachment,
         {
-          variant,
-          mediaTier: MediaTier.BACKUP,
           logPrefix: dataId,
+          mediaTier: MediaTier.BACKUP,
+          onSizeUpdate,
+          variant,
+          abortSignal,
         }
       );
     } catch (error) {
@@ -80,9 +85,11 @@ export async function downloadAttachment({
       server,
       migratedAttachment,
       {
-        variant,
-        mediaTier: MediaTier.STANDARD,
         logPrefix: dataId,
+        mediaTier: MediaTier.STANDARD,
+        onSizeUpdate,
+        variant,
+        abortSignal,
       }
     );
   } catch (error) {
@@ -91,13 +98,10 @@ export async function downloadAttachment({
       // may just need to wait for this attachment to end up on the backup tier
       throw error;
     }
-    // Attachments on the transit tier expire after 30 days, then start returning 404 or
-    // 403
-    if (
-      error instanceof HTTPError &&
-      (error.code === 404 || error.code === 403)
-    ) {
-      throw new AttachmentPermanentlyUndownloadableError();
+    // Attachments on the transit tier expire after (message queue length + buffer) days,
+    // then start returning 404
+    if (error instanceof HTTPError && error.code === 404) {
+      throw new AttachmentPermanentlyUndownloadableError(`HTTP ${error.code}`);
     } else {
       throw error;
     }

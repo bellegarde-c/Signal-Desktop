@@ -33,6 +33,8 @@ import { isAciString } from '../util/isAciString';
 import { normalizeAci } from '../util/normalizeAci';
 import { bytesToUuid } from '../util/uuidToBytes';
 import { createName } from '../util/attachmentPath';
+import { partitionBodyAndNormalAttachments } from '../types/Attachment';
+import { isNotNil } from '../util/isNotNil';
 
 const FLAGS = Proto.DataMessage.Flags;
 export const ATTACHMENT_MAX = 32;
@@ -149,7 +151,7 @@ export function processQuote(
     id: quote.id?.toNumber(),
     authorAci: normalizeAci(authorAci, 'Quote.authorAci'),
     text: dropNull(quote.text),
-    attachments: (quote.attachments ?? []).map(attachment => {
+    attachments: (quote.attachments ?? []).slice(0, 1).map(attachment => {
       return {
         contentType: attachment.contentType
           ? stringToMIMEType(attachment.contentType)
@@ -170,7 +172,7 @@ export function processContact(
     return undefined;
   }
 
-  return contact.map(item => {
+  return contact.slice(0, 1).map(item => {
     return {
       ...item,
       avatar: item.avatar
@@ -198,13 +200,13 @@ function cleanLinkPreviewDate(value?: Long | null): number | undefined {
 }
 
 export function processPreview(
-  preview?: ReadonlyArray<Proto.DataMessage.IPreview> | null
+  preview?: ReadonlyArray<Proto.IPreview> | null
 ): ReadonlyArray<ProcessedPreview> | undefined {
   if (!preview) {
     return undefined;
   }
 
-  return preview.map(item => {
+  return preview.slice(0, 1).map(item => {
     return {
       url: dropNull(item.url),
       title: dropNull(item.title),
@@ -247,7 +249,7 @@ export function processReaction(
     emoji: dropNull(reaction.emoji),
     remove: Boolean(reaction.remove),
     targetAuthorAci: normalizeAci(targetAuthorAci, 'Reaction.targetAuthorAci'),
-    targetTimestamp: reaction.targetTimestamp?.toNumber(),
+    targetTimestamp: reaction.targetSentTimestamp?.toNumber(),
   };
 }
 
@@ -316,14 +318,22 @@ export function processDataMessage(
     );
   }
 
+  const processedAttachments = message.attachments
+    ?.map((attachment: Proto.IAttachmentPointer) => ({
+      ...processAttachment(attachment),
+      downloadPath: doCreateName(),
+    }))
+    .filter(isNotNil);
+
+  const { bodyAttachment, attachments } = partitionBodyAndNormalAttachments(
+    { attachments: processedAttachments ?? [] },
+    { logId: `processDataMessage(${timestamp})` }
+  );
+
   const result: ProcessedDataMessage = {
     body: dropNull(message.body),
-    attachments: (message.attachments ?? []).map(
-      (attachment: Proto.IAttachmentPointer) => ({
-        ...processAttachment(attachment),
-        downloadPath: doCreateName(),
-      })
-    ),
+    bodyAttachment,
+    attachments,
     groupV2: processGroupV2Context(message.groupV2),
     flags: message.flags ?? 0,
     expireTimer: DurationInSeconds.fromSeconds(message.expireTimer ?? 0),

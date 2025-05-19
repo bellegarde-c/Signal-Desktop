@@ -8,7 +8,6 @@ import { chmod, realpath, writeFile } from 'fs-extra';
 import { randomBytes } from 'crypto';
 import { createParser } from 'dashdash';
 
-import normalizePath from 'normalize-path';
 import fastGlob from 'fast-glob';
 import PQueue from 'p-queue';
 import { get, pick, isNumber, isBoolean, some, debounce, noop } from 'lodash';
@@ -124,6 +123,7 @@ import { SafeStorageBackendChangeError } from '../ts/types/SafeStorageBackendCha
 import { LINUX_PASSWORD_STORE_FLAGS } from '../ts/util/linuxPasswordStoreFlags';
 import { getOwn } from '../ts/util/getOwn';
 import { safeParseLoose, safeParseUnknown } from '../ts/util/schemas';
+import { getAppErrorIcon } from '../ts/util/getAppErrorIcon';
 
 const animationSettings = systemPreferences.getAnimationSettings();
 
@@ -690,6 +690,21 @@ async function createWindow() {
     ? Math.min(windowConfig.height, maxHeight)
     : DEFAULT_HEIGHT;
 
+  const [systemTraySetting, backgroundColor, spellcheck] = await Promise.all([
+    systemTraySettingCache.get(),
+    isTestEnvironment(getEnvironment())
+      ? '#ffffff' // Tests should always be rendered on a white background
+      : getBackgroundColor({ signalColors: true }),
+    getSpellCheckSetting(),
+  ]);
+
+  const startInTray =
+    isTestEnvironment(getEnvironment()) ||
+    systemTraySetting === SystemTraySetting.MinimizeToAndStartInSystemTray;
+
+  const shouldShowWindow =
+    !app.getLoginItemSettings().wasOpenedAsHidden && !startInTray;
+
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
     show: false,
     width,
@@ -698,9 +713,7 @@ async function createWindow() {
     minHeight: MIN_HEIGHT,
     autoHideMenuBar: false,
     titleBarStyle: mainTitleBarStyle,
-    backgroundColor: isTestEnvironment(getEnvironment())
-      ? '#ffffff' // Tests should always be rendered on a white background
-      : await getBackgroundColor({ signalColors: true }),
+    backgroundColor,
     webPreferences: {
       ...defaultWebPrefs,
       nodeIntegration: false,
@@ -713,7 +726,7 @@ async function createWindow() {
           ? '../preload.wrapper.js'
           : '../ts/windows/main/preload.js'
       ),
-      spellcheck: await getSpellCheckSetting(),
+      spellcheck,
       backgroundThrottling: true,
       disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmallCanvases',
     },
@@ -730,11 +743,6 @@ async function createWindow() {
   if (!isBoolean(windowOptions.autoHideMenuBar)) {
     delete windowOptions.autoHideMenuBar;
   }
-
-  const startInTray =
-    isTestEnvironment(getEnvironment()) ||
-    (await systemTraySettingCache.get()) ===
-      SystemTraySetting.MinimizeToAndStartInSystemTray;
 
   const haveFullWindowsBounds =
     isNumber(windowOptions.x) &&
@@ -844,6 +852,8 @@ async function createWindow() {
 
   mainWindow.on('resize', captureWindowStats);
   mainWindow.on('move', captureWindowStats);
+  mainWindow.on('maximize', captureWindowStats);
+  mainWindow.on('unmaximize', captureWindowStats);
 
   if (!ciMode && config.get<boolean>('openDevTools')) {
     // Open the DevTools.
@@ -950,6 +960,9 @@ async function createWindow() {
       return;
     }
 
+    // Persist pending window settings to ephemeralConfig
+    debouncedSaveStats.flush();
+
     windowState.markRequestedShutdown();
     await requestShutdown();
     windowState.markReadyForShutdown();
@@ -988,8 +1001,15 @@ async function createWindow() {
 
   mainWindow.on('show', () => {
     if (mainWindow) {
+      mainWindow.webContents.send('activate');
       mainWindow.webContents.send('set-media-playback-disabled', false);
     }
+  });
+
+  mainWindow.webContents.on('devtools-reload-page', () => {
+    mainWindow?.webContents.on('dom-ready', () => {
+      mainWindow?.webContents.send('activate');
+    });
   });
 
   mainWindow.once('ready-to-show', async () => {
@@ -1003,11 +1023,6 @@ async function createWindow() {
     }
 
     mainWindow.webContents.send('ci:event', 'db-initialized', {});
-
-    const shouldShowWindow =
-      !app.getLoginItemSettings().wasOpenedAsHidden &&
-      !startInTray &&
-      !config.get<boolean>('ciIsBackupIntegration');
 
     if (shouldShowWindow) {
       getLogger().info('showing main window');
@@ -1812,12 +1827,14 @@ const onDatabaseError = async (error: Error) => {
 
   const { i18n } = getResolvedMessagesLocale();
 
+  let copyErrorAndQuitButtonIndex: number;
   let deleteAllDataButtonIndex: number | undefined;
+  let goToSupportPageButtonIndex: number | undefined;
+  let defaultButtonId: number;
+  let messageTitle: string;
   let messageDetail: string;
 
-  const buttons = [i18n('icu:copyErrorAndQuit')];
-  const copyErrorAndQuitButtonIndex = 0;
-  const SIGNAL_SUPPORT_LINK = 'https://support.signal.org/error';
+  const buttons = [];
 
   // Note that this error is thrown by the worker process and thus instanceof
   // check won't work.
@@ -1825,13 +1842,18 @@ const onDatabaseError = async (error: Error) => {
     // If the DB version is too new, the user likely opened an older version of Signal,
     // and they would almost never want to delete their data as a result, so we don't show
     // that option
+    messageTitle = i18n('icu:databaseError');
     messageDetail = i18n('icu:databaseError__startOldVersion');
+    buttons.push(i18n('icu:copyErrorAndQuit'));
+    copyErrorAndQuitButtonIndex = 0;
+    defaultButtonId = copyErrorAndQuitButtonIndex;
   } else if (error instanceof SafeStorageBackendChangeError) {
     const { currentBackend, previousBackend } = error;
     const previousBackendFlag = getOwn(
       LINUX_PASSWORD_STORE_FLAGS,
       previousBackend
     );
+    messageTitle = i18n('icu:databaseError');
     messageDetail = previousBackendFlag
       ? i18n('icu:databaseError__safeStorageBackendChangeWithPreviousFlag', {
           currentBackend,
@@ -1842,27 +1864,32 @@ const onDatabaseError = async (error: Error) => {
           currentBackend,
           previousBackend,
         });
+    buttons.push(i18n('icu:copyErrorAndQuit'));
+    copyErrorAndQuitButtonIndex = 0;
+    defaultButtonId = copyErrorAndQuitButtonIndex;
   } else {
-    // Otherwise, this is some other kind of DB error, let's give them the option to
-    // delete.
-    messageDetail = i18n(
-      'icu:databaseError__detail',
-      { link: SIGNAL_SUPPORT_LINK },
-      { bidi: 'strip' }
-    );
-
+    // Otherwise, this is some other kind of DB error, most likely broken safeStorage key.
+    // Let's give them the option to delete and show them the support guide.
+    messageTitle = i18n('icu:cantOpenSignalError');
+    messageDetail = i18n('icu:cantOpenSignalError__detail');
+    buttons.push(i18n('icu:goToSupportPage'));
+    goToSupportPageButtonIndex = 0;
+    // Delete button should be the hardest to click
     buttons.push(i18n('icu:deleteAndRestart'));
     deleteAllDataButtonIndex = 1;
+    buttons.push(i18n('icu:copyErrorAndQuit'));
+    copyErrorAndQuitButtonIndex = 2;
+    defaultButtonId = goToSupportPageButtonIndex;
   }
 
   const buttonIndex = dialog.showMessageBoxSync({
     buttons,
-    defaultId: copyErrorAndQuitButtonIndex,
+    defaultId: defaultButtonId,
     cancelId: copyErrorAndQuitButtonIndex,
-    message: i18n('icu:databaseError'),
+    message: messageTitle,
     detail: messageDetail,
+    icon: getAppErrorIcon(),
     noLink: true,
-    type: 'error',
   });
 
   if (buttonIndex === copyErrorAndQuitButtonIndex) {
@@ -1887,8 +1914,8 @@ const onDatabaseError = async (error: Error) => {
       cancelId: cancelButtonIndex,
       message: i18n('icu:databaseError__deleteDataConfirmation'),
       detail: i18n('icu:databaseError__deleteDataConfirmation__detail'),
+      icon: getAppErrorIcon(),
       noLink: true,
-      type: 'warning',
     });
 
     if (confirmationButtonIndex === confirmDeleteAllDataButtonIndex) {
@@ -1900,6 +1927,12 @@ const onDatabaseError = async (error: Error) => {
       );
       app.relaunch();
     }
+  } else if (buttonIndex === goToSupportPageButtonIndex) {
+    drop(
+      shell.openExternal(
+        'https://support.signal.org/hc/articles/9045714156314#desktop'
+      )
+    );
   }
 
   getLogger().error('onDatabaseError: Quitting application');
@@ -1970,6 +2003,7 @@ electronProtocol.registerSchemesAsPrivileged([
   {
     scheme: 'attachment',
     privileges: {
+      standard: true,
       supportFetchAPI: true,
       stream: true,
     },
@@ -2004,7 +2038,9 @@ app.on('ready', async () => {
   }
 
   installWebHandler({
-    enableHttp: Boolean(process.env.SIGNAL_ENABLE_HTTP),
+    enableHttp:
+      Boolean(process.env.SIGNAL_ENABLE_HTTP) ||
+      Boolean(process.env.REACT_DEVTOOLS),
     session: session.defaultSession,
   });
 
@@ -2101,7 +2137,8 @@ app.on('ready', async () => {
   // We use this event only a single time to log the startup time of the app
   // from when it's first ready until the loading screen disappears.
   ipc.once('signal-app-loaded', (event, info) => {
-    const { preloadTime, connectTime, processedCount } = info;
+    const { preloadCompileTime, preloadTime, connectTime, processedCount } =
+      info;
 
     const loadTime = Date.now() - startTime;
     const sqlInitTime = sqlInitTimeEnd - sqlInitTimeStart;
@@ -2112,6 +2149,7 @@ app.on('ready', async () => {
     const innerLogger = getLogger();
     innerLogger.info('App loaded - time:', loadTime);
     innerLogger.info('SQL init - time:', sqlInitTime);
+    innerLogger.info('Preload Compile - time:', preloadCompileTime);
     innerLogger.info('Preload - time:', preloadTime);
     innerLogger.info('WebSocket connect - time:', connectTime);
     innerLogger.info('Processed count:', processedCount);
@@ -2122,6 +2160,7 @@ app.on('ready', async () => {
     event.sender.send('ci:event', 'app-loaded', {
       loadTime,
       sqlInitTime,
+      preloadCompileTime,
       preloadTime,
       connectTime,
       processedCount,
@@ -2157,7 +2196,8 @@ app.on('ready', async () => {
     logger.info(
       'media access status',
       getMediaAccessStatus('microphone'),
-      getMediaAccessStatus('camera')
+      getMediaAccessStatus('camera'),
+      getMediaAccessStatus('screen')
     );
   }
 
@@ -2653,8 +2693,13 @@ ipc.on('show-debug-log', showDebugLogWindow);
 ipc.on(
   'show-debug-log-save-dialog',
   async (_event: Electron.Event, logText: string) => {
+    // Workaround KDE portal file dialog default path issue
+    const defaultPath = OS.isLinuxUsingKDE()
+      ? '~/debuglog.txt'
+      : 'debuglog.txt';
+
     const { filePath } = await dialog.showSaveDialog({
-      defaultPath: 'debuglog.txt',
+      defaultPath,
       showsTagField: false,
     });
     if (filePath) {
@@ -2745,12 +2790,11 @@ ipc.on('get-config', async event => {
         : getEnvironment(),
     isMockTestEnvironment: Boolean(process.env.MOCK_TEST),
     ciMode,
+    ciForceUnprocessed: config.get<boolean>('ciForceUnprocessed'),
     devTools: defaultWebPrefs.devTools,
     // Should be already computed and cached at this point
     dnsFallback: await getDNSFallback(),
     disableIPv6: DISABLE_IPV6,
-    ciBackupPath: config.get<string | null>('ciBackupPath') || undefined,
-    ciIsBackupIntegration: config.get<boolean>('ciIsBackupIntegration'),
     nodeVersion: process.versions.node,
     hostname: os.hostname(),
     osRelease: os.release(),
@@ -2829,6 +2873,8 @@ ipc.handle(
       app.getVersion(),
       os.version(),
       userAgent,
+      process.arch,
+      app.runningUnderARM64Translation,
       OS.getLinuxName()
     );
   }
@@ -2897,14 +2943,13 @@ function handleSignalRoute(route: ParsedSignalRoute) {
       value: route.args.encryptedUsername,
     });
   } else if (route.key === 'showConversation') {
-    mainWindow.webContents.send('show-conversation-via-notification', {
-      conversationId: route.args.conversationId,
-      messageId: route.args.messageId,
-      storyId: route.args.storyId,
-    });
+    mainWindow.webContents.send(
+      'show-conversation-via-token',
+      route.args.token
+    );
   } else if (route.key === 'startCallLobby') {
     mainWindow.webContents.send('start-call-lobby', {
-      conversationId: route.args.conversationId,
+      token: route.args.token,
     });
   } else if (route.key === 'linkCall') {
     mainWindow.webContents.send('start-call-link', {
@@ -2944,8 +2989,7 @@ async function ensureFilePermissions(onlyFiles?: Array<string>) {
 
   const start = Date.now();
   const userDataPath = await realpath(app.getPath('userData'));
-  // fast-glob uses `/` for all platforms
-  const userDataGlob = normalizePath(join(userDataPath, '**', '*'));
+  const userDataGlob = attachments.prepareGlobPattern(userDataPath);
 
   // Determine files to touch
   const files = onlyFiles
@@ -2984,11 +3028,35 @@ async function ensureFilePermissions(onlyFiles?: Array<string>) {
 ipc.handle('get-media-access-status', async (_event, value) => {
   // This function is not supported on Linux
   if (!systemPreferences.getMediaAccessStatus) {
-    return undefined;
+    return 'unknown';
   }
 
   return systemPreferences.getMediaAccessStatus(value);
 });
+
+ipc.handle(
+  'open-system-media-permissions',
+  async (_event, mediaType: 'camera' | 'microphone' | 'screenCapture') => {
+    if (!OS.isMacOS()) {
+      return;
+    }
+    if (mediaType === 'camera') {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
+      );
+    } else if (mediaType === 'microphone') {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+      );
+    } else if (mediaType === 'screenCapture') {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+      );
+    } else {
+      throw missingCaseError(mediaType);
+    }
+  }
+);
 
 ipc.handle('get-auto-launch', async () => {
   return app.getLoginItemSettings(await getDefaultLoginItemSettings())
@@ -3019,10 +3087,13 @@ ipc.handle('show-save-dialog', async (_event, { defaultPath }) => {
     return { canceled: true };
   }
 
+  // Workaround KDE portal file dialog default path issue
+  const osDefaultPath = OS.isLinuxUsingKDE() ? `~/${defaultPath}` : defaultPath;
+
   const { canceled, filePath: selectedFilePath } = await dialog.showSaveDialog(
     mainWindow,
     {
-      defaultPath,
+      defaultPath: osDefaultPath,
       showsTagField: false,
     }
   );

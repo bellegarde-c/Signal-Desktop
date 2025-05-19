@@ -5,7 +5,6 @@ import * as sinon from 'sinon';
 import casual from 'casual';
 import { v4 as generateUuid } from 'uuid';
 
-import { DataWriter } from '../../../sql/Client';
 import type {
   DispatchableViewStoryType,
   StoryDataType,
@@ -27,8 +26,16 @@ import { actions, getEmptyState } from '../../../state/ducks/stories';
 import { noopAction } from '../../../state/ducks/noop';
 import { reducer as rootReducer } from '../../../state/reducer';
 import { dropNull } from '../../../util/dropNull';
+import { MessageModel } from '../../../models/messages';
 
 describe('both/state/ducks/stories', () => {
+  const ourAci = generateAci();
+  const deviceId = 2;
+
+  before(async () => {
+    await window.textsecure.storage.put('uuid_id', `${ourAci}.${deviceId}`);
+  });
+
   const getEmptyRootState = () => ({
     ...rootReducer(undefined, noopAction()),
     stories: getEmptyState(),
@@ -862,11 +869,7 @@ describe('both/state/ducks/stories', () => {
       const storyId = generateUuid();
       const messageAttributes = getStoryMessage(storyId);
 
-      window.MessageCache.__DEPRECATED$register(
-        storyId,
-        messageAttributes,
-        'test'
-      );
+      window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
       await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
@@ -888,11 +891,7 @@ describe('both/state/ducks/stories', () => {
         ],
       };
 
-      window.MessageCache.__DEPRECATED$register(
-        storyId,
-        messageAttributes,
-        'test'
-      );
+      window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
       await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
@@ -914,11 +913,7 @@ describe('both/state/ducks/stories', () => {
         ],
       };
 
-      window.MessageCache.__DEPRECATED$register(
-        storyId,
-        messageAttributes,
-        'test'
-      );
+      window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
       await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
@@ -938,9 +933,8 @@ describe('both/state/ducks/stories', () => {
           },
         ],
       };
-      await DataWriter.saveMessage(messageAttributes, {
+      await window.MessageCache.saveMessage(messageAttributes, {
         forceSave: true,
-        ourAci: generateAci(),
       });
       const rootState = getEmptyRootState();
 
@@ -963,11 +957,7 @@ describe('both/state/ducks/stories', () => {
         },
       });
 
-      window.MessageCache.__DEPRECATED$register(
-        storyId,
-        messageAttributes,
-        'test'
-      );
+      window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
       await queueStoryDownload(storyId)(dispatch, getState, null);
@@ -986,6 +976,7 @@ describe('both/state/ducks/stories', () => {
           contentType: IMAGE_JPEG,
           digest: 'digest-1',
           size: 0,
+          isPermanentlyUndownloadable: false,
         },
         isCallLink: false,
       };
@@ -1004,9 +995,8 @@ describe('both/state/ducks/stories', () => {
         preview: [preview],
       };
 
-      await DataWriter.saveMessage(messageAttributes, {
+      await window.MessageCache.saveMessage(messageAttributes, {
         forceSave: true,
-        ourAci: generateAci(),
       });
       const rootState = getEmptyRootState();
 
@@ -1029,11 +1019,7 @@ describe('both/state/ducks/stories', () => {
         },
       });
 
-      window.MessageCache.__DEPRECATED$register(
-        storyId,
-        messageAttributes,
-        'test'
-      );
+      window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
       await queueStoryDownload(storyId)(dispatch, getState, null);

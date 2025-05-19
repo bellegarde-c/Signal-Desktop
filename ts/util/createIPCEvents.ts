@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { ipcRenderer } from 'electron';
+import type { SystemPreferences } from 'electron';
 import type { AudioDevice } from '@signalapp/ringrtc';
 import { noop } from 'lodash';
 
-import type { ZoomFactorType } from '../types/Storage.d';
+import type {
+  AutoDownloadAttachmentType,
+  ZoomFactorType,
+} from '../types/Storage.d';
 import type {
   ConversationColorType,
   CustomColorType,
@@ -19,6 +23,10 @@ import type { ConversationType } from '../state/ducks/conversations';
 import { calling } from '../services/calling';
 import { resolveUsernameByLinkBase64 } from '../services/username';
 import { writeProfile } from '../services/writeProfile';
+import {
+  backupsService,
+  type ValidationResultType as BackupValidationResultType,
+} from '../services/backups';
 import { isInCall } from '../state/selectors/calling';
 import { getConversationsWithCustomColorSelector } from '../state/selectors/conversations';
 import { getCustomColors } from '../state/selectors/items';
@@ -35,7 +43,10 @@ import * as Registration from './registration';
 import { lookupConversationWithoutServiceId } from './lookupConversationWithoutServiceId';
 import * as log from '../logging/log';
 import { deleteAllMyStories } from './deleteAllMyStories';
-import type { NotificationClickData } from '../services/notifications';
+import {
+  type NotificationClickData,
+  notificationService,
+} from '../services/notifications';
 import { StoryViewModeType, StoryViewTargetType } from '../types/Stories';
 import { isValidE164 } from './isValidE164';
 import { fromWebSafeBase64 } from './webSafeBase64';
@@ -49,6 +60,16 @@ import type {
 } from './preload';
 import type { SystemTraySetting } from '../types/SystemTraySetting';
 import { drop } from './drop';
+import { sendSyncRequests } from '../textsecure/syncRequests';
+import { waitForEvent } from '../shims/events';
+import { DEFAULT_AUTO_DOWNLOAD_ATTACHMENT } from '../textsecure/Storage';
+import { EmojiSkinTone } from '../components/fun/data/emojis';
+import type {
+  BackupsSubscriptionType,
+  BackupStatusType,
+} from '../types/backups';
+import { isBackupFeatureEnabled } from './isBackupEnabled';
+import * as RemoteConfig from '../RemoteConfig';
 
 type SentMediaQualityType = 'standard' | 'high';
 type NotificationSettingType = 'message' | 'name' | 'count' | 'off';
@@ -58,6 +79,7 @@ export type IPCEventsValuesType = {
   audioNotification: boolean | undefined;
   audioMessage: boolean;
   autoConvertEmoji: boolean;
+  autoDownloadAttachment: AutoDownloadAttachmentType;
   autoDownloadUpdate: boolean;
   autoLaunch: boolean;
   callRingtoneNotification: boolean;
@@ -80,10 +102,12 @@ export type IPCEventsValuesType = {
 
   // Optional
   mediaPermissions: boolean;
-  mediaCameraPermissions: boolean;
+  mediaCameraPermissions: boolean | undefined;
 
   // Only getters
-
+  backupFeatureEnabled: boolean;
+  cloudBackupStatus: BackupStatusType | undefined;
+  backupSubscriptionStatus: BackupsSubscriptionType | undefined;
   blockedCount: number;
   linkPreviewSetting: boolean;
   phoneNumberDiscoverabilitySetting: PhoneNumberDiscoverability;
@@ -102,6 +126,8 @@ export type IPCEventsCallbacksType = {
     availableMicrophones: Array<AudioDevice>;
     availableSpeakers: Array<AudioDevice>;
   }>;
+  refreshCloudBackupStatus(): void;
+  refreshBackupSubscriptionStatus(): void;
   addCustomColor: (customColor: CustomColorType) => void;
   addDarkOverlay: () => void;
   cleanupDownloads: () => Promise<void>;
@@ -111,9 +137,10 @@ export type IPCEventsCallbacksType = {
   getConversationsWithCustomColor: (x: string) => Array<ConversationType>;
   getMediaAccessStatus: (
     mediaType: 'screen' | 'microphone' | 'camera'
-  ) => Promise<string | unknown>;
+  ) => Promise<ReturnType<SystemPreferences['getMediaAccessStatus']>>;
   installStickerPack: (packId: string, key: string) => Promise<void>;
   isPrimary: () => boolean;
+  isInternalUser: () => boolean;
   removeCustomColor: (x: string) => void;
   removeCustomColorOnConversations: (x: string) => void;
   removeDarkOverlay: () => void;
@@ -121,6 +148,7 @@ export type IPCEventsCallbacksType = {
   resetDefaultChatColor: () => void;
   setMediaPlaybackDisabled: (playbackDisabled: boolean) => void;
   showConversationViaNotification: (data: NotificationClickData) => void;
+  showConversationViaToken: (token: string) => void;
   showConversationViaSignalDotMe: (
     kind: string,
     value: string
@@ -129,17 +157,21 @@ export type IPCEventsCallbacksType = {
   showGroupViaLink: (value: string) => Promise<void>;
   showReleaseNotes: () => void;
   showStickerPack: (packId: string, key: string) => void;
+  startCallingLobbyViaToken: (token: string) => void;
   requestCloseConfirmation: () => Promise<boolean>;
   getIsInCall: () => boolean;
   shutdown: () => Promise<void>;
   unknownSignalLink: () => void;
   getCustomColors: () => Record<string, CustomColorType>;
   syncRequest: () => Promise<void>;
+  validateBackup: () => Promise<BackupValidationResultType>;
   setGlobalDefaultConversationColor: (
     color: ConversationColorType,
     customColor?: { id: string; value: CustomColorType }
   ) => void;
+  setEmojiSkinToneDefault: (emojiSkinTone: EmojiSkinTone) => void;
   getDefaultConversationColor: () => DefaultConversationColorType;
+  getEmojiSkinToneDefault: () => EmojiSkinTone;
   uploadStickerPack: (
     manifest: Uint8Array,
     stickers: ReadonlyArray<Uint8Array>
@@ -169,6 +201,9 @@ type ValuesWithSetters = Omit<
   | 'typingIndicatorSetting'
   | 'deviceName'
   | 'phoneNumber'
+  | 'backupFeatureEnabled'
+  | 'cloudBackupStatus'
+  | 'backupSubscriptionStatus'
 
   // Optional
   | 'mediaPermissions'
@@ -330,6 +365,11 @@ export function createIPCEvents(
       await deleteAllMyStories();
     },
 
+    setGlobalDefaultConversationColor: (...args) =>
+      window.reduxActions.items.setGlobalDefaultConversationColor(...args),
+    setEmojiSkinToneDefault: (emojiSkinTone: EmojiSkinTone) =>
+      window.reduxActions.items.setEmojiSkinToneDefault(emojiSkinTone),
+
     // Chat Color redux hookups
     getCustomColors: () => {
       return getCustomColors(window.reduxStore.getState()) || {};
@@ -353,8 +393,6 @@ export function createIPCEvents(
       window.reduxActions.conversations.resetAllChatColors(),
     resetDefaultChatColor: () =>
       window.reduxActions.items.resetDefaultChatColor(),
-    setGlobalDefaultConversationColor: (...args) =>
-      window.reduxActions.items.setGlobalDefaultConversationColor(...args),
 
     // Getters only
     getAvailableIODevices: async () => {
@@ -375,6 +413,19 @@ export function createIPCEvents(
         availableSpeakers,
       };
     },
+    getBackupFeatureEnabled: () => {
+      return isBackupFeatureEnabled();
+    },
+    getCloudBackupStatus: () => {
+      return window.storage.get('cloudBackupStatus');
+    },
+    getBackupSubscriptionStatus: () => {
+      return window.storage.get('backupSubscriptionStatus');
+    },
+    refreshCloudBackupStatus:
+      window.Signal.Services.backups.throttledFetchCloudBackupStatus,
+    refreshBackupSubscriptionStatus:
+      window.Signal.Services.backups.throttledFetchSubscriptionStatus,
     getBlockedCount: () =>
       window.storage.blocked.getBlockedServiceIds().length +
       window.storage.blocked.getBlockedGroups().length,
@@ -383,6 +434,8 @@ export function createIPCEvents(
         'defaultConversationColor',
         DEFAULT_CONVERSATION_COLOR
       ),
+    getEmojiSkinToneDefault: () =>
+      window.storage.get('emojiSkinToneDefault', EmojiSkinTone.None),
     getLinkPreviewSetting: () => window.storage.get('linkPreviews', false),
     getPhoneNumberDiscoverabilitySetting: () =>
       window.storage.get(
@@ -400,6 +453,13 @@ export function createIPCEvents(
       window.storage.get('typingIndicators', false),
 
     // Configurable settings
+    getAutoDownloadAttachment: () =>
+      window.storage.get(
+        'auto-download-attachment',
+        DEFAULT_AUTO_DOWNLOAD_ATTACHMENT
+      ),
+    setAutoDownloadAttachment: (setting: AutoDownloadAttachmentType) =>
+      window.storage.put('auto-download-attachment', setting),
     getAutoDownloadUpdate: () =>
       window.storage.get('auto-download-update', true),
     setAutoDownloadUpdate: value =>
@@ -482,15 +542,17 @@ export function createIPCEvents(
     },
 
     isPrimary: () => window.textsecure.storage.user.getDeviceId() === 1,
-    syncRequest: () =>
-      new Promise<void>((resolve, reject) => {
-        const FIVE_MINUTES = 5 * durations.MINUTE;
-        const syncRequest = window.getSyncRequest(FIVE_MINUTES);
-        syncRequest.addEventListener('success', () => resolve());
-        syncRequest.addEventListener('timeout', () =>
-          reject(new Error('timeout'))
-        );
-      }),
+    isInternalUser: () => RemoteConfig.isEnabled('desktop.internalUser'),
+    syncRequest: async () => {
+      const contactSyncComplete = waitForEvent(
+        'contactSync:complete',
+        5 * durations.MINUTE
+      );
+      await sendSyncRequests();
+      return contactSyncComplete;
+    },
+    // Only for internal use
+    validateBackup: () => backupsService._internalValidate(),
     getLastSyncTime: () => window.storage.get('synced_at'),
     setLastSyncTime: value => window.storage.put('synced_at', value),
     getUniversalExpireTimer: () => universalExpireTimer.get(),
@@ -575,23 +637,31 @@ export function createIPCEvents(
       messageId,
       storyId,
     }: NotificationClickData) {
-      if (conversationId) {
-        if (storyId) {
-          window.reduxActions.stories.viewStory({
-            storyId,
-            storyViewMode: StoryViewModeType.Single,
-            viewTarget: StoryViewTargetType.Replies,
-          });
-        } else {
-          window.reduxActions.conversations.showConversation({
-            conversationId,
-            messageId: messageId ?? undefined,
-          });
-        }
-      } else {
+      if (!conversationId) {
         window.reduxActions.app.openInbox();
+      } else if (storyId) {
+        window.reduxActions.stories.viewStory({
+          storyId,
+          storyViewMode: StoryViewModeType.Single,
+          viewTarget: StoryViewTargetType.Replies,
+        });
+      } else {
+        window.reduxActions.conversations.showConversation({
+          conversationId,
+          messageId: messageId ?? undefined,
+        });
       }
     },
+
+    showConversationViaToken(token: string) {
+      const data = notificationService.resolveToken(token);
+      if (!data) {
+        window.reduxActions.app.openInbox();
+      } else {
+        window.Events.showConversationViaNotification(data);
+      }
+    },
+
     async showConversationViaSignalDotMe(kind: string, value: string) {
       if (!Registration.everDone()) {
         log.info(
@@ -638,6 +708,17 @@ export function createIPCEvents(
       showUnknownSgnlLinkModal();
     },
 
+    startCallingLobbyViaToken(token: string) {
+      const data = notificationService.resolveToken(token);
+      if (!data) {
+        return;
+      }
+      window.reduxActions?.calling?.startCallingLobby({
+        conversationId: data.conversationId,
+        isVideoCall: true,
+      });
+    },
+
     requestCloseConfirmation: async (): Promise<boolean> => {
       try {
         await new Promise<void>((resolve, reject) => {
@@ -680,6 +761,7 @@ export function createIPCEvents(
     installStickerPack: async (packId, key) => {
       void Stickers.downloadStickerPack(packId, key, {
         finalStatus: 'installed',
+        actionSource: 'ui',
       });
     },
 
@@ -695,7 +777,9 @@ export function createIPCEvents(
       return window.IPC.getMediaAccessStatus(mediaType);
     },
     getMediaPermissions: window.IPC.getMediaPermissions,
-    getMediaCameraPermissions: window.IPC.getMediaCameraPermissions,
+    getMediaCameraPermissions: async () => {
+      return (await window.IPC.getMediaCameraPermissions()) || false;
+    },
 
     setMediaPlaybackDisabled: (playbackDisabled: boolean) => {
       window.reduxActions?.lightbox.setPlaybackDisabled(playbackDisabled);

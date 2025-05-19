@@ -6,7 +6,7 @@ import type { ReadonlyMessageAttributesType } from '../model-types.d';
 import type { StoryDataType } from '../state/ducks/stories';
 import * as durations from '../util/durations';
 import * as log from '../logging/log';
-import { DataReader, DataWriter } from '../sql/Client';
+import { DataReader } from '../sql/Client';
 import type { GetAllStoriesResultType } from '../sql/Interface';
 import {
   getAttachmentsForMessage,
@@ -71,12 +71,14 @@ export function getStoryDataFromMessageAttributes(
         ...attachment.textAttachment,
         preview: {
           ...preview,
-          image: preview.image && getPropsForAttachment(preview.image),
+          image:
+            preview.image &&
+            getPropsForAttachment(preview.image, 'preview', message),
         },
       },
     };
   } else if (attachment) {
-    attachment = getPropsForAttachment(attachment);
+    attachment = getPropsForAttachment(attachment, 'attachment', message);
   }
 
   // for a story, the message should always include the sourceDevice
@@ -172,9 +174,7 @@ async function repairUnexpiredStories(): Promise<void> {
 
   await Promise.all(
     storiesWithExpiry.map(messageAttributes => {
-      return DataWriter.saveMessage(messageAttributes, {
-        ourAci: window.textsecure.storage.user.getCheckedAci(),
-      });
+      return window.MessageCache.saveMessage(messageAttributes);
     })
   );
 }

@@ -22,6 +22,11 @@ export const isShowingAnyModal = createSelector(
     })
 );
 
+export const getAttachmentNotAvailableModalType = createSelector(
+  getGlobalModalsState,
+  ({ attachmentNotAvailableModalType }) => attachmentNotAvailableModalType
+);
+
 export const getCallLinkEditModalRoomId = createSelector(
   getGlobalModalsState,
   ({ callLinkEditModalRoomId }) => callLinkEditModalRoomId
@@ -61,6 +66,11 @@ export const getSafetyNumberChangedBlockingData = createSelector(
 export const getDeleteMessagesProps = createSelector(
   getGlobalModalsState,
   ({ deleteMessagesProps }) => deleteMessagesProps
+);
+
+export const getDraftGifMessageSendModalProps = createSelector(
+  getGlobalModalsState,
+  ({ draftGifMessageSendModalProps }) => draftGifMessageSendModalProps
 );
 
 export const getEditHistoryMessages = createSelector(

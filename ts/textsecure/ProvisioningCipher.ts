@@ -3,6 +3,7 @@
 
 /* eslint-disable max-classes-per-file */
 
+import * as client from '@signalapp/libsignal-client';
 import type { KeyPairType } from './Types.d';
 import * as Bytes from '../Bytes';
 import {
@@ -26,6 +27,8 @@ export type ProvisionDecryptResult = Readonly<{
   readReceipts?: boolean;
   profileKey?: Uint8Array;
   masterKey?: Uint8Array;
+  accountEntropyPool: string | undefined;
+  mediaRootBackupKey: Uint8Array | undefined;
   ephemeralBackupKey: Uint8Array | undefined;
 }>;
 
@@ -53,7 +56,10 @@ class ProvisioningCipherInner {
       throw new Error('ProvisioningCipher.decrypt: No keypair!');
     }
 
-    const ecRes = calculateAgreement(masterEphemeral, this.keyPair.privKey);
+    const ecRes = calculateAgreement(
+      client.PublicKey.deserialize(Buffer.from(masterEphemeral)),
+      this.keyPair.privateKey
+    );
     const keys = deriveSecrets(
       ecRes,
       new Uint8Array(32),
@@ -94,10 +100,14 @@ class ProvisioningCipherInner {
       ephemeralBackupKey: Bytes.isNotEmpty(provisionMessage.ephemeralBackupKey)
         ? provisionMessage.ephemeralBackupKey
         : undefined,
+      mediaRootBackupKey: Bytes.isNotEmpty(provisionMessage.mediaRootBackupKey)
+        ? provisionMessage.mediaRootBackupKey
+        : undefined,
+      accountEntropyPool: provisionMessage.accountEntropyPool || undefined,
     };
   }
 
-  getPublicKey(): Uint8Array {
+  getPublicKey(): client.PublicKey {
     if (!this.keyPair) {
       this.keyPair = generateKeyPair();
     }
@@ -106,7 +116,7 @@ class ProvisioningCipherInner {
       throw new Error('ProvisioningCipher.decrypt: No keypair!');
     }
 
-    return this.keyPair.pubKey;
+    return this.keyPair.publicKey;
   }
 }
 
@@ -122,5 +132,5 @@ export default class ProvisioningCipher {
     provisionEnvelope: Proto.ProvisionEnvelope
   ) => ProvisionDecryptResult;
 
-  getPublicKey: () => Uint8Array;
+  getPublicKey: () => client.PublicKey;
 }

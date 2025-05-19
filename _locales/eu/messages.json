@@ -36,7 +36,10 @@
     "messageformat": "Kidetza zain dago"
   },
   "icu:Preferences__sent-media-quality": {
-    "messageformat": "Bidali media kalitatea"
+    "messageformat": "Bidalitako multimedia-edukiaren kalitatea"
+  },
+  "icu:Preferences__sent-media-quality__description": {
+    "messageformat": "Kalitate handiko multimedia bidaltzeak datu gehiago erabiliko ditu."
   },
   "icu:sentMediaQualityStandard": {
     "messageformat": "Estandarra"
@@ -50,8 +53,14 @@
   "icu:privacyPolicy": {
     "messageformat": "Baldintzak eta pribatutasun arauak"
   },
-  "icu:appleSilicon": {
-    "messageformat": "Apple silicon"
+  "icu:About__AppEnvironment": {
+    "messageformat": "{appEnv}"
+  },
+  "icu:About__AppEnvironment--AppleSilicon": {
+    "messageformat": "{appEnv} (Apple silicon)"
+  },
+  "icu:About__AppEnvironment--AppleIntel": {
+    "messageformat": "{appEnv} (Intel)"
   },
   "icu:copyErrorAndQuit": {
     "messageformat": "Kopiatu errorea eta irten"
@@ -59,23 +68,29 @@
   "icu:unknownContact": {
     "messageformat": "Kontaktu ezezaguna"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "Ezezaguna"
+  },
   "icu:unknownGroup": {
     "messageformat": "Talde ezezaguna"
   },
+  "icu:cantOpenSignalError": {
+    "messageformat": "Ezin da ireki Signal"
+  },
+  "icu:cantOpenSignalError__detail": {
+    "messageformat": "Arazoa konpontzen laguntzeko, jarraitu laguntza-orriko berreskuratze-gidari, edo jarri harremanetan Signal-en laguntza-zerbitzuarekin.\n\nSignal lehenbailehen erabili behar baduzu, datuak ezabatu eta ordenagailu hau berriro lotzeko aukera duzu. Telefonoko mezu-historia transferitu ahalko duzu."
+  },
   "icu:databaseError": {
     "messageformat": "Datubasearen Errorea"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "Datu-baseko errore bat gertatu da. Errorea kopiatu, eta Signal-en zerbitzu teknikoarekin harremanetan jar zaitezke, arazoa konpontzen lagun diezazuten. Signal berehala erabili behar baduzu, zure datuak ezabatu, eta berrabiarazi egin dezakezu.\n\nJarri harremanetan laguntza-zerbitzuarekin hemen: {link}"
   },
   "icu:deleteAndRestart": {
     "messageformat": "Ezabatu datuak eta berrabiarazi"
   },
   "icu:databaseError__deleteDataConfirmation": {
-    "messageformat": "Datu guztiak behin betiko ezabatu nahi dituzu?"
+    "messageformat": "Ezabatu datu guztiak betiko"
   },
   "icu:databaseError__deleteDataConfirmation__detail": {
-    "messageformat": "Zure mezuen historia eta multimedia-elementu guztiak betiko ezabatuko dira gailu honetatik. Gailu honetan Signal erabili ahal izateko, berriro lotu beharko duzu. Horrek ez du daturik ezabatuko telefonotik."
+    "messageformat": "Zure mezu-historia eta multimedia-eduki guztiak betiko ezabatuko dira gailu honetatik. Horrek ez du daturik ezabatuko telefonotik.\n\nGailu honetan Signal erabili ahal izateko, berriro lotu beharko duzu. Telefonoko mezu-historia transferitu ahalko duzu."
   },
   "icu:databaseError__startOldVersion": {
     "messageformat": "Zure datu-basearen bertsioa ez dator bat Signal-en bertsio honekin. Ziurtatu Signal-en bertsio berriena erabiltzen ari zarela ordenagailuan."
@@ -208,9 +223,6 @@
   },
   "icu:optimizingApplication": {
     "messageformat": "Aplikazioa optimizatzen…"
-  },
-  "icu:migratingToSQLCipher": {
-    "messageformat": "Mezuak optimizatzen… {status} osatu da."
   },
   "icu:archivedConversations": {
     "messageformat": "Artxibatutako txatak"
@@ -401,9 +413,6 @@
   "icu:unreadMessages": {
     "messageformat": "{count, plural, one {{count,number} mezu irakurri gabe} other {{count,number} mezu irakurri gabe}}"
   },
-  "icu:messageHistoryUnsynced": {
-    "messageformat": "Zure segurtasunerako, txat-historia ez da transferitzen lotutako gailu berrietara."
-  },
   "icu:youMarkedAsVerified": {
     "messageformat": "{name} erabiltzailearekin duzun segurtasun zenbakia egiaztatu gisa markatu duzu"
   },
@@ -525,13 +534,13 @@
     "messageformat": "Errorea sarrerako mezua kudeatzean"
   },
   "icu:media": {
-    "messageformat": "Multimedia"
+    "messageformat": "Multimedia-edukia"
   },
   "icu:mediaEmptyState": {
     "messageformat": "Ez duzu multimedia-edukirik txat honetan"
   },
   "icu:allMedia": {
-    "messageformat": "Multimedia guztia"
+    "messageformat": "Multimedia-eduki guztia"
   },
   "icu:documents": {
     "messageformat": "Agiriak"
@@ -580,6 +589,12 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--InvalidStorageServiceHeaders": {
+    "messageformat": "Biltegiratze-zerbitzuaren erantzun baliogabe bat jaso da. Partekatu erregistroak."
+  },
+  "icu:Toast--FailedToImportBackup": {
+    "messageformat": "Failed to process some frames during backup import. Please share your logs."
   },
   "icu:cannotSelectPhotosAndVideosAlongWithFiles": {
     "messageformat": "Fitxategiekin batera, ezin dituzu hautatu argazki eta bideoak."
@@ -677,6 +692,9 @@
   "icu:search": {
     "messageformat": "Bilatu"
   },
+  "icu:searchUnreadChats": {
+    "messageformat": "Bilatu irakurri gabeko txatak"
+  },
   "icu:clearSearch": {
     "messageformat": "Garbitu Bilaketa"
   },
@@ -686,11 +704,23 @@
   "icu:noSearchResults": {
     "messageformat": "Ez da topatu emaitzarik \"{searchTerm}\" bilaketarako"
   },
-  "icu:noSearchResults--sms-only": {
-    "messageformat": "SMS/MMS kontaktuak ez daude erabilgarri ordenagailurako bertsioan."
+  "icu:noSearchResultsWithUnreadFilter": {
+    "messageformat": "Ez dago \"{searchTerm}\" bilaketaren emaitzarik irakurri gabeko txatetan"
+  },
+  "icu:noSearchResultsOnlyUnreadFilter": {
+    "messageformat": "Ez dago irakurri gabeko txatik"
   },
   "icu:noSearchResultsInConversation": {
     "messageformat": "Ez da topatu emaitzarik \"{searchTerm}\" bilaketarako {conversationName} solasaldian"
+  },
+  "icu:conversationsUnreadHeader": {
+    "messageformat": "Irakurri gabekoen arabera iragazita"
+  },
+  "icu:filterByUnreadButtonLabel": {
+    "messageformat": "Iragazi irakurri gabekoen arabera"
+  },
+  "icu:clearFilterButton": {
+    "messageformat": "Garbitu iragazkia"
   },
   "icu:conversationsHeader": {
     "messageformat": "Txatak"
@@ -785,17 +815,14 @@
   "icu:voiceNoteError": {
     "messageformat": "Errore bat izan da ahots-grabagailuarekin."
   },
-  "icu:attachmentSaved": {
-    "messageformat": "Gorde da eranskina."
-  },
   "icu:attachmentSavedPlural": {
-    "messageformat": "{count, plural, one {Attachment saved} other {{count,number} attachments saved}}"
+    "messageformat": "{count, plural, one {Gorde da eranskina} other {Gorde dira {count,number} eranskinak}}"
   },
   "icu:attachmentSavedShow": {
     "messageformat": "Erakutsi karpetan"
   },
   "icu:attachmentStillDownloading": {
-    "messageformat": "{count, plural, one {Can't save attachment, since it hasn't finished downloading yet} other {Can't save attachments, since {count,number} haven't finished downloading yet}}"
+    "messageformat": "{count, plural, one {Ezin da gorde eranskina, oraindik ez baita guztiz deskargatu} other {Ezin dira gorde eranskinak, oraindik ez baitira guztiz deskargatu {count,number}}}"
   },
   "icu:you": {
     "messageformat": "Zu"
@@ -995,18 +1022,6 @@
   "icu:MessageContextMenu__info": {
     "messageformat": "Info"
   },
-  "icu:deleteMessagesInConversation": {
-    "messageformat": "Ezabatu mezuak"
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__title": {
-    "messageformat": "Mezuak ezabatu nahi dituzu?"
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description": {
-    "messageformat": "Txat honetako mezuak gailu honetatik ezabatuko dira. Mezuak ezabatuta ere, txat hau bilatu ahalko duzu."
-  },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description-with-sync": {
-    "messageformat": "Txat honetako mezuak gailu guztietatik ezabatuko dira. Mezuak ezabatuta ere, txat hau bilatu ahalko duzu."
-  },
   "icu:deleteConversation": {
     "messageformat": "Ezabatu"
   },
@@ -1062,7 +1077,7 @@
     "messageformat": "Arazo bat izan da bidalketarekin"
   },
   "icu:DeliveryIssue--summary": {
-    "messageformat": "Ezin izan dizugu entregatu {sender} erabiltzailearen mezu, sticker, erreakzio, irakurragiri edo multimedia-fitxategi bat. Baliteke zuzenean edo talde batean bidaltzen saiatu izatea."
+    "messageformat": "Ezin izan dizugu entregatu {sender} erabiltzailearen mezu, sticker, erreakzio, irakurragiri edo multimedia-edukiren bat. Baliteke zuzenean edo talde batean bidaltzen saiatu izatea."
   },
   "icu:DeliveryIssue--summary--group": {
     "messageformat": "Ezin izan da entregatu {sender} erabiltzailearen mezu, eranskailu, erreakzio, irakurketa-agiri edo multimedia-edukiren bat txat honetan."
@@ -1109,8 +1124,92 @@
   "icu:lightboxImageAlt": {
     "messageformat": "Txatean bidalitako irudia"
   },
+  "icu:lightBoxDownloading": {
+    "messageformat": "{downloaded} / {total} deskargatzen"
+  },
   "icu:imageCaptionIconAlt": {
     "messageformat": "Irudi honek azpitestu bak duela erakusteko ikonoa"
+  },
+  "icu:imageOpenAlt": {
+    "messageformat": "Ireki eranskin hau ikuspegi handiago batean"
+  },
+  "icu:startDownload": {
+    "messageformat": "Hasi deskargatzen"
+  },
+  "icu:cancelDownload": {
+    "messageformat": "Utzi deskarga bertan behera"
+  },
+  "icu:downloadNItems": {
+    "messageformat": "{count, plural, one {Elementu {count,number}} other {{count,number} elementu}}"
+  },
+  "icu:mediaNotAvailable": {
+    "messageformat": "Multimedia-edukia ez dago erabilgarri"
+  },
+  "icu:attachmentNoLongerAvailable__learnMore": {
+    "messageformat": "Informazio gehiago"
+  },
+  "icu:attachmentNotAvailable__file": {
+    "messageformat": "Fitxategia ez dago eskuragarri"
+  },
+  "icu:attachmentNotAvailable__longMessage": {
+    "messageformat": "Mezu hau ez dago osorik"
+  },
+  "icu:attachmentNotAvailable__sticker": {
+    "messageformat": "Eranskailua ez dago eskuragarri"
+  },
+  "icu:attachmentNotAvailable__voice": {
+    "messageformat": "Ahots-mezua ez dago eskuragarri"
+  },
+  "icu:attachmentNotAvailable__tapToView": {
+    "messageformat": "Behin ikusteko multimedia-elementua ez dago erabilgarri"
+  },
+  "icu:attachmentNotAvailable__tapToViewCannotDownload": {
+    "messageformat": "Ezin da deskargatu behin ikusteko multimedia-elementua"
+  },
+  "icu:AttachmentNotAvailableModal__title--file": {
+    "messageformat": "Fitxategia ez dago eskuragarri"
+  },
+  "icu:AttachmentNotAvailableModal__title--long-text": {
+    "messageformat": "Mezu osoa ez dago eskuragarri"
+  },
+  "icu:AttachmentNotAvailableModal__title--media": {
+    "messageformat": "Multimedia-edukia ez dago eskuragarri"
+  },
+  "icu:AttachmentNotAvailableModal__title--sticker": {
+    "messageformat": "Eranskailua ez dago eskuragarri"
+  },
+  "icu:AttachmentNotAvailableModal__title--voice-message": {
+    "messageformat": "Ahots-mezua ez dago eskuragarri"
+  },
+  "icu:AttachmentNotAvailableModal__body--file": {
+    "messageformat": "Gailu hau lotzean, fitxategi hau ez da transferitu telefonotik. Gailua lotzean 45 egun baino gehiago dituzten multimedia-eduki eta fitxategiak ezin dira sinkronizatu."
+  },
+  "icu:AttachmentNotAvailableModal__body--long-text": {
+    "messageformat": "Gailu hau lotzean, mezu honen testu osoa ez da transferitu telefonotik. Gailua lotzean 45 egun baino gehiago dituzten testu-mezu luzeak ezin dira sinkronizatu."
+  },
+  "icu:AttachmentNotAvailableModal__body--media": {
+    "messageformat": "Gailu hau lotzean, multimedia-eduki hau ez da transferitu telefonotik. Gailua lotzean 45 egun baino gehiago dituzten multimedia-edukiak ezin dira sinkronizatu."
+  },
+  "icu:AttachmentNotAvailableModal__body--sticker": {
+    "messageformat": "Gailu hau lotzean, eranskailu hau ez da transferitu telefonotik. Gailua lotzean 45 egun baino gehiago dituzten multimedia-eduki eta fitxategiak ezin dira sinkronizatu."
+  },
+  "icu:AttachmentNotAvailableModal__body--voice-message": {
+    "messageformat": "Gailu hau lotzean, ahots-mezu hau ez da transferitu telefonotik. Gailua lotzean 45 egun baino gehiago dituzten multimedia-eduki eta fitxategiak ezin dira sinkronizatu."
+  },
+  "icu:TapToViewNotAvailableModal__body--expired": {
+    "messageformat": "Behin ikusteko multimedia-elementu hau jada ezin da deskargatu. Eskatu {name}(r)i berriro bidaltzeko."
+  },
+  "icu:TapToViewNotAvailableModal__body--error": {
+    "messageformat": "Ezin da deskargatu behin ikusteko multimedia-elementua. {name}(e)k berriro bidali beharko du."
+  },
+  "icu:BackfillFailureModal__title": {
+    "messageformat": "Ezin da deskargatu multimedia-edukia"
+  },
+  "icu:BackfillFailureModal__body--timeout": {
+    "messageformat": "Egiaztatu ordenagailua eta telefonoa Internetera konektatuta daudela. Ireki Signal telefonoan eta saiatu berriro deskargatzen."
+  },
+  "icu:BackfillFailureModal__body--not-found": {
+    "messageformat": "Multimedia-edukia jada ez dago erabilgarri telefonoan, eta ezin da deskargatu."
   },
   "icu:save": {
     "messageformat": "Gorde"
@@ -1154,17 +1253,14 @@
   "icu:Install__qr-failed-load__retry": {
     "messageformat": "Berriro saiatu"
   },
+  "icu:Install__qr-max-rotations__retry": {
+    "messageformat": "Freskatu kodea"
+  },
   "icu:Install__qr-failed-load__get-help": {
     "messageformat": "Lortu laguntza"
   },
   "icu:Install__support-link": {
     "messageformat": "Laguntza behar duzu?"
-  },
-  "icu:Install__choose-device-name__description": {
-    "messageformat": "Izen hau telefonoko \"Lotutako gailuak\" atalean ikusiko duzu"
-  },
-  "icu:Install__choose-device-name__placeholder": {
-    "messageformat": "Nire ordenagailua"
   },
   "icu:Preferences--phone-number": {
     "messageformat": "Telefono-zenbakia"
@@ -1172,11 +1268,11 @@
   "icu:Preferences--device-name": {
     "messageformat": "Gailuaren izena"
   },
-  "icu:chooseDeviceName": {
-    "messageformat": "Aukeratu gailu honen izena"
+  "icu:Preferences--device-name__description": {
+    "messageformat": "Gailu honen izena aldatzeko, ireki Signal telefonoan eta joan Ezarpenak > Lotutako gailuak atalera"
   },
-  "icu:finishLinkingPhone": {
-    "messageformat": "Bukatu telefonoa lotzen"
+  "icu:Preferences__EmojiSkinToneDefaultSetting__Label": {
+    "messageformat": "Emojiaren azal-tonua"
   },
   "icu:initialSync": {
     "messageformat": "Kontaktuak eta taldeak sinkronizatzen"
@@ -1388,6 +1484,9 @@
   "icu:calling__pre-call-info--many-people-in-call": {
     "messageformat": "{others, plural, one {{first}, {second}, eta beste {others,number} dei honetan daude} other {{first}, {second}, eta beste {others,number} dei honetan daude.}}"
   },
+  "icu:calling__pre-call-info--only-unknown-contacts-in-call": {
+    "messageformat": "{count, plural, one {{count,number} pertsona dago dei honetan} other {{count,number} pertsona daude dei honetan}}"
+  },
   "icu:calling__pre-call-info--will-ring-1": {
     "messageformat": "Signal-ek {person}(r)i deituko dio"
   },
@@ -1545,10 +1644,10 @@
     "messageformat": "Datu guztiak garbitu nahi dituzu?"
   },
   "icu:deleteAllDataBody": {
-    "messageformat": "Signal-en ordenagailurako bertsio honetako datu eta mezu guztiak ezabatu nahi dituzu? Nahi duzunean lot dezakezu berriro ordenagailu hau, baina mezuak ez dira leheneratuko. Telefonoan nahiz lotutako beste gailu batzuetan, Signal-eko kontua eta datuak ez dira ezabatuko."
+    "messageformat": "Signal-en ordenagailurako bertsio honetako datu eta mezu guztiak ezabatu nahi dituzu? Telefonoan nahiz lotutako beste gailu batzuetan, Signal-eko kontua eta datuak ez dira ezabatuko."
   },
   "icu:deleteAllDataProgress": {
-    "messageformat": "Deskonektatzen eta datu guztiak ezabatzen"
+    "messageformat": "Deskonektatzen eta datu guztiak ezabatzen…"
   },
   "icu:deleteOldIndexedDBData": {
     "messageformat": "Ordenagailurako Signal-en aurreko instalazio baten datu zaharkituak dauzkazu. Aurrera jarraituz gero, ezabatu egingo dira, eta zerotik hasi beharko duzu."
@@ -1724,6 +1823,12 @@
   "icu:ConversationDetails__HeaderButton--Message": {
     "messageformat": "Mezua"
   },
+  "icu:ConversationDetails--help-section": {
+    "messageformat": "Laguntza"
+  },
+  "icu:ConversationDetails--support-center": {
+    "messageformat": "Laguntzarako Zentroa"
+  },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "Erakutsi segurtasun-zenbakia"
   },
@@ -1783,6 +1888,9 @@
   },
   "icu:Toast--failed-to-fetch-phone-number": {
     "messageformat": "Ezin izan da eskuratu telefono-zenbakia. Egiaztatu konektatuta zaudela eta saiatu berriro."
+  },
+  "icu:Toast--download-failed": {
+    "messageformat": "Ezin izan da deskargatu"
   },
   "icu:ToastManager__CannotEditMessage_24": {
     "messageformat": "Mezu hau bidali eta 24 orduko epean soilik aplika daitezke aldaketak."
@@ -2162,6 +2270,210 @@
   "icu:EmojiPicker__button--flag": {
     "messageformat": "Banderak"
   },
+  "icu:FunPicker__Tab--Emojis": {
+    "messageformat": "Emoji"
+  },
+  "icu:FunPicker__Tab--Stickers": {
+    "messageformat": "Eranskailuak"
+  },
+  "icu:FunPicker__Tab--Gifs": {
+    "messageformat": "GIFak"
+  },
+  "icu:FunPanelEmojis__SearchLabel": {
+    "messageformat": "Bilatu emoji-a"
+  },
+  "icu:FunPanelEmojis__SearchPlaceholder": {
+    "messageformat": "Bilatu emoji-a"
+  },
+  "icu:FunPanelEmojis__SubNavLabel": {
+    "messageformat": "Emoji-kategoriak"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Recents": {
+    "messageformat": "Arestian erabilia"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--SmileysAndPeople": {
+    "messageformat": "Emojiak eta jendea"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--AnimalsAndNature": {
+    "messageformat": "Animaliak eta natura"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--FoodAndDrink": {
+    "messageformat": "Janaria eta edaria"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Activities": {
+    "messageformat": "Jarduerak"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--TravelAndPlaces": {
+    "messageformat": "Bidaiak eta tokiak"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Objects": {
+    "messageformat": "Objektuak"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Symbols": {
+    "messageformat": "Ikurrak"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Flags": {
+    "messageformat": "Banderak"
+  },
+  "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
+    "messageformat": "Ez da emojirik topatu"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "Hautatu {emojiName} emojiaren azal-tonua"
+  },
+  "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
+    "messageformat": "Aldatu azal-tonuaren hobespena"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "Azal-tonua hautatzeko, sakatu luze"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
+    "messageformat": "Aukeratu zure azal-tonu lehenetsia"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SearchResults": {
+    "messageformat": "Bilaketa-emaitzak"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Recents": {
+    "messageformat": "Arestian erabilia"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SmileysAndPeople": {
+    "messageformat": "Emojiak eta jendea"
+  },
+  "icu:FunPanelEmojis__SectionTitle--AnimalsAndNature": {
+    "messageformat": "Animaliak eta natura"
+  },
+  "icu:FunPanelEmojis__SectionTitle--FoodAndDrink": {
+    "messageformat": "Janaria eta edaria"
+  },
+  "icu:FunPanelEmojis__SectionTitle--TravelAndPlaces": {
+    "messageformat": "Bidaiak eta tokiak"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Activities": {
+    "messageformat": "Jarduerak"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Objects": {
+    "messageformat": "Objektuak"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Symbols": {
+    "messageformat": "Ikurrak"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Flags": {
+    "messageformat": "Banderak"
+  },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "Pertsonalizatu erreakzioak"
+  },
+  "icu:FunPanelStickers__SearchLabel": {
+    "messageformat": "Bilatu eranskailuak"
+  },
+  "icu:FunPanelStickers__SearchPlaceholder": {
+    "messageformat": "Bilatu eranskailuak"
+  },
+  "icu:FunPanelSticker__SubNavLabel": {
+    "messageformat": "Eranskailu-paketeak"
+  },
+  "icu:FunPanelStickers__SubNavCategoryLabel--Recents": {
+    "messageformat": "Arestian erabilia"
+  },
+  "icu:FunPanelStickers__SectionTitle--SearchResults": {
+    "messageformat": "Bilaketa-emaitzak"
+  },
+  "icu:FunPanelStickers__SectionTitle--Recents": {
+    "messageformat": "Arestian erabilia"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "Nabarmenak"
+  },
+  "icu:FunPanelStickers__SearchResults__EmptyHeading": {
+    "messageformat": "Ez da eranskailurik aurkitu"
+  },
+  "icu:FunPanelStickers__LightboxDialog__Label": {
+    "messageformat": "Eranskailuaren aurrebista"
+  },
+  "icu:FunPanelGifs__SearchLabel--Tenor": {
+    "messageformat": "Bilatu GIFak Tenor bidez"
+  },
+  "icu:FunPanelGifs__SearchPlaceholder--Tenor": {
+    "messageformat": "Bilatu Tenor-en"
+  },
+  "icu:FunPanelGifs__SubNavLabel": {
+    "messageformat": "GIF kategoriak"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Recents": {
+    "messageformat": "Arestian erabilia"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Trending": {
+    "messageformat": "Joerak"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Celebrate": {
+    "messageformat": "Ospakizunak"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Love": {
+    "messageformat": "Maitasuna"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--ThumbsUp": {
+    "messageformat": "Erpurua gora"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Surprised": {
+    "messageformat": "Ezustea"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Excited": {
+    "messageformat": "Zirrara"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Sad": {
+    "messageformat": "Tristura"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Angry": {
+    "messageformat": "Haserrea"
+  },
+  "icu:FunPanelGifs__SearchResults__LoadingLabel": {
+    "messageformat": "GIFak kargatzen"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorHeading": {
+    "messageformat": "Ezin izan dira kargatu GIFak. Egiaztatu konexioa eta saiatu berriro"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorRetryButton": {
+    "messageformat": "Berriro saiatu"
+  },
+  "icu:FunPanelGifs__SearchResults__EmptyHeading": {
+    "messageformat": "Ez da aurkitu GIFik"
+  },
+  "icu:FunPanelGifs__LightboxDialog__Label": {
+    "messageformat": "GIFaren aurrebista"
+  },
+  "icu:FunSearch__ClearButtonLabel": {
+    "messageformat": "Garbitu Bilaketa"
+  },
+  "icu:FunSkinTones__List": {
+    "messageformat": "Azal-tonua"
+  },
+  "icu:FunSkinTones__ListItem--None": {
+    "messageformat": "Bat ere ez"
+  },
+  "icu:FunSkinTones__ListItem--Light": {
+    "messageformat": "Azal-tonu argia"
+  },
+  "icu:FunSkinTones__ListItem--MediumLight": {
+    "messageformat": "Azal-tonu argixka"
+  },
+  "icu:FunSkinTones__ListItem--Medium": {
+    "messageformat": "Tarteko azal-tonua"
+  },
+  "icu:FunSkinTones__ListItem--MediumDark": {
+    "messageformat": "Azal-tonu ilunxka"
+  },
+  "icu:FunSkinTones__ListItem--Dark": {
+    "messageformat": "Azal-tonu iluna"
+  },
+  "icu:FunButton__Label--FunPicker": {
+    "messageformat": "Gehitu emoji, eranskailu edo GIF bat"
+  },
+  "icu:FunButton__Label--EmojiPicker": {
+    "messageformat": "Gehitu emoji bat"
+  },
+  "icu:FunButton__Label--StickerPicker": {
+    "messageformat": "Gehitu eranskailu bat"
+  },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "Utzi"
   },
@@ -2198,11 +2510,11 @@
   "icu:Message--update-signal": {
     "messageformat": "Eguneratu Signal"
   },
-  "icu:Message--tap-to-view-expired": {
+  "icu:Message--tap-to-view--viewed": {
     "messageformat": "Ikusita"
   },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "Multimedia"
+  "icu:Message--tap-to-view--media": {
+    "messageformat": "Behin ikusteko multimedia-elementua"
   },
   "icu:Message--tap-to-view--incoming--expired-toast": {
     "messageformat": "Mezu hau ikusia duzu jadanik."
@@ -2210,11 +2522,14 @@
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "Ikustaldi bakarreko mezuak ez dira txat-historian gordetzen."
   },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "Ikusi argazkia"
+  "icu:Message--tap-to-view--video": {
+    "messageformat": "Behin ikusteko bideoa"
   },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "Bideoa Ikusi"
+  "icu:Message--tap-to-view--photo": {
+    "messageformat": "Behin ikusteko argazkia"
+  },
+  "icu:Message--tap-to-view--helper-text": {
+    "messageformat": "Egin klik ikusteko"
   },
   "icu:Conversation--getDraftPreview--attachment": {
     "messageformat": "(eranskina)"
@@ -2408,6 +2723,9 @@
   "icu:Keyboard--toggle-video": {
     "messageformat": "Bideoa aktibatu / desaktibatu"
   },
+  "icu:Keyboard--toggle-preview": {
+    "messageformat": "Aktibatu eta desaktibatu aurrebista zabaldua"
+  },
   "icu:Keyboard--accept-video-call": {
     "messageformat": "Erantzun deiari bideoarekin (bideodeiak soilik)"
   },
@@ -2470,6 +2788,12 @@
   },
   "icu:SafetyTipsModal__Description": {
     "messageformat": "Kontuz ibili ezagutzen ez duzun jendearen mezu-eskaerak onartzean. Adi ibili hauekin:"
+  },
+  "icu:SafetyTipsModal__TipTitle--Fake": {
+    "messageformat": "Gezurrezko izenak eta kontuak"
+  },
+  "icu:SafetyTipsModal__TipDescription--Fake": {
+    "messageformat": "Signal ez da inoiz zurekin harremanetan jarriko erregistro-kodea edo PINa eskatzeko. Kontuz besteren identitatea ordeztuz egiten dizkizuten eskaerekin. Profileko izenak kontuen jabeek aukeratzen dituzte eta ez dira egiaztatzen."
   },
   "icu:SafetyTipsModal__TipTitle--Crypto": {
     "messageformat": "Kriptodiru- edo diru-iruzurrak"
@@ -2603,6 +2927,12 @@
   "icu:MessageRequests--accept": {
     "messageformat": "Onartu"
   },
+  "icu:MessageRequests--accept-confirm-title": {
+    "messageformat": "Eskaera onartu nahi duzu?"
+  },
+  "icu:MessageRequests--accept-confirm-body": {
+    "messageformat": "Berrikusi eskaerak kontu handiz. Profileko izenak kontuen jabeek aukeratzen dituzte eta ez dira egiaztatzen."
+  },
   "icu:MessageRequests--continue": {
     "messageformat": "Jarraitu"
   },
@@ -2614,6 +2944,51 @@
   },
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, one {{count,number} kide} other {{count,number} kide}}"
+  },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, one {{memberList} (+{invitesCount,number} gonbidatu)} other {{memberList} (+{invitesCount,number} gonbidatu)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "Taldeak ez dauka kiderik"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "Oraindik ez dago beste taldekiderik"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} eta zu"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} eta {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}, {member2}, eta zu"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2}, eta {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3} eta <clickable>beste {remainingCount,number}</clickable>} other {{member1}, {member2}, {member3} eta <clickable>beste {remainingCount,number}</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3} eta <clickable>beste {remainingCount,number}</clickable>} other {{member1}, {member2}, {member3} eta <clickable>beste {remainingCount,number}</clickable>}}"
+  },
+  "icu:ConversationHero--review-carefully": {
+    "messageformat": "Berrikusi kontu handiz"
+  },
+  "icu:ConversationHero--group-names": {
+    "messageformat": "<clickable>Taldeen izenak</clickable> ez dira egiaztatzen"
+  },
+  "icu:ConversationHero--profile-names": {
+    "messageformat": "<clickable>Profileko izenak</clickable> ez dira egiaztatzen"
+  },
+  "icu:ConversationHero--signal-official-chat": {
+    "messageformat": "Signal-en txat ofiziala eta bakarra da hau"
+  },
+  "icu:ConversationHero--release-notes": {
+    "messageformat": "Jaso azken albiste eta kaleratze-oharrak."
   },
   "icu:member-of-1-group": {
     "messageformat": "{group} taldeko kidea"
@@ -2708,6 +3083,9 @@
   "icu:incomingGroupCall__ringing-many": {
     "messageformat": "{remaining, plural, one {{ringer} zu, {first}, {second} eta beste {remaining,number} deitzen ari da} other {{ringer} zuri, {first}(r)i, {second}(r)i eta beste {remaining,number} pertsonari deitzen ari da}}"
   },
+  "icu:outgoingCallConnecting": {
+    "messageformat": "Konektatzen…"
+  },
   "icu:outgoingCallRinging": {
     "messageformat": "Deitzen…"
   },
@@ -2747,11 +3125,23 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "Irten"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "Amaitu deia"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "Deia utzi"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "Mikrofonoa desaktibatuta"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "Mikrofonoa aktibatuta"
+  },
+  "icu:CallControls__LowerHandSuggestionToast": {
+    "messageformat": "Eskua jaitsi nahi duzu?"
+  },
+  "icu:CallControls__LowerHandSuggestionToast--button": {
+    "messageformat": "Jaitsi"
   },
   "icu:CallControls__RingingToast--ringing-on": {
     "messageformat": "Dei-tonua aktibatuta"
@@ -2818,6 +3208,12 @@
   },
   "icu:calling__pip--off": {
     "messageformat": "Deia pantaila osoan jarri"
+  },
+  "icu:calling__preview--maximize": {
+    "messageformat": "Maximizatu aurrebista"
+  },
+  "icu:calling__preview--minimize": {
+    "messageformat": "Minimizatu aurrebista"
   },
   "icu:calling__change-view": {
     "messageformat": "Aldatu ikuspegia"
@@ -3530,6 +3926,9 @@
   "icu:next": {
     "messageformat": "hurrengoa"
   },
+  "icu:ClearingData__description": {
+    "messageformat": "Baliteke minutu batzuk behar izatea"
+  },
   "icu:BadgeDialog__become-a-sustainer-button": {
     "messageformat": "Egin dohaintza Signal-i"
   },
@@ -3557,26 +3956,32 @@
   "icu:BackupImportScreen__progressbar-hint--processing": {
     "messageformat": "Mezuen transferentzia amaitzen..."
   },
+  "icu:BackupImportScreen__progressbar-hint--canceling": {
+    "messageformat": "Bertan behera uzten…"
+  },
   "icu:BackupImportScreen__progressbar-hint--preparing": {
     "messageformat": "Deskargatzeko prestatzen…"
   },
   "icu:BackupImportScreen__description": {
-    "messageformat": "Zure babeskopiaren tamainaren arabera, baliteke minutu batzuk behar izatea"
+    "messageformat": "Baliteke minutu batzuk behar izatea"
   },
   "icu:BackupImportScreen__cancel": {
-    "messageformat": "Utzi transferentzia bertan behera"
+    "messageformat": "Utzi"
+  },
+  "icu:BackupImportScreen__security-description": {
+    "messageformat": "Mezuak eta txatari buruzko informazioa muturretik muturrerako enkriptatzearen bidez daude babestuta (sinkronizazio-prozesua barne). <learnMoreLink>Informazio gehiago</learnMoreLink>"
   },
   "icu:BackupImportScreen__cancel-confirmation__title": {
-    "messageformat": "Transferentzia bertan behera utzi nahi duzu?"
+    "messageformat": "Gailua lotzeko prozesua bertan behera utzi nahi duzu?"
   },
   "icu:BackupImportScreen__cancel-confirmation__body": {
-    "messageformat": "Oraindik ez dira leheneratu mezuak eta multimedia-fitxategiak. Bertan behera utzi arren, berriro transferitu ahalko dituzu ezarpenetatik."
+    "messageformat": "Bertan behera uztea aukeratzen baduzu, gailu hau ez da lotuko, eta ez da transferituko multimedia-eduki edo mezurik."
   },
   "icu:BackupImportScreen__cancel-confirmation__cancel": {
-    "messageformat": "Jarraitu transferitzen"
+    "messageformat": "Jarraitu lotzen"
   },
   "icu:BackupImportScreen__cancel-confirmation__confirm": {
-    "messageformat": "Utzi transferentzia bertan behera"
+    "messageformat": "Ez lotu"
   },
   "icu:BackupImportScreen__error__title": {
     "messageformat": "Errore bat gertatu da mezuak transferitzean"
@@ -3584,26 +3989,29 @@
   "icu:BackupImportScreen__error__body": {
     "messageformat": "Ezin izan dira transferitu mezuak. Egiaztatu Internetera konektatuta zaudela eta saiatu berriro."
   },
+  "icu:BackupImportScreen__error-fatal__body": {
+    "messageformat": "Errore bat dela eta, ezin izan dira transferitu mezuak. Saiatu berriro ordenagailu hau berriro lotuta."
+  },
   "icu:BackupImportScreen__error__confirm": {
     "messageformat": "Berriro saiatu"
-  },
-  "icu:BackupImportScreen__skip": {
-    "messageformat": "Saltatu"
-  },
-  "icu:BackupImportScreen__skip-confirmation__title": {
-    "messageformat": "Mezuen transferentzia saltatu nahi duzu?"
-  },
-  "icu:BackupImportScreen__skip-confirmation__body": {
-    "messageformat": "Saltatzea aukeratzen baduzu, ezingo dituzu atzitu gailu honetako mezuak eta multimedia-edukia. Saltatu arren, geroago ere egin dezakezu transferentzia Ezarpenak > Txatak > Transferentzia atalean."
-  },
-  "icu:BackupImportScreen__skip-confirmation__cancel": {
-    "messageformat": "Utzi"
   },
   "icu:BackupMediaDownloadProgress__title-in-progress": {
     "messageformat": "Multimedia-edukia leheneratzen"
   },
   "icu:BackupMediaDownloadProgress__title-paused": {
     "messageformat": "Leheneratzea pausatu egin da"
+  },
+  "icu:BackupMediaDownloadProgress__title-idle": {
+    "messageformat": "{currentSize}/{totalSize} leheneratuta"
+  },
+  "icu:BackupMediaDownloadProgress__description-idle": {
+    "messageformat": "Multimedia-edukia atzeko planoan deskargatzen jarraituko da"
+  },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "Multimedia-edukia leheneratzeko prozesua pausatuta dago"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "Interneteko konexioaren zain…"
   },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "Pausatu transferentzia"
@@ -3627,13 +4035,25 @@
     "messageformat": "Multimedia-edukiaren transferentzia bertan behera utzi nahi duzu?"
   },
   "icu:BackupMediaDownloadCancelConfirmation__description": {
-    "messageformat": "Oraindik ez dira leheneratu mezuak eta multimedia-fitxategiak. Bertan behera utzi arren, berriro transferitu ahalko dituzu ezarpenetatik."
+    "messageformat": "Oraindik ez dira leheneratu mezuak eta multimedia-edukiak. Bertan behera utzi arren, berriro transferitu ahalko dituzu ezarpenetatik."
   },
   "icu:BackupMediaDownloadCancelConfirmation__button-continue": {
     "messageformat": "Jarraitu transferitzen"
   },
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "Utzi transferentzia bertan behera"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "Zerbait egin behar duzu kontuan"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "Kontu hau erabiltzen jarraitzeko, Signal telefonoan ireki behar duzu. Signal telefonoan ireki ezean, kontua laster ezabatuko da. <learnMoreLink>Informazio gehiago</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "Ezin da leheneratu multimedia-edukia"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "Zure gailuak ez du leku libre nahikorik. Multimedia-edukia leheneratzeko, utzi {diskSpaceAmount} libre."
   },
   "icu:CompositionArea--expand": {
     "messageformat": "Zabaldu"
@@ -3655,6 +4075,18 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "Bidali editatutako mezua"
+  },
+  "icu:CompositionArea__FunButtonLabel": {
+    "messageformat": "Gehitu emoji, eranskailu edo GIF bat"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Title": {
+    "messageformat": "Eranskina ordeztu nahi duzu?"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Body": {
+    "messageformat": "GIF hau gehitzen baduzu, oraingo zirriborroko elementua ordeztuko da."
+  },
+  "icu:CompositionArea__ConfirmGifSelection__ReplaceButton": {
+    "messageformat": "Ordeztu"
   },
   "icu:CompositionInput__editing-message": {
     "messageformat": "Editatu mezua"
@@ -3792,7 +4224,7 @@
     "messageformat": "{number, plural, one {{number,number} kide} other {{number,number} kide}}"
   },
   "icu:ConversationDetailsMediaList--shared-media": {
-    "messageformat": "Partekatutako media"
+    "messageformat": "Partekatutako multimedia-edukia"
   },
   "icu:ConversationDetailsMediaList--show-all": {
     "messageformat": "Ikusi denak"
@@ -3871,6 +4303,9 @@
   },
   "icu:GroupLinkManagement--approve-info": {
     "messageformat": "Kideak talde esteka bidez sartzen badira taldean, derrigorrezkotzat jo administratzaile batek onartzea."
+  },
+  "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
+    "messageformat": "Kopiatu signal.group esteka arbelean"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "Eskaerak ({count,number})"
@@ -4076,17 +4511,8 @@
   "icu:ShareCallLinkViaSignal__DraftMessageText": {
     "messageformat": "Erabili esteka hau Signal-eko dei batean sartzeko: {url}"
   },
-  "icu:MessageRequestWarning__learn-more": {
-    "messageformat": "Gehiago jakin"
-  },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "Segurtasun-aholkuak"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "Ez duzu talde komunik pertsona honekin. Eskaerak ondo aztertu onartu aurretik, nahi ez diren mezuak saihesteko."
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "Mezu eskaeren inguruan"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "Berrikusi eskaerak kontu handiz. Signal-ek izen bereko beste kontaktu bat aurkitu du. <reviewRequestLink>Berrikusi eskaera</reviewRequestLink>"
@@ -4182,7 +4608,7 @@
     "messageformat": "Berrezarri txat-kolore guztiak"
   },
   "icu:ChatColorPicker__confirm-reset-default": {
-    "messageformat": "Berrezarri lehenetsia"
+    "messageformat": "Berrezarri kolore lehenetsiak"
   },
   "icu:ChatColorPicker__confirm-reset": {
     "messageformat": "Berrabiarazi"
@@ -4231,6 +4657,9 @@
   },
   "icu:GradientDial__knob-end": {
     "messageformat": "Gradientearen amaiera"
+  },
+  "icu:GIF--download": {
+    "messageformat": "Deskargatu GIF eranskina"
   },
   "icu:customDisappearingTimeOption": {
     "messageformat": "Denbora pertsonalizatua…"
@@ -4293,7 +4722,7 @@
     "messageformat": "Gehitu taldearen deskribapena…"
   },
   "icu:MediaQualitySelector--button": {
-    "messageformat": "Hautatu media kalitatea"
+    "messageformat": "Hautatu multimedia-edukiaren kalitatea"
   },
   "icu:MediaQualitySelector--title": {
     "messageformat": "Media kalitatea"
@@ -4487,12 +4916,6 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "Ezin izan da zure profila eguneratu. Saiatu berriro mesedez."
   },
-  "icu:ProfileEditor__invalid-about__title": {
-    "messageformat": "Karaktere baliogabeak"
-  },
-  "icu:ProfileEditor__invalid-about__body": {
-    "messageformat": "Idatzitako karaktere bat edo gehiago ezin dira erabili. Saiatu berriro."
-  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "Mezua administratzailean"
   },
@@ -4507,6 +4930,12 @@
   },
   "icu:AvatarColorPicker--choose": {
     "messageformat": "Aukeratu kolore bat"
+  },
+  "icu:AttachmentDetailPill__retryDownload": {
+    "messageformat": "Saiatu berriro deskargatzen"
+  },
+  "icu:AttachmentDetailPill__retryDownloadShort": {
+    "messageformat": "Berriro saiatu"
   },
   "icu:LeftPaneSetGroupMetadataHelper__avatar-modal-title": {
     "messageformat": "Taldearen abatarra"
@@ -4534,6 +4963,39 @@
   },
   "icu:Preferences__button--privacy": {
     "messageformat": "Pribatutasuna"
+  },
+  "icu:Preferences__button--data-usage": {
+    "messageformat": "Datuen erabilera"
+  },
+  "icu:Preferences__media-auto-download": {
+    "messageformat": "Multimedia edukien deskargatze automatikoa"
+  },
+  "icu:Preferences__media-auto-download__photos": {
+    "messageformat": "Argazkiak"
+  },
+  "icu:Preferences__media-auto-download__videos": {
+    "messageformat": "Bideoak"
+  },
+  "icu:Preferences__media-auto-download__audio": {
+    "messageformat": "Audioa"
+  },
+  "icu:Preferences__media-auto-download__documents": {
+    "messageformat": "Agiriak"
+  },
+  "icu:Preferences__media-auto-download__description": {
+    "messageformat": "Ahots-mezuak eta eranskailuak automatikoki deskargatzen dira beti."
+  },
+  "icu:Preferences__button--backups": {
+    "messageformat": "Babeskopiak"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "Barnekoa"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "Esportatu segurtasun-kopia enkriptatua memoriara eta exekutatu baliozkotze-paketea bertan"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "Baliozkotu"
   },
   "icu:Preferences--lastSynced": {
     "messageformat": "Azken inportazioa {date} {time}"
@@ -4564,6 +5026,51 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "Blokeatua"
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "Babeskopiaren xehetasunak"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "Testuaren eta multimedia-eduki guztien babeskopia"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "Ez da aurkitu zure harpidetza. Berri ezazu Signal-en babeskopiak erabiltzen jarraitzeko."
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, one {Testuaren eta {mediaDayCount,number} eguneko multimedia-edukiaren babeskopia} other {Testuaren eta {mediaDayCount,number} eguneko multimedia-edukiaren babeskopia}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "Zure babeskopia-plana doakoa da"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "Berritze-data: {date}"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "Iraungitze-data: {date}"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "Harpidetza bertan behera utzi da"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "Signal-en babeskopien harpidetza kudeatu edo bertan behera uzteko, erabili telefonoa."
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "Signal-en babeskopiak kudeatzeko edo mailaz igotzeko, erabili telefonoa."
+  },
+  "icu:Preferences--backup-plan__not-found": {
+    "messageformat": "Ez da aurkitu zure harpidetza. Berri ezazu Signal-en babeskopiak erabiltzen jarraitzeko."
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "Signal-en babeskopien harpidetza kudeatu edo berritzeko, erabili telefonoa."
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "Azken babeskopia"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "Zure telefonoa"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "Babeskopiaren tamaina"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, one {Kontaktu 1} other {{num,number} kontaktu}}"
@@ -4691,8 +5198,29 @@
   "icu:DialogUpdate__downloaded": {
     "messageformat": "Deskargatu da eguneraketa"
   },
+  "icu:CriticalIdlePrimaryDevice__title": {
+    "messageformat": "Ireki Signal telefonoan"
+  },
+  "icu:CriticalIdlePrimaryDevice__body": {
+    "messageformat": "Signal telefonoan ireki ezean, zure kontua laster ezabatuko da. Signal irekitzen baduzu, mezu hau desagertu egingo da. <learnMoreLink>Informazio gehiago</learnMoreLink>"
+  },
+  "icu:IdlePrimaryDevice__body": {
+    "messageformat": "Ireki Signal telefonoan kontua aktibo mantentzeko"
+  },
+  "icu:IdlePrimaryDevice__learnMore": {
+    "messageformat": "Informazio gehiago"
+  },
   "icu:DialogNetworkStatus__outage": {
     "messageformat": "Signal arazo teknikoak izaten ari da. Gogor ari gara lanean zerbitzua ahal bezain laster berriro martxan jartzeko."
+  },
+  "icu:InstallScreenUpdateDialog--update-required__title": {
+    "messageformat": "Eguneratu behar da"
+  },
+  "icu:InstallScreenUpdateDialog--update-required__body": {
+    "messageformat": "Mezuak sinkronizatzen amaitzeko, eguneratu Signal Desktop."
+  },
+  "icu:InstallScreenUpdateDialog--update-required__action-update": {
+    "messageformat": "Eguneratu"
   },
   "icu:InstallScreenUpdateDialog--unsupported-os__title": {
     "messageformat": "Eguneratu behar da"
@@ -4822,6 +5350,30 @@
   },
   "icu:MediaEditor__crop-preset--9-16": {
     "messageformat": "9:16"
+  },
+  "icu:MediaPermissionsModal__title--microphone": {
+    "messageformat": "Eman mikrofonoa atzitzeko baimena"
+  },
+  "icu:MediaPermissionsModal__title--camera": {
+    "messageformat": "Eman kamerarako sarbidea"
+  },
+  "icu:MediaPermissionsModal__subtitle--call": {
+    "messageformat": "Dei batean sartzeko edo dei bat hasteko:"
+  },
+  "icu:MediaPermissionsModal__subtitle--call--camera": {
+    "messageformat": "Bideoa gaitzeko:"
+  },
+  "icu:MediaPermissionsModal__subtitle--voice-note": {
+    "messageformat": "Ahots-mezuak bidaltzeko:"
+  },
+  "icu:MediaPermissionsModal__step-1": {
+    "messageformat": "Sakatu \"{buttonName}\" behean"
+  },
+  "icu:MediaPermissionsModal__step-2": {
+    "messageformat": "Aktibatu \"Signal\""
+  },
+  "icu:MediaPermissionsModal__open": {
+    "messageformat": "Joan ezarpenetara"
   },
   "icu:MyStories__title": {
     "messageformat": "Nire istorioak"
@@ -5481,6 +6033,15 @@
   "icu:MessageMetadata__edited": {
     "messageformat": "Editatua"
   },
+  "icu:DraftGifMessageSendModal__Title": {
+    "messageformat": "Gehitu mezu bat"
+  },
+  "icu:DraftGifMessageSendModal__SendButtonLabel": {
+    "messageformat": "Bidali"
+  },
+  "icu:DraftGifMessageSendModal__CancelButtonLabel": {
+    "messageformat": "Utzi"
+  },
   "icu:EditHistoryMessagesModal__title": {
     "messageformat": "Edizio-historia"
   },
@@ -5532,8 +6093,14 @@
   "icu:CallsTab__EmptyStateText--with-icon-2": {
     "messageformat": "Egin klik hemen: <newCallButtonIcon></newCallButtonIcon> beste dei edo bideodei bat hasteko."
   },
+  "icu:CallsList__SearchInputPlaceholder--missed-calls": {
+    "messageformat": "Bilatu dei galduak"
+  },
   "icu:CallsList__SearchInputPlaceholder": {
     "messageformat": "Bilatu"
+  },
+  "icu:CallsList__FilteredByMissedHeader": {
+    "messageformat": "Galduen arabera iragazita"
   },
   "icu:CallsList__ToggleFilterByMissedLabel": {
     "messageformat": "Iragazi dei galduen arabera"
@@ -5547,14 +6114,14 @@
   "icu:CallsList__EmptyState--noQuery__subtitle": {
     "messageformat": "Azken deiak hemen agertuko dira."
   },
-  "icu:CallsList__EmptyState--noQuery--missed__title": {
-    "messageformat": "Dei galdurik ez"
-  },
-  "icu:CallsList__EmptyState--noQuery--missed__subtitle": {
-    "messageformat": "Dei galduak hemen agertuko dira."
-  },
   "icu:CallsList__EmptyState--hasQuery": {
     "messageformat": "Ez dago honen emaitzarik: \"{query}\""
+  },
+  "icu:CallsList__EmptyState--hasQueryAndMissedCalls": {
+    "messageformat": "Ez dago \"{query}\" bilaketaren emaitzarik dei galduetan"
+  },
+  "icu:CallsList__EmptyState--missedCalls": {
+    "messageformat": "Dei galdurik ez"
   },
   "icu:CallsList__CreateCallLink": {
     "messageformat": "Sortu dei-esteka bat"
@@ -5694,6 +6261,30 @@
   "icu:WhoCanFindMeReadOnlyToast": {
     "messageformat": "Ezarpen hori aldatzeko, joan \"Nork ikus dezake nire zenbakia?\" atalera eta aukeratu \"Inork ez\"."
   },
+  "icu:ProfileNameWarningModal__description--direct": {
+    "messageformat": "Signal-eko profileko izenak kontuen jabeek aukeratzen dituzte:"
+  },
+  "icu:ProfileNameWarningModal__list--item1--direct": {
+    "messageformat": "Profileko izenak ez dira egiaztatzen"
+  },
+  "icu:ProfileNameWarningModal__list--item2--direct": {
+    "messageformat": "Kontuz besteren identitatea ordezten duten kontuekin"
+  },
+  "icu:ProfileNameWarningModal__list--item3--direct": {
+    "messageformat": "Ez partekatu informazio pertsonala ezagutzen ez dituzun pertsonekin"
+  },
+  "icu:ProfileNameWarningModal__description--group": {
+    "messageformat": "Taldeen izenak taldeko kideek aukeratzen dituzte."
+  },
+  "icu:ProfileNameWarningModal__list--item1--group": {
+    "messageformat": "Kontuz ibili erakunde eta enpresen identitatea ordezten duten taldeekin"
+  },
+  "icu:ProfileNameWarningModal__list--item2--group": {
+    "messageformat": "Taldeetako kideen profileko izenak ez dira egiaztatzen"
+  },
+  "icu:ProfileNameWarningModal__list--item3--group": {
+    "messageformat": "Ez partekatu informazio pertsonala ezagutzen ez dituzun pertsonekin"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "Zer berri"
   },
@@ -5725,22 +6316,13 @@
     "messageformat": "Doikuntza txikiak, akats-konponketak eta errendimendu-hobekuntzak. Eskerrik asko Signal erabiltzeagatik!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.29--0": {
-    "messageformat": "Eguneratze honekin, abio-abiadura % 5 inguru hobetu da."
+  "icu:WhatsNew__v7.51--0": {
+    "messageformat": "Orain, GIF bizidunak Signal Desktop-en ere bila ditzakezu."
   },
-  "icu:WhatsNew__v7.30--header": {
-    "messageformat": "Deien estekak: Egutegiko gertaeren eta topaketa espontaneoen artean falta zen katebegia."
+  "icu:WhatsNew__v7.51--1": {
+    "messageformat": "Halaber, leiho gainjarriaren tamaina aldatu dugu, eta deiak minimizatuta dauden bitartean agertuko diren lasterbide erabilgarriak gehitu ditugu."
   },
-  "icu:WhatsNew__v7.30--0": {
-    "messageformat": "Orain, Signal-eko edonork taldeko deietan sartzeko erabili ahalko dituen estekak sor ditzakezu bizkor, lehenbizi Signal-eko taldeko txatetan sartu beharrik gabe."
-  },
-  "icu:WhatsNew__v7.30--1": {
-    "messageformat": "Deien estekak berrerabilgarriak dira, eta bikainak dira zure lagun minekin erregularki egiten dituzun deietarako edo lankideekin astero egiten dituzun bileretarako."
-  },
-  "icu:WhatsNew__v7.30--2": {
-    "messageformat": "Deien estekak kudea ditzakezu, bai eta onarpen-ezarpen kontrolatu eta deien fitxatik estekak bizkor partekatzeko kopiatu ere."
-  },
-  "icu:WhatsNew__v7.31--0": {
-    "messageformat": "Now you can quickly download every photo in an album when you receive a message with multiple attachments. But if you were a gallery curator with impeccable taste in another life, you can still save them individually too. Thanks, <linkMajorMayer>@major-mayer</linkMajorMayer>!"
+  "icu:WhatsNew__v7.54--0": {
+    "messageformat": "Emojien lasterbideak erabiltzeko aukera hizkuntza gehiagotan gehitu dugu."
   }
 }

@@ -35,7 +35,6 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
 
   state = state.updateAccount({
     profileKey: phone.profileKey.serialize(),
-    e164: phone.device.number,
     givenName: phone.profileName,
     readReceipts: true,
     hasCompletedUsernameOnboarding: true,
@@ -169,7 +168,7 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
     const start = Date.now();
 
     // test
-    await typeIntoInput(SearchBar, searchContact.profileName);
+    await typeIntoInput(SearchBar, searchContact.profileName, '');
     await CreateCallLink.waitFor({ state: 'hidden' }); // hides when searching
     await expect(OtherCallListItems).not.toBeAttached();
     await sendCallEventSync(

@@ -1,6 +1,8 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type * as client from '@signalapp/libsignal-client';
+
 import type { SignalService as Proto } from '../protobuf';
 import type { IncomingWebSocketRequest } from './WebsocketResources';
 import type { ServiceIdString, AciString, PniString } from '../types/ServiceId';
@@ -24,7 +26,6 @@ export {
   SignedPreKeyIdType,
   SignedPreKeyType,
   UnprocessedType,
-  UnprocessedUpdateType,
 } from '../sql/Interface';
 
 export type StorageServiceCallOptionsType = {
@@ -63,10 +64,7 @@ export type CompatPreKeyType = {
 
 // How we work with these types thereafter
 
-export type KeyPairType = {
-  privKey: Uint8Array;
-  pubKey: Uint8Array;
-};
+export type KeyPairType = client.IdentityKeyPair;
 
 export type OuterSignedPrekeyType = {
   confirmed: boolean;
@@ -87,19 +85,20 @@ export type ProcessedEnvelope = Readonly<{
 
   // Mostly from Proto.Envelope except for null/undefined
   type: Proto.Envelope.Type;
-  source?: string;
-  sourceServiceId?: ServiceIdString;
-  sourceDevice?: number;
+  source: string | undefined;
+  sourceServiceId: ServiceIdString | undefined;
+  sourceDevice: number | Undefined;
   destinationServiceId: ServiceIdString;
-  updatedPni?: PniString;
+  updatedPni: PniString | undefined;
   timestamp: number;
-  content?: Uint8Array;
+  content: Uint8Array;
   serverGuid: string;
   serverTimestamp: number;
-  groupId?: string;
-  urgent?: boolean;
-  story?: boolean;
-  reportingToken?: Uint8Array;
+  groupId: string | undefined;
+  urgent: boolean;
+  story: boolean;
+  reportingToken: Uint8Array | undefined;
+  groupId: string | undefined;
 }>;
 
 export type ProcessedAttachment = {
@@ -202,6 +201,7 @@ export type ProcessedGiftBadge = {
 
 export type ProcessedDataMessage = {
   body?: string;
+  bodyAttachment?: ProcessedAttachment;
   attachments: ReadonlyArray<ProcessedAttachment>;
   groupV2?: ProcessedGroupV2Context;
   flags: number;

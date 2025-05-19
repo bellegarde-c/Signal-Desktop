@@ -8,13 +8,13 @@ import { ToastType } from '../../types/Toast';
 import { useToastActions } from '../ducks/toast';
 import { getConversationSelector } from '../selectors/conversations';
 import {
-  getEmojiSkinTone,
+  getEmojiSkinToneDefault,
   getHasStoryViewReceiptSetting,
   getPreferredReactionEmoji,
   getTextFormattingEnabled,
   isInternalUser,
 } from '../selectors/items';
-import { getIntl, getPlatform } from '../selectors/user';
+import { getIntl, getPlatform, getUserConversationId } from '../selectors/user';
 import { getPreferredBadgeSelector } from '../selectors/badges';
 import {
   getSelectedStoryData,
@@ -56,7 +56,7 @@ export const SmartStoryViewer = memo(function SmartStoryViewer() {
     showConversation,
     toggleHideStories,
   } = useConversationsActions();
-  const { onSetSkinTone } = useItemsActions();
+  const { setEmojiSkinToneDefault } = useItemsActions();
   const { showToast } = useToastActions();
   const { showContactModal } = useGlobalModalActions();
 
@@ -64,6 +64,7 @@ export const SmartStoryViewer = memo(function SmartStoryViewer() {
 
   const i18n = useSelector(getIntl);
   const platform = useSelector(getPlatform);
+  const ourConversationId = useSelector(getUserConversationId);
   const getPreferredBadge = useSelector(getPreferredBadgeSelector);
   const preferredReactionEmoji = useSelector(getPreferredReactionEmoji);
   const selectedStoryData = useSelector(getSelectedStoryData);
@@ -75,7 +76,7 @@ export const SmartStoryViewer = memo(function SmartStoryViewer() {
 
   const getStoryById = useSelector(getStoryByIdSelector);
   const recentEmojis = useRecentEmojis();
-  const skinTone = useSelector(getEmojiSkinTone);
+  const emojiSkinToneDefault = useSelector(getEmojiSkinToneDefault);
   const replyState = useSelector(getStoryReplies);
   const hasAllStoriesUnmuted = useSelector(getHasAllStoriesUnmuted);
   const hasActiveCall = useSelector(isInFullScreenCall);
@@ -151,9 +152,10 @@ export const SmartStoryViewer = memo(function SmartStoryViewer() {
       onMediaPlaybackStart={pauseVoiceNotePlayer}
       onReactToStory={handleReactToStory}
       onReplyToStory={handleReplyToStory}
-      onSetSkinTone={onSetSkinTone}
+      onEmojiSkinToneDefaultChange={setEmojiSkinToneDefault}
       onTextTooLong={handleTextTooLong}
       onUseEmoji={onUseEmoji}
+      ourConversationId={ourConversationId}
       platform={platform}
       preferredReactionEmoji={preferredReactionEmoji}
       queueStoryDownload={queueStoryDownload}
@@ -165,7 +167,7 @@ export const SmartStoryViewer = memo(function SmartStoryViewer() {
       setHasAllStoriesUnmuted={setHasAllStoriesUnmuted}
       showContactModal={showContactModal}
       showToast={showToast}
-      skinTone={skinTone}
+      emojiSkinToneDefault={emojiSkinToneDefault}
       story={storyView}
       storyViewMode={selectedStoryData.storyViewMode}
       viewStory={viewStory}

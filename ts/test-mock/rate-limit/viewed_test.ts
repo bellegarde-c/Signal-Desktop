@@ -10,7 +10,11 @@ import { Bootstrap } from '../bootstrap';
 import type { App } from '../bootstrap';
 import { ReceiptType } from '../../types/Receipt';
 import { toUntaggedPni } from '../../types/ServiceId';
-import { typeIntoInput, waitForEnabledComposer } from '../helpers';
+import {
+  acceptConversation,
+  typeIntoInput,
+  waitForEnabledComposer,
+} from '../helpers';
 
 export const debug = createDebug('mock:test:challenge:receipts');
 
@@ -43,7 +47,6 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
 
     state = state.updateAccount({
       profileKey: phone.profileKey.serialize(),
-      e164: phone.device.number,
       givenName: phone.profileName,
       readReceipts: true,
     });
@@ -107,7 +110,6 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
 
     const window = await app.getWindow();
     const leftPane = window.locator('#LeftPane');
-    const conversationStack = window.locator('.Inbox__conversation-stack');
 
     debug(`Opening conversation with contact (${contact.toContact().aci})`);
     await leftPane
@@ -115,14 +117,12 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       .click();
 
     debug('Accept conversation from contact - does not trigger captcha!');
-    await conversationStack
-      .locator('.module-message-request-actions button >> "Accept"')
-      .click();
+    await acceptConversation(window);
 
     debug('Sending a message back to user - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -165,7 +165,6 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
 
     const window = await app.getWindow();
     const leftPane = window.locator('#LeftPane');
-    const conversationStack = window.locator('.Inbox__conversation-stack');
 
     debug('Sending a message from ContactA');
     const timestampA = bootstrap.getTimestamp();
@@ -179,9 +178,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       .click();
 
     debug('Accept conversation from ContactA - does not trigger captcha!');
-    await conversationStack
-      .locator('.module-message-request-actions button >> "Accept"')
-      .click();
+    await acceptConversation(window);
 
     debug('Sending a message from ContactB');
     const timestampB = bootstrap.getTimestamp();
@@ -195,14 +192,12 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       .click();
 
     debug('Accept conversation from ContactB - does not trigger captcha!');
-    await conversationStack
-      .locator('.module-message-request-actions button >> "Accept"')
-      .click();
+    await acceptConversation(window);
 
     debug('Sending a message back to ContactB - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -277,7 +272,6 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
 
     const window = await app.getWindow();
     const leftPane = window.locator('#LeftPane');
-    const conversationStack = window.locator('.Inbox__conversation-stack');
 
     debug(`Opening conversation with contact (${contact.toContact().aci})`);
     await leftPane
@@ -285,14 +279,12 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       .click();
 
     debug('Accept conversation from contact - does not trigger captcha!');
-    await conversationStack
-      .locator('.module-message-request-actions button >> "Accept"')
-      .click();
+    await acceptConversation(window);
 
     debug('Sending a message back to user - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -341,7 +333,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     debug('Sending another message - this time it should not trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'How have you been lately?');
+      await typeIntoInput(input, 'How have you been lately?', '');
       await input.press('Enter');
     }
 
@@ -356,16 +348,14 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       .click();
 
     debug('Accept conversation from Contact B - does not trigger captcha!');
-    await conversationStack
-      .locator('.module-message-request-actions button >> "Accept"')
-      .click();
+    await acceptConversation(window);
 
     debug(
       'Sending to Contact B - we should not pop captcha because we are waiting!'
     );
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'You the cow guy from craigslist?');
+      await typeIntoInput(input, 'You the cow guy from craigslist?', '');
       await input.press('Enter');
     }
 

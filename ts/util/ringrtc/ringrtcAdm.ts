@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import * as RemoteConfig from '../../RemoteConfig';
-import OS from '../os/osMain';
 import { isProduction } from '../version';
 
 export function getUseRingrtcAdm(): boolean {
@@ -11,15 +10,14 @@ export function getUseRingrtcAdm(): boolean {
     return localUseRingrtcAdm;
   }
 
-  if (
-    isProduction(window.getVersion()) ||
-    OS.isLinux() ||
-    !RemoteConfig.isEnabled('desktop.internalUser')
-  ) {
-    return false;
+  if (!RemoteConfig.isEnabled('desktop.internalUser')) {
+    if (isProduction(window.getVersion())) {
+      return RemoteConfig.isEnabled('desktop.calling.ringrtcAdmFull.3');
+    }
+    return RemoteConfig.isEnabled('desktop.calling.ringrtcAdmPreStable');
   }
 
-  return RemoteConfig.isEnabled('desktop.calling.ringrtcAdm');
+  return RemoteConfig.isEnabled('desktop.calling.ringrtcAdmInternal');
 }
 
 export async function setUseRingrtcAdm(value: boolean): Promise<void> {

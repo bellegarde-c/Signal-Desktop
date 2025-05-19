@@ -38,7 +38,22 @@ export const getRingingCall = (
       return false;
     }
 
-    return isRinging(call.callState) && call.callEndedReason == null;
+    if (
+      activeCallState?.state === 'Active' &&
+      activeCallState.conversationId !== call.conversationId
+    ) {
+      return false;
+    }
+
+    if (
+      activeCallState?.state === 'Active' &&
+      activeCallState?.outgoingRing &&
+      call.callState === CallState.Prering
+    ) {
+      return true;
+    }
+
+    return call.callState === CallState.Ringing && call.callEndedReason == null;
   });
 
   if (ringingDirect) {
@@ -50,11 +65,18 @@ export const getRingingCall = (
       return false;
     }
 
+    if (
+      activeCallState?.state === 'Active' &&
+      activeCallState.conversationId !== call.conversationId
+    ) {
+      return false;
+    }
+
     // Outgoing - ringerAci is not set for outgoing group calls
     if (
       activeCallState?.state === 'Active' &&
-      activeCallState.outgoingRing &&
       activeCallState.conversationId === call.conversationId &&
+      activeCallState.outgoingRing &&
       isConnected(call.connectionState) &&
       isJoined(call.joinState) &&
       !hasRemoteParticipants(call.remoteParticipants)
@@ -95,10 +117,6 @@ export const isGroupCallActiveOnServer = (
 
 export function isLonelyGroup(conversation: CallingConversationType): boolean {
   return (conversation.sortedGroupMembers?.length ?? 0) < 2;
-}
-
-function isRinging(callState: CallState | undefined): boolean {
-  return callState === CallState.Prering || callState === CallState.Ringing;
 }
 
 function isConnected(connectionState: GroupCallConnectionState): boolean {

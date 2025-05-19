@@ -69,12 +69,15 @@ export function convertFilePointerToAttachment(
     fileName: fileName ?? undefined,
     caption: caption ?? undefined,
     blurHash: blurHash ?? undefined,
-    incrementalMac: incrementalMac?.length
-      ? Bytes.toBase64(incrementalMac)
-      : undefined,
-    incrementalMacChunkSize: incrementalMacChunkSize ?? undefined,
+    incrementalMac: undefined,
+    chunkSize: undefined,
     downloadPath: doCreateName(),
   };
+
+  if (incrementalMac?.length && incrementalMacChunkSize) {
+    commonProps.incrementalMac = Bytes.toBase64(incrementalMac);
+    commonProps.chunkSize = incrementalMacChunkSize;
+  }
 
   if (attachmentLocator) {
     const { cdnKey, cdnNumber, key, digest, uploadTimestamp, size } =
@@ -119,15 +122,15 @@ export function convertFilePointerToAttachment(
     };
   }
 
-  if (invalidAttachmentLocator) {
-    return {
-      ...omit(commonProps, 'downloadPath'),
-      error: true,
-      size: 0,
-    };
+  if (!invalidAttachmentLocator) {
+    log.error('convertFilePointerToAttachment: filePointer had no locator');
   }
 
-  throw new Error('convertFilePointerToAttachment: mising locator');
+  return {
+    ...omit(commonProps, 'downloadPath'),
+    error: true,
+    size: 0,
+  };
 }
 
 export function convertBackupMessageAttachmentToAttachment(
@@ -179,15 +182,22 @@ export async function getFilePointerForAttachment({
 }> {
   const filePointerRootProps = new Backups.FilePointer({
     contentType: attachment.contentType,
-    incrementalMac: attachment.incrementalMac
-      ? Bytes.fromBase64(attachment.incrementalMac)
-      : undefined,
-    incrementalMacChunkSize: attachment.incrementalMacChunkSize,
     fileName: attachment.fileName,
     width: attachment.width,
     height: attachment.height,
     caption: attachment.caption,
     blurHash: attachment.blurHash,
+
+    // Resilience to invalid data in the database from internal testing
+    ...(typeof attachment.incrementalMac === 'string' && attachment.chunkSize
+      ? {
+          incrementalMac: Bytes.fromBase64(attachment.incrementalMac),
+          incrementalMacChunkSize: attachment.chunkSize,
+        }
+      : {
+          incrementalMac: undefined,
+          incrementalMacChunkSize: undefined,
+        }),
   });
   const logId = `getFilePointerForAttachment(${redactGenericText(
     attachment.digest ?? ''
@@ -210,7 +220,7 @@ export async function getFilePointerForAttachment({
     // one point in the past verified the digest).
     if (
       isDownloadableFromBackupTier(attachment) &&
-      backupLevel === BackupLevel.Media
+      backupLevel === BackupLevel.Paid
     ) {
       return {
         filePointer: new Backups.FilePointer({
@@ -240,7 +250,7 @@ export async function getFilePointerForAttachment({
   }
 
   // The attachment is locally saved
-  if (backupLevel !== BackupLevel.Media) {
+  if (backupLevel !== BackupLevel.Paid) {
     // 1. If we have information to donwnload the file from the transit tier, great, let's
     //    just create an attachmentLocator so the restorer can try to download from the
     //    transit tier

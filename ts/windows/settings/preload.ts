@@ -16,6 +16,7 @@ import { awaitObject } from '../../util/awaitObject';
 import { DurationInSeconds } from '../../util/durations';
 import { createSetting, createCallback } from '../../util/preload';
 import { findBestMatchingAudioDeviceIndex } from '../../calling/findBestMatchingDevice';
+import type { EmojiSkinTone } from '../../components/fun/data/emojis';
 
 function doneRendering() {
   ipcRenderer.send('settings-done-rendering');
@@ -25,6 +26,7 @@ const settingMessageAudio = createSetting('audioMessage');
 const settingAudioNotification = createSetting('audioNotification');
 const settingAutoConvertEmoji = createSetting('autoConvertEmoji');
 const settingAutoDownloadUpdate = createSetting('autoDownloadUpdate');
+const settingAutoDownloadAttachment = createSetting('autoDownloadAttachment');
 const settingAutoLaunch = createSetting('autoLaunch');
 const settingCallRingtoneNotification = createSetting(
   'callRingtoneNotification'
@@ -58,6 +60,18 @@ const settingZoomFactor = createSetting('zoomFactor');
 
 // Getters only.
 const settingBlockedCount = createSetting('blockedCount');
+const settingBackupFeatureEnabled = createSetting('backupFeatureEnabled', {
+  setter: false,
+});
+const settingCloudBackupStatus = createSetting('cloudBackupStatus', {
+  setter: false,
+});
+const settingBackupSubscriptionStatus = createSetting(
+  'backupSubscriptionStatus',
+  {
+    setter: false,
+  }
+);
 const settingLinkPreview = createSetting('linkPreviewSetting', {
   setter: false,
 });
@@ -82,9 +96,16 @@ const settingUniversalExpireTimer = createSetting('universalExpireTimer');
 // Callbacks
 const ipcGetAvailableIODevices = createCallback('getAvailableIODevices');
 const ipcGetCustomColors = createCallback('getCustomColors');
+const ipcGetEmojiSkinToneDefault = createCallback('getEmojiSkinToneDefault');
 const ipcIsSyncNotSupported = createCallback('isPrimary');
+const ipcIsInternalUser = createCallback('isInternalUser');
 const ipcMakeSyncRequest = createCallback('syncRequest');
+const ipcValidateBackup = createCallback('validateBackup');
 const ipcDeleteAllMyStories = createCallback('deleteAllMyStories');
+const ipcRefreshCloudBackupStatus = createCallback('refreshCloudBackupStatus');
+const ipcRefreshBackupSubscriptionStatus = createCallback(
+  'refreshBackupSubscriptionStatus'
+);
 
 // ChatColorPicker redux hookups
 // The redux actions update over IPC through a preferences re-render
@@ -105,6 +126,7 @@ const ipcResetDefaultChatColor = createCallback('resetDefaultChatColor');
 const ipcSetGlobalDefaultConversationColor = createCallback(
   'setGlobalDefaultConversationColor'
 );
+const ipcSetEmojiSkinToneDefault = createCallback('setEmojiSkinToneDefault');
 
 const DEFAULT_NOTIFICATION_SETTING = 'message';
 
@@ -139,8 +161,13 @@ function attachRenderCallback<Value>(f: (value: Value) => Promise<Value>) {
 
 async function renderPreferences() {
   const {
+    autoDownloadAttachment,
+    backupFeatureEnabled,
+    backupSubscriptionStatus,
     blockedCount,
+    cloudBackupStatus,
     deviceName,
+    emojiSkinToneDefault,
     hasAudioNotifications,
     hasAutoConvertEmoji,
     hasAutoDownloadUpdate,
@@ -180,8 +207,13 @@ async function renderPreferences() {
     customColors,
     defaultConversationColor,
     isSyncNotSupported,
+    isInternalUser,
   } = await awaitObject({
+    autoDownloadAttachment: settingAutoDownloadAttachment.getValue(),
+    backupFeatureEnabled: settingBackupFeatureEnabled.getValue(),
+    backupSubscriptionStatus: settingBackupSubscriptionStatus.getValue(),
     blockedCount: settingBlockedCount.getValue(),
+    cloudBackupStatus: settingCloudBackupStatus.getValue(),
     deviceName: settingDeviceName.getValue(),
     hasAudioNotifications: settingAudioNotification.getValue(),
     hasAutoConvertEmoji: settingAutoConvertEmoji.getValue(),
@@ -222,7 +254,9 @@ async function renderPreferences() {
     availableIODevices: ipcGetAvailableIODevices(),
     customColors: ipcGetCustomColors(),
     defaultConversationColor: ipcGetDefaultConversationColor(),
+    emojiSkinToneDefault: ipcGetEmojiSkinToneDefault(),
     isSyncNotSupported: ipcIsSyncNotSupported(),
+    isInternalUser: ipcIsInternalUser(),
   });
 
   const { availableCameras, availableMicrophones, availableSpeakers } =
@@ -264,16 +298,21 @@ async function renderPreferences() {
       ? availableSpeakers[selectedSpeakerIndex]
       : undefined;
 
-  const props = {
+  const props: PropsPreloadType = {
     // Settings
+    autoDownloadAttachment,
     availableCameras,
     availableLocales,
     availableMicrophones,
     availableSpeakers,
+    backupFeatureEnabled,
+    backupSubscriptionStatus,
     blockedCount,
+    cloudBackupStatus,
     customColors,
     defaultConversationColor,
     deviceName,
+    emojiSkinToneDefault,
     hasAudioNotifications,
     hasAutoConvertEmoji,
     hasAutoDownloadUpdate,
@@ -323,18 +362,24 @@ async function renderPreferences() {
     initialSpellCheckSetting:
       MinimalSignalContext.config.appStartInitialSpellcheckSetting,
     makeSyncRequest: ipcMakeSyncRequest,
+    refreshCloudBackupStatus: ipcRefreshCloudBackupStatus,
+    refreshBackupSubscriptionStatus: ipcRefreshBackupSubscriptionStatus,
     removeCustomColor: ipcRemoveCustomColor,
     removeCustomColorOnConversations: ipcRemoveCustomColorOnConversations,
     resetAllChatColors: ipcResetAllChatColors,
     resetDefaultChatColor: ipcResetDefaultChatColor,
     setGlobalDefaultConversationColor: ipcSetGlobalDefaultConversationColor,
-
+    validateBackup: ipcValidateBackup,
     // Limited support features
-    isAutoDownloadUpdatesSupported: Settings.isAutoDownloadUpdatesSupported(OS),
+    isAutoDownloadUpdatesSupported: Settings.isAutoDownloadUpdatesSupported(
+      OS,
+      MinimalSignalContext.getVersion()
+    ),
     isAutoLaunchSupported: Settings.isAutoLaunchSupported(OS),
     isHideMenuBarSupported: Settings.isHideMenuBarSupported(OS),
     isNotificationAttentionSupported: Settings.isDrawAttentionSupported(OS),
     isSyncSupported: !isSyncNotSupported,
+    isInternalUser,
     isSystemTraySupported: Settings.isSystemTraySupported(OS),
     isMinimizeToAndStartInSystemTraySupported:
       Settings.isMinimizeToAndStartInSystemTraySupported(OS),
@@ -349,6 +394,9 @@ async function renderPreferences() {
     onAutoDownloadUpdateChange: attachRenderCallback(
       settingAutoDownloadUpdate.setValue
     ),
+    onAutoDownloadAttachmentChange: attachRenderCallback(
+      settingAutoDownloadAttachment.setValue
+    ),
     onAutoLaunchChange: attachRenderCallback(settingAutoLaunch.setValue),
     onCallNotificationsChange: attachRenderCallback(
       settingCallSystemNotification.setValue
@@ -358,6 +406,12 @@ async function renderPreferences() {
     ),
     onCountMutedConversationsChange: attachRenderCallback(
       settingCountMutedConversations.setValue
+    ),
+    onEmojiSkinToneDefaultChange: attachRenderCallback(
+      async (emojiSkinTone: EmojiSkinTone) => {
+        await ipcSetEmojiSkinToneDefault(emojiSkinTone);
+        return emojiSkinTone;
+      }
     ),
     onHasStoriesDisabledChanged: attachRenderCallback(
       async (value: boolean) => {

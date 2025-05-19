@@ -17,12 +17,9 @@ import * as Errors from '../../types/errors';
 
 import { strictAssert } from '../../util/assert';
 import { drop } from '../../util/drop';
+import { explodePromise } from '../../util/explodePromise';
 import { DataReader } from '../../sql/Client';
-import type {
-  NotificationClickData,
-  WindowsNotificationData,
-} from '../../services/notifications';
-import { isAdhocCallingEnabled } from '../../util/isAdhocCallingEnabled';
+import type { WindowsNotificationData } from '../../services/notifications';
 import { AggregatedStats } from '../../textsecure/WebsocketResources';
 import { UNAUTHENTICATED_CHANNEL_NAME } from '../../textsecure/SocketManager';
 
@@ -92,11 +89,23 @@ const IPC: IPCType = {
   getAutoLaunch: () => ipc.invoke('get-auto-launch'),
   getMediaAccessStatus: mediaType =>
     ipc.invoke('get-media-access-status', mediaType),
+  openSystemMediaPermissions: mediaType =>
+    ipc.invoke('open-system-media-permissions', mediaType),
   getMediaPermissions: () => ipc.invoke('settings:get:mediaPermissions'),
   getMediaCameraPermissions: () =>
     ipc.invoke('settings:get:mediaCameraPermissions'),
   logAppLoadedEvent: ({ processedCount }) =>
     ipc.send('signal-app-loaded', {
+      // Sequence of events:
+      // 1. Preload compile start
+      // 2. Preload start
+      // 3. Preload end
+      //
+      // Compile time is thus: start - compileStart
+      preloadCompileTime:
+        window.preloadStartTime - window.preloadCompileStartTime,
+
+      // Preload time is: end - start
       preloadTime: window.preloadEndTime - window.preloadStartTime,
       connectTime: preloadConnectTime - window.preloadEndTime,
       processedCount,
@@ -136,6 +145,7 @@ const IPC: IPCType = {
     ipc.send('title-bar-double-click');
   },
   updateTrayIcon: unreadCount => ipc.send('update-tray-icon', unreadCount),
+  whenWindowVisible,
 };
 
 window.IPC = IPC;
@@ -341,25 +351,15 @@ ipc.on('show-group-via-link', (_event, info) => {
   drop(window.Events.showGroupViaLink?.(info.value));
 });
 
-ipc.on('start-call-lobby', (_event, { conversationId }) => {
+ipc.on('start-call-lobby', (_event, info) => {
   window.IPC.showWindow();
-  window.reduxActions?.calling?.startCallingLobby({
-    conversationId,
-    isVideoCall: true,
-  });
+  window.Events.startCallingLobbyViaToken(info.token);
 });
 
 ipc.on('start-call-link', (_event, { key }) => {
-  if (isAdhocCallingEnabled()) {
-    window.reduxActions?.calling?.startCallLinkLobby({
-      rootKey: key,
-    });
-  } else {
-    const { unknownSignalLink } = window.Events;
-    if (unknownSignalLink) {
-      unknownSignalLink();
-    }
-  }
+  window.reduxActions?.calling?.startCallLinkLobby({
+    rootKey: key,
+  });
 });
 
 ipc.on('show-window', () => {
@@ -370,15 +370,12 @@ ipc.on('cancel-presenting', () => {
   window.reduxActions?.calling?.cancelPresenting();
 });
 
-ipc.on(
-  'show-conversation-via-notification',
-  (_event, data: NotificationClickData) => {
-    const { showConversationViaNotification } = window.Events;
-    if (showConversationViaNotification) {
-      void showConversationViaNotification(data);
-    }
+ipc.on('show-conversation-via-token', (_event, token: string) => {
+  const { showConversationViaToken } = window.Events;
+  if (showConversationViaToken) {
+    void showConversationViaToken(token);
   }
-);
+});
 ipc.on('show-conversation-via-signal.me', (_event, info) => {
   const { kind, value } = info;
   strictAssert(typeof kind === 'string', 'Got an invalid kind over IPC');
@@ -455,3 +452,14 @@ ipc.on(
     event.sender.send('art-creator:uploadStickerPack:done', packId);
   }
 );
+
+const { promise: windowVisible, resolve: resolveWindowVisible } =
+  explodePromise<void>();
+
+ipc.on('activate', () => {
+  resolveWindowVisible();
+});
+
+async function whenWindowVisible(): Promise<void> {
+  await windowVisible;
+}

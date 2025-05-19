@@ -3,7 +3,7 @@
 
 const esbuild = require('esbuild');
 const path = require('path');
-const glob = require('glob');
+const fastGlob = require('fast-glob');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const BUNDLES_DIR = 'bundles';
@@ -34,7 +34,7 @@ const bundleDefaults = {
     '@signalapp/libsignal-client',
     '@signalapp/libsignal-client/zkgroup',
     '@signalapp/ringrtc',
-    '@signalapp/better-sqlite3',
+    '@signalapp/sqlcipher',
     '@indutny/mac-screen-share',
     'electron',
     'fs-xattr',
@@ -46,7 +46,6 @@ const bundleDefaults = {
 
     // Things that don't bundle well
     'got',
-    'jquery',
     'node-fetch',
     'pino',
     'proxy-agent',
@@ -106,10 +105,10 @@ async function main() {
       mainFields: ['browser', 'main'],
       entryPoints: [
         'preload.wrapper.ts',
-        ...glob
+        ...fastGlob
           .sync('{app,ts}/**/*.{ts,tsx}', {
-            nodir: true,
-            root: ROOT_DIR,
+            onlyFiles: true,
+            cwd: ROOT_DIR,
           })
           .filter(file => !file.endsWith('.d.ts')),
       ],
