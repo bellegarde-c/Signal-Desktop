@@ -741,7 +741,7 @@ async function generateManifest(
     const pendingDeletes: Set<string> = new Set();
 
     const remoteKeys: Set<string> = new Set();
-    (previousManifest.keys ?? []).forEach(
+    (previousManifest.identifiers ?? []).forEach(
       (identifier: IManifestRecordIdentifier) => {
         strictAssert(identifier.raw, 'Identifier without raw field');
         const storageID = Bytes.toBase64(identifier.raw);
@@ -874,7 +874,7 @@ async function encryptManifest(
   const manifestRecord = new Proto.ManifestRecord();
   manifestRecord.version = Long.fromNumber(version);
   manifestRecord.sourceDevice = window.storage.user.getDeviceId() ?? 0;
-  manifestRecord.keys = Array.from(manifestRecordKeys);
+  manifestRecord.identifiers = Array.from(manifestRecordKeys);
   if (recordIkm != null) {
     manifestRecord.recordIkm = recordIkm;
   }
@@ -1113,7 +1113,6 @@ type MergeableItemType = {
 };
 
 type MergedRecordType = UnknownRecord & {
-  hasConflict: boolean;
   shouldDrop: boolean;
   hasError: boolean;
   isUnsupported: boolean;
@@ -1133,7 +1132,7 @@ async function mergeRecord(
 
   const ITEM_TYPE = Proto.ManifestRecord.Identifier.Type;
 
-  let mergeResult: MergeResultType = { hasConflict: false, details: [] };
+  let mergeResult: MergeResultType = { details: [] };
   let isUnsupported = false;
   let hasError = false;
   let updatedConversations = new Array<ConversationModel>();
@@ -1220,7 +1219,6 @@ async function mergeRecord(
     log.info(
       `storageService.merge(${redactedID}): merged item type=${itemType} ` +
         `oldID=${oldID} ` +
-        `conflict=${mergeResult.hasConflict} ` +
         `shouldDrop=${Boolean(mergeResult.shouldDrop)} ` +
         `details=${JSON.stringify(mergeResult.details)}`
     );
@@ -1235,7 +1233,6 @@ async function mergeRecord(
   }
 
   return {
-    hasConflict: mergeResult.hasConflict,
     shouldDrop: Boolean(mergeResult.shouldDrop),
     hasError,
     isUnsupported,
@@ -1286,16 +1283,18 @@ async function getNonConversationRecords(): Promise<NonConversationRecordsResult
 async function processManifest(
   manifest: Proto.IManifestRecord,
   version: number
-): Promise<number> {
+): Promise<void> {
   if (!window.textsecure.messaging) {
     throw new Error('storageService.processManifest: We are offline!');
   }
 
   const remoteKeysTypeMap = new Map();
-  (manifest.keys || []).forEach(({ raw, type }: IManifestRecordIdentifier) => {
-    strictAssert(raw, 'Identifier without raw field');
-    remoteKeysTypeMap.set(Bytes.toBase64(raw), type);
-  });
+  (manifest.identifiers || []).forEach(
+    ({ raw, type }: IManifestRecordIdentifier) => {
+      strictAssert(raw, 'Identifier without raw field');
+      remoteKeysTypeMap.set(Bytes.toBase64(raw), type);
+    }
+  );
 
   const remoteKeys = new Set(remoteKeysTypeMap.keys());
   const localVersions = new Map<string, number | undefined>();
@@ -1407,14 +1406,13 @@ async function processManifest(
     });
   });
 
-  let conflictCount = 0;
   if (remoteOnlyRecords.size) {
     const fetchResult = await fetchRemoteRecords(
       version,
       Bytes.isNotEmpty(manifest.recordIkm) ? manifest.recordIkm : undefined,
       remoteOnlyRecords
     );
-    conflictCount = await processRemoteRecords(version, fetchResult);
+    await processRemoteRecords(version, fetchResult);
   }
 
   // Post-merge, if our local records contain any storage IDs that were not
@@ -1557,8 +1555,6 @@ async function processManifest(
         storyDistribution,
         shouldSave
       );
-
-      conflictCount += 1;
     }
 
     callLinkDbRecords.forEach(callLinkDbRecord => {
@@ -1627,11 +1623,7 @@ async function processManifest(
     });
   }
 
-  log.info(
-    `storageService.process(${version}): conflictCount=${conflictCount}`
-  );
-
-  return conflictCount;
+  log.info(`storageService.process(${version}): done`);
 }
 
 export type FetchRemoteRecordsResultType = Readonly<{
@@ -1767,7 +1759,7 @@ async function fetchRemoteRecords(
 async function processRemoteRecords(
   storageVersion: number,
   { decryptedItems, missingKeys }: FetchRemoteRecordsResultType
-): Promise<number> {
+): Promise<void> {
   const ITEM_TYPE = Proto.ManifestRecord.Identifier.Type;
   const droppedKeys = new Set<string>();
 
@@ -1822,7 +1814,7 @@ async function processRemoteRecords(
   });
 
   // Find remote contact records that:
-  // - Have `remote.pni` and have `remote.serviceE164`
+  // - Have `remote.pni` and have `remote.e164`
   // - Match local contact that has `aci`.
   const splitPNIContacts = new Array<MergeableItemType>();
   prunedStorageItems = prunedStorageItems.filter(item => {
@@ -1832,7 +1824,7 @@ async function processRemoteRecords(
       return true;
     }
 
-    if (!contact.serviceE164 || !contact.pni) {
+    if (!contact.e164 || !contact.pni) {
       return true;
     }
 
@@ -1914,13 +1906,7 @@ async function processRemoteRecords(
     );
 
     // Intentionally not awaiting
-    needProfileFetch.map(convo =>
-      drop(
-        convo.getProfiles().catch(() => {
-          /* nothing to do here; logging already happened */
-        })
-      )
-    );
+    needProfileFetch.map(convo => drop(convo.getProfiles()));
 
     // Collect full map of previously and currently unknown records
     const unknownRecords: Map<string, UnknownRecord> = new Map();
@@ -1936,8 +1922,6 @@ async function processRemoteRecords(
 
     const newRecordsWithErrors: Array<UnknownRecord> = [];
 
-    let conflictCount = 0;
-
     mergedRecords.forEach((mergedRecord: MergedRecordType) => {
       if (mergedRecord.isUnsupported) {
         unknownRecords.set(mergedRecord.storageID, {
@@ -1951,10 +1935,6 @@ async function processRemoteRecords(
           storageID: mergedRecord.storageID,
           storageVersion,
         });
-      }
-
-      if (mergedRecord.hasConflict) {
-        conflictCount += 1;
       }
 
       if (mergedRecord.shouldDrop) {
@@ -2016,12 +1996,6 @@ async function processRemoteRecords(
         `count=${redactedPendingDeletes.length}`
     );
     await window.storage.put('storage-service-pending-deletes', pendingDeletes);
-
-    if (conflictCount === 0) {
-      conflictBackOff.reset();
-    }
-
-    return conflictCount;
   } catch (err) {
     log.error(
       `storageService.process(${storageVersion}): ` +
@@ -2029,16 +2003,11 @@ async function processRemoteRecords(
       Errors.toLogFormat(err)
     );
   }
-
-  // conflictCount
-  return 0;
 }
 
 async function sync({
-  ignoreConflicts = false,
   reason,
 }: {
-  ignoreConflicts?: boolean;
   reason: string;
 }): Promise<Proto.ManifestRecord | undefined> {
   if (!window.storage.get('storageKey')) {
@@ -2057,9 +2026,7 @@ async function sync({
     log.warn('storageService.sync: fixed storage key');
   }
 
-  log.info(
-    `storageService.sync: starting... ignoreConflicts=${ignoreConflicts}, reason=${reason}`
-  );
+  log.info(`storageService.sync: starting... reason=${reason}`);
 
   let manifest: Proto.ManifestRecord | undefined;
   try {
@@ -2089,29 +2056,23 @@ async function sync({
     strictAssert(manifest.version != null, 'Manifest without version');
     const version = manifest.version?.toNumber() ?? 0;
 
+    await window.waitForEmptyEventQueue();
+
     log.info(
       `storageService.sync: updating to remoteVersion=${version} ` +
         `sourceDevice=${manifest.sourceDevice ?? '?'} from ` +
         `version=${localManifestVersion}`
     );
 
-    const conflictCount = await processManifest(manifest, version);
+    await processManifest(manifest, version);
 
-    log.info(
-      `storageService.sync: updated to version=${version} ` +
-        `conflicts=${conflictCount}`
-    );
+    log.info(`storageService.sync: updated to version=${version}`);
 
     await window.storage.put('manifestVersion', version);
     if (Bytes.isNotEmpty(manifest.recordIkm)) {
       await window.storage.put('manifestRecordIkm', manifest.recordIkm);
     } else {
       await window.storage.remove('manifestRecordIkm');
-    }
-
-    const hasConflicts = conflictCount !== 0;
-    if (hasConflicts && !ignoreConflicts) {
-      await upload({ fromSync: true, reason: `sync/${reason}` });
     }
 
     // We now know that we've successfully completed a storage service fetch
@@ -2188,11 +2149,7 @@ async function upload({
     // Syncing before we upload so that we repair any unknown records and
     // records with errors as well as ensure that we have the latest up to date
     // manifest.
-    // We are going to upload after this sync so we can ignore any conflicts
-    // that arise during the sync.
-    const ignoreConflicts = true;
     previousManifest = await sync({
-      ignoreConflicts,
       reason: `upload/${reason}`,
     });
   }
@@ -2232,10 +2189,20 @@ async function upload({
 let storageServiceEnabled = false;
 
 export function enableStorageService(): void {
+  if (storageServiceEnabled) {
+    return;
+  }
+
   storageServiceEnabled = true;
+  log.info('storageService.enableStorageService');
 }
 
-export function disableStorageService(): void {
+export function disableStorageService(reason: string): void {
+  if (!storageServiceEnabled) {
+    return;
+  }
+
+  log.info(`storageService.disableStorageService: ${reason}`);
   storageServiceEnabled = false;
 }
 
@@ -2324,23 +2291,12 @@ export async function reprocessUnknownFields(): Promise<void> {
         )
       );
 
-      const conflictCount = await processRemoteRecords(version, {
+      await processRemoteRecords(version, {
         decryptedItems: newRecords,
         missingKeys: new Set(),
       });
 
-      log.info(
-        `storageService.reprocessUnknownFields(${version}): done, ` +
-          `conflictCount=${conflictCount}`
-      );
-
-      const hasConflicts = conflictCount !== 0;
-      if (hasConflicts) {
-        log.info(
-          `storageService.reprocessUnknownFields(${version}): uploading`
-        );
-        await upload({ reason: 'reprocessUnknownFields/hasConflicts' });
-      }
+      log.info(`storageService.reprocessUnknownFields(${version}): done`);
     })
   );
 }
@@ -2366,7 +2322,8 @@ export const runStorageServiceSyncJob = debounce(
   ({ reason }: { reason: string }) => {
     if (!storageServiceEnabled) {
       log.info(
-        'storageService.runStorageServiceSyncJob: called before enabled'
+        `storageService.runStorageServiceSyncJob(${reason}): ` +
+          'called before enabled'
       );
       return;
     }

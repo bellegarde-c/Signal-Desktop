@@ -236,6 +236,7 @@ export class Provisioner {
     }
     log.info(`Provisioner: stopping, reason=${reason}`);
 
+    this.#sockets = [];
     this.#abortController?.abort();
     this.#abortController = undefined;
     this.#isRunning = false;
@@ -272,6 +273,11 @@ export class Provisioner {
 
         log.info(`${logId}: connected, refreshing in ${delay}ms`);
       } catch (error) {
+        // New loop is running
+        if (signal !== this.#abortController?.signal) {
+          return;
+        }
+
         // The only active socket has failed, notify subscribers and shutdown
         if (this.#sockets.length === 0) {
           if (error === TIMEOUT_ERROR || error instanceof ConnectTimeoutError) {
@@ -314,6 +320,11 @@ export class Provisioner {
         // eslint-disable-next-line no-await-in-loop
         await sleep(delay, signal);
       } catch (error) {
+        // New loop is running
+        if (signal !== this.#abortController?.signal) {
+          return;
+        }
+
         // Sleep aborted
         strictAssert(
           this.#subscribers.size === 0,
@@ -373,7 +384,6 @@ export class Provisioner {
                   isLinkAndSyncEnabled() &&
                   Bytes.isNotEmpty(envelope.ephemeralBackupKey),
               });
-              request.respond(200, 'OK');
             } else {
               log.warn(
                 'Provisioner.connect: unsupported request type',
@@ -385,6 +395,9 @@ export class Provisioner {
             log.error('Provisioner.connect: error', Errors.toLogFormat(error));
             resource.close();
           }
+        },
+        handleDisconnect() {
+          // No-op
         },
       },
       timeout
@@ -418,8 +431,8 @@ export class Provisioner {
     const url = linkDeviceRoute
       .toAppUrl({
         uuid,
-        pubKey: Bytes.toBase64(cipher.getPublicKey()),
-        capabilities: isLinkAndSyncEnabled() ? ['backup3'] : [],
+        pubKey: Bytes.toBase64(cipher.getPublicKey().serialize()),
+        capabilities: isLinkAndSyncEnabled() ? ['backup3', 'backup4'] : [],
       })
       .toString();
 
@@ -439,12 +452,17 @@ export class Provisioner {
     code: number,
     reason: string
   ): void {
-    log.info(`Provisioner: socket closed, code=${code}, reason=${reason}`);
-
     const index = this.#sockets.indexOf(resource);
     if (index === -1) {
+      log.info(
+        'Provisioner: ignoring socket closed, ' +
+          `code=${code}, reason=${reason}`
+      );
       return;
     }
+
+    const logId = `Provisioner.#handleClose(${index})`;
+    log.info(`${logId}: closed, code=${code}, reason=${reason}`);
 
     // Is URL from the socket displayed as a QR code?
     const isActive = index === this.#sockets.length - 1;
@@ -452,16 +470,20 @@ export class Provisioner {
 
     // Graceful closure
     if (state === SocketState.Done) {
+      log.info(`${logId}: closed gracefully`);
       return;
     }
 
     if (isActive) {
+      log.info(`${logId}: active socket closed`);
       this.#notify({
         kind:
           state === SocketState.WaitingForUuid
             ? EventKind.ConnectError
             : EventKind.EnvelopeError,
-        error: new Error(`Socket closed, code=${code}, reason=${reason}`),
+        error: new Error(
+          `Socket ${index} closed, code=${code}, reason=${reason}`
+        ),
       });
     }
   }

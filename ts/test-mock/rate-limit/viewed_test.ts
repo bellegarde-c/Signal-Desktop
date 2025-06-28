@@ -55,7 +55,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       contact,
       {
         whitelisted: true,
-        serviceE164: contact.device.number,
+        e164: contact.device.number,
         identityKey: contact.getPublicKey(ServiceIdKind.PNI).serialize(),
         pni: toUntaggedPni(contact.device.pni),
         givenName: 'Jamie',
@@ -66,7 +66,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
       contactB,
       {
         whitelisted: true,
-        serviceE164: contactB.device.number,
+        e164: contactB.device.number,
         identityKey: contactB.getPublicKey(ServiceIdKind.PNI).serialize(),
         pni: toUntaggedPni(contactB.device.pni),
         givenName: 'Kim',
@@ -122,7 +122,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     debug('Sending a message back to user - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -197,7 +197,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     debug('Sending a message back to ContactB - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -284,7 +284,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     debug('Sending a message back to user - will trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'Hi, good to hear from you!');
+      await typeIntoInput(input, 'Hi, good to hear from you!', '');
       await input.press('Enter');
     }
 
@@ -333,7 +333,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     debug('Sending another message - this time it should not trigger captcha!');
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'How have you been lately?');
+      await typeIntoInput(input, 'How have you been lately?', '');
       await input.press('Enter');
     }
 
@@ -355,7 +355,7 @@ describe('challenge/receipts', function (this: Mocha.Suite) {
     );
     {
       const input = await waitForEnabledComposer(window);
-      await typeIntoInput(input, 'You the cow guy from craigslist?');
+      await typeIntoInput(input, 'You the cow guy from craigslist?', '');
       await input.press('Enter');
     }
 

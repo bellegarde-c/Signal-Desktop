@@ -41,6 +41,9 @@
   "icu:Preferences__sent-media-quality__description": {
     "messageformat": "Sūtot augstas kvalitātes multivides saturu, tiks izmantots vairāk datu."
   },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "Ziedot Signal"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "Standarta"
   },
@@ -68,6 +71,9 @@
   "icu:unknownContact": {
     "messageformat": "Nezināma kontaktpersona"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "Nezināms"
+  },
   "icu:unknownGroup": {
     "messageformat": "Nezināma grupa"
   },
@@ -79,9 +85,6 @@
   },
   "icu:databaseError": {
     "messageformat": "Datu bāzes kļūda"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "Radusies datubāzes kļūda. Varat nokopēt kļūdas aprakstu un sazināties ar Signal atbalsta dienestu, lai novērstu problēmu. Ja nepieciešams izmantot Signal nekavējoties, varat dzēst savus datus un sākt no jauna.\n\nSazinieties ar atbalsta dienestu, apmeklējot vietni: {link}"
   },
   "icu:deleteAndRestart": {
     "messageformat": "Dzēst datus un restartēt"
@@ -202,6 +205,9 @@
   },
   "icu:menuSetupAsStandalone": {
     "messageformat": "Iestatīt kā savrupu ierīci"
+  },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
   },
   "icu:messageContextMenuButton": {
     "messageformat": "Citas darbības"
@@ -589,6 +595,9 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "Datubāzes kļūda: lūdzu, kopīgojiet savus žurnālus."
   },
   "icu:Toast--InvalidStorageServiceHeaders": {
     "messageformat": "Saņemta nederīga atbilde no servera. Lūdzu, nosūtiet mums atkļūdošanas žurnālus."
@@ -1262,6 +1271,9 @@
   "icu:Install__support-link": {
     "messageformat": "Nepieciešama palīdzība?"
   },
+  "icu:Preferences--header": {
+    "messageformat": "Iestatījumi"
+  },
   "icu:Preferences--phone-number": {
     "messageformat": "Tālruņa numurs"
   },
@@ -1670,9 +1682,6 @@
   "icu:notificationSenderInGroup": {
     "messageformat": "{sender} grupā {group}"
   },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} uz jūsu ziņu reaģēja ar {emoji}"
-  },
   "icu:notificationReactionMessage": {
     "messageformat": "{sender} reaģēja ar {emoji} uz: {message}"
   },
@@ -1828,12 +1837,6 @@
   },
   "icu:ConversationDetails--support-center": {
     "messageformat": "Atbalsta centrs"
-  },
-  "icu:ConversationDetails--contact-us": {
-    "messageformat": "Sazināties ar mums"
-  },
-  "icu:ConversationDetails--donate": {
-    "messageformat": "Ziedot Signal"
   },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "Skatīt drošības numuru"
@@ -2324,14 +2327,23 @@
   "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
     "messageformat": "Neviena emocijzīme netika atrasta"
   },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "Atlasīt {emojiName} ādas toni"
+  },
   "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
     "messageformat": "Mainīt ādas toņa preferences"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "Nospiediet un turiet, lai izvēlētos ādas toni"
   },
   "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
     "messageformat": "Izvēlēties noklusējuma ādas toni"
   },
   "icu:FunPanelEmojis__SectionTitle--SearchResults": {
     "messageformat": "Meklēšanas rezultāti"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "Šī ziņa"
   },
   "icu:FunPanelEmojis__SectionTitle--Recents": {
     "messageformat": "Nesen lietotie"
@@ -2360,6 +2372,9 @@
   "icu:FunPanelEmojis__SectionTitle--Flags": {
     "messageformat": "Karogi"
   },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "Pielāgot reakcijas"
+  },
   "icu:FunPanelStickers__SearchLabel": {
     "messageformat": "Meklēt uzlīmes"
   },
@@ -2377,6 +2392,9 @@
   },
   "icu:FunPanelStickers__SectionTitle--Recents": {
     "messageformat": "Nesen lietotie"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "Piedāvātās"
   },
   "icu:FunPanelStickers__SearchResults__EmptyHeading": {
     "messageformat": "Nav atrasta neviena uzlīme"
@@ -2460,13 +2478,13 @@
     "messageformat": "Tumšs ādas tonis"
   },
   "icu:FunButton__Label--FunPicker": {
-    "messageformat": "Add an Emoji, Sticker, or GIF"
+    "messageformat": "Pievienojiet emocijzīmi, uzlīmi vai GIF"
   },
   "icu:FunButton__Label--EmojiPicker": {
-    "messageformat": "Add an Emoji"
+    "messageformat": "Pievienot emocijzīmi"
   },
   "icu:FunButton__Label--StickerPicker": {
-    "messageformat": "Add a Sticker"
+    "messageformat": "Pievienot uzlīmi"
   },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "Atcelt"
@@ -2504,14 +2522,8 @@
   "icu:Message--update-signal": {
     "messageformat": "Aktualizēt Signālu"
   },
-  "icu:Message--tap-to-view-expired": {
-    "messageformat": "Skatīts"
-  },
   "icu:Message--tap-to-view--viewed": {
     "messageformat": "Skatīts"
-  },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "Multivide/multimediji"
   },
   "icu:Message--tap-to-view--media": {
     "messageformat": "Vienreiz skatāma multivide"
@@ -2521,12 +2533,6 @@
   },
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "Vienreiz skatāmās ziņas netiek saglabātas jūsu sarunu vēsturē."
-  },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "Skatīt attēlu"
-  },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "Skatīt video"
   },
   "icu:Message--tap-to-view--video": {
     "messageformat": "Vienreiz skatāms video"
@@ -2596,6 +2602,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "Atvērt uzlīmju izvēli"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "Atvērt GIF izvēli"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "Sākt balss piezīmes ierakstīšanu"
@@ -2951,6 +2960,36 @@
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, zero {{count,number} dalībnieki} one {1 dalībnieks} other {{count,number} dalībnieki}}"
   },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, zero {{memberList} (+{invitesCount,number} uzaicināti)} one {{memberList} (+{invitesCount,number} uzaicināts)} other {{memberList} (+{invitesCount,number} uzaicināti)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "Nav grupas dalībnieku"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "Citu grupas dalībnieku vēl nav"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} un jūs"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} un {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}, {member2} un jūs"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2} un {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, zero {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} citi</clickable>} one {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} cits</clickable>} other {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} citi</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, zero {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} citi</clickable>} one {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} cits</clickable>} other {{member1}, {member2}, {member3} un <clickable>{remainingCount,number} citi</clickable>}}"
+  },
   "icu:ConversationHero--review-carefully": {
     "messageformat": "Rūpīgi pārbaudiet"
   },
@@ -3101,11 +3140,29 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "Pamest"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "Beigt zvanu"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "Pamest sarunu"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "Mikrofons izslēgts"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "Mikrofons ieslēgts"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName} izslēdza jūsu skaņu."
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name} izslēdza skaņu {otherName}."
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "Jūs izslēdzāt skaņu {otherName}."
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "Jūs izslēdzāt savu skaņu citā ierīcē."
   },
   "icu:CallControls__LowerHandSuggestionToast": {
     "messageformat": "Nolaist roku?"
@@ -3199,9 +3256,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "Skats atjaunināts"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "Pamest sarunu"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "Ekrāna kopīgošana"
@@ -3357,7 +3411,7 @@
     "messageformat": "Nevar pievienoties grupai"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "Jūs nevarat pievienoties šai grupai, izmantojot grupas saiti, jo administrators jums to ir liedzis."
+    "messageformat": "Jūs nevarat pievienoties šai grupai, izmantojot grupas saiti, jo administrators jūs ir noņēmis no grupas. Sazinieties ar administratoru, lai pievienotos grupai atkārtoti."
   },
   "icu:GroupV2--join--prompt-with-approval": {
     "messageformat": "Lai varētu pievienoties šai grupai, šīs grupas administratoram ir jāapstiprina jūsu pieprasījums. Kad nosūtīsiet pieprasījumu pievienoties, grupas dalībnieki redzēs jūsu vārdu un fotoattēlu."
@@ -3917,6 +3971,12 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "Pieskarieties \"Ziedot Signal\" un abonējiet"
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "Jūsu profils ir pārvietots"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "Atveriet cilni Iestatījumi, lai skatītu un rediģētu savu profilu."
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "Notiek ziņu sinhronizēšana"
   },
@@ -3977,6 +4037,12 @@
   "icu:BackupMediaDownloadProgress__description-idle": {
     "messageformat": "Multivides lejupielāde turpināsies fonā"
   },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "Multivides atjaunošana ir apturēta"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "Gaida interneta savienojumu…"
+  },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "Apturēt pārsūtīšanu"
   },
@@ -4007,6 +4073,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "Atcelt pārsūtīšanu"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "Kontā nepieciešama darbība"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "Lai turpinātu izmantot šo kontu, tālrunī ir jāatver Signal. Ja tālrunī neatvērsiet programmu Signal, jūsu konts drīz tiks dzēsts. <learnMoreLink>Uzzināt vairāk</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "Nevar atjaunot multividi"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "Ierīces krātuvē nepietiek brīvas vietas. Lai atjaunotu multividi, atbrīvojiet {diskSpaceAmount} vietas krātuvē ."
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "Izvērst"
   },
@@ -4027,9 +4105,6 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "Nosūtīt rediģēto ziņu"
-  },
-  "icu:CompositionArea__FunButtonLabel": {
-    "messageformat": "Pievienojiet emocijzīmi, uzlīmi vai GIF"
   },
   "icu:CompositionArea__ConfirmGifSelection__Title": {
     "messageformat": "Vai aizvietot pielikumu?"
@@ -4257,7 +4332,7 @@
     "messageformat": "Pieprasiet, lai administrators apstiprina jaunu dalībnieku pievienošanos, izmantojot grupas saiti."
   },
   "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
-    "messageformat": "Copy signal.group link to keyboard"
+    "messageformat": "Kopēt Signal grupas saiti starpliktuvē"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "Pieprasījumi ({count,number})"
@@ -4465,12 +4540,6 @@
   },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "Padomi par drošību"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "Jums nav kopīgu grupu ar šo personu. Pirms piekrišanas rūpīgi pārskatiet pieprasījumus, lai izvairītos no nevēlamām ziņām."
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "Par ziņu pieprasījumiem"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "Rūpīgi pārskatiet pieprasījumus. Signal atrada citu kontaktu ar tādu pašu vārdu. <reviewRequestLink>Pārskatīt pieprasījumu</reviewRequestLink>"
@@ -4874,6 +4943,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "Jūsu profilu nevarēja atjaunināt. Lūdzu, mēģiniet vēlreiz."
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "Kopīgošana"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "Ziņot adminam"
   },
@@ -4906,6 +4978,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "Vispārīgi"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "Ziedot Signal"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "Izskats"
@@ -4943,6 +5018,36 @@
   "icu:Preferences__media-auto-download__description": {
     "messageformat": "Balss ziņas un uzlīmes vienmēr tiek lejupielādētas automātiski."
   },
+  "icu:Preferences__button--backups": {
+    "messageformat": "Rezerves kopijas"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "Iekšējā"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "Pārvaldīt"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "Izvēlēties mapi"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "Iestatīt"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "Vietējās rezerves kopijas"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "Eksportēt…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "Eksportēt lokāli šifrētu rezerves kopiju uz mapi un validēt to"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "Eksportējiet šifrētu rezerves kopiju atmiņā un palaidiet tās validācijas komplektu"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "Validēt"
+  },
   "icu:Preferences--lastSynced": {
     "messageformat": "Pēdējoreiz importēts {date}, plkst. {time}"
   },
@@ -4972,6 +5077,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "Bloķēti"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "Signal rezerves kopijas"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "Automātiska rezerves kopiju izveide, izmantojot Signal drošās un pilnībā šifrētās krātuves pakalpojumu. Sāciet savā tālrunī. <learnMoreLink>Uzzināt vairāk.</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "Izveidojiet ziņu vēstures rezerves kopiju, lai nezaudētu datus, nomainot tālruni vai pārinstalējot Signal."
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "Rezerves kopijas informācija"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "Teksta + visas multivides rezerves kopija"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "Jūsu abonements netika atrasts. Atjauniniet to, lai turpinātu izmantot Signal rezerves kopijas."
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, zero {Teksta + {mediaDayCount,number} dienu multivides rezerves kopija} one {Teksta + {mediaDayCount,number} dienas multivides rezerves kopija} other {Teksta + {mediaDayCount,number} dienu multivides rezerves kopija}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "Jums ir bezmaksas rezerves kopiju plāns"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "Atjaunojas {date}"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "Beigsies: {date}"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "Abonements atcelts"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "Varat pārvaldīt vai atcelt Signal rezerves kopiju abonementu savā tālrunī."
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "Varat pārvaldīt vai jaunināt Signal rezerves kopijas savā tālrunī."
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "Varat pārskatīt vai atjaunot savu Signal rezerves kopiju abonementu savā tālrunī."
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "Pēdējās rezerves kopijas izveide"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "Jūsu tālrunis"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "Rezerves kopijas izmērs"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "Darbvirsmas rezerves kopijas"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "Rezerves kopijas tiek šifrētas ar atslēgu un saglabātas jūsu datorā."
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "Izveidojiet pilnībā šifrētu rezerves kopiju, ko varēsiet atjaunot savā tālrunī. "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "Lai atjaunotu rezerves kopiju, instalējiet Signal no jauna. Atveriet lietotni un pieskarieties Atjaunot rezerves kopiju, pēc tam norādiet rezerves kopijas mapi. <learnMoreLink>Uzzināt vairāk.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "Izvēlēties mapi"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "Izvēlieties mapi sava datora krātuvē, kurā tiks saglabāta jūsu pilnībā šifrētā rezerves kopija."
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "Tālāk"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "Darīts"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "Rezerves kopijas atslēgas teksta lodziņš"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "Ievadīt atslēgu"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "Saglabājiet rezerves kopijas atslēgu"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "Šī atslēga ir nepieciešama, lai atgūtu jūsu kontu un datus. Noglabājiet šo atslēgu drošā vietā. Ja to pazaudēsiet, nevarēsiet atgūt savu kontu. <learnMoreLink>Uzziniet vairāk.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "Apstipriniet rezerves kopijas atslēgu"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "Ievadiet tikko ierakstīto rezerves kopijas atslēgu"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "Glabājiet atslēgu drošā vietā"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "Ja pazaudēsiet atslēgu, Signal nevarēs palīdzēt atjaunot rezerves kopiju. Glabājiet atslēgu drošā vietā un neizpaudiet to citiem."
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "Turpināt"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "Skatīt atslēgu vēlreiz"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "Rezerves kopiju mape"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "Mainīt"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "Kopēt starpliktuvē"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "Rezerves kopijas atslēga nokopēta"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "Skatīt atslēgu"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "Rezerves kopijas atslēga"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "Jūsu rezerves atslēga ir 64 ciparu kods, kas nepieciešams rezerves kopiju atjaunošanai"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "Citi rezerves kopijas veidi"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, zero {{num,number} kontakti} one {{num,number} kontakts} other {{num,number} kontakti}}"
@@ -5089,6 +5323,24 @@
   },
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "Restartēt"
+  },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "Programma"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "Ekrāna aizsardzība"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "Neļaut šajā datorā uzņemt Signal ekrānuzņēmumus privātuma nolūkos."
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "Vai atspējot ekrāna drošību?"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "Ja šī opcija ir atspējota, Microsoft Windows var uzņemt Signal ekrānuzņēmumus un izmantot tos funkcijām, kas, iespējams, nav privātas."
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "Atspējot"
   },
   "icu:DialogUpdate--version-available": {
     "messageformat": "Pieejams atjauninājums uz versiju {version}"
@@ -6186,6 +6438,9 @@
   "icu:ProfileNameWarningModal__list--item3--group": {
     "messageformat": "Neizpaudiet personas informāciju nepazīstamām personām"
   },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "Saglabāt pielikumus"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "Jaunumi"
   },
@@ -6217,16 +6472,10 @@
     "messageformat": "Nelielas izmaiņas, kļūdu labojumi un darbības uzlabojumi. Paldies, ka lietojat Signal!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.47--0": {
-    "messageformat": "Tagad zvana laikā varat paplašināt vietējā video priekšskatījumu, tā iegūstot jaunu skatu uz sevi un iespēju pareflektēt par to, kas esat."
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "Jaunā ziņu reakciju atlasītāja sadaļa tagad automātiski parāda visas emocijzīmju reakcijas, ko ziņa ir saņēmusi. Varat ātri pievienoties pārējiem un pievienot ierasto mirdzošo sirdi, vai arī sekot savai sirds balsij un pievienot anatomiskās sirds ikonu."
   },
-  "icu:WhatsNew__v7.48--0": {
-    "messageformat": "Mēs pievienojām ērtu saīsni, kas ļauj ātri nolaist roku, kolīdz sākat runāt Signal grupas zvana laikā."
-  },
-  "icu:WhatsNew__v7.49--0": {
-    "messageformat": "Ja Signal Android piesaistāt jaunu datoru un izvēlaties pārsūtīt ziņu vēsturi, tagad no savas galvenās ierīces varat arī atlasīt un izvēlēties pārsūtīt vecos pielikumus. Ienesiet pagātni tagadnē, ritinot atpakaļ ziņu vēsturi un klikšķinot lejupielādes ikonu. Pārsūtīšanas process ir pilnībā šifrēts un drošs."
-  },
-  "icu:WhatsNew__v7.50--0": {
-    "messageformat": "If you link a new Desktop on Signal Android and choose to transfer your message history, now you can also selectively transfer old attachments from your primary device too. Bring the past into the present by scrolling back in time and clicking on the download icon. As always, the transfer process is end-to-end encrypted and secure."
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "Šis atjauninājums iespējo GPU paātrinājumu operētājsistēmā Linux, lai uzlabotu veiktspēju un nodrošinātu vienmērīgāku video atskaņošanu datoros ar atbalstītu aparatūru."
   }
 }

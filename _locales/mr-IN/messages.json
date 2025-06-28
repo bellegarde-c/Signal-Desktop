@@ -41,6 +41,9 @@
   "icu:Preferences__sent-media-quality__description": {
     "messageformat": "मिडिया पाठवताना उच्च दर्जा हा पर्याय निवडल्यास अधिक डेटा वापरला जाईल."
   },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "Signal ला देणगी द्या"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "मानक"
   },
@@ -68,6 +71,9 @@
   "icu:unknownContact": {
     "messageformat": "अज्ञात संपर्क"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "अज्ञात"
+  },
   "icu:unknownGroup": {
     "messageformat": "अज्ञात गट"
   },
@@ -79,9 +85,6 @@
   },
   "icu:databaseError": {
     "messageformat": "डेटाबेस त्रुटी"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "डेटाबेस त्रुटी उद्भवली. आपण त्रुटी कॉपी करू आणि समस्येचे निराकरण करण्यासाठी Signal सपोर्टशी मदतीसाठी संपर्क करू शकता. आपणाला जर लगेचच Signal वापरण्याची गरज असल्यास, आपण आपला डेटा हटवू शकता आणि पुन्हा सुरूवात करू शकता.\n\n{link} :ला भेट देऊन सपोर्टशी संपर्क साधा"
   },
   "icu:deleteAndRestart": {
     "messageformat": "डेटा हटवा आणि पुन्हा सुरू करा"
@@ -202,6 +205,9 @@
   },
   "icu:menuSetupAsStandalone": {
     "messageformat": "स्टँडअलोन डिव्हाईस म्हणून सेटअप करा"
+  },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
   },
   "icu:messageContextMenuButton": {
     "messageformat": "अधिक क्रिया"
@@ -589,6 +595,9 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "डेटाबेसमध्ये त्रुटी : कृपया तुमचे लॉग्ज शेअर करा."
   },
   "icu:Toast--InvalidStorageServiceHeaders": {
     "messageformat": "साठवण सेवेकडून अवैध सर्व्हर प्रतिसाद मिळाला. कृपया तुमचे लॉग्ज शेअर करा."
@@ -1262,6 +1271,9 @@
   "icu:Install__support-link": {
     "messageformat": "मदत हवी?"
   },
+  "icu:Preferences--header": {
+    "messageformat": "सेटिंग"
+  },
   "icu:Preferences--phone-number": {
     "messageformat": "फोन नंबर"
   },
@@ -1670,11 +1682,8 @@
   "icu:notificationSenderInGroup": {
     "messageformat": "{group}मध्ये{sender}"
   },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} ने आपल्या संदेशावर {emoji} प्रतिक्रिया दिली"
-  },
   "icu:notificationReactionMessage": {
-    "messageformat": "{sender} ने {message} वर प्रतिक्रिया दिली: {emoji}"
+    "messageformat": "{sender} ने {emoji} अशी प्रतिक्रिया {message} वर दिली"
   },
   "icu:sendFailed": {
     "messageformat": "पाठविणे अयशस्वी"
@@ -1828,12 +1837,6 @@
   },
   "icu:ConversationDetails--support-center": {
     "messageformat": "समर्थन केंद्र"
-  },
-  "icu:ConversationDetails--contact-us": {
-    "messageformat": "आमच्याशी संपर्क साधा"
-  },
-  "icu:ConversationDetails--donate": {
-    "messageformat": "Signal ला देणगी द्या"
   },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "सुरक्षितता क्रमांक पहा"
@@ -2324,14 +2327,23 @@
   "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
     "messageformat": "कुठलेही ईमोजी आढळले नाही"
   },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "{emojiName} साठी त्वचेचा रंग निवडा"
+  },
   "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
     "messageformat": "त्वचेच्या रंगाचे प्राधान्ये बदला"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "त्वचेचा रंग निवडण्यासाठी जास्त वेळ दाबून ठेवा"
   },
   "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
     "messageformat": "तुमच्या त्वचेचा रंग निवडा"
   },
   "icu:FunPanelEmojis__SectionTitle--SearchResults": {
     "messageformat": "शोध परिणाम"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "हा संदेश"
   },
   "icu:FunPanelEmojis__SectionTitle--Recents": {
     "messageformat": "अलीकडील वापरलेले"
@@ -2360,6 +2372,9 @@
   "icu:FunPanelEmojis__SectionTitle--Flags": {
     "messageformat": "झेंडे"
   },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "प्रतिक्रिया सानुकूलित करा"
+  },
   "icu:FunPanelStickers__SearchLabel": {
     "messageformat": "स्टिकर शोधा"
   },
@@ -2377,6 +2392,9 @@
   },
   "icu:FunPanelStickers__SectionTitle--Recents": {
     "messageformat": "अलीकडील वापरलेले"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "वैशिष्ट्यीकृत"
   },
   "icu:FunPanelStickers__SearchResults__EmptyHeading": {
     "messageformat": "कुठलेही स्टिकर आढळले नाही"
@@ -2460,25 +2478,25 @@
     "messageformat": "गडद वर्ण"
   },
   "icu:FunButton__Label--FunPicker": {
-    "messageformat": "Add an Emoji, Sticker, or GIF"
+    "messageformat": "ईमोजी, स्टिकर किंवा GIF समाविष्ट करा"
   },
   "icu:FunButton__Label--EmojiPicker": {
-    "messageformat": "Add an Emoji"
+    "messageformat": "एक ईमोजी समाविष्ट करा"
   },
   "icu:FunButton__Label--StickerPicker": {
-    "messageformat": "Add a Sticker"
+    "messageformat": "स्टिकर जोडा"
   },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "रद्द करा"
   },
   "icu:Message__reaction-emoji-label--you": {
-    "messageformat": "आपण {emoji} ने प्रतिक्रिया दिली"
+    "messageformat": "तुम्ही {emoji}ने प्रतिक्रिया दिली"
   },
   "icu:Message__reaction-emoji-label--single": {
-    "messageformat": "{title} ने {emoji} सह प्रतिक्रिया दिली"
+    "messageformat": "{title}ने {emoji} सह प्रतिक्रिया दिली"
   },
   "icu:Message__reaction-emoji-label--many": {
-    "messageformat": "{count, plural, one {{count,number} लोकांनी {emoji} सह प्रतिक्रिया दिली} other {{count,number} लोकांनी {emoji} सह प्रतिक्रिया दिली}}"
+    "messageformat": "{count, plural, one {{count,number} लोकांनी {emoji}सह प्रतिक्रिया दिली} other {{count,number} लोकांनी {emoji}सह प्रतिक्रिया दिली}}"
   },
   "icu:Message__role-description": {
     "messageformat": "संदेश"
@@ -2504,14 +2522,8 @@
   "icu:Message--update-signal": {
     "messageformat": "Signal अद्यतनित करा"
   },
-  "icu:Message--tap-to-view-expired": {
-    "messageformat": "बघितले"
-  },
   "icu:Message--tap-to-view--viewed": {
     "messageformat": "बघितले"
-  },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "मीडिया"
   },
   "icu:Message--tap-to-view--media": {
     "messageformat": "एकदा मिडिया पहा"
@@ -2521,12 +2533,6 @@
   },
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "आपल्या चॅट्स इतिहासामध्ये एकदा-पहा संदेश संग्रहित केले जाणार नाहीत."
-  },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "फोटो बघा"
-  },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "व्हिडिओ बघा"
   },
   "icu:Message--tap-to-view--video": {
     "messageformat": "एकदा व्हिडिओ पहा"
@@ -2596,6 +2602,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "स्टिकर निवडणारा उघडा"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "GIF वेचक उघडा"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "व्हॉईस टिप रेकॉर्ड करणे चालू करा"
@@ -2951,6 +2960,36 @@
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, one {1 सदस्य} other {{count,number} सदस्य}}"
   },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, one {{memberList} (+{invitesCount,number} निमंत्रित)} other {{memberList} (+{invitesCount,number} निमंत्रित)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "एकही गट सदस्य नाही"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "अद्याप इतर कोणतेही गट सदस्य नाहीत"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} आणि तुम्ही"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} आणि {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}, {member2}, आणि तुम्ही"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2}, आणि {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3}, आणि <clickable>आणखी{remainingCount,number} </clickable>} other {{member1}, {member2}, {member3}, आणि <clickable>आणखी{remainingCount,number} </clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, one {{member1}, {member2}, {member3}, आणि <clickable>आणखी{remainingCount,number} </clickable>} other {{member1}, {member2}, {member3}, आणि <clickable>आणखी{remainingCount,number} </clickable>}}"
+  },
   "icu:ConversationHero--review-carefully": {
     "messageformat": "काळजीपूर्वक पुनरावलोकन करा"
   },
@@ -3101,11 +3140,29 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "सोडा"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "कॉल संपवा"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "कॉल सोडा"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "माईक बंद आहे"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "माईक चालू आहे"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName}ने तुम्हाला म्युट केले."
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name}ने {otherName}ला म्युट केले."
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "तुम्ही {otherName}ला म्युट केलेत."
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "तुम्ही दुसऱ्या डिव्हाईसवरून स्वतःला म्युट केलेत."
   },
   "icu:CallControls__LowerHandSuggestionToast": {
     "messageformat": "आपल्याला हात खाली करायचा आहे?"
@@ -3199,9 +3256,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "दृश्य अद्यतनित केले"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "कॉल सोडा"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "आपली स्क्रीन सामायिक करा"
@@ -3357,7 +3411,7 @@
     "messageformat": "गटात सामील होऊ शकत नाही"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "ॲडमिनने आपल्याला काढून टाकले असल्यामुळे आपण ग्रुप लिंकद्वारे या ग्रुपमध्ये सामील होऊ शकत नाही."
+    "messageformat": "ॲडमिन ने आपल्याला काढून टाकले असल्यामुळे आपण ग्रुप लिंकद्वारे या ग्रुपमध्ये सामील होऊ शकत नाही. ग्रूपमध्ये पुन्हा सामील होण्यासाठी एखाद्या ॲडमिन शी संंपर्क साधा."
   },
   "icu:GroupV2--join--prompt-with-approval": {
     "messageformat": "आपण या गटामध्ये सामील होण्यापूर्वी या गटाच्या प्रशासकाने आपली विनंती मंजूर करणे आवश्यक आहे. आपण सामील होण्याची विनंती करता तेव्हा आपले नाव आणि फोटो सदस्यांसह सामायिक केला जाईल."
@@ -3917,6 +3971,12 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "\"Signal ला देणगी द्या\" वर टॅप करा आणि सदस्यत्व घ्या"
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "तुमच्या प्रोफाईलची जागा हलवली आहे"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "तुमची प्रोफाईल पाहण्यासाठी आणि संपादित करण्यासाठी सेटिंग्ज टॅब उघडा."
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "संदेश समक्रमित करत आहे"
   },
@@ -3977,6 +4037,12 @@
   "icu:BackupMediaDownloadProgress__description-idle": {
     "messageformat": "मीडिया मागे डाऊनलोड होत राहील"
   },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "मिडीया पुर्नस्थापित करणे थांबवले"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "इंटरनेट कनेक्शनची वाट पाहात आहे..."
+  },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "हस्तांतरणाला विराम द्या"
   },
@@ -4007,6 +4073,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "हस्तांतरण रद्द करा"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "खात्यावर कृती करणे आवश्यक आहे"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "तुम्ही तुमच्या फोनवर Signal उघडून हे खाते वापरत राहणे आवश्यक आहे. जर तुम्ही तुमच्या फोनवर Signal उघडले नाहीत, तर तुमचे खाते लवकरच हटवले जाईल. <learnMoreLink>अधिक जाणून घ्या</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "मिडीया पुर्नस्थापित करू शकत नाही"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "आपल्या डिव्हाइसमध्ये पुरेशी मोकळी जागा नाही. आपला मिडीया पुर्नस्थापित करण्यासाठी {diskSpaceAmount} जागा मोकळी करा."
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "विस्तारित करा"
   },
@@ -4027,9 +4105,6 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "संपादित केलेले संदेश पाठवा"
-  },
-  "icu:CompositionArea__FunButtonLabel": {
-    "messageformat": "ईमोजी, स्टिकर किंवा GIF समाविष्ट करा"
   },
   "icu:CompositionArea__ConfirmGifSelection__Title": {
     "messageformat": "अटॅचमेंट बदलायची का?"
@@ -4257,7 +4332,7 @@
     "messageformat": "गट लिंक द्वारे सामील होण्यासाठी नवीन सदस्यांना प्रशासकाने स्वीकार करणे आवश्यक आहे"
   },
   "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
-    "messageformat": "Copy signal.group link to keyboard"
+    "messageformat": "signal.group लिंक क्लिपबोर्डवर कॉपी करा"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "विनंत्या ({count,number})"
@@ -4465,12 +4540,6 @@
   },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "सुरक्षिततेच्या टीपा"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "आपले या व्यक्तीसोबत कुठलेही गट समाईक नाहीत. नको असलेले संदेश टाळण्यासाठी विनंत्याचे काळजीपूर्वक पुनरावलोकन करा."
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "संदेश विनंत्यांबद्दल"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "विनंत्यांचे काळजीपूर्वक पुनरावलोकन करा. Signal ला त्याच नावाचा दुसरा संपर्क आढळला. <reviewRequestLink>विनंतीचे पुनरावलोकन करा</reviewRequestLink>"
@@ -4874,6 +4943,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "आपली प्रोफाईल अद्यतनित केली जाऊ शकली नाही. कृपया पुन्हा प्रयत्न करा."
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "शेअर करा"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "प्रशासकाला संदेश पाठवा"
   },
@@ -4906,6 +4978,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "सामान्य"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "Signal ला देणगी द्या"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "स्वरूप"
@@ -4943,6 +5018,36 @@
   "icu:Preferences__media-auto-download__description": {
     "messageformat": "व्हॉईस संदेश आणि स्टिकर नेहमी आपोआप डाऊनलोड होतात."
   },
+  "icu:Preferences__button--backups": {
+    "messageformat": "बॅकअप"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "अंतर्गत"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "व्यवस्थापित करा"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "फोल्डर निवडा"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "सेट अप"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "स्थानिक बॅकअप्स"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "एक्सपोर्ट…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "स्थानिक कूटबद्ध केलेले बॅकअप एका फोल्डरमध्ये एक्सपोर्ट करा आणि तो प्रमाणित करा"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "कूटबद्ध केलेला बॅकअप मेमरीमध्ये पाठवा आणि त्यावर व्हॅलिडेशन सूट चालवा"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "व्हॅलिडेट करा"
+  },
   "icu:Preferences--lastSynced": {
     "messageformat": "{date} {time} रोजी शेवटची आयात"
   },
@@ -4972,6 +5077,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "अवरोधित केले"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "Signal बॅकअप"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "ऑटोमॅटिक बॅकअप्स, Signal च्या सुरक्षित, एण्ड-टू-एण्ड कूटबद्ध केलेल्या संग्रहण सेवेसह. तुमच्या फोनवर सुरुवात करा. <learnMoreLink>अधिक जाणून घ्या.</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "आपल्या संदेश इतिहास चा बॅकअप घ्या ज्यामुळे आपण जेव्हा नवीन फोन घ्याल किंवा Signal पुन्हा इन्स्टॉल कराल तेव्हा आपण कधीही आपला डेटा गमावणार नाही."
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "बॅकअप तपशील"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "मजकूर + सर्व मिडीया बॅकअप"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "तुमचे सदस्यत्व सापडले नाही. Signal बॅकअप्स वापरत राहण्यासाठी रीन्यू करा."
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, one {मजकूर + {mediaDayCount,number} दिवसाचा मिडीया बॅकअप} other {मजकूर + {mediaDayCount,number} दिवसांचा मिडीया बॅकअप}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "आपला बॅकअप प्लॅन मोफत आहे"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "{date} नी नूतनीकरण केले"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "{date} ला कालबाह्य"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "सदस्यत्व रद्द केले"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "तुम्ही तुमच्या फोनवरून तुमचे Signal बॅकअप्स सदस्यत्व व्यवस्थापित करू शकता किंवा रद्द करू शकता."
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "तुम्ही तुमच्या फोनवरून तुमचे Signal बॅकअप्स व्यवस्थापित करू शकता किंवा अद्ययावत करू शकता."
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "तुम्ही तुमच्या फोनवरून तुमचे Signal बॅकअप्स सदस्यत्व व्यवस्थापित करू शकता किंवा रीन्यू करू शकता."
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "शेवटचा बॅकअप"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "तुमचा फोन"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "बॅकअप आकार"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "डेस्कटॉप बॅकअप्स"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "बॅकअप्स एका की सह कूटबद्ध केलेले असतात आणि तुमच्या कंप्युटरवर साठवले जातात."
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "एक एण्ड-टू-एण्ड कूटबद्ध केलेले बॅकअप तयार करा जो तुम्ही तुमच्या फोनवर रीस्टोर करू शकता. "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "बॅकअप रीस्टोर करण्यासाठी, Signal ची नवी आवृत्ती स्थापन करा. ॲप उघडा आणि रीस्टोर बॅकअप वर टॅप करा, मग बॅकअप फोल्डर शोधा. <learnMoreLink>अधिक जाणून घ्या.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "एक फोल्डर निवडा"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "तुमचा एण्ड-टू-एण्ड कूटबद्ध केलेला बॅकअप साठवण्यासाठी तुमच्या कंप्युटरच्या साठवणीतील एक फोल्डर निवडा."
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "पुढे"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "ठीक"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "बॅकअप की मजकुराचा रकाना"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "की प्रविष्ट करा"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "आपली बॅकअप कि नोंद करा"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "ही की आपले अकाऊंट आणि डेटा पुर्नप्राप्त करण्यासाठी आवश्यक आहे. ही की कोठेतरी सुरक्षित ठेवा. आपण जी ती गहाळ केल्यास, आपण आपले अकाऊंट पुर्नप्राप्त करू शकणार नाही. <learnMoreLink>अधिक जाणा.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "तुमची बॅकअप की निश्चित करा"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "तुम्ही नुकतीच नोंदवलेली बॅकअप की प्रविष्ट करा"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "आपली की सुरक्षित ठेवा"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "आपण जर आपली की गमावल्यास आपणाला आपला बॅकअप पुनर्संचयित करण्यात Signal आपणाला मदत करू शकणार नाही. त्याला कोठेतरी सुरक्षित आणि संरक्षित संग्रहित करून ठेवा, आणि ती इतरांसोबत शेअर करू नका."
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "सुरू ठेवा"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "की पुन्हा पहा"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "बॅकअप फोल्डर"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "बदला"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "क्लिपबोर्ड वर कॉपी करा"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "बॅकअप की कॉपी केली"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "की पहा"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "बॅकअप की"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "तुमची बॅकअप की एक 64-अंकी कोड असतो जो तुमचा बॅकअप रीस्टोर करण्यासाठी वापरला जातो"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "बॅकअप घेण्याचे इतर मार्ग"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, one {1 संपर्क} other {{num,number} संपर्क}}"
@@ -5089,6 +5323,24 @@
   },
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "पुन्हा सुरु करा"
+  },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "ॲप्लिकेशन"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "स्क्रीन सुरक्षा"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "वाढीव गोपनीयतेसाठी या कंप्युटरवर Signalचे स्क्रीनशॉट काढता येण्याची सोय बंद करा."
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "स्क्रीन सुरक्षितता निष्क्रिय करायची?"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "जर निष्क्रिय केली, तर यामुळे Microsoft Windows ला Signal चे स्क्रीनशॉट घेता येतील आणि खासगी नसणाऱ्या वैशिष्ट्यांसाठी वापरता येतील."
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "अक्षम करा"
   },
   "icu:DialogUpdate--version-available": {
     "messageformat": "{version} वर अपडेट आवृती उपलब्ध आहे"
@@ -5802,7 +6054,7 @@
     "messageformat": "स्टोरीला प्रतिक्रिया दिली"
   },
   "icu:Quote__story-reaction-notification--incoming": {
-    "messageformat": "आपल्या स्टोरी वर {emoji} प्रतिक्रिया दिली"
+    "messageformat": "{emoji} अशी प्रतिक्रिया तुमच्या स्टोरीवर दिली"
   },
   "icu:Quote__story-reaction-notification--outgoing": {
     "messageformat": "आपण {name} कडील स्टोरी वर {emoji} प्रतिक्रिया दिली"
@@ -6186,6 +6438,9 @@
   "icu:ProfileNameWarningModal__list--item3--group": {
     "messageformat": "तुम्ही ओळखत नसलेल्या लोकांना तुमची वैयक्तिक माहिती देऊ नका"
   },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "अटॅचमेंट्स जतन करा"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "नवीन काय आहे"
   },
@@ -6217,16 +6472,10 @@
     "messageformat": "लहान ट्विक्स, दोष निवारण, आणि कामगिरी सुधारणा. Signal वापरल्याबद्दल आभारी आहोत!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.47--0": {
-    "messageformat": "आता तुम्ही कॉलदरम्यान स्वतःकडे नीट पाहता यावे यासाठी तुमचे स्थानिक व्हिडिओ पूर्वावलोकन मोठे करू शकता."
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "संदेश प्रतिक्रिया वेचकामधील एक नवीन विभाग आपोआप एका संदेशाला मिळालेल्या सर्व इमोजी प्रतिक्रिया दाखवतो. आता तुम्हीसुद्धा इतरांप्रमाणेच नेहमीचा चमकणारा हार्ट इमोजी समाविष्ट करा किंवा, तुम्ही तुमच्या स्वतःच्या मर्जीनुसार दुसरा एखादा इमोजी वापरू शकता."
   },
-  "icu:WhatsNew__v7.48--0": {
-    "messageformat": "तुम्ही Signal गट कॉलवर बोलायला सुरुवात केल्यावर तुम्हाला हात लगेच खाली घेता यावा यासाठी आम्ही एक सोयीचा शॉर्टकट जोडला आहे. हे आमचे या प्रकाशनातील सगळ्यांत आवडते वैशिष्ट्य आहे."
-  },
-  "icu:WhatsNew__v7.49--0": {
-    "messageformat": "जर तुम्ही Signal ॲन्ड्राइड वर नवीन डेस्कटॉप जोडलात आणि तुमचा संदेश इतिहास हस्तांतरण करायचे ठरवलेत, तर तुम्ही तुमच्या प्रायमरी डिव्हाईसवरील ठरावीक जुनी अटॅचमेंट्ससुद्धा हस्तांतरण करू शकता. स्क्रोल करून भूतकाळात प्रवास करा आणि डाऊनलोड आयकन वर क्लिक करून हवा तो भूतकाळ वर्तमानात आणा. नेहमीप्रमाणेच, हस्तांतरण प्रक्रिया एंड-टू-एंड कूटबद्ध केलेली आहे आणि सुरक्षित आहे."
-  },
-  "icu:WhatsNew__v7.50--0": {
-    "messageformat": "If you link a new Desktop on Signal Android and choose to transfer your message history, now you can also selectively transfer old attachments from your primary device too. Bring the past into the present by scrolling back in time and clicking on the download icon. As always, the transfer process is end-to-end encrypted and secure."
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "हे अद्यतन समर्थित हार्डवेअर वर सुधारित कामगिरीसाठी आणि व्हिडिओ प्लेबॅक अधिक सुरळीत करण्यासाठी Linux वर GPU त्वरण सक्रिय करते."
   }
 }

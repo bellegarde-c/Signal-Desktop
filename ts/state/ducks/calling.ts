@@ -2,11 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ThunkAction, ThunkDispatch } from 'redux-thunk';
-import {
-  hasScreenCapturePermission,
-  openSystemPreferences,
-} from 'mac-screen-capture-permissions';
-import { isSupported as isNativeMacScreenShareSupported } from '@indutny/mac-screen-share';
 import { omit } from 'lodash';
 import type { ReadonlyDeep } from 'type-fest';
 import {
@@ -22,6 +17,7 @@ import { missingCaseError } from '../../util/missingCaseError';
 import { drop } from '../../util/drop';
 import {
   DesktopCapturer,
+  isNativeMacScreenShareSupported,
   type DesktopCapturerBaton,
 } from '../../util/desktopCapturer';
 import { calling } from '../../services/calling';
@@ -33,6 +29,7 @@ import type {
   ChangeIODevicePayloadType,
   GroupCallVideoRequest,
   MediaDeviceSettings,
+  ObservedRemoteMuteType,
   PresentedSource,
   PresentableSource,
 } from '../../types/Calling';
@@ -196,6 +193,8 @@ export type ActiveCallStateType = {
   showNeedsScreenRecordingPermissionsWarning?: boolean;
   showParticipantsList: boolean;
   suggestLowerHand?: boolean;
+  mutedBy?: number;
+  observedRemoteMute?: ObservedRemoteMuteType;
   reactions?: ActiveCallReactionsType;
 };
 export type WaitingCallStateType = ReadonlyDeep<{
@@ -360,12 +359,30 @@ export type RemoveClientType = ReadonlyDeep<{
   demuxId: number;
 }>;
 
-export type SetLocalAudioType = ReadonlyDeep<{
-  enabled: boolean;
-}>;
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
+export type SetLocalAudioType = (
+  payload?: ReadonlyDeep<{
+    enabled: boolean;
+  }>
+) => void;
 
-export type SetLocalVideoType = ReadonlyDeep<{
-  enabled: boolean;
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
+export type SetLocalVideoType = (
+  payload: ReadonlyDeep<{
+    enabled: boolean;
+  }>
+) => void;
+
+// eslint-disable-next-line local-rules/type-alias-readonlydeep
+export type SetMutedByType = (
+  payload: ReadonlyDeep<{
+    mutedBy: number;
+  }>
+) => void;
+
+export type ObservedRemoteMuteDucksType = ReadonlyDeep<{
+  source: number;
+  target: number;
 }>;
 
 export type SetGroupCallVideoRequestType = ReadonlyDeep<{
@@ -656,6 +673,8 @@ const SELECT_PRESENTING_SOURCE = 'calling/SELECT_PRESENTING_SOURCE';
 const SEND_GROUP_CALL_REACTION = 'calling/SEND_GROUP_CALL_REACTION';
 const SET_LOCAL_AUDIO_FULFILLED = 'calling/SET_LOCAL_AUDIO_FULFILLED';
 const SET_LOCAL_VIDEO_FULFILLED = 'calling/SET_LOCAL_VIDEO_FULFILLED';
+const SET_MUTED_BY = 'calling/SET_MUTED_BY';
+const OBSERVED_REMOTE_MUTE = 'calling/OBSERVED_REMOTE_MUTE';
 const SET_OUTGOING_RING = 'calling/SET_OUTGOING_RING';
 const SET_PRESENTING = 'calling/SET_PRESENTING';
 const SET_PRESENTING_SOURCES = 'calling/SET_PRESENTING_SOURCES';
@@ -905,12 +924,22 @@ type SelectPresentingSourceActionType = ReadonlyDeep<{
 
 type SetLocalAudioActionType = ReadonlyDeep<{
   type: 'calling/SET_LOCAL_AUDIO_FULFILLED';
-  payload: SetLocalAudioType;
+  payload: Parameters<SetLocalAudioType>[0];
 }>;
 
 type SetLocalVideoFulfilledActionType = ReadonlyDeep<{
   type: 'calling/SET_LOCAL_VIDEO_FULFILLED';
-  payload: SetLocalVideoType;
+  payload: Parameters<SetLocalVideoType>[0];
+}>;
+
+type SetMutedByActionType = ReadonlyDeep<{
+  type: 'calling/SET_MUTED_BY';
+  payload: Parameters<SetMutedByType>[0];
+}>;
+
+type ObservedRemoteMuteActionType = ReadonlyDeep<{
+  type: 'calling/OBSERVED_REMOTE_MUTE';
+  payload: ObservedRemoteMuteDucksType;
 }>;
 
 type SetPresentingFulfilledActionType = ReadonlyDeep<{
@@ -1017,6 +1046,8 @@ export type CallingActionType =
   | SetCapturerBatonActionType
   | SetLocalAudioActionType
   | SetLocalVideoFulfilledActionType
+  | SetMutedByActionType
+  | ObservedRemoteMuteActionType
   | SetPresentingSourcesActionType
   | SetOutgoingRingActionType
   | StartDirectCallActionType
@@ -1371,7 +1402,7 @@ function getPresentingSources(): ThunkAction<
     const needsPermission =
       platform === 'darwin' &&
       !isNativeMacScreenShareSupported &&
-      !hasScreenCapturePermission();
+      (await window.IPC.getMediaAccessStatus('screen')) === 'denied';
 
     const capturer = new DesktopCapturer({
       i18n,
@@ -1651,7 +1682,7 @@ function hangUpActiveCall(
 
     const { conversationId } = activeCall;
 
-    calling.hangup(conversationId, reason);
+    calling.hangup({ conversationId, reason });
 
     dispatch({
       type: HANG_UP,
@@ -1757,7 +1788,7 @@ function openSystemPreferencesAction(): ThunkAction<
   never
 > {
   return () => {
-    void openSystemPreferences();
+    drop(window.IPC.openSystemMediaPermissions('screenCapture'));
   };
 }
 
@@ -1907,7 +1938,28 @@ function setRendererCanvas(
 }
 
 function setLocalAudio(
-  payload: SetLocalAudioType
+  payload?: Parameters<SetLocalAudioType>[0]
+): ThunkAction<void, RootStateType, unknown, SetLocalAudioActionType> {
+  return (dispatch, getState) => {
+    const { activeCallState } = getState().calling;
+    if (!activeCallState || activeCallState.state !== 'Active') {
+      log.warn('Trying to set local audio when no call is active');
+      return;
+    }
+
+    const enabled = payload?.enabled ?? !activeCallState.hasLocalAudio;
+    calling.setOutgoingAudio(activeCallState.conversationId, enabled);
+    dispatch({
+      type: SET_LOCAL_AUDIO_FULFILLED,
+      payload: {
+        enabled,
+      },
+    });
+  };
+}
+
+function setLocalAudioRemoteMuted(
+  payload: Parameters<SetMutedByType>[0]
 ): ThunkAction<void, RootStateType, unknown, SetLocalAudioActionType> {
   return (dispatch, getState) => {
     const activeCall = getActiveCall(getState().calling);
@@ -1916,17 +1968,20 @@ function setLocalAudio(
       return;
     }
 
-    calling.setOutgoingAudio(activeCall.conversationId, payload.enabled);
+    calling.setOutgoingAudioRemoteMuted(
+      activeCall.conversationId,
+      payload?.mutedBy
+    );
 
     dispatch({
       type: SET_LOCAL_AUDIO_FULFILLED,
-      payload,
+      payload: { enabled: false },
     });
   };
 }
 
 function setLocalVideo(
-  payload: SetLocalVideoType
+  payload: Parameters<SetLocalVideoType>[0]
 ): ThunkAction<void, RootStateType, unknown, SetLocalVideoFulfilledActionType> {
   return async (dispatch, getState) => {
     const activeCall = getActiveCall(getState().calling);
@@ -1935,7 +1990,7 @@ function setLocalVideo(
       return;
     }
 
-    let enabled: boolean;
+    let enabled = payload?.enabled;
     if (await requestCameraPermissions()) {
       if (
         isGroupOrAdhocCallState(activeCall) ||
@@ -1943,14 +1998,13 @@ function setLocalVideo(
       ) {
         await calling.setOutgoingVideo(
           activeCall.conversationId,
-          payload.enabled
+          Boolean(payload?.enabled)
         );
-      } else if (payload.enabled) {
+      } else if (payload?.enabled) {
         await calling.enableLocalCamera(activeCall.callMode);
       } else {
         calling.disableLocalVideo();
       }
-      ({ enabled } = payload);
     } else {
       enabled = false;
     }
@@ -1958,9 +2012,42 @@ function setLocalVideo(
     dispatch({
       type: SET_LOCAL_VIDEO_FULFILLED,
       payload: {
-        ...payload,
-        enabled,
+        enabled: Boolean(enabled),
       },
+    });
+  };
+}
+
+function setMutedBy(
+  payload: Parameters<SetMutedByType>[0]
+): ThunkAction<void, RootStateType, unknown, SetMutedByActionType> {
+  return (dispatch, getState) => {
+    const activeCall = getActiveCall(getState().calling);
+    if (!activeCall) {
+      log.warn('Trying to set muted by when no call is active');
+      return;
+    }
+
+    dispatch({
+      type: SET_MUTED_BY,
+      payload,
+    });
+  };
+}
+
+function onObservedRemoteMute(
+  payload: ObservedRemoteMuteDucksType
+): ThunkAction<void, RootStateType, unknown, ObservedRemoteMuteActionType> {
+  return (dispatch, getState) => {
+    const activeCall = getActiveCall(getState().calling);
+    if (!activeCall) {
+      log.warn('Trying to record remote mute when no call is active');
+      return;
+    }
+
+    dispatch({
+      type: OBSERVED_REMOTE_MUTE,
+      payload,
     });
   };
 }
@@ -2012,7 +2099,6 @@ function _setPresenting(
 
     await calling.setPresenting({
       conversationId: activeCall.conversationId,
-      hasLocalVideo: activeCallState.hasLocalVideo,
       mediaStream,
       source: sourceToPresent,
       callLinkRootKey: rootKey,
@@ -2764,6 +2850,7 @@ export const actions = {
   handleCallLinkDelete,
   joinedAdhocCall,
   leaveCurrentCallAndStartCallingLobby,
+  onObservedRemoteMute,
   onOutgoingVideoCallInConversation,
   onOutgoingAudioCallInConversation,
   openSystemPreferencesAction,
@@ -2787,6 +2874,8 @@ export const actions = {
   setIsCallActive,
   setLocalAudio,
   setLocalVideo,
+  setLocalAudioRemoteMuted,
+  setMutedBy,
   setOutgoingRing,
   setRendererCanvas,
   setSuggestLowerHand,
@@ -3994,11 +4083,16 @@ export function reducer(
       return state;
     }
 
+    const newMutedBy = action.payload?.enabled
+      ? undefined
+      : state.activeCallState.mutedBy;
+
     return {
       ...state,
       activeCallState: {
         ...state.activeCallState,
-        hasLocalAudio: action.payload.enabled,
+        hasLocalAudio: Boolean(action.payload?.enabled),
+        mutedBy: newMutedBy,
       },
     };
   }
@@ -4013,7 +4107,48 @@ export function reducer(
       ...state,
       activeCallState: {
         ...state.activeCallState,
-        hasLocalVideo: action.payload.enabled,
+        hasLocalVideo: Boolean(action.payload?.enabled),
+      },
+    };
+  }
+
+  if (action.type === SET_MUTED_BY) {
+    const { mutedBy } = action.payload;
+    const { activeCallState } = state;
+
+    if (activeCallState?.state !== 'Active') {
+      log.warn('Cannot set muted by with no active call');
+      return state;
+    }
+
+    const newMutedBy = activeCallState.hasLocalAudio ? mutedBy : undefined;
+
+    return {
+      ...state,
+      activeCallState: {
+        ...activeCallState,
+        mutedBy: newMutedBy,
+      },
+    };
+  }
+
+  if (action.type === OBSERVED_REMOTE_MUTE) {
+    const { source, target } = action.payload;
+    const { activeCallState } = state;
+
+    if (activeCallState?.state !== 'Active') {
+      log.warn('Cannot observe muted by with no active call');
+      return state;
+    }
+
+    return {
+      ...state,
+      activeCallState: {
+        ...activeCallState,
+        observedRemoteMute: {
+          source,
+          target,
+        },
       },
     };
   }

@@ -1,10 +1,12 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type * as client from '@signalapp/libsignal-client';
+
 import type { SignalService as Proto } from '../protobuf';
 import type { IncomingWebSocketRequest } from './WebsocketResources';
 import type { ServiceIdString, AciString, PniString } from '../types/ServiceId';
-import type { AttachmentType, TextAttachmentType } from '../types/Attachment';
+import type { TextAttachmentType } from '../types/Attachment';
 import type { GiftBadgeStates } from '../components/conversation/Message';
 import type { MIMEType } from '../types/MIME';
 import type { DurationInSeconds } from '../util/durations';
@@ -62,10 +64,7 @@ export type CompatPreKeyType = {
 
 // How we work with these types thereafter
 
-export type KeyPairType = {
-  privKey: Uint8Array;
-  pubKey: Uint8Array;
-};
+export type KeyPairType = client.IdentityKeyPair;
 
 export type OuterSignedPrekeyType = {
   confirmed: boolean;
@@ -118,7 +117,7 @@ export type ProcessedAttachment = {
   blurHash?: string;
   cdnNumber?: number;
   textAttachment?: Omit<TextAttachmentType, 'preview'>;
-  backupLocator?: AttachmentType['backupLocator'];
+  uploadTimestamp?: number;
   downloadPath?: string;
   incrementalMac?: string;
   chunkSize?: number;
@@ -289,6 +288,7 @@ export type CallbackResultType = {
 
 export type IRequestHandler = {
   handleRequest(request: IncomingWebSocketRequest): void;
+  handleDisconnect(): void;
 };
 
 export type PniKeyMaterialType = Readonly<{

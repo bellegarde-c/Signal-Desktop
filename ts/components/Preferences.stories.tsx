@@ -2,18 +2,37 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Meta, StoryFn } from '@storybook/react';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 
 import { action } from '@storybook/addon-actions';
-import type { PropsType } from './Preferences';
 import { Page, Preferences } from './Preferences';
 import { DEFAULT_CONVERSATION_COLOR } from '../types/Colors';
 import { PhoneNumberSharingMode } from '../util/phoneNumberSharingMode';
 import { PhoneNumberDiscoverability } from '../util/phoneNumberDiscoverability';
 import { EmojiSkinTone } from './fun/data/emojis';
 import { DAY, DurationInSeconds, WEEK } from '../util/durations';
+import { DialogUpdate } from './DialogUpdate';
+import { DialogType } from '../types/Dialogs';
+import { ThemeType } from '../types/Util';
+import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
+import { EditState, ProfileEditor } from './ProfileEditor';
+import {
+  UsernameEditState,
+  UsernameLinkState,
+} from '../state/ducks/usernameEnums';
+
+import type { PropsType } from './Preferences';
+import type { WidthBreakpoint } from './_util';
+import type { MessageAttributesType } from '../model-types';
+import { PreferencesDonations } from './PreferencesDonations';
 
 const { i18n } = window.SignalContext;
+
+const me = {
+  ...getDefaultConversation(),
+  phoneNumber: '(215) 555-2345',
+  username: 'someone.243',
+};
 
 const availableMicrophones = [
   {
@@ -43,12 +62,110 @@ const availableSpeakers = [
   },
 ];
 
+const validateBackupResult = {
+  totalBytes: 100,
+  duration: 10000,
+  stats: {
+    adHocCalls: 1,
+    callLinks: 2,
+    conversations: 3,
+    chats: 4,
+    distributionLists: 5,
+    messages: 6,
+    notificationProfiles: 2,
+    skippedMessages: 7,
+    stickerPacks: 8,
+    fixedDirectMessages: 9,
+  },
+};
+
+const exportLocalBackupResult = {
+  ...validateBackupResult,
+  snapshotDir: '/home/signaluser/SignalBackups/signal-backup-1745618069169',
+};
+
+function renderUpdateDialog(
+  props: Readonly<{ containerWidthBreakpoint: WidthBreakpoint }>
+): JSX.Element {
+  return (
+    <DialogUpdate
+      i18n={i18n}
+      containerWidthBreakpoint={props.containerWidthBreakpoint}
+      dialogType={DialogType.DownloadReady}
+      downloadSize={100000}
+      downloadedSize={50000}
+      version="8.99.0"
+      currentVersion="8.98.00"
+      disableDismiss
+      dismissDialog={action('dismissDialog')}
+      snoozeUpdate={action('snoozeUpdate')}
+      startUpdate={action('startUpdate')}
+    />
+  );
+}
+function RenderProfileEditor(): JSX.Element {
+  const contentsRef = useRef<HTMLDivElement | null>(null);
+  return (
+    <ProfileEditor
+      aboutEmoji={undefined}
+      aboutText={undefined}
+      color={undefined}
+      contentsRef={contentsRef}
+      conversationId="something"
+      deleteAvatarFromDisk={action('deleteAvatarFromDisk')}
+      deleteUsername={action('deleteUsername')}
+      familyName={me.familyName}
+      firstName={me.firstName ?? ''}
+      hasCompletedUsernameLinkOnboarding={false}
+      i18n={i18n}
+      editState={EditState.None}
+      markCompletedUsernameLinkOnboarding={action(
+        'markCompletedUsernameLinkOnboarding'
+      )}
+      onProfileChanged={action('onProfileChanged')}
+      onEmojiSkinToneDefaultChange={action('onEmojiSkinToneDefaultChange')}
+      openUsernameReservationModal={action('openUsernameReservationModal')}
+      profileAvatarUrl={undefined}
+      recentEmojis={[]}
+      renderUsernameEditor={() => <div />}
+      replaceAvatar={action('replaceAvatar')}
+      resetUsernameLink={action('resetUsernameLink')}
+      saveAttachment={action('saveAttachment')}
+      saveAvatarToDisk={action('saveAvatarToDisk')}
+      setEditState={action('setEditState')}
+      setUsernameEditState={action('setUsernameEditState')}
+      setUsernameLinkColor={action('setUsernameLinkColor')}
+      showToast={action('showToast')}
+      emojiSkinToneDefault={null}
+      userAvatarData={[]}
+      username={undefined}
+      usernameCorrupted={false}
+      usernameEditState={UsernameEditState.Editing}
+      usernameLink={undefined}
+      usernameLinkColor={undefined}
+      usernameLinkCorrupted={false}
+      usernameLinkState={UsernameLinkState.Ready}
+    />
+  );
+}
+
+function RenderDonationsPane(): JSX.Element {
+  const contentsRef = useRef<HTMLDivElement | null>(null);
+  return <PreferencesDonations i18n={i18n} contentsRef={contentsRef} />;
+}
+
+function renderToastManager(): JSX.Element {
+  return <div />;
+}
+
 export default {
   title: 'Components/Preferences',
   component: Preferences,
   args: {
     i18n,
 
+    accountEntropyPool:
+      'uy38jh2778hjjhj8lk19ga61s672jsj089r023s6a57809bap92j2yh5t326vv7t',
     autoDownloadAttachment: {
       photos: true,
       videos: false,
@@ -77,10 +194,14 @@ export default {
     availableMicrophones,
     availableSpeakers,
     backupFeatureEnabled: false,
+    backupKeyViewed: false,
+    backupLocalBackupsEnabled: false,
+    badge: undefined,
     blockedCount: 0,
     customColors: {},
     defaultConversationColor: DEFAULT_CONVERSATION_COLOR,
     deviceName: 'Work Windows ME',
+    donationsFeatureEnabled: false,
     emojiSkinToneDefault: EmojiSkinTone.None,
     phoneNumber: '+1 555 123-4567',
     hasAudioNotifications: true,
@@ -89,7 +210,9 @@ export default {
     hasAutoLaunch: true,
     hasCallNotifications: true,
     hasCallRingtoneNotification: false,
+    hasContentProtection: false,
     hasCountMutedConversations: false,
+    hasFailedStorySends: false,
     hasHideMenuBar: false,
     hasIncomingCallNotifications: true,
     hasLinkPreviews: true,
@@ -113,40 +236,71 @@ export default {
     isNotificationAttentionSupported: true,
     isSyncSupported: true,
     isSystemTraySupported: true,
+    isInternalUser: false,
+    isContentProtectionSupported: true,
+    isContentProtectionNeeded: true,
     isMinimizeToAndStartInSystemTraySupported: true,
     lastSyncTime: Date.now(),
     localeOverride: null,
+    localBackupFolder: undefined,
+    me,
+    navTabsCollapsed: false,
     notificationContent: 'name',
+    otherTabsUnreadStats: {
+      unreadCount: 0,
+      unreadMentionsCount: 0,
+      markedUnread: false,
+    },
+    page: Page.Profile,
     preferredSystemLocales: ['en'],
+    preferredWidthFromStorage: 300,
     resolvedLocale: 'en',
     selectedCamera:
       'dfbe6effe70b0611ba0fdc2a9ea3f39f6cb110e6687948f7e5f016c111b7329c',
     selectedMicrophone: availableMicrophones[0],
     selectedSpeaker: availableSpeakers[1],
     sentMediaQualitySetting: 'standard',
+    shouldShowUpdateDialog: false,
     themeSetting: 'system',
+    theme: ThemeType.light,
     universalExpireTimer: DurationInSeconds.HOUR,
     whoCanFindMe: PhoneNumberDiscoverability.Discoverable,
     whoCanSeeMe: PhoneNumberSharingMode.Everybody,
     zoomFactor: 1,
 
-    getConversationsWithCustomColor: () => Promise.resolve([]),
+    renderDonationsPane: RenderDonationsPane,
+    renderProfileEditor: RenderProfileEditor,
+    renderToastManager,
+    renderUpdateDialog,
+    getConversationsWithCustomColor: () => [],
 
     addCustomColor: action('addCustomColor'),
-    closeSettings: action('closeSettings'),
     doDeleteAllData: action('doDeleteAllData'),
-    doneRendering: action('doneRendering'),
     editCustomColor: action('editCustomColor'),
+    exportLocalBackup: async () => {
+      return {
+        result: exportLocalBackupResult,
+      };
+    },
+    getMessageCountBySchemaVersion: async () => [
+      { schemaVersion: 10, count: 1024 },
+      { schemaVersion: 8, count: 256 },
+    ],
+    getMessageSampleForSchemaVersion: async () => [
+      { id: 'messageId' } as MessageAttributesType,
+    ],
     makeSyncRequest: action('makeSyncRequest'),
     onAudioNotificationsChange: action('onAudioNotificationsChange'),
     onAutoConvertEmojiChange: action('onAutoConvertEmojiChange'),
     onAutoDownloadAttachmentChange: action('onAutoDownloadAttachmentChange'),
     onAutoDownloadUpdateChange: action('onAutoDownloadUpdateChange'),
     onAutoLaunchChange: action('onAutoLaunchChange'),
+    onBackupKeyViewedChange: action('onBackupKeyViewedChange'),
     onCallNotificationsChange: action('onCallNotificationsChange'),
     onCallRingtoneNotificationChange: action(
       'onCallRingtoneNotificationChange'
     ),
+    onContentProtectionChange: action('onContentProtectionChange'),
     onCountMutedConversationsChange: action('onCountMutedConversationsChange'),
     onEmojiSkinToneDefaultChange: action('onEmojiSkinToneDefaultChange'),
     onHasStoriesDisabledChanged: action('onHasStoriesDisabledChanged'),
@@ -172,12 +326,17 @@ export default {
     onSelectedSpeakerChange: action('onSelectedSpeakerChange'),
     onSentMediaQualityChange: action('onSentMediaQualityChange'),
     onSpellCheckChange: action('onSpellCheckChange'),
+    onStartUpdate: action('onStartUpdate'),
     onTextFormattingChange: action('onTextFormattingChange'),
     onThemeChange: action('onThemeChange'),
+    onToggleNavTabsCollapse: action('onToggleNavTabsCollapse'),
     onUniversalExpireTimerChange: action('onUniversalExpireTimerChange'),
     onWhoCanSeeMeChange: action('onWhoCanSeeMeChange'),
     onWhoCanFindMeChange: action('onWhoCanFindMeChange'),
     onZoomFactorChange: action('onZoomFactorChange'),
+    pickLocalBackupFolder: () =>
+      Promise.resolve('/home/signaluser/Signal Backups/'),
+    promptOSAuth: () => Promise.resolve('success'),
     refreshCloudBackupStatus: action('refreshCloudBackupStatus'),
     refreshBackupSubscriptionStatus: action('refreshBackupSubscriptionStatus'),
     removeCustomColor: action('removeCustomColor'),
@@ -186,48 +345,104 @@ export default {
     ),
     resetAllChatColors: action('resetAllChatColors'),
     resetDefaultChatColor: action('resetDefaultChatColor'),
+    savePreferredLeftPaneWidth: action('savePreferredLeftPaneWidth'),
     setGlobalDefaultConversationColor: action(
       'setGlobalDefaultConversationColor'
     ),
+    setPage: action('setPage'),
+    showToast: action('showToast'),
+    validateBackup: async () => {
+      return {
+        result: validateBackupResult,
+      };
+    },
   } satisfies PropsType,
 } satisfies Meta<PropsType>;
 
 // eslint-disable-next-line react/function-component-definition
-const Template: StoryFn<PropsType> = args => <Preferences {...args} />;
+const Template: StoryFn<PropsType> = args => {
+  const [page, setPage] = useState(args.page);
+  return <Preferences {...args} page={page} setPage={setPage} />;
+};
 
 export const _Preferences = Template.bind({});
+
+export const General = Template.bind({});
+General.args = {
+  page: Page.General,
+};
+export const Appearance = Template.bind({});
+Appearance.args = {
+  page: Page.Appearance,
+};
+export const Chats = Template.bind({});
+Chats.args = {
+  page: Page.Chats,
+};
+export const Calls = Template.bind({});
+Calls.args = {
+  page: Page.Calls,
+};
+export const Notifications = Template.bind({});
+Notifications.args = {
+  page: Page.Notifications,
+};
+export const Privacy = Template.bind({});
+Privacy.args = {
+  page: Page.Privacy,
+};
+export const DataUsage = Template.bind({});
+DataUsage.args = {
+  page: Page.DataUsage,
+};
+export const Donations = Template.bind({});
+Donations.args = {
+  donationsFeatureEnabled: true,
+  page: Page.Donations,
+};
+export const Internal = Template.bind({});
+Internal.args = {
+  page: Page.Internal,
+  isInternalUser: true,
+};
 
 export const Blocked1 = Template.bind({});
 Blocked1.args = {
   blockedCount: 1,
+  page: Page.Privacy,
 };
 
 export const BlockedMany = Template.bind({});
 BlockedMany.args = {
   blockedCount: 55,
+  page: Page.Privacy,
 };
 
 export const CustomUniversalExpireTimer = Template.bind({});
 CustomUniversalExpireTimer.args = {
   universalExpireTimer: DurationInSeconds.fromSeconds(9000),
+  page: Page.Privacy,
 };
 
 export const PNPSharingDisabled = Template.bind({});
 PNPSharingDisabled.args = {
   whoCanSeeMe: PhoneNumberSharingMode.Nobody,
   whoCanFindMe: PhoneNumberDiscoverability.Discoverable,
+  page: Page.PNP,
 };
 
 export const PNPDiscoverabilityDisabled = Template.bind({});
 PNPDiscoverabilityDisabled.args = {
   whoCanSeeMe: PhoneNumberSharingMode.Nobody,
   whoCanFindMe: PhoneNumberDiscoverability.NotDiscoverable,
+  page: Page.PNP,
 };
 
 export const BackupsPaidActive = Template.bind({});
 BackupsPaidActive.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
   cloudBackupStatus: {
     mediaSize: 539_249_410_039,
     protoSize: 100_000_000,
@@ -245,8 +460,9 @@ BackupsPaidActive.args = {
 
 export const BackupsPaidCancelled = Template.bind({});
 BackupsPaidCancelled.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
   cloudBackupStatus: {
     mediaSize: 539_249_410_039,
     protoSize: 100_000_000,
@@ -264,8 +480,9 @@ BackupsPaidCancelled.args = {
 
 export const BackupsFree = Template.bind({});
 BackupsFree.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
   backupSubscriptionStatus: {
     status: 'free',
     mediaIncludedInBackupDurationDays: 30,
@@ -274,14 +491,23 @@ BackupsFree.args = {
 
 export const BackupsOff = Template.bind({});
 BackupsOff.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
+};
+
+export const BackupsLocalBackups = Template.bind({});
+BackupsLocalBackups.args = {
+  page: Page.Backups,
+  backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
 };
 
 export const BackupsSubscriptionNotFound = Template.bind({});
 BackupsSubscriptionNotFound.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
   backupSubscriptionStatus: {
     status: 'not-found',
   },
@@ -294,9 +520,71 @@ BackupsSubscriptionNotFound.args = {
 
 export const BackupsSubscriptionExpired = Template.bind({});
 BackupsSubscriptionExpired.args = {
-  initialPage: Page.Backups,
+  page: Page.Backups,
   backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
   backupSubscriptionStatus: {
     status: 'expired',
   },
+};
+
+export const LocalBackups = Template.bind({});
+LocalBackups.args = {
+  page: Page.LocalBackups,
+  backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
+  backupKeyViewed: true,
+  localBackupFolder: '/home/signaluser/Signal Backups/',
+};
+
+export const LocalBackupsSetupChooseFolder = Template.bind({});
+LocalBackupsSetupChooseFolder.args = {
+  page: Page.LocalBackupsSetupFolder,
+  backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
+};
+
+export const LocalBackupsSetupViewBackupKey = Template.bind({});
+LocalBackupsSetupViewBackupKey.args = {
+  page: Page.LocalBackupsSetupKey,
+  backupFeatureEnabled: true,
+  backupLocalBackupsEnabled: true,
+  localBackupFolder: '/home/signaluser/Signal Backups/',
+};
+
+export const ShowingUpdateDialog = Template.bind({});
+ShowingUpdateDialog.args = {
+  shouldShowUpdateDialog: true,
+};
+
+export const NavTabsCollapsed = Template.bind({});
+NavTabsCollapsed.args = {
+  navTabsCollapsed: true,
+};
+
+export const NavTabsCollapsedWithBadges = Template.bind({});
+NavTabsCollapsedWithBadges.args = {
+  navTabsCollapsed: true,
+  hasFailedStorySends: false,
+  otherTabsUnreadStats: {
+    unreadCount: 1,
+    unreadMentionsCount: 2,
+    markedUnread: false,
+  },
+};
+
+export const NavTabsCollapsedWithExclamation = Template.bind({});
+NavTabsCollapsedWithExclamation.args = {
+  navTabsCollapsed: true,
+  hasFailedStorySends: true,
+  otherTabsUnreadStats: {
+    unreadCount: 1,
+    unreadMentionsCount: 2,
+    markedUnread: true,
+  },
+};
+
+export const WithDonationsEnabled = Template.bind({});
+WithDonationsEnabled.args = {
+  donationsFeatureEnabled: true,
 };

@@ -21,6 +21,10 @@ export enum FunGifsCategory {
   Angry = 'Angry',
 }
 
+export enum FunEmojisBase {
+  ThisMessage = 'ThisMessage',
+}
+
 export enum FunSectionCommon {
   SearchResults = 'SearchResults',
   Recents = 'Recents',
@@ -28,7 +32,15 @@ export enum FunSectionCommon {
 
 export enum FunStickersSectionBase {
   StickersSetup = 'StickersSetup',
+  Featured = 'Featured',
 }
+
+export type FunTimeStickerStyle = 'analog' | 'digital';
+
+export const FunTimeStickerStylesOrder: ReadonlyArray<FunTimeStickerStyle> = [
+  'analog',
+  'digital',
+];
 
 export type FunStickersPackSection = `StickerPack:${string}` & {
   FunStickersPackSection: never;
@@ -40,7 +52,10 @@ export function toFunStickersPackSection(
   return `StickerPack:${pack.id}` as FunStickersPackSection;
 }
 
-export type FunEmojisSection = FunSectionCommon | EmojiPickerCategory;
+export type FunEmojisSection =
+  | FunSectionCommon
+  | EmojiPickerCategory
+  | FunEmojisBase;
 export type FunStickersSection =
   | FunSectionCommon
   | FunStickersSectionBase
@@ -48,8 +63,9 @@ export type FunStickersSection =
 export type FunGifsSection = FunSectionCommon | FunGifsCategory;
 
 export const FunEmojisSectionOrder: ReadonlyArray<
-  FunSectionCommon.Recents | EmojiPickerCategory
+  FunSectionCommon.Recents | FunEmojisBase.ThisMessage | EmojiPickerCategory
 > = [
+  FunEmojisBase.ThisMessage,
   FunSectionCommon.Recents,
   EmojiPickerCategory.SmileysAndPeople,
   EmojiPickerCategory.AnimalsAndNature,

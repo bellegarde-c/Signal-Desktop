@@ -21,6 +21,7 @@ export type ConfigKeyType =
   | 'desktop.calling.ringrtcAdmPreStable'
   | 'desktop.clientExpiration'
   | 'desktop.backup.credentialFetch'
+  | 'desktop.donations'
   | 'desktop.internalUser'
   | 'desktop.mediaQuality.levels'
   | 'desktop.messageCleanup'
@@ -30,17 +31,16 @@ export type ConfigKeyType =
   | 'desktop.experimentalTransport.enableAuth'
   | 'desktop.experimentalTransportEnabled.alpha'
   | 'desktop.experimentalTransportEnabled.beta'
-  | 'desktop.experimentalTransportEnabled.prod'
+  | 'desktop.experimentalTransportEnabled.prod.2'
+  | 'desktop.libsignalNet.enforceMinimumTls'
   | 'desktop.cdsiViaLibsignal'
   | 'desktop.cdsiViaLibsignal.disableNewConnectionLogic'
   | 'desktop.funPicker' // alpha
   | 'desktop.funPicker.beta'
   | 'desktop.funPicker.prod'
-  | 'desktop.releaseNotes'
-  | 'desktop.releaseNotes.beta'
-  | 'desktop.releaseNotes.dev'
   | 'global.attachments.maxBytes'
   | 'global.attachments.maxReceiveBytes'
+  | 'global.backups.mediaTierFallbackCdnNumber'
   | 'global.calling.maxGroupCallRingSize'
   | 'global.groupsv2.groupSizeHardLimit'
   | 'global.groupsv2.maxGroupSize'
@@ -269,5 +269,5 @@ export function getBucketValue(aci: AciString, flagName: string): number {
     hashInput
   );
 
-  return Number(Bytes.readBigUint64BE(hashResult.slice(0, 8)) % 1_000_000n);
+  return Number(Bytes.readBigUint64BE(hashResult.subarray(0, 8)) % 1_000_000n);
 }

@@ -230,22 +230,12 @@ describe('calling duck', () => {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let oldEvents: any;
   beforeEach(function (this: Mocha.Context) {
     this.sandbox = sinon.createSandbox();
-
-    oldEvents = window.Events;
-    window.Events = {
-      getCallRingtoneNotification: sinon.spy(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
   });
 
   afterEach(function (this: Mocha.Context) {
     this.sandbox.restore();
-
-    window.Events = oldEvents;
   });
 
   describe('actions', () => {
@@ -304,7 +294,6 @@ describe('calling duck', () => {
         sinon.assert.calledOnce(this.callingServiceSetPresenting);
         sinon.assert.calledWith(this.callingServiceSetPresenting, {
           conversationId: 'fake-group-call-conversation-id',
-          hasLocalVideo: false,
           mediaStream: undefined,
           source: presentedSource,
           callLinkRootKey: undefined,

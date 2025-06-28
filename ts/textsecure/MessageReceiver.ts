@@ -8,7 +8,6 @@ import PQueue from 'p-queue';
 import { v7 as getGuid } from 'uuid';
 
 import type {
-  SealedSenderDecryptionResult,
   SenderCertificate,
   UnidentifiedSenderMessageContent,
 } from '@signalapp/libsignal-client';
@@ -16,19 +15,21 @@ import {
   CiphertextMessageType,
   ContentHint,
   DecryptionErrorMessage,
+  ErrorCode as LibSignalErrorCode,
   groupDecrypt,
+  LibSignalErrorBase,
   PlaintextContent,
   Pni,
   PreKeySignalMessage,
   processSenderKeyDistributionMessage,
   ProtocolAddress,
   PublicKey,
-  sealedSenderDecryptMessage,
   sealedSenderDecryptToUsmc,
   SenderKeyDistributionMessage,
   signalDecrypt,
   signalDecryptPreKey,
   SignalMessage,
+  UsePQRatchet,
 } from '@signalapp/libsignal-client';
 
 import {
@@ -127,7 +128,6 @@ import {
   MessageEvent,
   MessageRequestResponseEvent,
   ProfileKeyUpdateEvent,
-  ProgressEvent,
   ReadEvent,
   ReadSyncEvent,
   RetryRequestEvent,
@@ -188,8 +188,7 @@ type DecryptResult = Readonly<
 >;
 
 type DecryptSealedSenderResult = Readonly<{
-  plaintext?: Uint8Array;
-  unsealedPlaintext?: SealedSenderDecryptionResult;
+  plaintext: Uint8Array;
   wasEncrypted: boolean;
 }>;
 
@@ -293,14 +292,13 @@ export default class MessageReceiver
   #appQueue: PQueue;
   #decryptAndCacheBatcher: BatcherType<CacheAddItemType>;
   #cacheRemoveBatcher: BatcherType<string>;
-  #count: number;
   #processedCount: number;
   #incomingQueue: PQueue;
   #isEmptied?: boolean;
   #encryptedQueue: PQueue;
   #decryptedQueue: PQueue;
   #retryCachedTimeout: NodeJS.Timeout | undefined;
-  #serverTrustRoot: Uint8Array;
+  #serverTrustRoot: PublicKey;
   #stoppingProcessing?: boolean;
   #pniIdentityKeyCheckRequired?: boolean;
 
@@ -309,13 +307,14 @@ export default class MessageReceiver
 
     this.#storage = storage;
 
-    this.#count = 0;
     this.#processedCount = 0;
 
     if (!serverTrustRoot) {
       throw new Error('Server trust root is required!');
     }
-    this.#serverTrustRoot = Bytes.fromBase64(serverTrustRoot);
+    this.#serverTrustRoot = PublicKey.deserialize(
+      Buffer.from(Bytes.fromBase64(serverTrustRoot))
+    );
 
     this.#incomingQueue = new PQueue({
       concurrency: 1,
@@ -470,10 +469,12 @@ export default class MessageReceiver
     );
   }
 
+  public handleDisconnect(): void {
+    this.#isEmptied = false;
+  }
+
   public startProcessingQueue(): void {
     log.info('MessageReceiver.startProcessingQueue');
-    this.#count = 0;
-    this.#isEmptied = false;
     this.#stoppingProcessing = false;
 
     drop(this.#addCachedMessagesToQueue());
@@ -534,11 +535,6 @@ export default class MessageReceiver
   public override addEventListener(
     name: 'empty',
     handler: (ev: EmptyEvent) => void
-  ): void;
-
-  public override addEventListener(
-    name: 'progress',
-    handler: (ev: ProgressEvent) => void
   ): void;
 
   public override addEventListener(
@@ -735,22 +731,14 @@ export default class MessageReceiver
     id: string,
     taskType: TaskType
   ): Promise<T> {
-    if (taskType === TaskType.Encrypted) {
-      this.#count += 1;
-    }
-
     const queue =
       taskType === TaskType.Encrypted
         ? this.#encryptedQueue
         : this.#decryptedQueue;
 
-    try {
-      return await queue.add(
-        createTaskWithTimeout(task, id, TASK_WITH_TIMEOUT_OPTIONS)
-      );
-    } finally {
-      this.#updateProgress(this.#count);
-    }
+    return queue.add(
+      createTaskWithTimeout(task, id, TASK_WITH_TIMEOUT_OPTIONS)
+    );
   }
 
   #onEmpty(): void {
@@ -804,10 +792,6 @@ export default class MessageReceiver
     };
 
     const waitForIncomingQueue = async () => {
-      // Note: this.count is used in addToQueue
-      // Resetting count so everything from the websocket after this starts at zero
-      this.#count = 0;
-
       drop(
         this.#addToQueue(
           waitForEncryptedQueue,
@@ -831,14 +815,6 @@ export default class MessageReceiver
     };
 
     drop(waitForCacheAddBatcher());
-  }
-
-  #updateProgress(count: number): void {
-    // count by 10s
-    if (count % 10 !== 0) {
-      return;
-    }
-    this.dispatchEvent(new ProgressEvent({ count }));
   }
 
   async #queueAllCached(): Promise<void> {
@@ -1248,16 +1224,9 @@ export default class MessageReceiver
 
     const task = async (): Promise<DecryptResult> => {
       const { destinationServiceId } = envelope;
-      const serviceIdKind =
-        this.#storage.user.getOurServiceIdKind(destinationServiceId);
-      if (serviceIdKind === ServiceIdKind.Unknown) {
-        log.warn(
-          'MessageReceiver.decryptAndCacheBatch: ' +
-            `Rejecting envelope ${getEnvelopeId(envelope)}, ` +
-            `unknown serviceId: ${destinationServiceId}`
-        );
-        return { plaintext: undefined, envelope: undefined };
-      }
+      const serviceIdKind = isPniString(destinationServiceId)
+        ? ServiceIdKind.PNI
+        : ServiceIdKind.ACI;
 
       const unsealedEnvelope = await this.#unsealEnvelope(
         stores,
@@ -1644,12 +1613,22 @@ export default class MessageReceiver
       `${logId}: Sealed sender message was missing serverTimestamp`
     );
 
+    const localAci = this.#storage.user.getCheckedAci();
+    const localDeviceId = parseIntOrThrow(
+      this.#storage.user.getDeviceId(),
+      'MessageReceiver.decryptSealedSender: localDeviceId'
+    );
+
     if (
-      !certificate.validate(
-        PublicKey.deserialize(Buffer.from(this.#serverTrustRoot)),
-        serverTimestamp
-      )
+      certificate.senderAci()?.getServiceIdString() === localAci &&
+      certificate.senderDeviceId() === localDeviceId
     ) {
+      throw new Error(
+        `${logId}: Received sealed sender message sent by this device`
+      );
+    }
+
+    if (!certificate.validate(this.#serverTrustRoot, serverTimestamp)) {
       throw new Error(`${logId}: Sealed sender certificate validation failed`);
     }
 
@@ -1681,7 +1660,7 @@ export default class MessageReceiver
   #unpad(paddedPlaintext: Uint8Array): Uint8Array {
     for (let i = paddedPlaintext.length - 1; i >= 0; i -= 1) {
       if (paddedPlaintext[i] === 0x80) {
-        return new Uint8Array(paddedPlaintext.slice(0, i));
+        return new Uint8Array(paddedPlaintext.subarray(0, i));
       }
       if (paddedPlaintext[i] !== 0x00) {
         throw new Error('Invalid padding');
@@ -1693,16 +1672,9 @@ export default class MessageReceiver
 
   async #decryptSealedSender(
     { senderKeyStore, sessionStore, identityKeyStore, zone }: LockedStores,
-    envelope: UnsealedEnvelope,
-    ciphertext: Uint8Array
+    envelope: UnsealedEnvelope
   ): Promise<DecryptSealedSenderResult> {
-    const localE164 = this.#storage.user.getNumber();
     const { destinationServiceId } = envelope;
-    const localDeviceId = parseIntOrThrow(
-      this.#storage.user.getDeviceId(),
-      'MessageReceiver.decryptSealedSender: localDeviceId'
-    );
-
     const logId = getEnvelopeId(envelope);
 
     const { unsealedContent: messageContent, certificate } = envelope;
@@ -1796,27 +1768,40 @@ export default class MessageReceiver
       destinationServiceId,
       Address.create(sealedSenderIdentifier, envelope.sourceDevice)
     );
-    const unsealedPlaintext = await this.#storage.protocol.enqueueSessionJob(
+    const protocolAddress = ProtocolAddress.new(
+      sealedSenderIdentifier,
+      envelope.sourceDevice
+    );
+    const message =
+      messageContent.msgType() === unidentifiedSenderTypeEnum.PREKEY_MESSAGE
+        ? PreKeySignalMessage.deserialize(messageContent.contents())
+        : SignalMessage.deserialize(messageContent.contents());
+    const plaintext = await this.#storage.protocol.enqueueSessionJob(
       address,
-      `sealedSenderDecryptMessage(${address.toString()})`,
-      () =>
-        sealedSenderDecryptMessage(
-          Buffer.from(ciphertext),
-          PublicKey.deserialize(Buffer.from(this.#serverTrustRoot)),
-          envelope.serverTimestamp,
-          localE164 || null,
-          destinationServiceId,
-          localDeviceId,
+      () => {
+        if (message instanceof PreKeySignalMessage) {
+          return signalDecryptPreKey(
+            message,
+            protocolAddress,
+            sessionStore,
+            identityKeyStore,
+            preKeyStore,
+            signedPreKeyStore,
+            kyberPreKeyStore,
+            UsePQRatchet.No
+          );
+        }
+        return signalDecrypt(
+          message,
+          protocolAddress,
           sessionStore,
-          identityKeyStore,
-          preKeyStore,
-          signedPreKeyStore,
-          kyberPreKeyStore
-        ),
+          identityKeyStore
+        );
+      },
       zone
     );
 
-    return { unsealedPlaintext, wasEncrypted: true };
+    return { plaintext, wasEncrypted: true };
   }
 
   async #innerDecrypt(
@@ -1893,7 +1878,6 @@ export default class MessageReceiver
 
       const plaintext = await this.#storage.protocol.enqueueSessionJob(
         address,
-        `signalDecrypt(${address.toString()})`,
         async () =>
           this.#unpad(
             await signalDecrypt(
@@ -1925,7 +1909,6 @@ export default class MessageReceiver
 
       const plaintext = await this.#storage.protocol.enqueueSessionJob(
         address,
-        `signalDecryptPreKey(${address.toString()})`,
         async () =>
           this.#unpad(
             await signalDecryptPreKey(
@@ -1935,7 +1918,8 @@ export default class MessageReceiver
               identityKeyStore,
               preKeyStore,
               signedPreKeyStore,
-              kyberPreKeyStore
+              kyberPreKeyStore,
+              UsePQRatchet.No
             )
           ),
         zone
@@ -1944,28 +1928,11 @@ export default class MessageReceiver
     }
     if (envelope.type === envelopeTypeEnum.UNIDENTIFIED_SENDER) {
       log.info(`decrypt/${logId}: unidentified message`);
-      const { plaintext, unsealedPlaintext, wasEncrypted } =
-        await this.#decryptSealedSender(stores, envelope, ciphertext);
-
-      if (plaintext) {
-        return { plaintext: this.#unpad(plaintext), wasEncrypted };
-      }
-
-      if (unsealedPlaintext) {
-        const content = unsealedPlaintext.message();
-
-        if (!content) {
-          throw new Error(
-            'MessageReceiver.innerDecrypt: Content returned was falsey!'
-          );
-        }
-
-        // Return just the content because that matches the signature of the other
-        //   decrypt methods used above.
-        return { plaintext: this.#unpad(content), wasEncrypted };
-      }
-
-      throw new Error('Unexpected lack of plaintext from unidentified sender');
+      const { plaintext, wasEncrypted } = await this.#decryptSealedSender(
+        stores,
+        envelope
+      );
+      return { plaintext: this.#unpad(plaintext), wasEncrypted };
     }
     throw new Error('Unknown message type');
   }
@@ -1989,14 +1956,11 @@ export default class MessageReceiver
       );
 
       if (isAciString(uuid) && isNumber(deviceId)) {
-        const event = new SuccessfulDecryptEvent(
-          {
-            senderDevice: deviceId,
-            senderAci: uuid,
-            timestamp: envelope.timestamp,
-          },
-          () => this.#removeFromCache(envelope)
-        );
+        const event = new SuccessfulDecryptEvent({
+          senderDevice: deviceId,
+          senderAci: uuid,
+          timestamp: envelope.timestamp,
+        });
         drop(
           this.#addToQueue(
             async () => this.dispatchEvent(event),
@@ -2021,14 +1985,7 @@ export default class MessageReceiver
       }
 
       // We don't do anything if it's just a duplicated message
-      if (error?.message?.includes?.('message with old counter')) {
-        this.#removeFromCache(envelope);
-        throw error;
-      }
-
-      // We don't do a light session reset if it's an error with the sealed sender
-      //   wrapper, since we don't trust the sender information.
-      if (error?.message?.includes?.('trust root validation failed')) {
+      if (LibSignalErrorBase.is(error, LibSignalErrorCode.DuplicatedMessage)) {
         this.#removeFromCache(envelope);
         throw error;
       }

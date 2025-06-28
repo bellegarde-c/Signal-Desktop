@@ -81,6 +81,7 @@ const defaultGroups: Array<GroupListItemConversationType> = [
 ];
 
 const backupMediaDownloadProgress = {
+  isBackupMediaEnabled: true,
   downloadedBytes: 1024,
   totalBytes: 4098,
   downloadBannerDismissed: false,
@@ -146,12 +147,14 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
       markedUnread: false,
     },
     backupMediaDownloadProgress: {
+      isBackupMediaEnabled: true,
       downloadBannerDismissed: false,
       isIdle: false,
       isPaused: false,
       totalBytes: 0,
       downloadedBytes: 0,
     },
+    changeLocation: action('changeLocation'),
     clearConversationSearch: action('clearConversationSearch'),
     clearGroupCreationError: action('clearGroupCreationError'),
     clearSearchQuery: action('clearSearchQuery'),
@@ -174,6 +177,7 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
     hasPendingUpdate: false,
     i18n,
     isMacOS: false,
+    isOnline: true,
     preferredWidthFromStorage: 320,
     challengeStatus: 'idle',
     crashReportCount: 0,
@@ -319,7 +323,6 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
       'toggleConversationInChooseMembers'
     ),
     toggleNavTabsCollapse: action('toggleNavTabsCollapse'),
-    toggleProfileEditor: action('toggleProfileEditor'),
     updateFilterByUnread: action('updateFilterByUnread'),
     updateSearchTerm: action('updateSearchTerm'),
 

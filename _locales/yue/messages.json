@@ -41,6 +41,9 @@
   "icu:Preferences__sent-media-quality__description": {
     "messageformat": "發送高畫質嘅多媒體檔案會用多啲數據。"
   },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "捐款俾 Signal"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "標準"
   },
@@ -68,6 +71,9 @@
   "icu:unknownContact": {
     "messageformat": "不明嘅聯絡人"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "未知"
+  },
   "icu:unknownGroup": {
     "messageformat": "不明嘅群組"
   },
@@ -79,9 +85,6 @@
   },
   "icu:databaseError": {
     "messageformat": "資料庫錯誤"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "資料庫發生錯誤。你可以複製錯誤，然後聯絡 Signal 支援團隊幫手解決問題。如果你需要即刻用 Signal，可以選擇刪除資料然後重新啟動。\n\n要聯絡支援團隊，請去呢度：{link}"
   },
   "icu:deleteAndRestart": {
     "messageformat": "刪除資料，然後重新啟動"
@@ -202,6 +205,9 @@
   },
   "icu:menuSetupAsStandalone": {
     "messageformat": "設定做獨立裝置"
+  },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
   },
   "icu:messageContextMenuButton": {
     "messageformat": "其他操作"
@@ -589,6 +595,9 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "資料庫錯誤：請分享你嘅除錯記錄。"
   },
   "icu:Toast--InvalidStorageServiceHeaders": {
     "messageformat": "伺服器傳回無效嘅回應。請分享你嘅除錯記錄。"
@@ -1262,6 +1271,9 @@
   "icu:Install__support-link": {
     "messageformat": "需要幫手？"
   },
+  "icu:Preferences--header": {
+    "messageformat": "設定"
+  },
   "icu:Preferences--phone-number": {
     "messageformat": "電話冧把"
   },
@@ -1670,9 +1682,6 @@
   "icu:notificationSenderInGroup": {
     "messageformat": "{group} 入面嘅 {sender}"
   },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} 用 {emoji} 回應咗你嘅訊息"
-  },
   "icu:notificationReactionMessage": {
     "messageformat": "{sender} 用 {emoji} 回應咗：「{message}」"
   },
@@ -1828,12 +1837,6 @@
   },
   "icu:ConversationDetails--support-center": {
     "messageformat": "支援中心"
-  },
-  "icu:ConversationDetails--contact-us": {
-    "messageformat": "聯絡我哋"
-  },
-  "icu:ConversationDetails--donate": {
-    "messageformat": "捐款俾 Signal"
   },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "檢視安全碼"
@@ -2324,14 +2327,23 @@
   "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
     "messageformat": "搵唔到表情符號"
   },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "為 {emojiName} 揀膚色"
+  },
   "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
     "messageformat": "更改膚色偏好"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "長㩒去揀膚色"
   },
   "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
     "messageformat": "選擇你嘅預設膚色"
   },
   "icu:FunPanelEmojis__SectionTitle--SearchResults": {
     "messageformat": "搵到嘅結果"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "呢個訊息"
   },
   "icu:FunPanelEmojis__SectionTitle--Recents": {
     "messageformat": "最近用過"
@@ -2360,6 +2372,9 @@
   "icu:FunPanelEmojis__SectionTitle--Flags": {
     "messageformat": "旗幟"
   },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "自訂心情回應"
+  },
   "icu:FunPanelStickers__SearchLabel": {
     "messageformat": "搜尋貼圖"
   },
@@ -2377,6 +2392,9 @@
   },
   "icu:FunPanelStickers__SectionTitle--Recents": {
     "messageformat": "最近用過"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "精選"
   },
   "icu:FunPanelStickers__SearchResults__EmptyHeading": {
     "messageformat": "搵唔到貼圖"
@@ -2460,13 +2478,13 @@
     "messageformat": "深膚色"
   },
   "icu:FunButton__Label--FunPicker": {
-    "messageformat": "Add an Emoji, Sticker, or GIF"
+    "messageformat": "加個表情符號、貼圖或者 GIF"
   },
   "icu:FunButton__Label--EmojiPicker": {
-    "messageformat": "Add an Emoji"
+    "messageformat": "加個表情符號"
   },
   "icu:FunButton__Label--StickerPicker": {
-    "messageformat": "Add a Sticker"
+    "messageformat": "加個貼圖"
   },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "取消"
@@ -2504,14 +2522,8 @@
   "icu:Message--update-signal": {
     "messageformat": "更新 Signal"
   },
-  "icu:Message--tap-to-view-expired": {
-    "messageformat": "睇咗"
-  },
   "icu:Message--tap-to-view--viewed": {
     "messageformat": "睇咗"
-  },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "媒體"
   },
   "icu:Message--tap-to-view--media": {
     "messageformat": "閱後即焚媒體"
@@ -2521,12 +2533,6 @@
   },
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "「閱後即毀」嘅訊息唔會儲存喺你嘅對話紀錄入面。"
-  },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "睇吓張相"
-  },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "睇吓段片"
   },
   "icu:Message--tap-to-view--video": {
     "messageformat": "閱後即焚影片"
@@ -2596,6 +2602,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "打開貼圖選擇器"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "打開 GIF 選擇器"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "開始錄製語音筆記"
@@ -2951,6 +2960,36 @@
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, other {{count,number} 位成員}}"
   },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, other {{memberList} （+ {invitesCount,number} 個已獲邀請）}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "未有谷友"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "仲未有其他谷友"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} 同你"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} 同 {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}、{member2} 同你"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}、{member2} 同 {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, other {{member1}、{member2}、{member3} 同<clickable>另外 {remainingCount,number} 個</clickable>谷友}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, other {{member1}、{member2}、{member3} 同<clickable>另外 {remainingCount,number} 個</clickable>谷友}}"
+  },
   "icu:ConversationHero--review-carefully": {
     "messageformat": "請仔細審查"
   },
@@ -3101,11 +3140,29 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "離開"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "結束通話"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "退出通話"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "閂咗咪"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "開咗咪"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName} 已經將你靜音。"
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name} 已經將 {otherName} 靜音。"
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "你已經將 {otherName} 靜音。"
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "你已經喺另一部機度將自己靜音。"
   },
   "icu:CallControls__LowerHandSuggestionToast": {
     "messageformat": "係咪想放低手？"
@@ -3199,9 +3256,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "更新咗檢視方式"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "退出通話"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "分享你嘅畫面"
@@ -3357,7 +3411,7 @@
     "messageformat": "加入唔到群組"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "你唔可以用群組連結加入呢個群組，因為管理員已經移除咗你。"
+    "messageformat": "你唔可以用群組連結加入呢個谷，因為管理員已經剷走咗你。請聯絡管理員叫佢加返你入去個谷度。"
   },
   "icu:GroupV2--join--prompt-with-approval": {
     "messageformat": "群組管理員要先批准咗你嘅請求，先可以俾你加入群組。當你要求加入嘅時候，系統會將你嘅名同相分享俾群組成員。"
@@ -3917,6 +3971,12 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "㩒一下「捐款俾 Signal」定期贊助"
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "個人資料已經搬咗位"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "打開「設定」選項標籤就可以睇吓同埋編輯你嘅個人資料。"
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "同步訊息"
   },
@@ -3977,6 +4037,12 @@
   "icu:BackupMediaDownloadProgress__description-idle": {
     "messageformat": "媒體會繼續喺背景下載"
   },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "還原媒體暫停咗"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "等緊網絡連線…"
+  },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "暫停轉移"
   },
@@ -4007,6 +4073,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "取消轉移"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "帳戶有嘢要你做"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "你一定要喺手機上面打開 Signal 先至可以繼續用呢個帳戶。如果你唔喺手機上面打開 Signal，你嘅帳戶就會好快被刪除。<learnMoreLink>了解詳情</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "還原唔到媒體"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "你部機唔夠位。請你搵多 {diskSpaceAmount} 空間嚟還原媒體。"
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "展開"
   },
@@ -4027,9 +4105,6 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "傳送編輯咗嘅訊息"
-  },
-  "icu:CompositionArea__FunButtonLabel": {
-    "messageformat": "加個表情符號、貼圖或者 GIF"
   },
   "icu:CompositionArea__ConfirmGifSelection__Title": {
     "messageformat": "係咪要更換附件？"
@@ -4257,7 +4332,7 @@
     "messageformat": "用群組連結加入嘅新成員需要經過管理員嘅批准"
   },
   "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
-    "messageformat": "Copy signal.group link to keyboard"
+    "messageformat": "將 signal.group 連結複製到剪貼簿"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "請求（{count,number} 個）"
@@ -4465,12 +4540,6 @@
   },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "安全貼士"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "你同呢個人冇共同嘅群組。記住小心睇清楚先好接受請求，避免收到無謂嘅訊息滋擾。"
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "關於訊息請求"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "請仔細審查請求。Signal 搵到另一位同名嘅聯絡人。<reviewRequestLink>審查請求</reviewRequestLink>"
@@ -4874,6 +4943,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "更新唔到你嘅個人檔案。請你再試過啦。"
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "分享"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "傳個訊息俾管理員"
   },
@@ -4906,6 +4978,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "一般"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "捐款俾 Signal"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "外觀"
@@ -4943,6 +5018,36 @@
   "icu:Preferences__media-auto-download__description": {
     "messageformat": "語音訊息同貼圖長期都會自動下載。"
   },
+  "icu:Preferences__button--backups": {
+    "messageformat": "備份"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "内部"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "管理"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "選擇資料夾"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "設定"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "本機備份"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "匯出…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "將本機加密備份匯出去資料夾同埋驗證"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "將加密備份匯出去內建記憶體同埋執行驗證套件"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "驗證"
+  },
   "icu:Preferences--lastSynced": {
     "messageformat": "上次匯入嘅時間係 {date} {time}"
   },
@@ -4972,6 +5077,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "封鎖咗"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "Signal 備份"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "用 Signal 嘅端對端加密儲存服務安全自動備份。由你部手機開始。<learnMoreLink>了解詳情。</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "備份你嘅訊息紀錄，當你換新手機或者重新安裝 Signal 嗰陣，就唔會冇咗啲資料啦。"
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "備份詳情"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "備份文字訊息 + 全部媒體"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "搵唔到你嘅課金計劃。即刻續期嚟繼續用 Signal 備份啦。"
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, other {備份文字訊息 + {mediaDayCount,number} 日嘅媒體}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "你嘅備份計劃係免費嘅"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "{date} 續期"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "{date} 到期"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "取消咗課金計劃"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "你可以喺手機度管理或者取消「Signal 備份」課金計劃。"
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "你可以喺手機度管理或者升級「Signal 備份」課金計劃。"
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "你可以喺手機度管理「Signal 備份」課金計劃或者續期。"
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "上一次備份"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "你部手機"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "備份大小"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "桌面備份"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "啲備份會用一個金鑰加密，然後儲存喺你部電腦度。"
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "建立可以喺手機上面還原嘅端對端加密備份。 "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "要還原一個備份嘅話，請首先重新再裝過 Signal。開返個 APP 出嚟，㩒一下「還原備份」，然後揀返嗰一個備份資料夾。<learnMoreLink>了解詳情。</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "揀一個資料夾"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "喺電腦嘅儲存空間度揀一個資料夾，將你嘅端到端加密備份儲存响嗰度。"
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "下一步"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "完成"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "備份金鑰文字框"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "輸入金鑰"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "記低你嘅備份金鑰"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "系統需要用呢個金鑰嚟恢復你嘅帳戶同資料。請將金鑰儲存喺安全嘅地方。如果你整唔見咗佢，就冇辦法恢復帳戶㗎喇。 <learnMoreLink>了解詳情。</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "確認你嘅備份金鑰"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "輸入你啱啱記低嘅備份金鑰"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "安全儲存你嘅金鑰"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "如果你唔見咗個金鑰，Signal 就冇辦法幫你還原備份喇。請將佢儲存喺安全嘅地方，同埋千祈唔好講俾其他人知。"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "繼續"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "再睇多次金鑰"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "備份資料夾"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "改一改"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "複製到剪貼簿"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "已經複製備份金鑰"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "睇吓金鑰"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "備份金鑰"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "你嘅備份金鑰係一組 64 位數字代碼，用嚟還原你嘅備份"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "其他備份方式"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, other {{num,number} 個聯絡人}}"
@@ -5089,6 +5323,24 @@
   },
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "重新開 app"
+  },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "應用程式"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "防止畫面截圖"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "防止呢部電腦用 Signal 嘅時候截圖，以增加私隱。"
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "係咪要停用防止畫面截圖？"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "如果停用，Microsoft Windows 有機會攞到 Signal 嘅畫面截圖，然後用喺私隱唔受保障嘅功能度。"
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "停用"
   },
   "icu:DialogUpdate--version-available": {
     "messageformat": "更新版本 {version} 已經推出咗"
@@ -6186,6 +6438,9 @@
   "icu:ProfileNameWarningModal__list--item3--group": {
     "messageformat": "唔好分享個人資料俾啲唔識嘅人"
   },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "儲存附件"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "最新消息"
   },
@@ -6217,16 +6472,10 @@
     "messageformat": "我哋做咗啲調整、修復咗一啲錯誤，同埋加強咗程式功能。多謝你使用 Signal！",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.47--0": {
-    "messageformat": "而家，你可以喺通話期間放大自己嘅視像預覽，睇清楚啲自己個樣。"
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "訊息心情回應選擇器裡面加咗新嘅部分，喺訊息入面收到嘅所有表情符號回應都會自動顯示喺嗰度。咁以後你可以好似人哋咁即刻加個普通嘅閃閃心心，又或者隨你心意，改用一個真正心臟咁樣嘅表情符號。"
   },
-  "icu:WhatsNew__v7.48--0": {
-    "messageformat": "我哋加咗個捷徑，方便你喺 Signal 群組通話期間一開始講嘢就即刻放低手。"
-  },
-  "icu:WhatsNew__v7.49--0": {
-    "messageformat": "如果你喺 Signal Android 度連結新嘅桌面電腦，同選擇轉移訊息紀錄，而家仲可以由主裝置轉移舊附件添。轉移過程經端對端加密，確保安全。"
-  },
-  "icu:WhatsNew__v7.50--0": {
-    "messageformat": "If you link a new Desktop on Signal Android and choose to transfer your message history, now you can also selectively transfer old attachments from your primary device too. Bring the past into the present by scrolling back in time and clicking on the download icon. As always, the transfer process is end-to-end encrypted and secure."
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "呢次更新等你可以喺 Linux 開咗個 GPU 加速，咁就可以提升支援硬件嘅效能，播片都會順暢啲。"
   }
 }

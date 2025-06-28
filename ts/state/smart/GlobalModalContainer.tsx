@@ -11,7 +11,6 @@ import { SmartAddUserToAnotherGroupModal } from './AddUserToAnotherGroupModal';
 import { SmartContactModal } from './ContactModal';
 import { SmartEditHistoryMessagesModal } from './EditHistoryMessagesModal';
 import { SmartForwardMessagesModal } from './ForwardMessagesModal';
-import { SmartProfileEditorModal } from './ProfileEditorModal';
 import { SmartUsernameOnboardingModal } from './UsernameOnboardingModal';
 import { SmartSafetyNumberModal } from './SafetyNumberModal';
 import { SmartSendAnywayDialog } from './SendAnywayDialog';
@@ -56,10 +55,6 @@ function renderEditHistoryMessagesModal(): JSX.Element {
 
 function renderEditNicknameAndNoteModal(): JSX.Element {
   return <SmartEditNicknameAndNoteModal />;
-}
-
-function renderProfileEditor(): JSX.Element {
-  return <SmartProfileEditorModal />;
 }
 
 function renderProfileNameWarningModal(): JSX.Element {
@@ -132,16 +127,17 @@ export const SmartGlobalModalContainer = memo(
       callLinkPendingParticipantContactId,
       confirmLeaveCallModalState,
       contactModalState,
+      criticalIdlePrimaryDeviceModal,
       deleteMessagesProps,
       draftGifMessageSendModalProps,
       editHistoryMessages,
       editNicknameAndNoteModalProps,
       errorModalProps,
       forwardMessagesProps,
+      lowDiskSpaceBackupImportModal,
       mediaPermissionsModalProps,
       messageRequestActionsConfirmationProps,
       notePreviewModalProps,
-      isProfileEditorVisible,
       isProfileNameWarningModalVisible,
       profileNameWarningModalConversationType,
       isShortcutGuideModalVisible,
@@ -159,6 +155,8 @@ export const SmartGlobalModalContainer = memo(
     const {
       closeErrorModal,
       closeMediaPermissionsModal,
+      hideCriticalIdlePrimaryDeviceModal,
+      hideLowDiskSpaceBackupImportModal,
       hideTapToViewNotAvailableModal,
       hideUserNotFoundModal,
       hideWhatsNewModal,
@@ -226,12 +224,16 @@ export const SmartGlobalModalContainer = memo(
         }
         confirmLeaveCallModalState={confirmLeaveCallModalState}
         contactModalState={contactModalState}
+        criticalIdlePrimaryDeviceModal={criticalIdlePrimaryDeviceModal}
         editHistoryMessages={editHistoryMessages}
         editNicknameAndNoteModalProps={editNicknameAndNoteModalProps}
         errorModalProps={errorModalProps}
         deleteMessagesProps={deleteMessagesProps}
         draftGifMessageSendModalProps={draftGifMessageSendModalProps}
         forwardMessagesProps={forwardMessagesProps}
+        hideCriticalIdlePrimaryDeviceModal={hideCriticalIdlePrimaryDeviceModal}
+        hideLowDiskSpaceBackupImportModal={hideLowDiskSpaceBackupImportModal}
+        lowDiskSpaceBackupImportModal={lowDiskSpaceBackupImportModal}
         messageRequestActionsConfirmationProps={
           messageRequestActionsConfirmationProps
         }
@@ -246,7 +248,6 @@ export const SmartGlobalModalContainer = memo(
         hideTapToViewNotAvailableModal={hideTapToViewNotAvailableModal}
         i18n={i18n}
         isAboutContactModalVisible={aboutContactModalContactId != null}
-        isProfileEditorVisible={isProfileEditorVisible}
         isProfileNameWarningModalVisible={isProfileNameWarningModalVisible}
         isShortcutGuideModalVisible={isShortcutGuideModalVisible}
         isSignalConnectionsVisible={isSignalConnectionsVisible}
@@ -272,7 +273,6 @@ export const SmartGlobalModalContainer = memo(
           renderMessageRequestActionsConfirmation
         }
         renderNotePreviewModal={renderNotePreviewModal}
-        renderProfileEditor={renderProfileEditor}
         renderProfileNameWarningModal={renderProfileNameWarningModal}
         renderUsernameOnboarding={renderUsernameOnboarding}
         renderSafetyNumber={renderSafetyNumber}

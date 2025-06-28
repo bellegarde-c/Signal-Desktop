@@ -115,7 +115,7 @@ export type PropsType = {
   setHasAllStoriesUnmuted: (isUnmuted: boolean) => unknown;
   showContactModal: (contactId: string, conversationId?: string) => void;
   showToast: ShowToastAction;
-  emojiSkinToneDefault: EmojiSkinTone;
+  emojiSkinToneDefault: EmojiSkinTone | null;
   story: StoryViewType;
   storyViewMode: StoryViewModeType;
   viewStory: ViewStoryActionCreatorType;
@@ -704,6 +704,7 @@ export function StoryViewer({
                   onExpandSpoiler={data => setIsSpoilerExpanded(data)}
                   renderLocation={RenderLocation.StoryViewer}
                   text={caption.text}
+                  originalText={caption.text}
                 />
                 {caption.hasReadMore && !hasExpandedCaption && (
                   <button

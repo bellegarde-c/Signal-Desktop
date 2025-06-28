@@ -199,6 +199,7 @@ export type OwnProps = Readonly<{
     props: SmartCompositionRecordingDraftProps
   ) => JSX.Element | null;
   selectedMessageIds: ReadonlyArray<string> | undefined;
+  areSelectedMessagesForwardable: boolean | undefined;
   toggleSelectMode: (on: boolean) => void;
   toggleForwardMessagesModal: (
     payload: ForwardMessagesPayload,
@@ -209,7 +210,7 @@ export type OwnProps = Readonly<{
   ) => void;
 
   onPickEmoji: (e: EmojiPickDataType) => void;
-  emojiSkinToneDefault: EmojiSkinTone;
+  emojiSkinToneDefault: EmojiSkinTone | null;
   // StickerButton
   installedPacks: ReadonlyArray<StickerPackType>;
   recentStickers: ReadonlyArray<StickerType>;
@@ -367,6 +368,7 @@ export const CompositionArea = memo(function CompositionArea({
   renderSmartCompositionRecordingDraft,
   // Selected messages
   selectedMessageIds,
+  areSelectedMessagesForwardable,
   toggleSelectMode,
   toggleForwardMessagesModal,
   // DraftGifMessageSendModal
@@ -735,7 +737,6 @@ export const CompositionArea = memo(function CompositionArea({
             recentEmojis={recentEmojis}
             emojiSkinToneDefault={emojiSkinToneDefault}
             onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
-            closeOnPick
           />
         </div>
       )}
@@ -907,6 +908,7 @@ export const CompositionArea = memo(function CompositionArea({
       <SelectModeActions
         i18n={i18n}
         selectedMessageIds={selectedMessageIds}
+        areSelectedMessagesForwardable={areSelectedMessagesForwardable === true}
         onExitSelectMode={() => {
           toggleSelectMode(false);
         }}
@@ -1076,6 +1078,7 @@ export const CompositionArea = memo(function CompositionArea({
             imageSrc={attachmentToEdit.url}
             imageToBlurHash={imageToBlurHash}
             installedPacks={installedPacks}
+            isCreatingStory={false}
             isFormattingEnabled={isFormattingEnabled}
             isSending={false}
             onClose={() => setAttachmentToEdit(undefined)}

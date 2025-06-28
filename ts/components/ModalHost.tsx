@@ -66,12 +66,18 @@ export const ModalHost = React.memo(function ModalHostInner({
     }
     return handleOutsideClick(
       node => {
+        // In strange event propagation situations we can get the actual document.body
+        // node here. We don't want to handle those events.
+        if (node === document.body) {
+          return false;
+        }
+
         // ignore clicks that originate in the calling/pip
         // when we're not handling a component in the calling/pip
         if (
           modalContainer === document.body &&
           node instanceof Element &&
-          node.closest('.module-calling__modal-container')
+          node.closest('.module-calling__modal-container, [data-fun-overlay]')
         ) {
           return false;
         }

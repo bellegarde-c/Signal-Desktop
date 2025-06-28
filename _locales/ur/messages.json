@@ -41,6 +41,9 @@
   "icu:Preferences__sent-media-quality__description": {
     "messageformat": "اعلیٰ کوالٹی کے میڈیا کو بھیجنے میں مزید ڈیٹا استعمال ہو گا۔"
   },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "Signal کے لئے عطیہ کریں"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "معیار"
   },
@@ -68,6 +71,9 @@
   "icu:unknownContact": {
     "messageformat": "نامعلوم رابطہ"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "نامعلوم"
+  },
   "icu:unknownGroup": {
     "messageformat": "نامعلوم گروپ"
   },
@@ -79,9 +85,6 @@
   },
   "icu:databaseError": {
     "messageformat": "ڈیٹا بیس ایرر"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "ڈیٹا بیس میں نقص واقع ہوا ہے۔ آپ نقص کو کاپی کر سکتے اور مسئلے کو ٹھیک کرنے میں مدد کے لیے Signal سپورٹ سے رابطہ کر سکتے ہیں۔ اگر آپ کو فوری طور پر Signal استعمال کرنا ہے، تو آپ اپنا ڈیٹا حذف کر سکتے ہیں اور ری اسٹارٹ کر سکتے ہیں۔\n\nسپورٹ سے رابطہ کرنے کے لیے ملاحظہ کریں: {link}"
   },
   "icu:deleteAndRestart": {
     "messageformat": "ڈیٹا حذف کریں اور ری اسٹارٹ کریں"
@@ -202,6 +205,9 @@
   },
   "icu:menuSetupAsStandalone": {
     "messageformat": "Standalone ڈیوائس کے طور پر مرتب کریں"
+  },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
   },
   "icu:messageContextMenuButton": {
     "messageformat": "مزید افعال"
@@ -589,6 +595,9 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "ڈیٹا بیس کا نقص: براہ کرم اپنے لاگز شیئر کریں۔"
   },
   "icu:Toast--InvalidStorageServiceHeaders": {
     "messageformat": "اسٹوریج سروس کی جانب سے غلط جواب موصول ہوا۔ براہ کرم اپنے لاگز شیئر کریں۔"
@@ -1262,6 +1271,9 @@
   "icu:Install__support-link": {
     "messageformat": "مدد چاہیے؟"
   },
+  "icu:Preferences--header": {
+    "messageformat": "ترتیبات"
+  },
   "icu:Preferences--phone-number": {
     "messageformat": "فون نمبر"
   },
@@ -1670,9 +1682,6 @@
   "icu:notificationSenderInGroup": {
     "messageformat": "{sender} میں {group}"
   },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} نے آپ کے میسج پر {emoji} ری ایکٹ کیا"
-  },
   "icu:notificationReactionMessage": {
     "messageformat": "{sender} نے {emoji} ری ایکٹ کیا: {message} پر"
   },
@@ -1828,12 +1837,6 @@
   },
   "icu:ConversationDetails--support-center": {
     "messageformat": "مدداور تعاون کا مرکز"
-  },
-  "icu:ConversationDetails--contact-us": {
-    "messageformat": "ہم سے رابطہ کریں"
-  },
-  "icu:ConversationDetails--donate": {
-    "messageformat": "Signal کے لئے عطیہ کریں"
   },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "حفاظتی نمبر دیکھیں"
@@ -2324,14 +2327,23 @@
   "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
     "messageformat": "کوئی ایموجی نہیں ملا"
   },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "{emojiName} کے لیے اسکن ٹون منتخب کریں"
+  },
   "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
     "messageformat": "اسکن ٹون کی ترجیحات کو تبدیل کریں"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "اسکن ٹون منتخب کرنے کے لیے دیر تک دبائیں"
   },
   "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
     "messageformat": "اپنی ڈیفالٹ اسکن ٹون منتخب کریں"
   },
   "icu:FunPanelEmojis__SectionTitle--SearchResults": {
     "messageformat": "تلاش کے نتائج"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "یہ پیغام"
   },
   "icu:FunPanelEmojis__SectionTitle--Recents": {
     "messageformat": "حالیہ استعمال شدہ"
@@ -2360,6 +2372,9 @@
   "icu:FunPanelEmojis__SectionTitle--Flags": {
     "messageformat": "جھنڈے"
   },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "ری ایکشنز کو حسبِ ضرورت بنائیں"
+  },
   "icu:FunPanelStickers__SearchLabel": {
     "messageformat": "اسٹیکرز تلاش کریں"
   },
@@ -2377,6 +2392,9 @@
   },
   "icu:FunPanelStickers__SectionTitle--Recents": {
     "messageformat": "حالیہ استعمال شدہ"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "فیچر کردہ"
   },
   "icu:FunPanelStickers__SearchResults__EmptyHeading": {
     "messageformat": "کوئی اسٹیکر نہیں ملا"
@@ -2460,13 +2478,13 @@
     "messageformat": "گہری اسکن ٹون"
   },
   "icu:FunButton__Label--FunPicker": {
-    "messageformat": "Add an Emoji, Sticker, or GIF"
+    "messageformat": "کوئی ایموجی، اسٹیکر، یا GIF شامل کریں"
   },
   "icu:FunButton__Label--EmojiPicker": {
-    "messageformat": "Add an Emoji"
+    "messageformat": "ایموجی شامل کریں"
   },
   "icu:FunButton__Label--StickerPicker": {
-    "messageformat": "Add a Sticker"
+    "messageformat": "اسٹیکر شامل کریں"
   },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "منسوخ کریں"
@@ -2504,14 +2522,8 @@
   "icu:Message--update-signal": {
     "messageformat": "Signal اپ ڈیٹ کریں"
   },
-  "icu:Message--tap-to-view-expired": {
-    "messageformat": "دیکھا ہوا"
-  },
   "icu:Message--tap-to-view--viewed": {
     "messageformat": "دیکھا ہوا"
-  },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "میڈیا"
   },
   "icu:Message--tap-to-view--media": {
     "messageformat": "ایک مرتبہ دیکھا جانے والا میڈیا"
@@ -2521,12 +2533,6 @@
   },
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "ایک وقتی دیکھے جانے والے میسجز آپ کی چیٹ ہسٹری میں اسٹور نہیں ہوتے۔"
-  },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "تصویر دیکھیں"
-  },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "ویڈیو دیکھیں"
   },
   "icu:Message--tap-to-view--video": {
     "messageformat": "ایک بار دیکھنے کی ویڈیو"
@@ -2596,6 +2602,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "اسٹیکر کا انتخاب کنندہ کھولیں"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "GIF منتخب کرنے والا کھولیں"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "آڈیو نوٹ ریکارڈ کرنا شروع کریں"
@@ -2951,6 +2960,36 @@
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, one {1 ممبر} other {{count,number} ممبرز}}"
   },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, one {{memberList} (+{invitesCount,number} کو مدعو کیا گیا)} other {{memberList} (+{invitesCount,number} مدعو کیے گئے)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "کوئی گروپ ممبرز نہیں ہیں"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "ابھی تک کوئی اور گروپ ممبرز نہیں ہیں"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} اور آپ"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} اور{member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}، {member2}، اور آپ"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}، {member2}، اور {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, one {{member1}، {member2}، {member3}، اور <clickable>{remainingCount,number} دیگر</clickable>} other {{member1}، {member2}، {member3}، اور <clickable>{remainingCount,number} دیگر</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, one {{member1}، {member2}، {member3}، اور <clickable>{remainingCount,number} دیگر</clickable>} other {{member1}، {member2}، {member3}، اور <clickable>{remainingCount,number} دیگر</clickable>}}"
+  },
   "icu:ConversationHero--review-carefully": {
     "messageformat": "احتیاط سے جائزہ لیں"
   },
@@ -3101,11 +3140,29 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "نکل جائیں"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "کال ختم کریں"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "کال چھوڑو"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "مائیک آف"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "مائیک آن"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName} نے آپ کو خاموش کر دیا۔"
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name} نے {otherName} کو خاموش کر دیا۔"
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "آپ نے {otherName} کو خاموش کر دیا۔"
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "آپ نے کسی دوسری ڈیوائس سے خود کو خاموش کر دیا۔"
   },
   "icu:CallControls__LowerHandSuggestionToast": {
     "messageformat": "اپنا ہاتھ نیچے کریں؟"
@@ -3199,9 +3256,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "ویو اپ ڈیٹ ہو گیا"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "کال چھوڑو"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "اپنی اسکرین کا اشتراک کریں"
@@ -3357,7 +3411,7 @@
     "messageformat": "گروپ میں شامل نہیں ہوسکتے ہیں"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "آپ گروپ لنک کے ذریعے اس گروپ میں شامل نہیں ہو سکتے کیونکہ ایک ایڈمن نے آپ کو ہٹا دیا تھا۔"
+    "messageformat": "آپ گروپ لنک کے ذریعے اس گروپ میں شامل نہیں ہو سکتے کیونکہ ایڈمن نے آپ کو ہٹا دیا تھا۔ گروپ میں دوبارہ شامل ہونے کے لیے ایڈمن سے رابطہ کریں۔"
   },
   "icu:GroupV2--join--prompt-with-approval": {
     "messageformat": "اس گروپ میں شامل ہونے سے پہلے اس گروپ کے منتظم کو آپ کی درخواست کو منظور کرنا ہوگا۔ جب آپ شمولیت کی درخواست کریں گے تو ، آپ کا نام اور تصویر اس کے ممبروں کے ساتھ شیئر کی جائے گی."
@@ -3917,6 +3971,12 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "\"Signal کو عطیہ کریں\" پر ٹیپ اور سبسکرائب کریں"
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "آپ کی پروفائل کو منتقل کر دیا گیا ہے"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "اپنی پروفائل کو دیکھنے اور اس میں ترمیم کرنے کے لیے سیٹنگز ٹیب کھولیں۔"
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "میسجز سنک ہو رہے ہیں"
   },
@@ -3977,6 +4037,12 @@
   "icu:BackupMediaDownloadProgress__description-idle": {
     "messageformat": "پس منظر میں میڈیا ڈاؤن لوڈ ہونا جاری رہے گا"
   },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "میڈیا بحال کرنے میں توقف کر دیا گيا"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "انٹرنیٹ کنکشن کا انتظار ہو رہا ہے..."
+  },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "ٹرانسفر روکیں"
   },
@@ -4007,6 +4073,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "منتقل کرنے کو منسوخ کریں"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "اکاؤنٹ کی کارروائی درکار ہے"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "آپ کو اس اکاؤنٹ کا استعمال جاری رکھنے کے لیے اپنے فون پر Signal کھولنا ہو گا۔ اگر آپ اپنے فون پر Signal نہیں کھولتے، تو جلد ہی آپ کا اکاؤنٹ حذف کر دیا جائے گا۔ <learnMoreLink>مزید جانیں</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "میڈیا بحال نہیں ہو سکتا"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "آپ کی ڈیوائس میں کافی جگہ خالی نہیں ہے۔ اپنے میڈیا کو بحال کرنے کے لیے {diskSpaceAmount} جگہ خالی کریں۔"
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "پھیلائیں"
   },
@@ -4027,9 +4105,6 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "ترمیم کردہ میسج بھیجیں"
-  },
-  "icu:CompositionArea__FunButtonLabel": {
-    "messageformat": "کوئی ایموجی، اسٹیکر، یا GIF شامل کریں"
   },
   "icu:CompositionArea__ConfirmGifSelection__Title": {
     "messageformat": "منسلکہ بدلیں؟"
@@ -4257,7 +4332,7 @@
     "messageformat": "کسی منتظم سے گروپ لینک کے ذریعے نئے ممبران کی شمولیت کی منظوری کی ضرورت ہے"
   },
   "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
-    "messageformat": "Copy signal.group link to keyboard"
+    "messageformat": "signal.group کے لنک کو کلپ بورڈ پر کاپی کریں"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "درخواستیں ({count,number})"
@@ -4465,12 +4540,6 @@
   },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "حفاظتی تجاویز"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "اس شخص کے ساتھ آپ کے کوئی گروپ مشترک نہیں ہیں۔ ناپسندیدہ پیغامات سے بچنے کے لئے قبول کرنے سے پہلے درخواستوں کا بغور جائزہ لیں۔"
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "پیغام کی درخواستوں کے بارے میں"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "درخواستوں کا بغور جائزہ لیں۔ Signal کو یکساں نام کا حامل ایک دوسرا رابطہ ملا ہے۔ <reviewRequestLink>جائزے کی درخواست</reviewRequestLink>"
@@ -4874,6 +4943,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "آپ کے پروفائل کو اپ ڈیٹ نہیں کیا جاسکا۔ دوبارہ کوشش کریں."
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "شیئر کرنا"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "کسی ایڈمن کو پیغام دیں"
   },
@@ -4906,6 +4978,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "عام"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "Signal کے لئے عطیہ کریں"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "ظہور ہونا"
@@ -4943,6 +5018,36 @@
   "icu:Preferences__media-auto-download__description": {
     "messageformat": "صوتی میسجز اور اسٹیکرز ہمیشہ خودکار طور پر ڈاؤن لوڈ ہوتے ہیں۔"
   },
+  "icu:Preferences__button--backups": {
+    "messageformat": "بیک اپس"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "اندرونی"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "انتظام کریں"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "فولڈر منتخب کریں"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "سیٹ اپ"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "مقامی بیک اپس"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "برآمد کریں…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "مقامی انکرپٹ کردہ بیک اپ کو فولڈر میں برآمد کریں اور اس کی توثیق کریں"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "انکرپٹ کردہ بیک اپ کو میموری میں ایکسپورٹ کریں اور اس پر تصدیقی سوئٹ چلائیں"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "تصدیق کریں"
+  },
   "icu:Preferences--lastSynced": {
     "messageformat": "آخری درآمد {date} {time} پر کی گئی"
   },
@@ -4972,6 +5077,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "بلاک شدہ"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "Signal بیک اپس"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "Signal کی محفوظ، آخر سے آخر تک انکرپٹ کردہ اسٹوریج سروس کے حامل خودکار بیک اپس۔ اپنے فون پر آغاز کریں۔ <learnMoreLink>مزید جانیں۔</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "اپنی میسج ہسٹری کا بیک اپ کریں تاکہ جب بھی آپ کوئی نیا فون لیں یا Signal کو دوبارہ انسٹال کریں تو اس صورت میں آپ کا ڈیٹا کبھی بھی ضائع نہ ہو۔"
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "بیک اپ کی تفصیلات"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "ٹیکسٹ + تمام میڈیا کا بیک اپ"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "آپ کی سبسکرپشن نہیں ملی۔ Signal بیک اپس کا استعمال کرنا جاری رکھنے کے لیے تجدید کریں۔"
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, one {ٹیکسٹ + {mediaDayCount,number} دن کے میڈیا کا بیک اپ} other {ٹیکسٹ + {mediaDayCount,number} دنوں کے میڈیا کا بیک اپ}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "آپ کا بیک اپ پلان مفت ہے"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "{date} کی تجدید کرتا ہے"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "{date} پر زائد المیعاد ہوتا ہے"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "سبسکرپشن منسوخ کر دی گئی"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "آپ اپنے فون پر Signal بیک اپس کی سبسکرپشن کا نظم کر سکتے ہیں یا منسوخ کر سکتے ہیں۔"
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "آپ Signal بیک اپس کو اپنے فون پر منظم کر سکتے یا اپ گریڈ کر سکتے ہیں۔"
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "آپ Signal بیک اپس کی سبسکرپشن کو اپنے فون پر منظم کر سکتے ہیں یا تجدید کر سکتے ہیں۔"
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "آخری بیک اپ"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "آپکا موبائل"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "بیک اپ کا سائز"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "ڈیسک ٹاپ کے بیک اپس"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "بیک اپس ایک کیی کے ساتھ انکرپٹ کردہ ہوتے ہیں اور آپ کے کمپیوٹر میں اسٹور کیے جاتے ہیں۔"
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "آخر سے آخر تک انکرپٹ کردہ بیک اپ تخلیق کریں جسے آپ اپنے فون میں دوبارہ ری اسٹور کر سکیں۔ "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "بیک اپ کو ری اسٹور کرنے کے لیے، Signal کی نئی کاپی انسٹال کریں۔ ایپ کھولیں اور بیک اپ ری اسٹور کریں پر ٹیپ کریں، اس کے بعد بیک اپ فولڈر کو تلاش کریں۔ <learnMoreLink>مزید جانیں۔</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "ایک فولڈر منتخب کریں"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "اپنے کمپیوٹر کی اسٹوریج میں ایک فولڈر منتخب کریں جہاں آپ کے آخر سے آخر تک انکرپٹ کردہ بیک اپ کو اسٹور کیا جائے گا۔"
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "اگلا"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "ہو گیا"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "بیک اپ کیی کا ٹیکسٹ باکس"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "کیی درج کریں"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "اپنی بیک اپ کیی محفوظ کریں"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "یہ کیی آپ کے اکاؤنٹ اور ڈیٹا کو بحال کرنے کے لیے درکار ہوتی ہے۔ اس کیی کو کسی محفوظ جگہ پر اسٹور کریں۔ اگر آپ اسے کھو دیتے ہیں، تو آپ اپنا اکاؤنٹ بحال نہیں کر سکیں گے۔ <learnMoreLink>مزید جانیں۔</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "اپنی بیک اپ کیی کی تصدیق کریں"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "وہ بیک اپ کیی درج کریں جو آپ نے ابھی ریکارڈ کی ہے"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "اپنی کیی کو محفوظ رکھیں"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "اگر آپ اپنی کیی کو کھو دیتے ہیں تو Signal آپ کے بیک اپ کو بحال کرنے میں مدد نہیں کر سکے گا۔ اسے کسی انتہائی محفوظ جگہ پر اسٹور کریں، اور دوسروں کے ساتھ شئیر نہ کریں۔"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "جاری رکھیں"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "کیی کو دوبارہ دیکھیں"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "بیک اپ فولڈر"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "تبدیل کریں"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "کلپ بورڈ کو کاپی کریں"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "بیک اپ کیی کو کاپی کر لیا گیا"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "کیی دیکھیں"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "بیک اپ کیی"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "آپ کی بیک اپ کیی 64-ہندسے پر مشتمل کوڈ ہے جو آپ کے بیک اپ کو ری اسٹور کرنے کے لیے استعمال ہوتی ہے"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "بیک اپ کے دیگر طریقے"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, one {{num,number} رابطہ} other {{num,number} روابط}}"
@@ -5089,6 +5323,24 @@
   },
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "ری اسٹاٹ کریں"
+  },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "ایپلیکیشن"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "سکرین سیکیورٹی"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "اس کمپیوٹر پر Signal کے اسکرین شاٹس کو روکیں تاکہ اضافی پرائیویسی حاصل ہو۔"
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "اسکرین سیکیورٹی کو غیر فعال کریں؟"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "اگر غیر فعال کیا گیا، تو یہ Microsoft Windows کو Signal کے اسکرین شاٹس لینے اور انہیں ایسے فیچرز میں استعمال کرنے کی اجازت دے سکتا ہے جو نجی نہ ہوں۔"
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "معطل کریں"
   },
   "icu:DialogUpdate--version-available": {
     "messageformat": "ورژن {version} پر اپ ڈیٹ دستیاب ہے"
@@ -6186,6 +6438,9 @@
   "icu:ProfileNameWarningModal__list--item3--group": {
     "messageformat": "ان لوگوں کے ساتھ ذاتی معلومات شیئر نہ کریں جنہیں آپ جانتے نہیں ہیں"
   },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "منسلکات کو محفوظ کریں"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "نیا کیا ہے"
   },
@@ -6217,16 +6472,10 @@
     "messageformat": "معمولی تبدیلیاں کی گئیں، بگ ٹھیک کیے گئے، اور کارکردگی اور بھی بہتر بنائی گئی ہے۔ Signal استعمال کرنے کے لیے شکریہ!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.47--0": {
-    "messageformat": "اب آپ کال کے دوران اپنے آپ کو بہتر انداز میں دیکھنے کے لیے اپنے مقامی ویڈیو کے پری ویو کو پھیلا سکتے ہیں۔"
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "میسج ری ایکشن کے سلیکٹر میں ایک نیا سیکشن خودکار طور پر تمام ایموجی ری ایکشنز دکھاتا ہے جو کسی پیغام کو موصول ہوئے ہیں۔ تو اب آپ بھی دوسروں کو فالو کرتے ہوئے ایک چمکدار دل والا ایموجی ڈال سکتے ہیں یا پھر اپنے خاص سٹائل میں ایناٹومکل دل کا نشان ڈال سکتے ہیں۔"
   },
-  "icu:WhatsNew__v7.48--0": {
-    "messageformat": "ہم نے ایک آسان شارٹ کٹ شامل کیا ہے تاکہ آپ Signal کی گروپ کال کے دوران بولنا شروع کرنے کے بعد فوری طور پر اپنا ہاتھ نیچے کر سکیں۔"
-  },
-  "icu:WhatsNew__v7.49--0": {
-    "messageformat": "اگر آپ Signal Android پر نیا ڈیسک ٹاپ لنک کرتے ہیں اور اپنی میسج ہسٹری ٹرانسفر کرنے کا انتخاب کرتے ہیں، تو اب آپ اپنی بنیادی ڈیوائس سے پرانے منسلکات کو چن کر بھی ٹرانسفر کر سکتے ہیں۔ یہ ٹرانسفر کا عمل اینڈ ٹو اینڈ انکرپٹ کردہ اور محفوظ ہے۔"
-  },
-  "icu:WhatsNew__v7.50--0": {
-    "messageformat": "If you link a new Desktop on Signal Android and choose to transfer your message history, now you can also selectively transfer old attachments from your primary device too. Bring the past into the present by scrolling back in time and clicking on the download icon. As always, the transfer process is end-to-end encrypted and secure."
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "یہ اپ ڈیٹ لینکس پر GPU ایکسلریشن کو بہتر کارکردگی اور معاون ہارڈ ویئر پر ہموار ویڈیو پلے بیک کے لیے قابل بنایا ہے۔"
   }
 }

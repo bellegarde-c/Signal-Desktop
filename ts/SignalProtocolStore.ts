@@ -8,6 +8,7 @@ import { EventEmitter } from 'events';
 
 import {
   Direction,
+  IdentityChange,
   IdentityKeyPair,
   KyberPreKeyRecord,
   PreKeyRecord,
@@ -204,26 +205,6 @@ export function hydrateSignedPreKey(
   );
 }
 
-export function freezePublicKey(publicKey: PublicKey): Uint8Array {
-  return publicKey.serialize();
-}
-export function freezePreKey(preKey: PreKeyRecord): KeyPairType {
-  const keyPair = {
-    pubKey: preKey.publicKey().serialize(),
-    privKey: preKey.privateKey().serialize(),
-  };
-  return keyPair;
-}
-export function freezeSignedPreKey(
-  signedPreKey: SignedPreKeyRecord
-): KeyPairType {
-  const keyPair = {
-    pubKey: signedPreKey.publicKey().serialize(),
-    privKey: signedPreKey.privateKey().serialize(),
-  };
-  return keyPair;
-}
-
 type SessionCacheEntry = CacheEntryType<SessionType, SessionRecord>;
 type SenderKeyCacheEntry = CacheEntryType<SenderKeyType, SenderKeyRecord>;
 
@@ -269,8 +250,6 @@ export class SignalProtocolStore extends EventEmitter {
 
   sessionQueues = new Map<SessionIdType, PQueue>();
 
-  sessionQueueJobCounter = 0;
-
   readonly #identityQueues = new Map<ServiceIdString, PQueue>();
   #currentZone?: Zone;
   #currentZoneDepth = 0;
@@ -296,10 +275,12 @@ export class SignalProtocolStore extends EventEmitter {
             'Invalid identity key serviceId'
           );
           const { privKey, pubKey } = map.value[serviceId];
-          this.#ourIdentityKeys.set(serviceId, {
-            privKey,
-            pubKey,
-          });
+          const privateKey = PrivateKey.deserialize(Buffer.from(privKey));
+          const publicKey = PublicKey.deserialize(Buffer.from(pubKey));
+          this.#ourIdentityKeys.set(
+            serviceId,
+            new IdentityKeyPair(publicKey, privateKey)
+          );
         }
       })(),
       (async () => {
@@ -627,8 +608,8 @@ export class SignalProtocolStore extends EventEmitter {
         id,
         keyId: key.keyId,
         ourServiceId,
-        publicKey: key.keyPair.pubKey,
-        privateKey: key.keyPair.privKey,
+        publicKey: key.keyPair.publicKey.serialize(),
+        privateKey: key.keyPair.privateKey.serialize(),
         createdAt: now,
       };
 
@@ -780,8 +761,8 @@ export class SignalProtocolStore extends EventEmitter {
       id,
       ourServiceId,
       keyId,
-      publicKey: keyPair.pubKey,
-      privateKey: keyPair.privKey,
+      publicKey: keyPair.publicKey.serialize(),
+      privateKey: keyPair.privateKey.serialize(),
       created_at: createdAt,
       confirmed: Boolean(confirmed),
     };
@@ -1009,29 +990,13 @@ export class SignalProtocolStore extends EventEmitter {
 
   async enqueueSessionJob<T>(
     qualifiedAddress: QualifiedAddress,
-    name: string,
     task: () => Promise<T>,
     zone: Zone = GLOBAL_ZONE
   ): Promise<T> {
-    this.sessionQueueJobCounter += 1;
-    const id = this.sessionQueueJobCounter;
-
-    const waitStart = Date.now();
-
     return this.withZone(zone, 'enqueueSessionJob', async () => {
       const queue = this.#_getSessionQueue(qualifiedAddress);
 
-      const waitTime = Date.now() - waitStart;
-      log.info(
-        `enqueueSessionJob(${id}): queuing task ${name}, waited ${waitTime}ms`
-      );
-      const queueStart = Date.now();
-
       return queue.add<T>(() => {
-        const queueTime = Date.now() - queueStart;
-        log.info(
-          `enqueueSessionJob(${id}): running task ${name}, waited ${queueTime}ms`
-        );
         return task();
       });
     });
@@ -1611,7 +1576,6 @@ export class SignalProtocolStore extends EventEmitter {
 
     await this.enqueueSessionJob(
       addr,
-      `_archiveSession(${addr.toString()})`,
       async () => {
         const item = entry.hydrated ? entry.item : hydrateSession(entry.fromDB);
 
@@ -1959,7 +1923,7 @@ export class SignalProtocolStore extends EventEmitter {
     }
 
     const hash = sha256(pubKey);
-    const fingerprint = hash.slice(0, 4);
+    const fingerprint = hash.subarray(0, 4);
 
     return Bytes.toBase64(fingerprint);
   }
@@ -1984,7 +1948,7 @@ export class SignalProtocolStore extends EventEmitter {
     publicKey: Uint8Array,
     nonblockingApproval = false,
     { zone = GLOBAL_ZONE, noOverwrite = false }: SaveIdentityOptions = {}
-  ): Promise<boolean> {
+  ): Promise<IdentityChange> {
     if (!this.identityKeys) {
       throw new Error('saveIdentity: this.identityKeys not yet cached!');
     }
@@ -2031,11 +1995,11 @@ export class SignalProtocolStore extends EventEmitter {
             'saveIdentity'
           );
 
-          return false;
+          return IdentityChange.NewOrUnchanged;
         }
 
         if (noOverwrite) {
-          return false;
+          return IdentityChange.NewOrUnchanged;
         }
 
         const identityKeyChanged = !constantTimeEqual(
@@ -2050,7 +2014,7 @@ export class SignalProtocolStore extends EventEmitter {
 
           if (isOurIdentifier && identityKeyChanged) {
             log.warn(`${logId}: ignoring identity for ourselves`);
-            return false;
+            return IdentityChange.NewOrUnchanged;
           }
 
           log.info(`${logId}: Replacing existing identity...`);
@@ -2095,7 +2059,7 @@ export class SignalProtocolStore extends EventEmitter {
             zone,
           });
 
-          return true;
+          return IdentityChange.ReplacedExisting;
         }
         if (this.#isNonBlockingApprovalRequired(identityRecord)) {
           log.info(`${logId}: Setting approval status...`);
@@ -2103,10 +2067,10 @@ export class SignalProtocolStore extends EventEmitter {
           identityRecord.nonblockingApproval = nonblockingApproval;
           await this.#_saveIdentityKey(identityRecord);
 
-          return false;
+          return IdentityChange.NewOrUnchanged;
         }
 
-        return false;
+        return IdentityChange.NewOrUnchanged;
       }
     );
   }
@@ -2537,10 +2501,7 @@ export class SignalProtocolStore extends EventEmitter {
     const pniPrivateKey = identityKeyPair.privateKey.serialize();
 
     // Update caches
-    this.#ourIdentityKeys.set(pni, {
-      pubKey: pniPublicKey,
-      privKey: pniPrivateKey,
-    });
+    this.#ourIdentityKeys.set(pni, identityKeyPair);
     this.#ourRegistrationIds.set(pni, registrationId);
 
     // Update database
@@ -2564,10 +2525,10 @@ export class SignalProtocolStore extends EventEmitter {
       this.storeSignedPreKey(
         pni,
         signedPreKey.id(),
-        {
-          privKey: signedPreKey.privateKey().serialize(),
-          pubKey: signedPreKey.publicKey().serialize(),
-        },
+        new IdentityKeyPair(
+          signedPreKey.publicKey(),
+          signedPreKey.privateKey()
+        ),
         true,
         signedPreKey.timestamp()
       ),
@@ -2647,11 +2608,8 @@ export class SignalProtocolStore extends EventEmitter {
       return undefined;
     }
 
-    const pniIdentity = new IdentityKeyPair(
-      PublicKey.deserialize(Buffer.from(pniKeyPair.pubKey)),
-      PrivateKey.deserialize(Buffer.from(pniKeyPair.privKey))
-    );
-    const aciPubKey = PublicKey.deserialize(Buffer.from(aciKeyPair.pubKey));
+    const pniIdentity = pniKeyPair;
+    const aciPubKey = aciKeyPair.publicKey;
     this.#cachedPniSignatureMessage = {
       pni: ourPni,
       signature: pniIdentity.signAlternateIdentity(aciPubKey),

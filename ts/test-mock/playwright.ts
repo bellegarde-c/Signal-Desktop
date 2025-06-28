@@ -101,6 +101,10 @@ export class App extends EventEmitter {
     return this.#waitForEvent('provisioning-url');
   }
 
+  public async waitForPreloadCacheHit(): Promise<boolean> {
+    return this.#waitForEvent('preload-cache-hit');
+  }
+
   public async waitForDbInitialized(): Promise<void> {
     return this.#waitForEvent('db-initialized');
   }
@@ -201,6 +205,20 @@ export class App extends EventEmitter {
   ): Promise<Array<MessageAttributesType>> {
     const window = await this.getWindow();
     return window.evaluate(`window.SignalCI.getMessagesBySentAt(${timestamp})`);
+  }
+
+  public async exportLocalBackup(backupsBaseDir: string): Promise<string> {
+    const window = await this.getWindow();
+    return window.evaluate(
+      `window.SignalCI.exportLocalBackup('${backupsBaseDir}')`
+    );
+  }
+
+  public async stageLocalBackupForImport(snapshotDir: string): Promise<void> {
+    const window = await this.getWindow();
+    return window.evaluate(
+      `window.SignalCI.stageLocalBackupForImport('${snapshotDir}')`
+    );
   }
 
   public async uploadBackup(): Promise<void> {

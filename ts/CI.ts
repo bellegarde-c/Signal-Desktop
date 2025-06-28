@@ -32,6 +32,7 @@ export type CIType = {
   getSocketStatus: () => SocketStatuses;
   handleEvent: (event: string, data: unknown) => unknown;
   setProvisioningURL: (url: string) => unknown;
+  setPreloadCacheHit: (value: boolean) => unknown;
   solveChallenge: (response: ChallengeResponseType) => unknown;
   waitForEvent: (
     event: string,
@@ -42,6 +43,8 @@ export type CIType = {
   ) => unknown;
   openSignalRoute(url: string): Promise<void>;
   migrateAllMessages(): Promise<void>;
+  exportLocalBackup(backupsBaseDir: string): Promise<string>;
+  stageLocalBackupForImport(snapshotDir: string): Promise<void>;
   uploadBackup(): Promise<void>;
   unlink: () => void;
   print: (...args: ReadonlyArray<unknown>) => void;
@@ -118,6 +121,10 @@ export function getCI({
     handleEvent('provisioning-url', url);
   }
 
+  function setPreloadCacheHit(value: boolean): void {
+    handleEvent('preload-cache-hit', value);
+  }
+
   function handleEvent(event: string, data: unknown): void {
     const list = eventListeners.get(event) || [];
     const resolve = list.shift();
@@ -188,6 +195,20 @@ export function getCI({
     document.body.removeChild(a);
   }
 
+  async function exportLocalBackup(backupsBaseDir: string): Promise<string> {
+    const { snapshotDir } =
+      await backupsService.exportLocalBackup(backupsBaseDir);
+    return snapshotDir;
+  }
+
+  async function stageLocalBackupForImport(snapshotDir: string): Promise<void> {
+    const { error } =
+      await backupsService.stageLocalBackupForImport(snapshotDir);
+    if (error) {
+      throw error;
+    }
+  }
+
   async function uploadBackup() {
     await backupsService.upload();
     await AttachmentBackupManager.waitForIdle();
@@ -227,10 +248,13 @@ export function getCI({
     getSocketStatus,
     handleEvent,
     setProvisioningURL,
+    setPreloadCacheHit,
     solveChallenge,
     waitForEvent,
     openSignalRoute,
     migrateAllMessages,
+    exportLocalBackup,
+    stageLocalBackupForImport,
     uploadBackup,
     unlink,
     getPendingEventCount,

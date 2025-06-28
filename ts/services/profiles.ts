@@ -6,6 +6,7 @@ import type {
   ProfileKeyCredentialRequestContext,
 } from '@signalapp/libsignal-client/zkgroup';
 import PQueue from 'p-queue';
+import { IdentityChange } from '@signalapp/libsignal-client';
 
 import type { ReadonlyDeep } from 'type-fest';
 import type { ConversationModel } from '../models/conversations';
@@ -132,7 +133,11 @@ export class ProfileService {
         await this.fetchProfile(conversation, groupId);
         resolve();
       } catch (error) {
-        reject(error);
+        log.error(
+          `ProfileServices.get: Error was thrown fetching ${conversation.idForLogging()}!`,
+          Errors.toLogFormat(error)
+        );
+        resolve();
 
         if (this.#isPaused) {
           return;
@@ -516,9 +521,9 @@ async function doGetProfile(
       profile = await messaging.server.getProfile(serviceId, request);
     }
   } catch (error) {
-    log.error(`${logId}: Failed to fetch profile`, Errors.toLogFormat(error));
-
     if (error instanceof HTTPError) {
+      log.warn(`${logId}: Failed to fetch profile. Code:`, error.code);
+
       // Unauthorized/Forbidden
       if (error.code === 401 || error.code === 403) {
         if (request.groupSendToken != null) {
@@ -555,9 +560,6 @@ async function doGetProfile(
             });
           }
         }
-
-        // TODO: Is it safe to ignore these errors?
-        return;
       }
 
       // Not Found
@@ -571,6 +573,8 @@ async function doGetProfile(
           c.setUnregistered();
         }
       }
+
+      return;
     }
 
     // throw all unhandled errors
@@ -834,12 +838,13 @@ export async function updateIdentityKey(
     return false;
   }
 
-  const changed = await window.textsecure.storage.protocol.saveIdentity(
+  const saveOutcome = await window.textsecure.storage.protocol.saveIdentity(
     new Address(serviceId, 1),
     identityKey,
     false,
     { noOverwrite }
   );
+  const changed = saveOutcome === IdentityChange.ReplacedExisting;
   if (changed) {
     log.info(`updateIdentityKey(${serviceId}): changed`);
     // save identity will close all sessions except for .1, so we

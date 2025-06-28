@@ -26,7 +26,7 @@ import { getNotificationTextForMessage } from '../util/getNotificationTextForMes
 import { getNotificationDataForMessage } from '../util/getNotificationDataForMessage';
 import type { ProfileNameChangeType } from '../util/getStringForProfileChange';
 import type { AttachmentType, ThumbnailType } from '../types/Attachment';
-import { MAX_SAFE_TIMEOUT_DELAY, toDayMillis } from '../util/timestamp';
+import { toDayMillis } from '../util/timestamp';
 import { areWeAdmin } from '../util/areWeAdmin';
 import { isBlocked } from '../util/isBlocked';
 import { getAboutText } from '../util/getAboutText';
@@ -59,7 +59,6 @@ import type {
   ConversationColorType,
   CustomColorType,
 } from '../types/Colors';
-import { getAuthor } from '../messages/helpers';
 import { strictAssert } from '../util/assert';
 import { isConversationMuted } from '../util/isConversationMuted';
 import { isConversationSMSOnly } from '../util/isConversationSMSOnly';
@@ -89,14 +88,9 @@ import {
 import { decryptAttachmentV2 } from '../AttachmentCrypto';
 import * as Bytes from '../Bytes';
 import type { DraftBodyRanges } from '../types/BodyRange';
-import { BodyRange } from '../types/BodyRange';
 import { migrateColor } from '../util/migrateColor';
 import { isNotNil } from '../util/isNotNil';
-import {
-  NotificationType,
-  notificationService,
-  shouldSaveNotificationAvatarToDisk,
-} from '../services/notifications';
+import { shouldSaveNotificationAvatarToDisk } from '../services/notifications';
 import { storageServiceUploadJob } from '../services/storage';
 import { getSendOptions } from '../util/getSendOptions';
 import type { IsConversationAcceptedOptionsType } from '../util/isConversationAccepted';
@@ -143,7 +137,6 @@ import {
   conversationJobQueue,
   conversationQueueJobEnum,
 } from '../jobs/conversationJobQueue';
-import type { ReactionAttributesType } from '../messageModifiers/Reactions';
 import { getProfile } from '../util/getProfile';
 import { SEALED_SENDER } from '../types/SealedSender';
 import { createIdenticon } from '../util/createIdenticon';
@@ -177,7 +170,6 @@ import { generateMessageId } from '../util/generateMessageId';
 import { getMessageAuthorText } from '../util/getMessageAuthorText';
 import { downscaleOutgoingAttachment } from '../util/attachments';
 import { MessageRequestResponseEvent } from '../types/MessageRequestResponseEvent';
-import { hasExpiration } from '../types/Message2';
 import type { AddressableMessage } from '../textsecure/messageReceiverEvents';
 import {
   getConversationIdentifier,
@@ -192,8 +184,11 @@ import { queueAttachmentDownloadsForMessage } from '../util/queueAttachmentDownl
 import { cleanupMessages } from '../util/cleanup';
 import { MessageModel } from './messages';
 import { applyNewAvatar } from '../groups';
+import { safeSetTimeout } from '../util/timeout';
+import { getTypingIndicatorSetting } from '../types/Util';
+import { INITIAL_EXPIRE_TIMER_VERSION } from '../util/expirationTimer';
+import { maybeNotify } from '../messages/maybeNotify';
 
-/* eslint-disable more/no-then */
 window.Whisper = window.Whisper || {};
 
 const { Message } = window.Signal.Types;
@@ -285,6 +280,8 @@ export class ConversationModel extends window.Backbone
 
   throttledUpdateVerified?: () => void;
 
+  throttledUpdateUnread: () => void;
+
   typingRefreshTimer?: NodeJS.Timeout | null;
 
   typingPauseTimer?: NodeJS.Timeout | null;
@@ -312,7 +309,7 @@ export class ConversationModel extends window.Backbone
       verified: window.textsecure.storage.protocol.VerifiedStatus.DEFAULT,
       messageCount: 0,
       sentMessageCount: 0,
-      expireTimerVersion: 1,
+      expireTimerVersion: INITIAL_EXPIRE_TIMER_VERSION,
     };
   }
 
@@ -440,6 +437,7 @@ export class ConversationModel extends window.Backbone
     this.isFetchingUUID = this.isSMSOnly();
 
     this.throttledBumpTyping = throttle(this.bumpTyping, 300);
+    this.throttledUpdateUnread = throttle(this.#updateUnread, 300);
     this.throttledUpdateSharedGroups = throttle(
       this.updateSharedGroups.bind(this),
       FIVE_MINUTES
@@ -845,9 +843,9 @@ export class ConversationModel extends window.Backbone
     }
 
     const e164 = this.get('e164');
+    const aci = this.getAci();
     const pni = this.getPni();
-    const aci = this.getServiceId();
-    if (e164 && pni && aci && pni !== aci) {
+    if (e164 && aci) {
       this.updateE164(undefined);
       this.updatePni(undefined, false);
 
@@ -1120,7 +1118,7 @@ export class ConversationModel extends window.Backbone
 
   bumpTyping(): void {
     // We don't send typing messages if the setting is disabled
-    if (!window.Events.getTypingIndicatorSetting()) {
+    if (!getTypingIndicatorSetting()) {
       return;
     }
 
@@ -3144,7 +3142,7 @@ export class ConversationModel extends window.Backbone
     window.MessageCache.register(message);
 
     drop(this.onNewMessage(message));
-    drop(this.updateUnread());
+    this.throttledUpdateUnread();
   }
 
   async addDeliveryIssue({
@@ -3188,9 +3186,9 @@ export class ConversationModel extends window.Backbone
     window.MessageCache.register(message);
 
     drop(this.onNewMessage(message));
-    drop(this.updateUnread());
+    this.throttledUpdateUnread();
 
-    await this.notify(message.attributes);
+    await maybeNotify({ message: message.attributes, conversation: this });
   }
 
   async addKeyChange(
@@ -3242,12 +3240,9 @@ export class ConversationModel extends window.Backbone
       }
 
       if (isDirectConversation(this.attributes) && serviceId) {
-        const groups =
-          await window.ConversationController.getAllGroupsInvolvingServiceId(
-            serviceId
-          );
-        groups.forEach(group => {
-          void group.addKeyChange('addKeyChange - group fan-out', serviceId);
+        const groups = await this.#getSharedGroups();
+        groups?.forEach(group => {
+          drop(group.addKeyChange('addKeyChange - group fan-out', serviceId));
         });
       }
 
@@ -3343,16 +3338,14 @@ export class ConversationModel extends window.Backbone
       return;
     }
 
-    const lastMessage = this.get('timestamp') || Date.now();
-
+    const timestamp = Date.now();
     log.info(
       'adding verified change advisory for',
       this.idForLogging(),
       verifiedChangeId,
-      lastMessage
+      timestamp
     );
 
-    const timestamp = Date.now();
     const message = new MessageModel({
       ...generateMessageId(incrementMessageCounter()),
       conversationId: this.id,
@@ -3360,7 +3353,7 @@ export class ConversationModel extends window.Backbone
       readStatus: ReadStatus.Read,
       received_at_ms: timestamp,
       seenStatus: options.local ? SeenStatus.Seen : SeenStatus.Unseen,
-      sent_at: lastMessage,
+      sent_at: timestamp,
       timestamp,
       type: 'verified-change',
       verified,
@@ -3371,16 +3364,13 @@ export class ConversationModel extends window.Backbone
     window.MessageCache.register(message);
 
     drop(this.onNewMessage(message));
-    drop(this.updateUnread());
+    this.throttledUpdateUnread();
 
     const serviceId = this.getServiceId();
     if (isDirectConversation(this.attributes) && serviceId) {
-      void window.ConversationController.getAllGroupsInvolvingServiceId(
-        serviceId
-      ).then(groups => {
-        groups.forEach(group => {
-          void group.addVerifiedChange(this.id, verified, options);
-        });
+      const groups = await this.#getSharedGroups();
+      groups?.forEach(group => {
+        drop(group.addVerifiedChange(this.id, verified, options));
       });
     }
   }
@@ -3412,12 +3402,9 @@ export class ConversationModel extends window.Backbone
     if (isDirectConversation(this.attributes) && serviceId) {
       this.set({ profileLastUpdatedAt: Date.now() });
 
-      void window.ConversationController.getAllGroupsInvolvingServiceId(
-        serviceId
-      ).then(groups => {
-        groups.forEach(group => {
-          void group.addProfileChange(profileChange, this.id);
-        });
+      const groups = await this.#getSharedGroups();
+      groups?.forEach(group => {
+        drop(group.addProfileChange(profileChange, this.id));
       });
     }
   }
@@ -3600,12 +3587,7 @@ export class ConversationModel extends window.Backbone
         `notification for ${sourceServiceId} from ${oldValue} to ${newValue}`
     );
 
-    const convos = [
-      this,
-      ...(await window.ConversationController.getAllGroupsInvolvingServiceId(
-        sourceServiceId
-      )),
-    ];
+    const convos = [this, ...((await this.#getSharedGroups()) ?? [])];
 
     await Promise.all(
       convos.map(convo => {
@@ -4666,6 +4648,21 @@ export class ConversationModel extends window.Backbone
       );
     }
 
+    // If this is the initial sync, we want to use the provided expire timer & version and
+    // disregard our local version. We might be re-linking after the primary has
+    // re-registered and their expireTimerVersion may have been reset, but we don't want
+    // to ignore it; our local version is out of date.
+    if (
+      isInitialSync &&
+      this.get('expireTimerVersion') !== INITIAL_EXPIRE_TIMER_VERSION
+    ) {
+      log.warn(
+        'updateExpirationTimer: Resetting expireTimerVersion since this is initialSync'
+      );
+      // This is reset after unlink, but we do it here as well to recover from errors
+      this.set('expireTimerVersion', INITIAL_EXPIRE_TIMER_VERSION);
+    }
+
     let expireTimer: DurationInSeconds | undefined = providedExpireTimer;
     let source = providedSource;
     if (this.get('left')) {
@@ -4686,7 +4683,7 @@ export class ConversationModel extends window.Backbone
       `updateExpirationTimer(${this.idForLogging()}, ` +
       `${expireTimer || 'disabled'}, version=${version || 0}) ` +
       `source=${source ?? '?'} localValue=${this.get('expireTimer')} ` +
-      `localVersion=${localVersion}, reason=${reason}`;
+      `localVersion=${localVersion}, reason=${reason}, isInitialSync=${isInitialSync}`;
 
     if (isSetByOther) {
       if (version) {
@@ -4784,7 +4781,7 @@ export class ConversationModel extends window.Backbone
     window.MessageCache.register(message);
 
     void this.addSingleMessage(message.attributes);
-    void this.updateUnread();
+    this.throttledUpdateUnread();
 
     log.info(
       `${logId}: added a notification received_at=${message.get('received_at')}`
@@ -4819,11 +4816,11 @@ export class ConversationModel extends window.Backbone
     }
   ): Promise<void> {
     await markConversationRead(this.attributes, newestUnreadAt, options);
-    await this.updateUnread();
+    this.throttledUpdateUnread();
     window.reduxActions.callHistory.updateCallHistoryUnreadCount();
   }
 
-  async updateUnread(): Promise<void> {
+  async #updateUnread(): Promise<void> {
     const options = {
       storyId: undefined,
       includeStoryReplies: !isGroup(this.attributes),
@@ -4847,32 +4844,40 @@ export class ConversationModel extends window.Backbone
     }
   }
 
-  // This is an expensive operation we use to populate the message request hero row. It
-  //   shows groups the current user has in common with this potential new contact.
-  async updateSharedGroups(): Promise<void> {
+  async #getSharedGroups(): Promise<Array<ConversationModel> | undefined> {
     if (!isDirectConversation(this.attributes)) {
-      return;
+      return undefined;
     }
     if (isMe(this.attributes)) {
-      return;
+      return undefined;
     }
 
     const ourAci = window.textsecure.storage.user.getCheckedAci();
     const theirAci = this.getAci();
     if (!theirAci) {
-      return;
+      return undefined;
     }
 
     const ourGroups =
       await window.ConversationController.getAllGroupsInvolvingServiceId(
         ourAci
       );
-    const sharedGroups = ourGroups
+    return ourGroups
       .filter(c => c.hasMember(ourAci) && c.hasMember(theirAci))
       .sort(
         (left, right) =>
           (right.get('timestamp') || 0) - (left.get('timestamp') || 0)
       );
+  }
+
+  // This is an expensive operation we use to populate the message request hero row. It
+  //   shows groups the current user has in common with this potential new contact.
+  async updateSharedGroups(): Promise<void> {
+    const sharedGroups = await this.#getSharedGroups();
+
+    if (sharedGroups == null) {
+      return;
+    }
 
     const sharedGroupNames = sharedGroups.map(conversation =>
       conversation.getTitle()
@@ -4883,11 +4888,7 @@ export class ConversationModel extends window.Backbone
 
   onChangeProfileKey(): void {
     if (isDirectConversation(this.attributes)) {
-      drop(
-        this.getProfiles().catch(() => {
-          /* nothing to do here; logging already happened */
-        })
-      );
+      drop(this.getProfiles());
     }
   }
 
@@ -5417,14 +5418,8 @@ export class ConversationModel extends window.Backbone
         return;
       }
 
-      if (delay > MAX_SAFE_TIMEOUT_DELAY) {
-        log.warn(
-          'startMuteTimer: timeout is larger than maximum setTimeout delay'
-        );
-        return;
-      }
-
-      this.#muteTimer = setTimeout(() => this.setMuteExpiration(0), delay);
+      this.#muteTimer =
+        safeSetTimeout(() => this.setMuteExpiration(0), delay) ?? undefined;
     }
   }
 
@@ -5461,84 +5456,6 @@ export class ConversationModel extends window.Backbone
 
   isMuted(): boolean {
     return isConversationMuted(this.attributes);
-  }
-
-  async notify(
-    message: Readonly<MessageAttributesType>,
-    reaction?: Readonly<ReactionAttributesType>
-  ): Promise<void> {
-    // As a performance optimization don't perform any work if notifications are
-    // disabled.
-    if (!notificationService.isEnabled) {
-      return;
-    }
-
-    if (this.isMuted()) {
-      if (this.get('dontNotifyForMentionsIfMuted')) {
-        return;
-      }
-
-      const ourAci = window.textsecure.storage.user.getCheckedAci();
-      const ourPni = window.textsecure.storage.user.getCheckedPni();
-      const ourServiceIds: Set<ServiceIdString> = new Set([ourAci, ourPni]);
-
-      const mentionsMe = (message.bodyRanges || []).some(bodyRange => {
-        if (!BodyRange.isMention(bodyRange)) {
-          return false;
-        }
-        return ourServiceIds.has(
-          normalizeServiceId(bodyRange.mentionAci, 'notify: mentionsMe check')
-        );
-      });
-      if (!mentionsMe) {
-        return;
-      }
-    }
-
-    if (!isIncoming(message) && !reaction) {
-      return;
-    }
-
-    const conversationId = this.id;
-    const isMessageInDirectConversation = isDirectConversation(this.attributes);
-
-    const sender = reaction
-      ? window.ConversationController.get(reaction.fromId)
-      : getAuthor(message);
-    const senderName = sender
-      ? sender.getTitle()
-      : window.i18n('icu:unknownContact');
-    const senderTitle = isMessageInDirectConversation
-      ? senderName
-      : window.i18n('icu:notificationSenderInGroup', {
-          sender: senderName,
-          group: this.getTitle(),
-        });
-
-    const { url, absolutePath } = await this.getAvatarOrIdenticon();
-
-    const messageId = message.id;
-    const isExpiringMessage = hasExpiration(message);
-
-    notificationService.add({
-      senderTitle,
-      conversationId,
-      storyId: isMessageInDirectConversation ? undefined : message.storyId,
-      notificationIconUrl: url,
-      notificationIconAbsolutePath: absolutePath,
-      isExpiringMessage,
-      message: getNotificationTextForMessage(message),
-      messageId,
-      reaction: reaction
-        ? {
-            emoji: reaction.emoji,
-            targetAuthorAci: reaction.targetAuthorAci,
-            targetTimestamp: reaction.targetTimestamp,
-          }
-        : undefined,
-      sentAt: message.timestamp,
-      type: reaction ? NotificationType.Reaction : NotificationType.Message,
-    });
   }
 
   async getAvatarOrIdenticon(): Promise<{

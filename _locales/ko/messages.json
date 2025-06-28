@@ -41,6 +41,9 @@
   "icu:Preferences__sent-media-quality__description": {
     "messageformat": "고품질 미디어는 더 많은 모바일 데이터를 사용할 수 있습니다."
   },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "Signal에 기부"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "기본"
   },
@@ -68,6 +71,9 @@
   "icu:unknownContact": {
     "messageformat": "알 수 없는 연락처"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "알 수 없음"
+  },
   "icu:unknownGroup": {
     "messageformat": "알 수 없는 그룹"
   },
@@ -79,9 +85,6 @@
   },
   "icu:databaseError": {
     "messageformat": "데이터베이스 오류"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "데이터베이스 오류가 발생했습니다. 오류를 복사하여 Signal 지원 팀에 문제 해결을 요청할 수 있습니다. Signal을 바로 사용해야 하는 경우 데이터를 삭제하고 다시 시작할 수 있습니다.\n\n{link}을(를) 방문하여 지원 팀에 문의하세요."
   },
   "icu:deleteAndRestart": {
     "messageformat": "데이터 삭제 후 다시 시작"
@@ -202,6 +205,9 @@
   },
   "icu:menuSetupAsStandalone": {
     "messageformat": "독립 실행형 기기로 설정"
+  },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
   },
   "icu:messageContextMenuButton": {
     "messageformat": "더 많은 작업"
@@ -589,6 +595,9 @@
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "데이터베이스 오류: 로그를 공유해 주세요."
   },
   "icu:Toast--InvalidStorageServiceHeaders": {
     "messageformat": "스토리지 서비스에서 잘못된 응답을 받았습니다. 로그를 공유해 주세요."
@@ -1262,6 +1271,9 @@
   "icu:Install__support-link": {
     "messageformat": "도움이 필요하신가요?"
   },
+  "icu:Preferences--header": {
+    "messageformat": "설정"
+  },
   "icu:Preferences--phone-number": {
     "messageformat": "전화번호"
   },
@@ -1670,11 +1682,8 @@
   "icu:notificationSenderInGroup": {
     "messageformat": "{group} 내 {sender} 님"
   },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} 님이 내 메시지에 {emoji} 이모지로 반응했습니다."
-  },
   "icu:notificationReactionMessage": {
-    "messageformat": "{sender} 님이 ''{message}'에 {emoji} 이모지로 반응했습니다."
+    "messageformat": "{sender} 님이 다음에 {emoji} 이모지로 반응함: {message}"
   },
   "icu:sendFailed": {
     "messageformat": "보내기 실패"
@@ -1828,12 +1837,6 @@
   },
   "icu:ConversationDetails--support-center": {
     "messageformat": "지원 센터"
-  },
-  "icu:ConversationDetails--contact-us": {
-    "messageformat": "문의하기"
-  },
-  "icu:ConversationDetails--donate": {
-    "messageformat": "Signal에 후원"
   },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "안전 번호 보기"
@@ -2324,14 +2327,23 @@
   "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
     "messageformat": "이모지 없음"
   },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "{emojiName}의 피부 톤 선택"
+  },
   "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
     "messageformat": "피부색 기본 설정 변경"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "길게 눌러 피부 톤 선택"
   },
   "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
     "messageformat": "기본 피부색 선택"
   },
   "icu:FunPanelEmojis__SectionTitle--SearchResults": {
     "messageformat": "검색 결과"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "이 메시지"
   },
   "icu:FunPanelEmojis__SectionTitle--Recents": {
     "messageformat": "최근 사용함"
@@ -2360,6 +2372,9 @@
   "icu:FunPanelEmojis__SectionTitle--Flags": {
     "messageformat": "깃발"
   },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "반응 사용자 정의"
+  },
   "icu:FunPanelStickers__SearchLabel": {
     "messageformat": "스티커 검색"
   },
@@ -2377,6 +2392,9 @@
   },
   "icu:FunPanelStickers__SectionTitle--Recents": {
     "messageformat": "최근 사용함"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "추천"
   },
   "icu:FunPanelStickers__SearchResults__EmptyHeading": {
     "messageformat": "스티커 없음"
@@ -2460,13 +2478,13 @@
     "messageformat": "어두운 피부색"
   },
   "icu:FunButton__Label--FunPicker": {
-    "messageformat": "Add an Emoji, Sticker, or GIF"
+    "messageformat": "이모지, 스티커, GIF 추가"
   },
   "icu:FunButton__Label--EmojiPicker": {
-    "messageformat": "Add an Emoji"
+    "messageformat": "이모지 추가"
   },
   "icu:FunButton__Label--StickerPicker": {
-    "messageformat": "Add a Sticker"
+    "messageformat": "스티커 추가"
   },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "취소"
@@ -2504,14 +2522,8 @@
   "icu:Message--update-signal": {
     "messageformat": "시그널 최신 버전으로 업데이트"
   },
-  "icu:Message--tap-to-view-expired": {
-    "messageformat": "조회함"
-  },
   "icu:Message--tap-to-view--viewed": {
     "messageformat": "조회함"
-  },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "미디어"
   },
   "icu:Message--tap-to-view--media": {
     "messageformat": "한 번만 볼 수 있는 미디어"
@@ -2521,12 +2533,6 @@
   },
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "한 번만 볼 수 있는 메시지는 대화 기록에 저장되지 않습니다."
-  },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "사진 보기"
-  },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "동영상 보기"
   },
   "icu:Message--tap-to-view--video": {
     "messageformat": "한 번만 볼 수 있는 동영상"
@@ -2596,6 +2602,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "스티커 선택기 열기"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "GIF 선택기 열기"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "음성 녹음 시작하기"
@@ -2951,6 +2960,36 @@
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, other {멤버 {count,number}명}}"
   },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, other {{memberList}(+{invitesCount,number}명 초대됨)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "그룹 멤버 없음"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "아직 다른 그룹 멤버가 없습니다"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "나와 {member}"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1}, {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "나와 {member1}, {member2}"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2}, {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, other {{member1}, {member2}, {member3}, 외 <clickable>{remainingCount,number} 명</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, other {{member1}, {member2}, {member3}, 외 <clickable>{remainingCount,number} 명</clickable>}}"
+  },
   "icu:ConversationHero--review-carefully": {
     "messageformat": "신중하게 검토하세요"
   },
@@ -3101,11 +3140,29 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "나가기"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "전화 종료"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "통화 종료"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "마이크 꺼짐"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "마이크 켜짐"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName} 님이 내 알림을 껐습니다."
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name} 님이 {otherName} 님의 알림을 껐습니다."
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "{otherName}의 알림을 껐습니다."
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "다른 기기에서 내 알림을 껐습니다."
   },
   "icu:CallControls__LowerHandSuggestionToast": {
     "messageformat": "손을 내릴까요?"
@@ -3199,9 +3256,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "보기 업데이트 완료"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "전화 종료"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "화면 공유"
@@ -3357,7 +3411,7 @@
     "messageformat": "그룹에 참가할 수 없음"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "관리자가 당신을 제거했기 때문에 그룹 링크를 통해 그룹에 참가할 수 없습니다."
+    "messageformat": "관리자가 귀하를 제거했기 때문에 그룹 링크를 통해 그룹에 참가할 수 없습니다. 관리자에게 그룹에 다시 추가해 달라고 요청하세요."
   },
   "icu:GroupV2--join--prompt-with-approval": {
     "messageformat": "이 그룹에 가입하려면 그룹의 관리자가 요청을 승인해야 합니다. 가입을 요청하면 내 이름과 사진이 공유됩니다."
@@ -3917,6 +3971,12 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "'Singal에 기부'를 탭하여 구독하세요."
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "프로필을 이동함"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "설정 탭을 열어 프로필을 확인하고 수정하세요."
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "메시지를 동기화하는 중"
   },
@@ -3977,6 +4037,12 @@
   "icu:BackupMediaDownloadProgress__description-idle": {
     "messageformat": "미디어가 백그라운드에서 계속 다운로드됩니다."
   },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "미디어 복원 일시 중지됨"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "인터넷 연결을 기다리는 중…"
+  },
   "icu:BackupMediaDownloadProgress__button-pause": {
     "messageformat": "전송 일시 중지"
   },
@@ -4007,6 +4073,18 @@
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "전송 취소"
   },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "계정 조치 필요"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "이 계정을 계속 사용하려면 휴대폰에서 Signal을 열어야 합니다. 휴대폰에서 Signal을 열지 않으면 계정이 곧 삭제됩니다. <learnMoreLink>자세히 알아보기</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "미디어를 복원할 수 없음"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "기기에 여유 공간이 부족합니다. 미디어를 복원하려면 {diskSpaceAmount}의 여유 공간을 확보하세요."
+  },
   "icu:CompositionArea--expand": {
     "messageformat": "확장"
   },
@@ -4027,9 +4105,6 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "수정한 메시지 보내기"
-  },
-  "icu:CompositionArea__FunButtonLabel": {
-    "messageformat": "이모지, 스티커, GIF 추가"
   },
   "icu:CompositionArea__ConfirmGifSelection__Title": {
     "messageformat": "첨부 파일을 바꾸시겠습니까?"
@@ -4257,7 +4332,7 @@
     "messageformat": "그룹 링크를 통해 참가하는 새로운 멤버들이 관리자 승인을 받도록 하기"
   },
   "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
-    "messageformat": "Copy signal.group link to keyboard"
+    "messageformat": "signal.group 링크를 클립보드에 복사"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "요청 ({count,number})"
@@ -4465,12 +4540,6 @@
   },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "안전 팁"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "해당 사용자와 공유하는 그룹이 없습니다. 원치 않는 메시지를 피하기 위해 수락하기 전 요청을 주의 깊게 검토하세요."
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "메시지 요청 정보"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "신중하게 요청을 검토하세요. Signal에서 같은 이름을 가진 다른 연락처를 찾았습니다. <reviewRequestLink>요청 검토</reviewRequestLink>"
@@ -4874,6 +4943,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "프로필을 업데이트할 수 없습니다. 다시 시도하세요."
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "공유"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "관리자에게 메시지 전송"
   },
@@ -4906,6 +4978,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "일반 설정"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "Signal에 기부"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "모양"
@@ -4943,6 +5018,36 @@
   "icu:Preferences__media-auto-download__description": {
     "messageformat": "음성 메시지와 스티커를 항상 자동 다운로드합니다."
   },
+  "icu:Preferences__button--backups": {
+    "messageformat": "백업"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "내부"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "관리"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "폴더 선택"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "설정"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "로컬 백업"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "내보내기…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "로컬 암호화된 백업을 폴더로 내보내고 유효성 검사하기"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "암호화된 백업을 메모리로 내보내고, 해당 백업에 유효성 검사 제품군을 실행합니다"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "유효성 검사"
+  },
   "icu:Preferences--lastSynced": {
     "messageformat": "마지막으로 가져온 시간: {date} {time}"
   },
@@ -4972,6 +5077,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "차단함"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "Signal 백업"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "Signal의 안전한 엔드투엔드 암호화 저장소 서비스를 사용하는 자동 백업. 휴대폰으로 시작해 보세요. <learnMoreLink>자세히 알아보기.</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "새 휴대폰을 사용하거나 Signal을 다시 설치할 때 데이터를 잃지 않도록 메시지 기록을 백업하세요."
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "백업 세부 정보"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "텍스트 + 모든 미디어 백업"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "구독을 찾지 못했습니다. Signal 백업을 계속 사용하려면 갱신하세요."
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, other {텍스트 + {mediaDayCount,number}일간의 미디어 백업}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "백업 플랜이 무료입니다."
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "{date} 갱신"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "{date} 만료"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "구독을 취소했습니다."
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "휴대폰에서 Signal 백업 구독을 관리하거나 취소할 수 있습니다."
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "휴대폰에서 Signal 백업을 관리하거나 업그레이드할 수 있습니다."
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "휴대폰에서 Signal 백업 구독을 관리하거나 갱신할 수 있습니다."
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "마지막 백업"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "내 휴대폰"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "백업 크기"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "데스크톱 백업"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "백업은 키로 암호화되어 컴퓨터에 저장됩니다."
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "휴대폰에서 복원할 수 있는 엔드투엔드 암호화 백업을 만듭니다. "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "백업을 복원하려면 Signal의 새 복사본을 설치하세요. 앱을 열고 백업 복원을 탭한 다음 백업 폴더를 찾으세요. <learnMoreLink>자세히 알아보기.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "폴더 선택"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "컴퓨터 저장소에서 엔드투엔드 암호화된 백업을 저장할 폴더를 선택하세요."
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "다음"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "확인"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "백업 키 텍스트 상자"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "키 입력"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "백업 키 기록"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "이 키는 계정과 데이터를 복원하는 데 필요합니다. 안전한 곳에 보관해 두세요. 키를 분실하면 계정을 복원할 수 없습니다. <learnMoreLink>자세히 알아보기.</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "백업 키 확인"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "기록해 둔 백업 키를 입력하세요"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "키를 안전하게 보관하세요"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "키를 분실할 경우 Signal은 백업을 복원하도록 도와드릴 수 없습니다. 안전한 곳에 키를 보관해 두고, 다른 사람과 공유하지 마세요."
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "계속"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "키 다시 보기"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "백업 폴더"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "변경"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "클립보드에 복사"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "백업 키 복사됨"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "키 보기"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "백업 키"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "백업 키는 백업을 복원하는 데 사용되는 64자리 코드입니다"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "다른 백업 방법"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, other {연락처 {num,number}개}}"
@@ -5089,6 +5323,24 @@
   },
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "다시 시작"
+  },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "애플리케이션"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "화면 보안"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "이 컴퓨터에서 Signal의 스크린샷을 사용하지 못하도록 방지하여 개인정보 보호를 강화하세요."
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "화면 보안을 비활성화하시겠습니까?"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "이 옵션을 비활성화하면 Microsoft Windows가 Signal의 스크린샷을 캡처하여 개인정보 보호가 보장되지 않는 기능에 사용할 수 있습니다."
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "사용 안 함"
   },
   "icu:DialogUpdate--version-available": {
     "messageformat": "{version} 버전으로 업데이트할 수 있습니다."
@@ -6186,6 +6438,9 @@
   "icu:ProfileNameWarningModal__list--item3--group": {
     "messageformat": "모르는 사람과 개인 정보를 공유하지 마세요"
   },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "첨부 파일 저장"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "업데이트 내용"
   },
@@ -6217,16 +6472,10 @@
     "messageformat": "사소한 변경 사항과 버그 수정 및 성능 개선. Signal을 이용해 주셔서 감사합니다!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.47--0": {
-    "messageformat": "이제 통화 중에 내 모습이 더 잘 보이도록 로컬 화상 미리 보기를 펼칠 수 있습니다."
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "메시지 반응 선택기의 새로운 섹션에 메시지가 받은 모든 이모지 반응이 자동으로 표시됩니다."
   },
-  "icu:WhatsNew__v7.48--0": {
-    "messageformat": "Signal 그룹 통화 중에 대화를 시작한 후 손을 바로 내릴 수 있는 편리한 단축키를 추가했습니다. 이번 릴리스에서 단연코 가장 마음에 드는 기능입니다."
-  },
-  "icu:WhatsNew__v7.49--0": {
-    "messageformat": "이제 Signal Android에서 새로운 데스크톱을 연결하고 메시지 기록을 전송하도록 선택할 경우 기본 기기에서 이전 첨부 파일을 선택하여 전송할 수 있습니다. 전송 프로세스는 안전하게 엔드투엔드로 암호화됩니다."
-  },
-  "icu:WhatsNew__v7.50--0": {
-    "messageformat": "If you link a new Desktop on Signal Android and choose to transfer your message history, now you can also selectively transfer old attachments from your primary device too. Bring the past into the present by scrolling back in time and clicking on the download icon. As always, the transfer process is end-to-end encrypted and secure."
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "Linux 성능 개선 사항."
   }
 }

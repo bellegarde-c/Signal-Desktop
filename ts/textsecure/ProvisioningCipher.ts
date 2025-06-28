@@ -3,6 +3,7 @@
 
 /* eslint-disable max-classes-per-file */
 
+import * as client from '@signalapp/libsignal-client';
 import type { KeyPairType } from './Types.d';
 import * as Bytes from '../Bytes';
 import {
@@ -46,16 +47,19 @@ class ProvisioningCipherInner {
       throw new Error('Bad version number on ProvisioningMessage');
     }
 
-    const iv = message.slice(1, 16 + 1);
-    const mac = message.slice(message.byteLength - 32, message.byteLength);
-    const ivAndCiphertext = message.slice(0, message.byteLength - 32);
-    const ciphertext = message.slice(16 + 1, message.byteLength - 32);
+    const iv = message.subarray(1, 16 + 1);
+    const mac = message.subarray(message.byteLength - 32, message.byteLength);
+    const ivAndCiphertext = message.subarray(0, message.byteLength - 32);
+    const ciphertext = message.subarray(16 + 1, message.byteLength - 32);
 
     if (!this.keyPair) {
       throw new Error('ProvisioningCipher.decrypt: No keypair!');
     }
 
-    const ecRes = calculateAgreement(masterEphemeral, this.keyPair.privKey);
+    const ecRes = calculateAgreement(
+      client.PublicKey.deserialize(Buffer.from(masterEphemeral)),
+      this.keyPair.privateKey
+    );
     const keys = deriveSecrets(
       ecRes,
       new Uint8Array(32),
@@ -103,7 +107,7 @@ class ProvisioningCipherInner {
     };
   }
 
-  getPublicKey(): Uint8Array {
+  getPublicKey(): client.PublicKey {
     if (!this.keyPair) {
       this.keyPair = generateKeyPair();
     }
@@ -112,7 +116,7 @@ class ProvisioningCipherInner {
       throw new Error('ProvisioningCipher.decrypt: No keypair!');
     }
 
-    return this.keyPair.pubKey;
+    return this.keyPair.publicKey;
   }
 }
 
@@ -128,5 +132,5 @@ export default class ProvisioningCipher {
     provisionEnvelope: Proto.ProvisionEnvelope
   ) => ProvisionDecryptResult;
 
-  getPublicKey: () => Uint8Array;
+  getPublicKey: () => client.PublicKey;
 }

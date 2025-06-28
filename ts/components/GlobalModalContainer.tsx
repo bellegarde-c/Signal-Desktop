@@ -32,6 +32,8 @@ import {
   type DataPropsType as BackfillFailureModalPropsType,
 } from './BackfillFailureModal';
 import type { SmartDraftGifMessageSendModalProps } from '../state/smart/DraftGifMessageSendModal';
+import { CriticalIdlePrimaryDeviceModal } from './CriticalIdlePrimaryDeviceModal';
+import { LowDiskSpaceBackupImportModal } from './LowDiskSpaceBackupImportModal';
 
 // NOTE: All types should be required for this component so that the smart
 // component gives you type errors when adding/removing props.
@@ -102,9 +104,6 @@ export type PropsType = {
   // NotePreviewModal
   notePreviewModalProps: { conversationId: string } | null;
   renderNotePreviewModal: () => JSX.Element;
-  // ProfileEditor
-  isProfileEditorVisible: boolean;
-  renderProfileEditor: () => JSX.Element;
   // SafetyNumberModal
   safetyNumberModalContactId: string | undefined;
   renderSafetyNumber: () => JSX.Element;
@@ -147,6 +146,12 @@ export type PropsType = {
   isProfileNameWarningModalVisible: boolean;
   profileNameWarningModalConversationType?: string;
   renderProfileNameWarningModal: () => JSX.Element;
+  // CriticalIdlePrimaryDeviceModal,
+  criticalIdlePrimaryDeviceModal: boolean;
+  hideCriticalIdlePrimaryDeviceModal: () => void;
+  // LowDiskSpaceBackupImportModal
+  lowDiskSpaceBackupImportModal: { bytesNeeded: number } | null;
+  hideLowDiskSpaceBackupImportModal: () => void;
 };
 
 export function GlobalModalContainer({
@@ -200,9 +205,6 @@ export function GlobalModalContainer({
   // NotePreviewModal
   notePreviewModalProps,
   renderNotePreviewModal,
-  // ProfileEditor
-  isProfileEditorVisible,
-  renderProfileEditor,
   // SafetyNumberModal
   safetyNumberModalContactId,
   renderSafetyNumber,
@@ -243,6 +245,12 @@ export function GlobalModalContainer({
   // ProfileNameWarningModal
   isProfileNameWarningModalVisible,
   renderProfileNameWarningModal,
+  // CriticalIdlePrimaryDeviceModal
+  criticalIdlePrimaryDeviceModal,
+  hideCriticalIdlePrimaryDeviceModal,
+  // LowDiskSpaceBackupImportModal
+  lowDiskSpaceBackupImportModal,
+  hideLowDiskSpaceBackupImportModal,
 }: PropsType): JSX.Element | null {
   // We want the following dialogs to show in this order:
   // 1. Errors
@@ -317,10 +325,6 @@ export function GlobalModalContainer({
 
   if (notePreviewModalProps) {
     return renderNotePreviewModal();
-  }
-
-  if (isProfileEditorVisible) {
-    return renderProfileEditor();
   }
 
   if (isProfileNameWarningModalVisible) {
@@ -421,6 +425,25 @@ export function GlobalModalContainer({
         i18n={i18n}
         onClose={hideBackfillFailureModal}
         {...backfillFailureModalProps}
+      />
+    );
+  }
+
+  if (criticalIdlePrimaryDeviceModal) {
+    return (
+      <CriticalIdlePrimaryDeviceModal
+        i18n={i18n}
+        onClose={hideCriticalIdlePrimaryDeviceModal}
+      />
+    );
+  }
+
+  if (lowDiskSpaceBackupImportModal) {
+    return (
+      <LowDiskSpaceBackupImportModal
+        bytesNeeded={lowDiskSpaceBackupImportModal.bytesNeeded}
+        i18n={i18n}
+        onClose={hideLowDiskSpaceBackupImportModal}
       />
     );
   }

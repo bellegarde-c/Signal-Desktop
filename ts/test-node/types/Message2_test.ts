@@ -62,9 +62,6 @@ describe('Message', () => {
         height: 20,
       }),
       doesAttachmentExist: async () => true,
-      // @ts-expect-error ensureAttachmentIsReencryptable has type guards that we don't
-      // implement here
-      ensureAttachmentIsReencryptable: async attachment => attachment,
       getRegionCode: () => 'region-code',
       logger,
       makeImageThumbnail: async (_params: {
@@ -197,9 +194,6 @@ describe('Message', () => {
             fileName: 'test\uFFFDfig.exe',
           },
         ],
-        hasAttachments: 1,
-        hasVisualMediaAttachments: undefined,
-        hasFileAttachments: undefined,
         schemaVersion: Message.CURRENT_SCHEMA_VERSION,
       });
 
@@ -826,31 +820,6 @@ describe('Message', () => {
         getDefaultContext()
       );
       assert.deepEqual(result, message);
-    });
-  });
-
-  describe('toVersion14: ensureAttachmentsAreReencryptable', () => {
-    it('migrates message if the file does not exist', async () => {
-      const message = getDefaultMessage({
-        schemaVersion: 13,
-        schemaMigrationAttempts: 0,
-        attachments: [
-          {
-            size: 128,
-            contentType: MIME.IMAGE_BMP,
-            path: 'no/file/here.png',
-            iv: 'iv',
-            digest: 'digest',
-            key: 'key',
-          },
-        ],
-      });
-      const result = await Message.upgradeSchema(message, {
-        ...getDefaultContext(),
-        doesAttachmentExist: async () => false,
-      });
-
-      assert.deepEqual({ ...message, schemaVersion: 14 }, result);
     });
   });
 });

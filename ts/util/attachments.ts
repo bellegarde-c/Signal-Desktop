@@ -88,6 +88,7 @@ export type CdnFieldsType = Pick<
   | 'iv'
   | 'key'
   | 'plaintextHash'
+  | 'uploadTimestamp'
 >;
 
 export function copyCdnFields(
@@ -105,9 +106,8 @@ export function copyCdnFields(
       ? Bytes.toBase64(uploaded.incrementalMac)
       : undefined,
     chunkSize: dropNull(uploaded.chunkSize),
-    isReencryptableToSameDigest: uploaded.isReencryptableToSameDigest,
-    iv: Bytes.toBase64(uploaded.iv),
     key: Bytes.toBase64(uploaded.key),
     plaintextHash: uploaded.plaintextHash,
+    uploadTimestamp: uploaded.uploadTimestamp?.toNumber(),
   };
 }

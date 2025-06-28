@@ -119,14 +119,20 @@ export type BootstrapOptions = Readonly<{
   useLegacyStorageEncryption?: boolean;
 }>;
 
-export type EphemeralBackupType = Readonly<{
-  cdn: 3;
-  key: string;
-}>;
+export type EphemeralBackupType = Readonly<
+  | {
+      cdn: 3;
+      key: string;
+    }
+  | {
+      error: 'RELINK_REQUESTED';
+    }
+>;
 
 export type LinkOptionsType = Readonly<{
   extraConfig?: Partial<RendererConfigType>;
   ephemeralBackup?: EphemeralBackupType;
+  localBackup?: string;
 }>;
 
 type BootstrapInternalOptions = BootstrapOptions &
@@ -168,8 +174,8 @@ function sanitizePathComponent(component: string): string {
 const DEFAULT_REMOTE_CONFIG = [
   ['desktop.backup.credentialFetch', { enabled: true }],
   ['desktop.internalUser', { enabled: true }],
-  ['desktop.releaseNotes', { enabled: true }],
   ['desktop.senderKey.retry', { enabled: true }],
+  ['global.backups.mediaTierFallbackCdnNumber', { enabled: true, value: '3' }],
   ['global.groupsv2.groupSizeHardLimit', { enabled: true, value: '64' }],
   ['global.groupsv2.maxGroupSize', { enabled: true, value: '32' }],
 ] as const;
@@ -371,12 +377,17 @@ export class Bootstrap {
   public async link({
     extraConfig,
     ephemeralBackup,
+    localBackup,
   }: LinkOptionsType = {}): Promise<App> {
     debug('linking');
 
     const app = await this.startApp(extraConfig);
 
     const window = await app.getWindow();
+
+    if (localBackup != null) {
+      await app.stageLocalBackupForImport(localBackup);
+    }
 
     debug('looking for QR code or relink button');
     const qrCode = window.locator(
@@ -404,6 +415,11 @@ export class Bootstrap {
 
     if (ephemeralBackup != null) {
       await this.server.provideTransferArchive(this.desktop, ephemeralBackup);
+
+      // Desktop won't get linked
+      if ('error' in ephemeralBackup) {
+        return app;
+      }
     }
 
     debug('new desktop device %j', this.desktop.debugId);
@@ -548,8 +564,9 @@ export class Bootstrap {
     test?: Mocha.Runnable
   ): Promise<(app: App) => Promise<void>> {
     const snapshots = new Array<{ name: string; data: Buffer }>();
-
+    const viewportSize = { width: 1000, height: 2000 } as const;
     const window = await app.getWindow();
+    await window.setViewportSize(viewportSize);
     await callback(window, async (name: string) => {
       debug('creating screenshot');
       snapshots.push({
@@ -568,7 +585,7 @@ export class Bootstrap {
         const before = snapshots.shift();
         assert(before != null, 'No previous snapshot');
         assert.strictEqual(before.name, name, 'Wrong snapshot order');
-
+        await anotherWindow.setViewportSize(viewportSize);
         const after = await anotherWindow.screenshot();
 
         const beforePng = PNG.sync.read(before.data);

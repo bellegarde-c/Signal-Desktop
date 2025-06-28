@@ -53,6 +53,7 @@ $color-white-alpha-20: rgba($color-white, 0.2);
 $color-white-alpha-30: rgba($color-white, 0.3);
 $color-white-alpha-40: rgba($color-white, 0.4);
 $color-white-alpha-50: rgba($color-white, 0.5);
+$color-white-alpha-55: rgba($color-white, 0.55);
 $color-white-alpha-60: rgba($color-white, 0.6);
 $color-white-alpha-70: rgba($color-white, 0.7);
 $color-white-alpha-80: rgba($color-white, 0.8);
@@ -103,6 +104,7 @@ $color-taupe: #8f616a;
 $color-steel: #71717f;
 $color-bright-gray: #ebeae8;
 $color-borage-blue: #506ecd;
+$color-orange: #ff9500;
 
 // Gradient colors
 
@@ -316,3 +318,6 @@ $NavTabs__ItemButton__blockPadding: 10px;
 $CallControls__height: 80px;
 $CallControls__max-width: 640px;
 $CallControls__initial-width: 480px;
+
+$scrollbar_height: 9px;
+$scrollbar_width: 9px;

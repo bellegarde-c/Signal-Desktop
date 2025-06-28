@@ -23,7 +23,6 @@ import { dataByCategory } from './lib';
 import type { LocalizerType } from '../../types/Util';
 import { isSingleGrapheme } from '../../util/grapheme';
 import { missingCaseError } from '../../util/missingCaseError';
-import { useEmojiSearch } from '../../hooks/useEmojiSearch';
 import { FunStaticEmoji } from '../fun/FunEmoji';
 import { strictAssert } from '../../util/assert';
 import {
@@ -35,7 +34,9 @@ import {
   getEmojiVariantByParentKeyAndSkinTone,
   isEmojiEnglishShortName,
   EMOJI_SKIN_TONE_TO_NUMBER,
+  getEmojiParentByKey,
 } from '../fun/data/emojis';
+import { useFunEmojiSearch } from '../fun/useFunEmojiSearch';
 
 export type EmojiPickDataType = {
   skinTone: EmojiSkinTone;
@@ -45,7 +46,7 @@ export type EmojiPickDataType = {
 export type OwnProps = {
   readonly i18n: LocalizerType;
   readonly recentEmojis?: ReadonlyArray<string>;
-  readonly emojiSkinToneDefault: EmojiSkinTone;
+  readonly emojiSkinToneDefault: EmojiSkinTone | null;
   readonly onClickSettings?: () => unknown;
   readonly onClose?: () => unknown;
   readonly onPickEmoji: (o: EmojiPickDataType) => unknown;
@@ -96,7 +97,7 @@ export const EmojiPicker = React.memo(
       {
         i18n,
         onPickEmoji,
-        emojiSkinToneDefault = EmojiSkinTone.None,
+        emojiSkinToneDefault,
         onEmojiSkinToneDefaultChange,
         recentEmojis = [],
         style,
@@ -122,7 +123,7 @@ export const EmojiPicker = React.memo(
       const [selectedTone, setSelectedTone] =
         React.useState(emojiSkinToneDefault);
 
-      const search = useEmojiSearch(i18n.getLocale());
+      const emojiSearch = useFunEmojiSearch();
 
       const handleToggleSearch = React.useCallback(
         (
@@ -169,7 +170,10 @@ export const EmojiPicker = React.memo(
           if ('key' in e) {
             if (e.key === 'Enter') {
               if (shortName && isUsingKeyboard) {
-                onPickEmoji({ skinTone: selectedTone, shortName });
+                onPickEmoji({
+                  skinTone: selectedTone ?? EmojiSkinTone.None,
+                  shortName,
+                });
                 e.stopPropagation();
                 e.preventDefault();
               } else if (onClose) {
@@ -184,7 +188,10 @@ export const EmojiPicker = React.memo(
             }
             e.stopPropagation();
             e.preventDefault();
-            onPickEmoji({ skinTone: selectedTone, shortName });
+            onPickEmoji({
+              skinTone: selectedTone ?? EmojiSkinTone.None,
+              shortName,
+            });
           }
         },
         [
@@ -255,7 +262,13 @@ export const EmojiPicker = React.memo(
 
       const emojiGrid = React.useMemo(() => {
         if (searchText) {
-          return chunk(search(searchText), COL_COUNT);
+          return chunk(
+            emojiSearch(searchText).map(result => {
+              const parent = getEmojiParentByKey(result.parentKey);
+              return parent.englishShortNameDefault;
+            }),
+            COL_COUNT
+          );
         }
 
         const chunks = flatMap(renderableCategories, cat =>
@@ -266,7 +279,7 @@ export const EmojiPicker = React.memo(
         );
 
         return [...chunk(firstRecent, COL_COUNT), ...chunks];
-      }, [firstRecent, renderableCategories, searchText, search]);
+      }, [firstRecent, renderableCategories, searchText, emojiSearch]);
 
       const rowCount = emojiGrid.length;
 
@@ -329,7 +342,7 @@ export const EmojiPicker = React.memo(
           const parentKey = getEmojiParentKeyByEnglishShortName(shortName);
           const variantKey = getEmojiVariantByParentKeyAndSkinTone(
             parentKey,
-            selectedTone
+            selectedTone ?? EmojiSkinTone.None
           );
 
           return (

@@ -17,10 +17,13 @@ import * as Errors from '../../types/errors';
 
 import { strictAssert } from '../../util/assert';
 import { drop } from '../../util/drop';
+import { explodePromise } from '../../util/explodePromise';
 import { DataReader } from '../../sql/Client';
 import type { WindowsNotificationData } from '../../services/notifications';
 import { AggregatedStats } from '../../textsecure/WebsocketResources';
 import { UNAUTHENTICATED_CHANNEL_NAME } from '../../textsecure/SocketManager';
+import { isProduction } from '../../util/version';
+import { ToastType } from '../../types/Toast';
 
 // It is important to call this as early as possible
 window.i18n = SignalContext.i18n;
@@ -122,6 +125,10 @@ const IPC: IPCType = {
   },
   showPermissionsPopup: (forCalling, forCamera) =>
     ipc.invoke('show-permissions-popup', forCalling, forCamera),
+  setMediaPermissions: (value: boolean) =>
+    ipc.invoke('settings:set:mediaPermissions', value),
+  setMediaCameraPermissions: (value: boolean) =>
+    ipc.invoke('settings:set:mediaCameraPermissions', value),
   showSettings: () => ipc.send('show-settings'),
   showWindow: () => {
     log.info('show window');
@@ -144,6 +151,7 @@ const IPC: IPCType = {
     ipc.send('title-bar-double-click');
   },
   updateTrayIcon: unreadCount => ipc.send('update-tray-icon', unreadCount),
+  whenWindowVisible,
 };
 
 window.IPC = IPC;
@@ -261,12 +269,20 @@ ipc.on('additional-log-data-request', async event => {
   });
 });
 
+ipc.on('open-settings-tab', () => {
+  window.Whisper.events.trigger('openSettingsTab');
+});
+
 ipc.on('set-up-as-new-device', () => {
   window.Whisper.events.trigger('setupAsNewDevice');
 });
 
 ipc.on('set-up-as-standalone', () => {
   window.Whisper.events.trigger('setupAsStandalone');
+});
+
+ipc.on('stage-local-backup-for-import', () => {
+  window.Whisper.events.trigger('stageLocalBackupForImport');
 });
 
 ipc.on('challenge:response', (_event, response) => {
@@ -325,19 +341,6 @@ ipc.on('add-dark-overlay', () => {
 });
 ipc.on('remove-dark-overlay', () => {
   window.Events.removeDarkOverlay();
-});
-
-ipc.on('delete-all-data', async () => {
-  const { deleteAllData } = window.Events;
-  if (!deleteAllData) {
-    return;
-  }
-
-  try {
-    await deleteAllData();
-  } catch (error) {
-    log.error('delete-all-data: error', Errors.toLogFormat(error));
-  }
 });
 
 ipc.on('show-sticker-pack', (_event, info) => {
@@ -436,6 +439,20 @@ ipc.on('show-release-notes', () => {
   }
 });
 
+ipc.on('sql-error', () => {
+  if (!window.reduxActions) {
+    return;
+  }
+
+  if (isProduction(window.getVersion())) {
+    return;
+  }
+
+  window.reduxActions.toast.showToast({
+    toastType: ToastType.SQLError,
+  });
+});
+
 ipc.on(
   'art-creator:uploadStickerPack',
   async (
@@ -450,3 +467,14 @@ ipc.on(
     event.sender.send('art-creator:uploadStickerPack:done', packId);
   }
 );
+
+const { promise: windowVisible, resolve: resolveWindowVisible } =
+  explodePromise<void>();
+
+ipc.on('activate', () => {
+  resolveWindowVisible();
+});
+
+async function whenWindowVisible(): Promise<void> {
+  await windowVisible;
+}

@@ -89,6 +89,7 @@ import {
 import {
   getDefaultSystemTraySetting,
   isSystemTraySupported,
+  isContentProtectionEnabledByDefault,
 } from '../ts/types/Settings';
 import * as ephemeralConfig from './ephemeral_config';
 import * as logging from '../ts/logging/main_process_logging';
@@ -99,7 +100,7 @@ import type { CreateTemplateOptionsType } from './menu';
 import { createTemplate } from './menu';
 import { installFileHandler, installWebHandler } from './protocol_filter';
 import OS from '../ts/util/os/osMain';
-import { isProduction } from '../ts/util/version';
+import { isNightly, isProduction } from '../ts/util/version';
 import { clearTimeoutIfNecessary } from '../ts/util/clearTimeoutIfNecessary';
 import { toggleMaximizedBrowserWindow } from '../ts/util/toggleMaximizedBrowserWindow';
 import { ChallengeMainHandler } from '../ts/main/challengeMain';
@@ -124,6 +125,7 @@ import { LINUX_PASSWORD_STORE_FLAGS } from '../ts/util/linuxPasswordStoreFlags';
 import { getOwn } from '../ts/util/getOwn';
 import { safeParseLoose, safeParseUnknown } from '../ts/util/schemas';
 import { getAppErrorIcon } from '../ts/util/getAppErrorIcon';
+import { promptOSAuth } from '../ts/util/os/promptOSAuthMain';
 
 const animationSettings = systemPreferences.getAnimationSettings();
 
@@ -202,20 +204,16 @@ const defaultWebPrefs = {
     getEnvironment() !== Environment.PackagedApp ||
     !isProduction(app.getVersion()),
   spellcheck: false,
-  // https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5
-  enableBlinkFeatures: [
-    'CSSPseudoDir', // status=experimental, needed for RTL (ex: :dir(rtl))
-    'CSSLogical', // status=experimental, needed for RTL (ex: margin-inline-start)
-  ].join(','),
   enablePreferredSizeMode: true,
 };
-
-const DISABLE_GPU =
-  OS.isLinux() && !process.argv.some(arg => arg === '--enable-gpu');
 
 const DISABLE_IPV6 = process.argv.some(arg => arg === '--disable-ipv6');
 const FORCE_ENABLE_CRASH_REPORTS = process.argv.some(
   arg => arg === '--enable-crash-reports'
+);
+
+const DISABLE_SCREEN_SECURITY = process.argv.some(
+  arg => arg === '--disable-screen-security'
 );
 
 const CLI_LANG = cliOptions.lang as string | undefined;
@@ -576,6 +574,18 @@ async function handleCommonWindowEvents(window: BrowserWindow) {
   const focusInterval = setInterval(setWindowFocus, 10000);
   window.on('closed', () => clearInterval(focusInterval));
 
+  const contentProtection = ephemeralConfig.get('contentProtection');
+  // Apply content protection by default on Windows, unless explicitly disabled
+  // by user in settings.
+  if (
+    !DISABLE_SCREEN_SECURITY &&
+    (contentProtection ?? isContentProtectionEnabledByDefault(OS, os.release()))
+  ) {
+    window.once('ready-to-show', async () => {
+      window.setContentProtection(true);
+    });
+  }
+
   await zoomFactorService.syncWindow(window);
 
   nativeThemeNotifier.addWindow(window);
@@ -690,6 +700,21 @@ async function createWindow() {
     ? Math.min(windowConfig.height, maxHeight)
     : DEFAULT_HEIGHT;
 
+  const [systemTraySetting, backgroundColor, spellcheck] = await Promise.all([
+    systemTraySettingCache.get(),
+    isTestEnvironment(getEnvironment())
+      ? '#ffffff' // Tests should always be rendered on a white background
+      : getBackgroundColor({ signalColors: true }),
+    getSpellCheckSetting(),
+  ]);
+
+  const startInTray =
+    isTestEnvironment(getEnvironment()) ||
+    systemTraySetting === SystemTraySetting.MinimizeToAndStartInSystemTray;
+
+  const shouldShowWindow =
+    !app.getLoginItemSettings().wasOpenedAsHidden && !startInTray;
+
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
     show: false,
     width,
@@ -698,9 +723,7 @@ async function createWindow() {
     minHeight: MIN_HEIGHT,
     autoHideMenuBar: false,
     titleBarStyle: mainTitleBarStyle,
-    backgroundColor: isTestEnvironment(getEnvironment())
-      ? '#ffffff' // Tests should always be rendered on a white background
-      : await getBackgroundColor({ signalColors: true }),
+    backgroundColor,
     webPreferences: {
       ...defaultWebPrefs,
       nodeIntegration: false,
@@ -713,9 +736,8 @@ async function createWindow() {
           ? '../preload.wrapper.js'
           : '../ts/windows/main/preload.js'
       ),
-      spellcheck: await getSpellCheckSetting(),
+      spellcheck,
       backgroundThrottling: true,
-      disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmallCanvases',
     },
     icon: windowIcon,
     ...pick(windowConfig, ['autoHideMenuBar', 'x', 'y']),
@@ -730,11 +752,6 @@ async function createWindow() {
   if (!isBoolean(windowOptions.autoHideMenuBar)) {
     delete windowOptions.autoHideMenuBar;
   }
-
-  const startInTray =
-    isTestEnvironment(getEnvironment()) ||
-    (await systemTraySettingCache.get()) ===
-      SystemTraySetting.MinimizeToAndStartInSystemTray;
 
   const haveFullWindowsBounds =
     isNumber(windowOptions.x) &&
@@ -993,13 +1010,18 @@ async function createWindow() {
 
   mainWindow.on('show', () => {
     if (mainWindow) {
+      mainWindow.webContents.send('activate');
       mainWindow.webContents.send('set-media-playback-disabled', false);
     }
   });
 
-  mainWindow.once('ready-to-show', async () => {
-    getLogger().info('main window is ready-to-show');
+  mainWindow.webContents.on('devtools-reload-page', () => {
+    mainWindow?.webContents.on('dom-ready', () => {
+      mainWindow?.webContents.send('activate');
+    });
+  });
 
+  const maybeShowMainWindow = async () => {
     // Ignore sql errors and show the window anyway
     await sqlInitPromise;
 
@@ -1009,14 +1031,23 @@ async function createWindow() {
 
     mainWindow.webContents.send('ci:event', 'db-initialized', {});
 
-    const shouldShowWindow =
-      !app.getLoginItemSettings().wasOpenedAsHidden && !startInTray;
-
     if (shouldShowWindow) {
       getLogger().info('showing main window');
       mainWindow.show();
     }
-  });
+  };
+
+  if (OS.isLinux() && OS.isWaylandEnabled()) {
+    mainWindow.webContents.once('did-finish-load', async () => {
+      getLogger().info('main window webContents did-finish-load');
+      drop(maybeShowMainWindow());
+    });
+  } else {
+    mainWindow.once('ready-to-show', async () => {
+      getLogger().info('main window is ready-to-show');
+      drop(maybeShowMainWindow());
+    });
+  }
 
   await safeLoadURL(
     mainWindow,
@@ -1128,6 +1159,13 @@ ipc.on('convert-image', async (event, uuid, data) => {
   event.reply(`convert-image:${uuid}`, { error, response });
 });
 
+ipc.on('prompt-os-auth', async (event, { reason, localeString }) => {
+  getLogger().info(`Prompt for OS auth reason=${reason}`);
+  const result = await promptOSAuth({ reason, localeString });
+  getLogger().info(`Prompt for OS auth result=${result}`);
+  event.reply(`prompt-os-auth:${reason}`, result);
+});
+
 let isReadyForUpdates = false;
 async function readyForUpdates() {
   if (isReadyForUpdates) {
@@ -1154,9 +1192,6 @@ async function readyForUpdates() {
       'SettingsChannel must be initialized'
     );
     await updater.start({
-      settingsChannel,
-      logger: getLogger(),
-      getMainWindow,
       canRunSilently: () => {
         return (
           systemTrayService?.isVisible() === true &&
@@ -1164,6 +1199,9 @@ async function readyForUpdates() {
           mainWindow?.webContents?.getBackgroundThrottling() !== false
         );
       },
+      getMainWindow,
+      logger: getLogger(),
+      sql,
     });
   } catch (error) {
     getLogger().error(
@@ -1237,6 +1275,12 @@ function setupAsNewDevice() {
 function setupAsStandalone() {
   if (mainWindow) {
     mainWindow.webContents.send('set-up-as-standalone');
+  }
+}
+
+function stageLocalBackupForImport() {
+  if (mainWindow) {
+    mainWindow.webContents.send('stage-local-backup-for-import');
   }
 }
 
@@ -1405,57 +1449,6 @@ async function showAbout() {
   );
 }
 
-let settingsWindow: BrowserWindow | undefined;
-async function showSettingsWindow() {
-  if (settingsWindow) {
-    settingsWindow.show();
-    return;
-  }
-
-  const options = {
-    width: 700,
-    height: 700,
-    frame: true,
-    resizable: false,
-    title: getResolvedMessagesLocale().i18n('icu:signalDesktopPreferences'),
-    titleBarStyle: mainTitleBarStyle,
-    autoHideMenuBar: true,
-    backgroundColor: await getBackgroundColor(),
-    show: false,
-    webPreferences: {
-      ...defaultWebPrefs,
-      nodeIntegration: false,
-      nodeIntegrationInWorker: false,
-      sandbox: true,
-      contextIsolation: true,
-      preload: join(__dirname, '../bundles/settings/preload.js'),
-      nativeWindowOpen: true,
-    },
-  };
-
-  settingsWindow = new BrowserWindow(options);
-
-  await handleCommonWindowEvents(settingsWindow);
-
-  settingsWindow.on('closed', () => {
-    settingsWindow = undefined;
-  });
-
-  ipc.once('settings-done-rendering', () => {
-    if (!settingsWindow) {
-      getLogger().warn('settings-done-rendering: no settingsWindow available!');
-      return;
-    }
-
-    settingsWindow.show();
-  });
-
-  await safeLoadURL(
-    settingsWindow,
-    await prepareFileUrl([__dirname, '../settings.html'])
-  );
-}
-
 async function getIsLinked() {
   try {
     const number = await sql.sqlRead('getItemById', 'number_id');
@@ -1617,7 +1610,7 @@ const runSQLCorruptionHandler = async () => {
   // This is a glorified event handler. Normally, this promise never resolves,
   // but if there is a corruption error triggered by any query that we run
   // against the database - the promise will resolve and we will call
-  // `onDatabaseError`.
+  // `onDatabaseInitializationError`.
   const error = await sql.whenCorrupted();
 
   getLogger().error(
@@ -1625,14 +1618,14 @@ const runSQLCorruptionHandler = async () => {
       `Restarting the application immediately. Error: ${error.message}`
   );
 
-  await onDatabaseError(error);
+  await onDatabaseInitializationError(error);
 };
 
 const runSQLReadonlyHandler = async () => {
   // This is a glorified event handler. Normally, this promise never resolves,
   // but if there is a corruption error triggered by any query that we run
   // against the database - the promise will resolve and we will call
-  // `onDatabaseError`.
+  // `onDatabaseInitializationError`.
   const error = await sql.whenReadonly();
 
   getLogger().error(
@@ -1801,10 +1794,19 @@ async function initializeSQL(
   drop(runSQLCorruptionHandler());
   drop(runSQLReadonlyHandler());
 
+  sql.onUnknownSqlError(onUnknownSqlError);
+
   return { ok: true, error: undefined };
 }
 
-const onDatabaseError = async (error: Error) => {
+function onUnknownSqlError(error: Error) {
+  getLogger().error('Unknown SQL Error:', Errors.toLogFormat(error));
+  if (mainWindow) {
+    mainWindow.webContents.send('sql-error');
+  }
+}
+
+const onDatabaseInitializationError = async (error: Error) => {
   // Prevent window from re-opening
   ready = false;
 
@@ -1907,23 +1909,23 @@ const onDatabaseError = async (error: Error) => {
     });
 
     if (confirmationButtonIndex === confirmDeleteAllDataButtonIndex) {
-      getLogger().error('onDatabaseError: Deleting all data');
+      getLogger().error('onDatabaseInitializationError: Deleting all data');
       await sql.removeDB();
       userConfig.remove();
       getLogger().error(
-        'onDatabaseError: Requesting immediate restart after quit'
+        'onDatabaseInitializationError: Requesting immediate restart after quit'
       );
       app.relaunch();
     }
   } else if (buttonIndex === goToSupportPageButtonIndex) {
     drop(
       shell.openExternal(
-        'https://support.signal.org/hc/articles/9045714156314-Can-t-Open-Signal-Desktop'
+        'https://support.signal.org/hc/articles/9045714156314#desktop'
       )
     );
   }
 
-  getLogger().error('onDatabaseError: Quitting application');
+  getLogger().error('onDatabaseInitializationError: Quitting application');
   app.exit(1);
 };
 
@@ -1980,10 +1982,9 @@ const featuresToDisable = `HardwareMediaKeyHandling,${app.commandLine.getSwitchV
 )}`;
 app.commandLine.appendSwitch('disable-features', featuresToDisable);
 
-// <canvas/> rendering is often utterly broken on Linux when using GPU
-// acceleration.
-if (DISABLE_GPU) {
-  app.disableHardwareAcceleration();
+if (OS.isLinux()) {
+  // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
+  app.commandLine.appendSwitch('gtk-version', '3');
 }
 
 // This has to run before the 'ready' event.
@@ -2121,6 +2122,7 @@ app.on('ready', async () => {
     'ephemeral-setting-changed',
     sendPreferencesChangedEventToWindows
   );
+  settingsChannel.on('ephemeral-setting-changed', onEphemeralSettingChanged);
 
   // We use this event only a single time to log the startup time of the app
   // from when it's first ready until the loading screen disappears.
@@ -2184,7 +2186,8 @@ app.on('ready', async () => {
     logger.info(
       'media access status',
       getMediaAccessStatus('microphone'),
-      getMediaAccessStatus('camera')
+      getMediaAccessStatus('camera'),
+      getMediaAccessStatus('screen')
     );
   }
 
@@ -2284,6 +2287,8 @@ app.on('ready', async () => {
     },
   });
 
+  appStartInitialSpellcheckSetting = await getSpellCheckSetting();
+
   // Run window preloading in parallel with database initialization.
   await createWindow();
 
@@ -2291,12 +2296,10 @@ app.on('ready', async () => {
   if (sqlError) {
     getLogger().error('sql.initialize was unsuccessful; returning early');
 
-    await onDatabaseError(sqlError);
+    await onDatabaseInitializationError(sqlError);
 
     return;
   }
-
-  appStartInitialSpellcheckSetting = await getSpellCheckSetting();
 
   try {
     const IDB_KEY = 'indexeddb-delete-needed';
@@ -2334,12 +2337,14 @@ app.on('ready', async () => {
 
 function setupMenu(options?: Partial<CreateTemplateOptionsType>) {
   const { platform } = process;
+  const version = app.getVersion();
   menuOptions = {
     // options
     development,
     devTools: defaultWebPrefs.devTools,
     includeSetup: false,
-    isProduction: isProduction(app.getVersion()),
+    isNightly: isNightly(version),
+    isProduction: isProduction(version),
     platform,
 
     // actions
@@ -2352,11 +2357,20 @@ function setupMenu(options?: Partial<CreateTemplateOptionsType>) {
     openSupportPage,
     setupAsNewDevice,
     setupAsStandalone,
+    stageLocalBackupForImport,
     showAbout,
     showDebugLog: showDebugLogWindow,
     showCallingDevTools: showCallingDevToolsWindow,
     showKeyboardShortcuts,
-    showSettings: showSettingsWindow,
+    showSettings: () => {
+      if (!settingsChannel) {
+        getLogger().warn(
+          'showSettings: No settings channel; cannot open settings tab.'
+        );
+        return;
+      }
+      settingsChannel.openSettingsTab();
+    },
     showWindow,
     zoomIn,
     zoomOut,
@@ -2376,6 +2390,7 @@ function setupMenu(options?: Partial<CreateTemplateOptionsType>) {
     development: menuOptions.development,
     devTools: menuOptions.devTools,
     includeSetup: menuOptions.includeSetup,
+    isNightly: menuOptions.isNightly,
     isProduction: menuOptions.isProduction,
     platform: menuOptions.platform,
   });
@@ -2724,17 +2739,6 @@ function removeDarkOverlay() {
   }
 }
 
-ipc.on('show-settings', showSettingsWindow);
-
-ipc.on('delete-all-data', () => {
-  if (settingsWindow) {
-    settingsWindow.close();
-  }
-  if (mainWindow && mainWindow.webContents) {
-    mainWindow.webContents.send('delete-all-data');
-  }
-});
-
 ipc.on('get-config', async event => {
   const theme = await getResolvedThemeSetting();
 
@@ -2782,6 +2786,7 @@ ipc.on('get-config', async event => {
     // Should be already computed and cached at this point
     dnsFallback: await getDNSFallback(),
     disableIPv6: DISABLE_IPV6,
+    disableScreenSecurity: DISABLE_SCREEN_SECURITY,
     nodeVersion: process.versions.node,
     hostname: os.hostname(),
     osRelease: os.release(),
@@ -2790,7 +2795,7 @@ ipc.on('get-config', async event => {
     proxyUrl: process.env.HTTPS_PROXY || process.env.https_proxy || undefined,
     contentProxyUrl: config.get<string>('contentProxyUrl'),
     sfuUrl: config.get('sfuUrl'),
-    reducedMotionSetting: DISABLE_GPU || animationSettings.prefersReducedMotion,
+    reducedMotionSetting: animationSettings.prefersReducedMotion,
     registrationChallengeUrl: config.get<string>('registrationChallengeUrl'),
     serverPublicParams: config.get<string>('serverPublicParams'),
     serverTrustRoot: config.get<string>('serverTrustRoot'),
@@ -2889,6 +2894,20 @@ const sendPreferencesChangedEventToWindows = () => {
   }
 };
 ipc.on('preferences-changed', sendPreferencesChangedEventToWindows);
+
+const onEphemeralSettingChanged = (name: string) => {
+  if (name !== 'contentProtection') {
+    return;
+  }
+
+  const contentProtection = ephemeralConfig.get('contentProtection');
+
+  for (const window of activeWindows) {
+    if (typeof contentProtection === 'boolean') {
+      window.setContentProtection(contentProtection);
+    }
+  }
+};
 
 function maybeGetIncomingSignalRoute(argv: Array<string>) {
   for (const arg of argv) {
@@ -3023,7 +3042,7 @@ ipc.handle('get-media-access-status', async (_event, value) => {
 
 ipc.handle(
   'open-system-media-permissions',
-  async (_event, mediaType: 'camera' | 'microphone') => {
+  async (_event, mediaType: 'camera' | 'microphone' | 'screenCapture') => {
     if (!OS.isMacOS()) {
       return;
     }
@@ -3034,6 +3053,10 @@ ipc.handle(
     } else if (mediaType === 'microphone') {
       await shell.openExternal(
         'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+      );
+    } else if (mediaType === 'screenCapture') {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
       );
     } else {
       throw missingCaseError(mediaType);
@@ -3094,31 +3117,62 @@ ipc.handle('show-save-dialog', async (_event, { defaultPath }) => {
   return { canceled: false, filePath: finalFilePath };
 });
 
-ipc.handle('show-save-multi-dialog', async _event => {
-  if (!mainWindow) {
-    getLogger().warn('show-save-multi-dialog: no main window');
-
-    return { canceled: true };
-  }
-  const { canceled, filePaths: selectedDirPaths } = await dialog.showOpenDialog(
-    mainWindow,
+ipc.handle(
+  'show-open-folder-dialog',
+  async (
+    _event,
     {
-      defaultPath: app.getPath('downloads'),
-      properties: ['openDirectory', 'createDirectory'],
+      useMainWindow,
+      buttonLabel,
+      title,
+    }: {
+      useMainWindow: boolean;
+      buttonLabel?: string;
+      title?: string;
+    } = { useMainWindow: false }
+  ) => {
+    let canceled: boolean;
+    let selectedDirPaths: ReadonlyArray<string>;
+
+    if (useMainWindow) {
+      if (!mainWindow) {
+        getLogger().warn('show-open-folder-dialog: no main window');
+        return { canceled: true };
+      }
+
+      ({ canceled, filePaths: selectedDirPaths } = await dialog.showOpenDialog(
+        mainWindow,
+        {
+          defaultPath: app.getPath('downloads'),
+          properties: ['openDirectory', 'createDirectory'],
+          buttonLabel,
+          title,
+        }
+      ));
+    } else {
+      ({ canceled, filePaths: selectedDirPaths } = await dialog.showOpenDialog({
+        defaultPath: app.getPath('downloads'),
+        properties: ['openDirectory', 'createDirectory'],
+        buttonLabel,
+        title,
+      }));
     }
-  );
-  if (canceled || selectedDirPaths.length === 0) {
-    return { canceled: true };
+
+    if (canceled || selectedDirPaths.length === 0) {
+      return { canceled: true };
+    }
+
+    if (selectedDirPaths.length > 1) {
+      getLogger().warn(
+        'show-open-folder-dialog: multiple directories selected'
+      );
+
+      return { canceled: true };
+    }
+
+    return { canceled: false, dirPath: selectedDirPaths[0] };
   }
-
-  if (selectedDirPaths.length > 1) {
-    getLogger().warn('show-save-multi-dialog: multiple directories selected');
-
-    return { canceled: true };
-  }
-
-  return { canceled: false, dirPath: selectedDirPaths[0] };
-});
+);
 
 ipc.handle('executeMenuRole', async ({ sender }, untypedRole) => {
   const role = untypedRole as MenuItemConstructorOptions['role'];
@@ -3189,6 +3243,7 @@ ipc.handle('getMenuOptions', async () => {
     development: menuOptions?.development ?? false,
     devTools: menuOptions?.devTools ?? false,
     includeSetup: menuOptions?.includeSetup ?? false,
+    isNightly: menuOptions?.isNightly ?? false,
     isProduction: menuOptions?.isProduction ?? true,
     platform: menuOptions?.platform ?? 'unknown',
   };

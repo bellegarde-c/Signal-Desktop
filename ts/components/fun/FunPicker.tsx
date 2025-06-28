@@ -1,9 +1,10 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReactNode } from 'react';
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useEffect } from 'react';
 import type { Placement } from 'react-aria';
 import { DialogTrigger } from 'react-aria-components';
+import { createKeybindingsHandler } from 'tinykeys';
 import { FunPickerTabKey } from './constants';
 import { FunPopover } from './base/FunPopover';
 import { FunPickerTab, FunTabList, FunTabPanel, FunTabs } from './base/FunTabs';
@@ -15,6 +16,7 @@ import type { FunStickerSelection } from './panels/FunPanelStickers';
 import { FunPanelStickers } from './panels/FunPanelStickers';
 import { useFunContext } from './FunProvider';
 import type { ThemeType } from '../../types/Util';
+import { FunErrorBoundary } from './base/FunErrorBoundary';
 
 /**
  * FunPicker
@@ -37,7 +39,7 @@ export const FunPicker = memo(function FunPicker(
 ): JSX.Element {
   const { onOpenChange } = props;
   const fun = useFunContext();
-  const { i18n, onOpenChange: onFunOpenChange } = fun;
+  const { i18n, onOpenChange: onFunOpenChange, onChangeTab } = fun;
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -50,6 +52,27 @@ export const FunPicker = memo(function FunPicker(
   const handleClose = useCallback(() => {
     handleOpenChange(false);
   }, [handleOpenChange]);
+
+  useEffect(() => {
+    const onKeyDown = createKeybindingsHandler({
+      '$mod+Shift+J': () => {
+        onChangeTab(FunPickerTabKey.Emoji);
+        handleOpenChange(true);
+      },
+      '$mod+Shift+O': () => {
+        onChangeTab(FunPickerTabKey.Stickers);
+        handleOpenChange(true);
+      },
+      '$mod+Shift+G': () => {
+        onChangeTab(FunPickerTabKey.Gifs);
+        handleOpenChange(true);
+      },
+    });
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [handleOpenChange, onChangeTab]);
 
   return (
     <DialogTrigger isOpen={props.open} onOpenChange={handleOpenChange}>
@@ -68,23 +91,32 @@ export const FunPicker = memo(function FunPicker(
             </FunPickerTab>
           </FunTabList>
           <FunTabPanel id={FunPickerTabKey.Emoji}>
-            <FunPanelEmojis
-              onEmojiSelect={props.onSelectEmoji}
-              onClose={handleClose}
-            />
+            <FunErrorBoundary>
+              <FunPanelEmojis
+                onSelectEmoji={props.onSelectEmoji}
+                onClose={handleClose}
+                showCustomizePreferredReactionsButton={false}
+                closeOnSelect={false}
+              />
+            </FunErrorBoundary>
           </FunTabPanel>
           <FunTabPanel id={FunPickerTabKey.Stickers}>
-            <FunPanelStickers
-              onSelectSticker={props.onSelectSticker}
-              onAddStickerPack={props.onAddStickerPack}
-              onClose={handleClose}
-            />
+            <FunErrorBoundary>
+              <FunPanelStickers
+                showTimeStickers={false}
+                onSelectSticker={props.onSelectSticker}
+                onAddStickerPack={props.onAddStickerPack}
+                onClose={handleClose}
+              />
+            </FunErrorBoundary>
           </FunTabPanel>
           <FunTabPanel id={FunPickerTabKey.Gifs}>
-            <FunPanelGifs
-              onSelectGif={props.onSelectGif}
-              onClose={handleClose}
-            />
+            <FunErrorBoundary>
+              <FunPanelGifs
+                onSelectGif={props.onSelectGif}
+                onClose={handleClose}
+              />
+            </FunErrorBoundary>
           </FunTabPanel>
         </FunTabs>
       </FunPopover>

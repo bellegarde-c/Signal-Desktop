@@ -52,7 +52,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
       contactA,
       {
         whitelisted: true,
-        serviceE164: contactA.device.number,
+        e164: contactA.device.number,
         identityKey: contactA.getPublicKey(ServiceIdKind.PNI).serialize(),
         pni: toUntaggedPni(contactA.device.pni),
         givenName: 'ContactA',
@@ -108,7 +108,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'message to contactA');
+      await typeIntoInput(compositionInput, 'message to contactA', '');
       await compositionInput.press('Enter');
     }
 
@@ -144,7 +144,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
             {
               identityState: Proto.ContactRecord.IdentityState.DEFAULT,
               whitelisted: true,
-              serviceE164: contactA.device.number,
+              e164: contactA.device.number,
               pni: toUntaggedPni(updatedPni),
               identityKey: contactA.getPublicKey(ServiceIdKind.PNI).serialize(),
             },
@@ -207,7 +207,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'message to contactA');
+      await typeIntoInput(compositionInput, 'message to contactA', '');
       await compositionInput.press('Enter');
     }
 
@@ -241,7 +241,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
             {
               identityState: Proto.ContactRecord.IdentityState.DEFAULT,
               whitelisted: true,
-              serviceE164: contactA.device.number,
+              e164: contactA.device.number,
               pni: toUntaggedPni(contactB.device.pni),
 
               // Key change - different identity key
@@ -309,7 +309,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'message to contactA');
+      await typeIntoInput(compositionInput, 'message to contactA', '');
       await compositionInput.press('Enter');
     }
 
@@ -343,7 +343,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
             {
               identityState: Proto.ContactRecord.IdentityState.DEFAULT,
               whitelisted: true,
-              serviceE164: contactA.device.number,
+              e164: contactA.device.number,
               pni: toUntaggedPni(contactB.device.pni),
 
               // Note: No identityKey key provided here!
@@ -365,7 +365,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'message to contactB');
+      await typeIntoInput(compositionInput, 'message to contactB', '');
       await compositionInput.press('Enter');
 
       // We get a safety number change warning, because we get a different identity key!
@@ -440,7 +440,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'message to contactA');
+      await typeIntoInput(compositionInput, 'message to contactA', '');
       await compositionInput.press('Enter');
     }
 
@@ -474,7 +474,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
             {
               identityState: Proto.ContactRecord.IdentityState.DEFAULT,
               whitelisted: true,
-              serviceE164: contactA.device.number,
+              e164: contactA.device.number,
               pni: toUntaggedPni(contactB.device.pni),
 
               // Note: No identityKey key provided here!
@@ -506,7 +506,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
             {
               identityState: Proto.ContactRecord.IdentityState.DEFAULT,
               whitelisted: true,
-              serviceE164: contactA.device.number,
+              e164: contactA.device.number,
               pni: toUntaggedPni(contactA.device.pni),
             },
             ServiceIdKind.PNI
@@ -526,7 +526,7 @@ describe('pnp/PNI Change', function (this: Mocha.Suite) {
     {
       const compositionInput = await waitForEnabledComposer(window);
 
-      await typeIntoInput(compositionInput, 'second message to contactA');
+      await typeIntoInput(compositionInput, 'second message to contactA', '');
       await compositionInput.press('Enter');
     }
 

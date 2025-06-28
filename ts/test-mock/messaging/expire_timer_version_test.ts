@@ -54,7 +54,7 @@ describe('messaging/expireTimerVersion', function (this: Mocha.Suite) {
     state = state.addContact(stranger, {
       identityState: Proto.ContactRecord.IdentityState.DEFAULT,
       whitelisted: true,
-      serviceE164: undefined,
+      e164: undefined,
       profileKey: stranger.profileKey.serialize(),
     });
 
@@ -251,7 +251,7 @@ describe('messaging/expireTimerVersion', function (this: Mocha.Suite) {
       {
         const compositionInput = await waitForEnabledComposer(window);
 
-        await typeIntoInput(compositionInput, 'Hello');
+        await typeIntoInput(compositionInput, 'Hello', '');
         await compositionInput.press('Enter');
       }
 

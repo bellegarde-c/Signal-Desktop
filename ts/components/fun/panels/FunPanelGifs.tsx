@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Range } from '@tanstack/react-virtual';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
-import type { MouseEvent } from 'react';
+import type { PointerEvent } from 'react';
 import React, {
   memo,
   useCallback,
@@ -10,11 +10,17 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useId,
 } from 'react';
-import { useId, VisuallyHidden } from 'react-aria';
+import { VisuallyHidden } from 'react-aria';
 import { LRUCache } from 'lru-cache';
 import { FunItemButton } from '../base/FunItem';
-import { FunPanel } from '../base/FunPanel';
+import {
+  FunPanel,
+  FunPanelBody,
+  FunPanelFooter,
+  FunPanelHeader,
+} from '../base/FunPanel';
 import { FunScroller } from '../base/FunScroller';
 import { FunSearch } from '../base/FunSearch';
 import {
@@ -106,12 +112,7 @@ type GifsQuery = Readonly<{
 }>;
 
 export type FunGifSelection = Readonly<{
-  id: string;
-  title: string;
-  description: string;
-  url: string;
-  width: number;
-  height: number;
+  gif: GifType;
 }>;
 
 export type FunPanelGifsProps = Readonly<{
@@ -134,6 +135,7 @@ export function FunPanelGifs({
     fetchGifsFeatured,
     fetchGifsSearch,
     fetchGif,
+    onSelectGif: onFunSelectGif,
   } = fun;
 
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -354,13 +356,15 @@ export function FunPanelGifs({
     []
   );
 
-  const handlePressGif = useCallback(
-    (_event: MouseEvent, gifSelection: FunGifSelection) => {
+  const handleClickGif = useCallback(
+    (_event: PointerEvent, gifSelection: FunGifSelection) => {
+      onFunSelectGif(gifSelection);
       onSelectGif(gifSelection);
+      setSelectedItemKey(null);
       // Should always close, cannot select multiple
       onClose();
     },
-    [onSelectGif, onClose]
+    [onFunSelectGif, onSelectGif, onClose]
   );
 
   const handleRetry = useCallback(() => {
@@ -376,151 +380,157 @@ export function FunPanelGifs({
 
   return (
     <FunPanel>
-      <FunSearch
-        i18n={i18n}
-        searchInput={searchInput}
-        onSearchInputChange={handleSearchInputChange}
-        placeholder={i18n('icu:FunPanelGifs__SearchPlaceholder--Tenor')}
-        aria-label={i18n('icu:FunPanelGifs__SearchLabel--Tenor')}
-      />
+      <FunPanelHeader>
+        <FunSearch
+          i18n={i18n}
+          searchInput={searchInput}
+          onSearchInputChange={handleSearchInputChange}
+          placeholder={i18n('icu:FunPanelGifs__SearchPlaceholder--Tenor')}
+          aria-label={i18n('icu:FunPanelGifs__SearchLabel--Tenor')}
+        />
+      </FunPanelHeader>
       {visibleSelectedSection !== FunSectionCommon.SearchResults && (
-        <FunSubNav>
-          <FunSubNavListBox
-            aria-label={i18n('icu:FunPanelGifs__SubNavLabel')}
-            selected={visibleSelectedSection}
-            onSelect={handleSelectSection}
-          >
-            {recentGifs.length > 0 && (
+        <FunPanelFooter>
+          <FunSubNav>
+            <FunSubNavListBox
+              aria-label={i18n('icu:FunPanelGifs__SubNavLabel')}
+              selected={visibleSelectedSection}
+              onSelect={handleSelectSection}
+            >
+              {recentGifs.length > 0 && (
+                <FunSubNavListBoxItem
+                  id={FunSectionCommon.Recents}
+                  label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Recents')}
+                >
+                  <FunSubNavIcon iconClassName="FunSubNav__Icon--Recents" />
+                </FunSubNavListBoxItem>
+              )}
               <FunSubNavListBoxItem
-                id={FunSectionCommon.Recents}
-                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Recents')}
+                id={FunGifsCategory.Trending}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Trending')}
               >
-                <FunSubNavIcon iconClassName="FunSubNav__Icon--Recents" />
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Trending" />
               </FunSubNavListBoxItem>
-            )}
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Trending}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Trending')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Trending" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Celebrate}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Celebrate')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Celebrate" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Love}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Love')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Love" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.ThumbsUp}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--ThumbsUp')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--ThumbsUp" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Surprised}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Surprised')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Surprised" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Excited}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Excited')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Excited" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Sad}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Sad')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Sad" />
-            </FunSubNavListBoxItem>
-            <FunSubNavListBoxItem
-              id={FunGifsCategory.Angry}
-              label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Angry')}
-            >
-              <FunSubNavIcon iconClassName="FunSubNav__Icon--Angry" />
-            </FunSubNavListBoxItem>
-          </FunSubNavListBox>
-        </FunSubNav>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Celebrate}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Celebrate')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Celebrate" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Love}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Love')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Love" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.ThumbsUp}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--ThumbsUp')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--ThumbsUp" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Surprised}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Surprised')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Surprised" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Excited}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Excited')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Excited" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Sad}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Sad')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Sad" />
+              </FunSubNavListBoxItem>
+              <FunSubNavListBoxItem
+                id={FunGifsCategory.Angry}
+                label={i18n('icu:FunPanelGifs__SubNavCategoryLabel--Angry')}
+              >
+                <FunSubNavIcon iconClassName="FunSubNav__Icon--Angry" />
+              </FunSubNavListBoxItem>
+            </FunSubNavListBox>
+          </FunSubNav>
+        </FunPanelFooter>
       )}
-      <FunScroller ref={scrollerRef} sectionGap={0}>
-        {count === 0 && (
-          <FunResults aria-busy={queryState.pending}>
-            {queryState.pending && (
-              <>
-                <FunResultsFigure>
-                  <FunResultsSpinner />
-                </FunResultsFigure>
-                <VisuallyHidden>
+      <FunPanelBody>
+        <FunScroller ref={scrollerRef} sectionGap={0}>
+          {count === 0 && (
+            <FunResults aria-busy={queryState.pending}>
+              {queryState.pending && (
+                <>
+                  <FunResultsFigure>
+                    <FunResultsSpinner />
+                  </FunResultsFigure>
+                  <VisuallyHidden>
+                    <FunResultsHeader>
+                      {i18n('icu:FunPanelGifs__SearchResults__LoadingLabel')}
+                    </FunResultsHeader>
+                  </VisuallyHidden>
+                </>
+              )}
+              {queryState.rejected && (
+                <>
                   <FunResultsHeader>
-                    {i18n('icu:FunPanelGifs__SearchResults__LoadingLabel')}
+                    {i18n('icu:FunPanelGifs__SearchResults__ErrorHeading')}
                   </FunResultsHeader>
-                </VisuallyHidden>
-              </>
-            )}
-            {queryState.rejected && (
-              <>
+                  <FunResultsButton onPress={handleRetry}>
+                    {i18n('icu:FunPanelGifs__SearchResults__ErrorRetryButton')}
+                  </FunResultsButton>
+                </>
+              )}
+              {!queryState.pending && !queryState.rejected && (
                 <FunResultsHeader>
-                  {i18n('icu:FunPanelGifs__SearchResults__ErrorHeading')}
+                  {i18n('icu:FunPanelGifs__SearchResults__EmptyHeading')}{' '}
+                  <FunStaticEmoji
+                    size={16}
+                    role="presentation"
+                    emoji={emojiVariantConstant('\u{1F641}')}
+                  />
                 </FunResultsHeader>
-                <FunResultsButton onPress={handleRetry}>
-                  {i18n('icu:FunPanelGifs__SearchResults__ErrorRetryButton')}
-                </FunResultsButton>
-              </>
-            )}
-            {!queryState.pending && !queryState.rejected && (
-              <FunResultsHeader>
-                {i18n('icu:FunPanelGifs__SearchResults__EmptyHeading')}{' '}
-                <FunStaticEmoji
-                  size={16}
-                  role="presentation"
-                  emoji={emojiVariantConstant('\u{1F641}')}
-                />
-              </FunResultsHeader>
-            )}
-          </FunResults>
-        )}
-        {count !== 0 && (
-          <FunLightboxProvider containerRef={scrollerRef}>
-            <GifsLightbox i18n={i18n} items={items} />
-            <FunKeyboard
-              scrollerRef={scrollerRef}
-              keyboard={keyboard}
-              onStateChange={handleKeyboardStateChange}
-            >
-              <FunWaterfallContainer totalSize={virtualizer.getTotalSize()}>
-                {virtualizer.getVirtualItems().map(item => {
-                  const gif = items[item.index];
-                  const key = String(item.key);
-                  const isTabbable =
-                    selectedItemKey != null
-                      ? key === selectedItemKey
-                      : item.index === 0;
-                  return (
-                    <Item
-                      key={key}
-                      gif={gif}
-                      itemKey={key}
-                      itemHeight={item.size}
-                      itemOffset={item.start}
-                      itemLane={item.lane}
-                      isTabbable={isTabbable}
-                      onPressGif={handlePressGif}
-                      fetchGif={fetchGif}
-                    />
-                  );
-                })}
-              </FunWaterfallContainer>
-            </FunKeyboard>
-          </FunLightboxProvider>
-        )}
-      </FunScroller>
+              )}
+            </FunResults>
+          )}
+          {count !== 0 && (
+            <FunLightboxProvider containerRef={scrollerRef}>
+              <GifsLightbox i18n={i18n} items={items} />
+              <FunKeyboard
+                scrollerRef={scrollerRef}
+                keyboard={keyboard}
+                onStateChange={handleKeyboardStateChange}
+              >
+                <FunWaterfallContainer totalSize={virtualizer.getTotalSize()}>
+                  {virtualizer.getVirtualItems().map(item => {
+                    const gif = items[item.index];
+                    const key = String(item.key);
+                    const isTabbable =
+                      selectedItemKey != null
+                        ? key === selectedItemKey
+                        : item.index === 0;
+                    return (
+                      <Item
+                        key={key}
+                        gif={gif}
+                        itemKey={key}
+                        itemHeight={item.size}
+                        itemOffset={item.start}
+                        itemLane={item.lane}
+                        isTabbable={isTabbable}
+                        onClickGif={handleClickGif}
+                        fetchGif={fetchGif}
+                      />
+                    );
+                  })}
+                </FunWaterfallContainer>
+              </FunKeyboard>
+            </FunLightboxProvider>
+          )}
+        </FunScroller>
+      </FunPanelBody>
     </FunPanel>
   );
 }
@@ -532,23 +542,16 @@ const Item = memo(function Item(props: {
   itemOffset: number;
   itemLane: number;
   isTabbable: boolean;
-  onPressGif: (event: MouseEvent, gifSelection: FunGifSelection) => void;
+  onClickGif: (event: PointerEvent, gifSelection: FunGifSelection) => void;
   fetchGif: typeof tenorDownload;
 }) {
-  const { onPressGif, fetchGif } = props;
+  const { onClickGif, fetchGif } = props;
 
   const handleClick = useCallback(
-    async (event: MouseEvent) => {
-      onPressGif(event, {
-        id: props.gif.id,
-        title: props.gif.title,
-        description: props.gif.description,
-        url: props.gif.attachmentMedia.url,
-        width: props.gif.attachmentMedia.width,
-        height: props.gif.attachmentMedia.height,
-      });
+    async (event: PointerEvent) => {
+      onClickGif(event, { gif: props.gif });
     },
-    [props.gif, onPressGif]
+    [props.gif, onClickGif]
   );
 
   const descriptionId = `FunGifsPanelItem__GifDescription--${props.gif.id}`;
@@ -604,7 +607,7 @@ const Item = memo(function Item(props: {
       <FunItemButton
         aria-label={props.gif.title}
         onClick={handleClick}
-        tabIndex={props.isTabbable ? 0 : -1}
+        excludeFromTabOrder={!props.isTabbable}
       >
         {src != null && (
           <FunGif

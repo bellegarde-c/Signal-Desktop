@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import React, { StrictMode } from 'react';
 import { render, unmountComponentAtNode } from 'react-dom';
 
 import * as Errors from '../types/errors';
@@ -9,6 +9,7 @@ import * as log from '../logging/log';
 import { ProgressModal } from '../components/ProgressModal';
 import { clearTimeoutIfNecessary } from './clearTimeoutIfNecessary';
 import { sleep } from './sleep';
+import { FunDefaultEnglishEmojiLocalizationProvider } from '../components/fun/FunEmojiLocalizationProvider';
 
 export async function longRunningTaskWrapper<T>({
   name,
@@ -31,7 +32,14 @@ export async function longRunningTaskWrapper<T>({
     progressNode = document.createElement('div');
 
     log.info(`longRunningTaskWrapper/${idLog}: Creating spinner`);
-    render(<ProgressModal i18n={window.i18n} />, progressNode);
+    render(
+      <StrictMode>
+        <FunDefaultEnglishEmojiLocalizationProvider>
+          <ProgressModal i18n={window.i18n} />
+        </FunDefaultEnglishEmojiLocalizationProvider>
+      </StrictMode>,
+      progressNode
+    );
     spinnerStart = Date.now();
   }, TWO_SECONDS);
 
