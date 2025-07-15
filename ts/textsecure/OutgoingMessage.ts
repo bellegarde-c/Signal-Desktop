@@ -41,7 +41,12 @@ import type { ServiceIdString } from '../types/ServiceId';
 import { Sessions, IdentityKeys } from '../LibSignalStores';
 import { getKeysForServiceId } from './getKeysForServiceId';
 import { SignalService as Proto } from '../protobuf';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
+import type { GroupSendToken } from '../types/GroupSendEndorsements';
+import { isSignalServiceId } from '../util/isSignalConversation';
+import * as Bytes from '../Bytes';
+
+const log = createLogger('OutgoingMessage');
 
 export const enum SenderCertificateMode {
   WithE164,
@@ -68,10 +73,10 @@ type OutgoingMessageOptionsType = SendOptionsType & {
 
 function ciphertextMessageTypeToEnvelopeType(type: number) {
   if (type === CiphertextMessageType.PreKey) {
-    return Proto.Envelope.Type.PREKEY_BUNDLE;
+    return Proto.Envelope.Type.PREKEY_MESSAGE;
   }
   if (type === CiphertextMessageType.Whisper) {
-    return Proto.Envelope.Type.CIPHERTEXT;
+    return Proto.Envelope.Type.DOUBLE_RATCHET;
   }
   if (type === CiphertextMessageType.Plaintext) {
     return Proto.Envelope.Type.PLAINTEXT_CONTENT;
@@ -306,13 +311,20 @@ export default class OutgoingMessage {
     serviceId: ServiceIdString,
     jsonData: ReadonlyArray<MessageType>,
     timestamp: number,
-    { accessKey }: { accessKey?: string } = {}
+    {
+      accessKey,
+      groupSendToken,
+    }: {
+      accessKey: string | null;
+      groupSendToken: GroupSendToken | null;
+    } = { accessKey: null, groupSendToken: null }
   ): Promise<void> {
     let promise;
 
-    if (accessKey) {
+    if (accessKey != null || groupSendToken != null) {
       promise = this.server.sendMessagesUnauth(serviceId, jsonData, timestamp, {
         accessKey,
+        groupSendToken,
         online: this.online,
         story: this.story,
         urgent: this.urgent,
@@ -377,7 +389,7 @@ export default class OutgoingMessage {
 
     if (message instanceof Proto.Content) {
       return signalEncrypt(
-        Buffer.from(this.getPlaintext()),
+        this.getPlaintext(),
         protocolAddress,
         sessionStore,
         identityKeyStore
@@ -393,15 +405,21 @@ export default class OutgoingMessage {
     recurse?: boolean
   ): Promise<void> {
     const { sendMetadata } = this;
-    const { accessKey, senderCertificate } = sendMetadata?.[serviceId] || {};
+    const {
+      accessKey = null,
+      groupSendToken = null,
+      senderCertificate,
+    } = sendMetadata?.[serviceId] || {};
 
     if (accessKey && !senderCertificate) {
       log.warn(
-        'OutgoingMessage.doSendMessage: accessKey was provided, but senderCertificate was not'
+        'doSendMessage: accessKey was provided, but senderCertificate was not'
       );
     }
 
-    const sealedSender = Boolean(accessKey && senderCertificate);
+    const sealedSender =
+      (accessKey != null || groupSendToken != null) &&
+      senderCertificate != null;
 
     // We don't send to ourselves unless sealedSender is enabled
     const ourNumber = window.textsecure.storage.user.getNumber();
@@ -430,7 +448,6 @@ export default class OutgoingMessage {
 
         return window.textsecure.storage.protocol.enqueueSessionJob<MessageType>(
           address,
-          `doSendMessage(${address.toString()}, ${this.timestamp})`,
           async () => {
             const protocolAddress = ProtocolAddress.new(
               serviceId,
@@ -456,10 +473,10 @@ export default class OutgoingMessage {
               });
 
               const certificate = SenderCertificate.deserialize(
-                Buffer.from(senderCertificate.serialized)
+                senderCertificate.serialized
               );
               const groupIdBuffer = this.groupId
-                ? Buffer.from(this.groupId, 'base64')
+                ? Bytes.fromBase64(this.groupId)
                 : null;
 
               const content = UnidentifiedSenderMessageContent.new(
@@ -479,7 +496,7 @@ export default class OutgoingMessage {
                 type: Proto.Envelope.Type.UNIDENTIFIED_SENDER,
                 destinationDeviceId,
                 destinationRegistrationId,
-                content: buffer.toString('base64'),
+                content: Bytes.toBase64(buffer),
               };
             }
 
@@ -492,7 +509,7 @@ export default class OutgoingMessage {
               ciphertextMessage.type()
             );
 
-            const content = ciphertextMessage.serialize().toString('base64');
+            const content = Bytes.toBase64(ciphertextMessage.serialize());
 
             return {
               type,
@@ -508,6 +525,7 @@ export default class OutgoingMessage {
         if (sealedSender) {
           return this.transmitMessage(serviceId, jsonData, this.timestamp, {
             accessKey,
+            groupSendToken,
           }).then(
             () => {
               this.recipients[serviceId] = deviceIds;
@@ -522,7 +540,7 @@ export default class OutgoingMessage {
                 });
               } else if (this.successfulServiceIds.length > 1) {
                 log.warn(
-                  `OutgoingMessage.doSendMessage: no sendLogCallback provided for message ${this.timestamp}, but multiple recipients`
+                  `doSendMessage: no sendLogCallback provided for message ${this.timestamp}, but multiple recipients`
                 );
               }
             },
@@ -532,7 +550,7 @@ export default class OutgoingMessage {
                 (error.code === 401 || error.code === 403)
               ) {
                 log.warn(
-                  `OutgoingMessage.doSendMessage: Failing over to unsealed send for serviceId ${serviceId}`
+                  `doSendMessage: Failing over to unsealed send for serviceId ${serviceId}`
                 );
                 if (this.failoverServiceIds.indexOf(serviceId) === -1) {
                   this.failoverServiceIds.push(serviceId);
@@ -564,7 +582,7 @@ export default class OutgoingMessage {
               });
             } else if (this.successfulServiceIds.length > 1) {
               log.warn(
-                `OutgoingMessage.doSendMessage: no sendLogCallback provided for message ${this.timestamp}, but multiple recipients`
+                `doSendMessage: no sendLogCallback provided for message ${this.timestamp}, but multiple recipients`
               );
             }
           }
@@ -625,7 +643,7 @@ export default class OutgoingMessage {
         ) {
           newError = new OutgoingIdentityKeyError(serviceId, error);
           log.error(
-            'Got "key changed" error from encrypt - no identityKey for application layer',
+            'UntrustedIdentityKeyError from decrypt!',
             serviceId,
             deviceIds
           );
@@ -671,6 +689,15 @@ export default class OutgoingMessage {
   }
 
   async sendToServiceId(serviceId: ServiceIdString): Promise<void> {
+    if (isSignalServiceId(serviceId)) {
+      this.registerError(
+        serviceId,
+        'Failed to send to Signal serviceId',
+        new Error("Can't send to Signal serviceId")
+      );
+      return;
+    }
+
     try {
       const ourAci = window.textsecure.storage.user.getCheckedAci();
       const deviceIds = await window.textsecure.storage.protocol.getDeviceIds({

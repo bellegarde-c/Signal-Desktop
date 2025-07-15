@@ -38,6 +38,12 @@
   "icu:Preferences__sent-media-quality": {
     "messageformat": "ส่งคุณภาพสื่อแล้ว"
   },
+  "icu:Preferences__sent-media-quality__description": {
+    "messageformat": "การส่งสื่อคุณภาพสูงจะใช้ข้อมูลมากขึ้น"
+  },
+  "icu:Preferences__DonateTitle": {
+    "messageformat": "บริจาคให้ Signal"
+  },
   "icu:sentMediaQualityStandard": {
     "messageformat": "มาตรฐาน"
   },
@@ -50,8 +56,14 @@
   "icu:privacyPolicy": {
     "messageformat": "เงื่อนไขและนโยบายความเป็นส่วนตัว"
   },
-  "icu:appleSilicon": {
-    "messageformat": "Apple Silicon"
+  "icu:About__AppEnvironment": {
+    "messageformat": "{appEnv}"
+  },
+  "icu:About__AppEnvironment--AppleSilicon": {
+    "messageformat": "{appEnv} (Apple silicon)"
+  },
+  "icu:About__AppEnvironment--AppleIntel": {
+    "messageformat": "{appEnv} (Intel)"
   },
   "icu:copyErrorAndQuit": {
     "messageformat": "คัดลอกข้อผิดพลาดและออก"
@@ -59,23 +71,29 @@
   "icu:unknownContact": {
     "messageformat": "ผู้ที่ติดต่อที่ไม่รู้จัก"
   },
+  "icu:unknownContactShort": {
+    "messageformat": "ไม่ทราบ"
+  },
   "icu:unknownGroup": {
     "messageformat": "กลุ่มที่ไม่รู้จัก"
   },
+  "icu:cantOpenSignalError": {
+    "messageformat": "ไม่สามารถเปิด Signal ได้"
+  },
+  "icu:cantOpenSignalError__detail": {
+    "messageformat": "โปรดลองทำตามขั้นตอนในหน้าการสนับสนุนหรือติดต่อฝ่ายสนับสนุนของ Signal ให้ช่วยแก้ไขปัญหาดังกล่าว\n\nในกรณีที่คุณต้องการใช้ Signal ทันที คุณสามารถลบข้อมูลและเชื่อมโยงอุปกรณ์เดสก์ท็อปนี้ใหม่อีกครั้ง โดยคุณจะสามารถเลือกถ่ายโอนประวัติการส่งข้อความจากโทรศัพท์ได้"
+  },
   "icu:databaseError": {
     "messageformat": "ฐานข้อมูลผิดพลาด"
-  },
-  "icu:databaseError__detail": {
-    "messageformat": "เกิดข้อผิดพลาดด้านฐานข้อมูล คุณสามารถคัดลอกข้อมูลความผิดพลาดนี้แล้วติดต่อฝ่ายสนับสนุนของ Signal ให้ช่วยแก้ไขปัญหาดังกล่าว ในกรณีที่คุณต้องการใช้ Signal ทันที คุณสามารถลบข้อมูลและรีสตาร์ทได้\n\nติดต่อฝ่ายสนับสนุนโดยไปที่: {link}"
   },
   "icu:deleteAndRestart": {
     "messageformat": "ลบข้อมูลและรีสตาร์ท"
   },
   "icu:databaseError__deleteDataConfirmation": {
-    "messageformat": "ลบข้อมูลทั้งหมดอย่างถาวรใช่หรือไม่"
+    "messageformat": "ลบข้อมูลทั้งหมดอย่างถาวร"
   },
   "icu:databaseError__deleteDataConfirmation__detail": {
-    "messageformat": "ประวัติการส่งข้อความและสื่อทั้งหมดของคุณจะถูกลบออกจากอุปกรณ์นี้อย่างถาวร คุณจะสามารถใช้ Signal บนอุปกรณ์นี้ได้หลังจากเชื่อมโยงอุปกรณ์อีกครั้ง โดยการดำเนินการนี้จะไม่ลบข้อมูลออกจากโทรศัพท์ของคุณ"
+    "messageformat": "ประวัติการส่งข้อความและสื่อทั้งหมดของคุณจะถูกลบออกจากอุปกรณ์นี้อย่างถาวร โดยการดำเนินการนี้จะไม่ลบข้อมูลออกจากโทรศัพท์ของคุณ\n\nคุณจะสามารถใช้ Signal บนอุปกรณ์นี้ได้หลังจากเชื่อมโยงอุปกรณ์อีกครั้ง โดยคุณจะสามารถเลือกถ่ายโอนประวัติการส่งข้อความจากโทรศัพท์ได้"
   },
   "icu:databaseError__startOldVersion": {
     "messageformat": "เวอร์ชันฐานข้อมูลของคุณไม่ตรงกับ Signal เวอร์ชันนี้ ตรวจสอบให้แน่ใจว่า Signal ที่คุณเปิดอยู่บนคอมพิวเตอร์เป็นเวอร์ชันล่าสุด"
@@ -188,6 +206,9 @@
   "icu:menuSetupAsStandalone": {
     "messageformat": "ตั้งค่าเป็นอุปกรณ์เอกเทศ"
   },
+  "icu:menuStageLocalBackupForImport": {
+    "messageformat": "Stage Local Backup for Import…"
+  },
   "icu:messageContextMenuButton": {
     "messageformat": "การกระทำเพิ่มเติม"
   },
@@ -208,9 +229,6 @@
   },
   "icu:optimizingApplication": {
     "messageformat": "กำลังเพิ่มประสิทธิภาพแอปพลิเคชัน…"
-  },
-  "icu:migratingToSQLCipher": {
-    "messageformat": "กำลังเพิ่มประสิทธิภาพข้อความ… {status} สำเร็จ"
   },
   "icu:archivedConversations": {
     "messageformat": "แชทที่ถูกเก็บในที่เก็บถาวร"
@@ -286,9 +304,6 @@
   },
   "icu:NavTabs__ItemLabel--Settings": {
     "messageformat": "การตั้งค่า"
-  },
-  "icu:NavTabs__ItemLabel--Update": {
-    "messageformat": "ปรับปรุง Signal"
   },
   "icu:NavTabs__ItemLabel--Profile": {
     "messageformat": "โปรไฟล์"
@@ -400,9 +415,6 @@
   },
   "icu:unreadMessages": {
     "messageformat": "{count, plural, other {{count,number} ข้อความที่ยังไม่ได้อ่าน}}"
-  },
-  "icu:messageHistoryUnsynced": {
-    "messageformat": "เพื่อความปลอดภัยของคุณ ประวัติการแชทจะไม่ถูกโอนถ่ายไปยังอุปกรณ์ที่ถูกเชื่อมโยงเครื่องใหม่"
   },
   "icu:youMarkedAsVerified": {
     "messageformat": "คุณทำเครื่องหมายว่า หมายเลขความปลอดภัยของคุณกับ {name} ถูกตรวจยืนยันแล้ว"
@@ -575,14 +587,20 @@
   "icu:decryptionErrorToast": {
     "messageformat": "เดสก์ท็อปพบข้อผิดพลาดในการถอดรหัสจาก {name}, อุปกรณ์ {deviceId}"
   },
-  "icu:decryptionErrorToastAction": {
-    "messageformat": "ส่งปูม"
-  },
   "icu:Toast__ActionLabel--SubmitLog": {
-    "messageformat": "ส่งปูม"
+    "messageformat": "ส่งบันทึก"
   },
   "icu:Toast--FailedToSendWithEndorsements": {
     "messageformat": "Failed to send message with endorsements"
+  },
+  "icu:Toast--SQLError": {
+    "messageformat": "ข้อผิดพลาดเกี่ยวกับฐานข้อมูล: โปรดแชร์บันทึกดีบักของคุณ"
+  },
+  "icu:Toast--InvalidStorageServiceHeaders": {
+    "messageformat": "การตอบรับจากเซิร์ฟเวอร์ไม่ถูกต้อง โปรดแชร์บันทึกดีบักของคุณ"
+  },
+  "icu:Toast--FailedToImportBackup": {
+    "messageformat": "Failed to process some frames during backup import. Please share your logs."
   },
   "icu:cannotSelectPhotosAndVideosAlongWithFiles": {
     "messageformat": "ไม่สามารถเลือกรูปภาพและวิดีโอพร้อมกับไฟล์อื่นได้"
@@ -644,9 +662,6 @@
   "icu:joinTheBeta": {
     "messageformat": "ร่วมทดสอบซอฟต์แวร์"
   },
-  "icu:signalDesktopPreferences": {
-    "messageformat": "การกำหนดลักษณะ Signal Desktop"
-  },
   "icu:signalDesktopStickerCreator": {
     "messageformat": "ผู้สร้างสรรค์ชุดสติกเกอร์"
   },
@@ -680,6 +695,9 @@
   "icu:search": {
     "messageformat": "ค้นหา"
   },
+  "icu:searchUnreadChats": {
+    "messageformat": "ค้นหาแชทที่ยังไม่ได้อ่าน"
+  },
   "icu:clearSearch": {
     "messageformat": "ล้างการค้นหา"
   },
@@ -689,11 +707,23 @@
   "icu:noSearchResults": {
     "messageformat": "ไม่มีผลลัพธ์สำหรับ \"{searchTerm}\""
   },
-  "icu:noSearchResults--sms-only": {
-    "messageformat": "ไม่มีผู้ติดต่อ SMS/MMS บนเดสก์ท็อป"
+  "icu:noSearchResultsWithUnreadFilter": {
+    "messageformat": "ไม่มีผลลัพธ์สำหรับ \"{searchTerm}\" ในแชทที่ยังไม่ได้อ่าน"
+  },
+  "icu:noSearchResultsOnlyUnreadFilter": {
+    "messageformat": "ไม่มีแชทที่ยังไม่ได้อ่าน"
   },
   "icu:noSearchResultsInConversation": {
     "messageformat": "ไม่มีผลลัพ์สำหรับ \"{searchTerm}\" ใน  {conversationName}"
+  },
+  "icu:conversationsUnreadHeader": {
+    "messageformat": "กรองตามแชทที่ยังไม่ได้อ่าน"
+  },
+  "icu:filterByUnreadButtonLabel": {
+    "messageformat": "กรองตามแชทที่ยังไม่ได้อ่าน"
+  },
+  "icu:clearFilterButton": {
+    "messageformat": "ล้างตัวกรอง"
   },
   "icu:conversationsHeader": {
     "messageformat": "แชท"
@@ -788,11 +818,14 @@
   "icu:voiceNoteError": {
     "messageformat": "เกิดข้อผิดพลาดในการอัดเสียง"
   },
-  "icu:attachmentSaved": {
-    "messageformat": "บันทึกแฟ้มแนบแล้ว"
+  "icu:attachmentSavedPlural": {
+    "messageformat": "{count, plural, other {บันทึกไฟล์แนบ {count,number} รายการ}}"
   },
   "icu:attachmentSavedShow": {
     "messageformat": "แสดงในโฟลเดอร์"
+  },
+  "icu:attachmentStillDownloading": {
+    "messageformat": "{count, plural, other {ไม่สามารถบันทึกไฟล์แนบ เนื่องจากยังดาวน์โหลด {count,number} ไฟล์ไม่เสร็จสิ้น}}"
   },
   "icu:you": {
     "messageformat": "คุณ"
@@ -944,9 +977,6 @@
   "icu:NotePreviewModal__Title": {
     "messageformat": "โน้ต"
   },
-  "icu:viewRecentMedia": {
-    "messageformat": "ดูสื่อครั้งล่าสุด"
-  },
   "icu:allMediaMenuItem": {
     "messageformat": "สื่อทั้งหมด"
   },
@@ -995,17 +1025,17 @@
   "icu:MessageContextMenu__info": {
     "messageformat": "ข้อมูล"
   },
-  "icu:deleteMessagesInConversation": {
-    "messageformat": "ลบข้อความ"
+  "icu:deleteConversation": {
+    "messageformat": "ลบ"
   },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__title": {
-    "messageformat": "ลบข้อความหรือไม่"
+  "icu:ConversationHeader__DeleteConversationConfirmation__title": {
+    "messageformat": "ลบแชทใช่หรือไม่"
   },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description": {
-    "messageformat": "ระบบจะลบข้อความทั้งหมดในแชทออกจากอุปกรณ์เครื่องนี้ โดยคุณจะยังสามารถค้นหาแชทนี้ได้แม้จะลบข้อความไปแล้ว"
+  "icu:ConversationHeader__DeleteConversationConfirmation__description": {
+    "messageformat": "ระบบจะลบข้อความทั้งหมดในแชทออกจากอุปกรณ์เครื่องนี้"
   },
-  "icu:ConversationHeader__DeleteMessagesInConversationConfirmation__description-with-sync": {
-    "messageformat": "ข้อความทั้งหมดในแชทนี้จะถูกลบออกจากอุปกรณ์ทุกเครื่องของคุณ โดยคุณจะยังสามารถค้นหาแชทนี้ได้แม้จะลบข้อความไปแล้ว"
+  "icu:ConversationHeader__DeleteConversationConfirmation__description-with-sync": {
+    "messageformat": "ข้อความทั้งหมดในแชทนี้จะถูกลบออกจากอุปกรณ์ทุกเครื่องของคุณ"
   },
   "icu:ConversationHeader__ContextMenu__LeaveGroupAction__title": {
     "messageformat": "ออกจากกลุ่ม"
@@ -1097,8 +1127,92 @@
   "icu:lightboxImageAlt": {
     "messageformat": "รูปภาพที่ส่งในแชท"
   },
+  "icu:lightBoxDownloading": {
+    "messageformat": "กำลังดาวน์โหลด {downloaded} จาก {total}"
+  },
   "icu:imageCaptionIconAlt": {
     "messageformat": "ไอคอนแสดงว่ารูปภาพนี้มีคำอธิบายภาพ"
+  },
+  "icu:imageOpenAlt": {
+    "messageformat": "เปิดไฟล์แนบนี้ในมุมมองที่ใหญ่ขึ้น"
+  },
+  "icu:startDownload": {
+    "messageformat": "เริ่มดาวน์โหลด"
+  },
+  "icu:cancelDownload": {
+    "messageformat": "ยกเลิกการดาวน์โหลด"
+  },
+  "icu:downloadNItems": {
+    "messageformat": "{count, plural, other {{count,number} รายการ}}"
+  },
+  "icu:mediaNotAvailable": {
+    "messageformat": "ไม่พบไฟล์สื่อนี้"
+  },
+  "icu:attachmentNoLongerAvailable__learnMore": {
+    "messageformat": "เรียนรู้เพิ่มเติม"
+  },
+  "icu:attachmentNotAvailable__file": {
+    "messageformat": "ไม่พบไฟล์"
+  },
+  "icu:attachmentNotAvailable__longMessage": {
+    "messageformat": "ข้อความนี้ไม่ครบถ้วนสมบูรณ์"
+  },
+  "icu:attachmentNotAvailable__sticker": {
+    "messageformat": "ไม่พบสติกเกอร์"
+  },
+  "icu:attachmentNotAvailable__voice": {
+    "messageformat": "ไม่พบข้อความเสียง"
+  },
+  "icu:attachmentNotAvailable__tapToView": {
+    "messageformat": "ไม่พบไฟล์สื่อแบบที่ดูได้ครั้งเดียวนี้"
+  },
+  "icu:attachmentNotAvailable__tapToViewCannotDownload": {
+    "messageformat": "ไม่สามารถดาวน์โหลดไฟล์สื่อแบบที่ดูได้ครั้งเดียวนี้"
+  },
+  "icu:AttachmentNotAvailableModal__title--file": {
+    "messageformat": "ไม่พบไฟล์"
+  },
+  "icu:AttachmentNotAvailableModal__title--long-text": {
+    "messageformat": "ไม่พบข้อความที่ครบถ้วน"
+  },
+  "icu:AttachmentNotAvailableModal__title--media": {
+    "messageformat": "ไม่พบไฟล์สื่อ"
+  },
+  "icu:AttachmentNotAvailableModal__title--sticker": {
+    "messageformat": "ไม่พบสติกเกอร์"
+  },
+  "icu:AttachmentNotAvailableModal__title--voice-message": {
+    "messageformat": "ไม่พบข้อความเสียง"
+  },
+  "icu:AttachmentNotAvailableModal__body--file": {
+    "messageformat": "ไฟล์นี้ไม่ได้ถูกถ่ายโอนจากโทรศัพท์ของคุณในขั้นตอนการเชื่อมโยงอุปกรณ์ ระบบไม่สามารถซิงค์ไฟล์และสื่อที่เก่ากว่า 45 วันนับจากวันที่เชื่อมโยงอุปกรณ์ได้"
+  },
+  "icu:AttachmentNotAvailableModal__body--long-text": {
+    "messageformat": "เนื้อหาที่ครบถ้วนทั้งหมดในข้อความนี้ไม่ได้ถูกถ่ายโอนจากโทรศัพท์ของคุณในขั้นตอนการเชื่อมโยงอุปกรณ์ ระบบไม่สามารถซิงค์ข้อความขนาดยาวที่เก่ากว่า 45 วันนับจากวันที่เชื่อมโยงอุปกรณ์ได้"
+  },
+  "icu:AttachmentNotAvailableModal__body--media": {
+    "messageformat": "ไฟล์สื่อนี้ไม่ได้ถูกถ่ายโอนจากโทรศัพท์ของคุณในขั้นตอนการเชื่อมโยงอุปกรณ์ ระบบไม่สามารถซิงค์ไฟล์สื่อที่เก่ากว่า 45 วันนับจากวันที่เชื่อมโยงอุปกรณ์ได้"
+  },
+  "icu:AttachmentNotAvailableModal__body--sticker": {
+    "messageformat": "สติกเกอร์นี้ไม่ได้ถูกถ่ายโอนจากโทรศัพท์ของคุณในขั้นตอนการเชื่อมโยงอุปกรณ์ ระบบไม่สามารถซิงค์ไฟล์และสื่อที่เก่ากว่า 45 วันนับจากวันที่เชื่อมโยงอุปกรณ์ได้"
+  },
+  "icu:AttachmentNotAvailableModal__body--voice-message": {
+    "messageformat": "ข้อความเสียงนี้ไม่ได้ถูกถ่ายโอนจากโทรศัพท์ของคุณในขั้นตอนการเชื่อมโยงอุปกรณ์ ระบบไม่สามารถซิงค์ไฟล์และสื่อที่เก่ากว่า 45 วันนับจากวันที่เชื่อมโยงอุปกรณ์ได้"
+  },
+  "icu:TapToViewNotAvailableModal__body--expired": {
+    "messageformat": "ไม่สามารถดาวน์โหลดไฟล์สื่อแบบที่ดูได้ครั้งเดียวนี้ได้แล้ว ลองขอให้ {name} ส่งใหม่อีกครั้ง"
+  },
+  "icu:TapToViewNotAvailableModal__body--error": {
+    "messageformat": "ไม่สามารถดาวน์โหลดไฟล์สื่อแบบที่ดูได้ครั้งเดียว {name} จะต้องส่งใหม่อีกครั้ง"
+  },
+  "icu:BackfillFailureModal__title": {
+    "messageformat": "ไม่สามารถดาวน์โหลดสื่อ"
+  },
+  "icu:BackfillFailureModal__body--timeout": {
+    "messageformat": "โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของเดสก์ท็อปและโทรศัพท์คุณ จากนั้นเปิด Signal บนโทรศัพท์ แล้วลองดาวน์โหลดอีกครั้ง"
+  },
+  "icu:BackfillFailureModal__body--not-found": {
+    "messageformat": "ไม่สามารถดาวน์โหลดไฟล์สื่อได้เนื่องจากไม่พบไฟล์นี้บนโทรศัพท์ของคุณ"
   },
   "icu:save": {
     "messageformat": "บันทึก"
@@ -1142,17 +1256,17 @@
   "icu:Install__qr-failed-load__retry": {
     "messageformat": "ลองอีกครั้ง"
   },
+  "icu:Install__qr-max-rotations__retry": {
+    "messageformat": "รีเฟรชคิวอาร์โค้ด"
+  },
   "icu:Install__qr-failed-load__get-help": {
     "messageformat": "ขอความช่วยเหลือ"
   },
   "icu:Install__support-link": {
     "messageformat": "ต้องการความช่วยเหลือหรือไม่?"
   },
-  "icu:Install__choose-device-name__description": {
-    "messageformat": "คุณจะเห็นชื่อนี้ภายใต้ \"อุปกรณ์ที่เชื่อมโยงอยู่\" บนโทรศัพท์ของคุณ"
-  },
-  "icu:Install__choose-device-name__placeholder": {
-    "messageformat": "คอมพิวเตอร์ของฉัน"
+  "icu:Preferences--header": {
+    "messageformat": "การตั้งค่า"
   },
   "icu:Preferences--phone-number": {
     "messageformat": "หมายเลขโทรศัพท์"
@@ -1160,11 +1274,173 @@
   "icu:Preferences--device-name": {
     "messageformat": "ชื่ออุปกรณ์"
   },
-  "icu:chooseDeviceName": {
-    "messageformat": "เลือกชื่อของอุปกรณ์นี้"
+  "icu:Preferences--device-name__description": {
+    "messageformat": "หากต้องการเปลี่ยนชื่ออุปกรณ์นี้ ให้เปิดแอป Signal บนโทรศัพท์ แล้วไปที่การตั้งค่า > อุปกรณ์ที่เชื่อมโยงอยู่"
   },
-  "icu:finishLinkingPhone": {
-    "messageformat": "เชื่อมโยงโทรศัพท์เสร็จสิ้น"
+  "icu:Preferences__EmojiSkinToneDefaultSetting__Label": {
+    "messageformat": "โทนสีผิวของอีโมจิ"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__Title": {
+    "messageformat": "โฟลเดอร์แชท"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__AddChatFolderItem__Title": {
+    "messageformat": "เพิ่มโฟลเดอร์แชท"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__AddChatFolderItem__Description": {
+    "messageformat": "จัดแยกแชทเป็นโฟลเดอร์ ให้คุณเปิดสลับไปมาได้อย่างสะดวกรวดเร็วในหน้ารายการแชท"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__ChatFolderItem__ContextMenu__EditFolder": {
+    "messageformat": "แก้ไขโฟลเดอร์"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__ChatFolderItem__ContextMenu__DeleteFolder": {
+    "messageformat": "ลบ"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__Title": {
+    "messageformat": "ลบโฟลเดอร์ใช่หรือไม่"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__Description": {
+    "messageformat": "คุณต้องการลบโฟลเดอร์ “{chatFolderTitle}” ใช่หรือไม่"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__DeleteButton": {
+    "messageformat": "ลบ"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__CancelButton": {
+    "messageformat": "ยกเลิก"
+  },
+  "icu:Preferences__ChatFoldersPage__Title": {
+    "messageformat": "โฟลเดอร์แชท"
+  },
+  "icu:Preferences__ChatFoldersPage__Description": {
+    "messageformat": "Organize your chats into folders and quickly switch between them on your chat list"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__Title": {
+    "messageformat": "Folders"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__AllChatsFolder__Title": {
+    "messageformat": "All chats"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__CreateAFolderButton": {
+    "messageformat": "Create a folder"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__Title": {
+    "messageformat": "Suggested folders"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__AddButton": {
+    "messageformat": "Add"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__AddButton__Toast": {
+    "messageformat": "{chatFolderTitle} folder added"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__UnreadFolder__Title": {
+    "messageformat": "Unread"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__UnreadFolder__Description": {
+    "messageformat": "Unread messages from all chats"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__DirectChatsFolder__Title": {
+    "messageformat": "1:1 chats"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__DirectChatsFolder__Description": {
+    "messageformat": "Only messages from direct chats"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__GroupChatsFolder__Title": {
+    "messageformat": "Groups"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__GroupChatsFolder__Description": {
+    "messageformat": "Only messages from group chats"
+  },
+  "icu:Preferences__EditChatFolderPage__Title": {
+    "messageformat": "Create a folder"
+  },
+  "icu:Preferences__EditChatFolderPage__FolderNameField__Label": {
+    "messageformat": "Folder name"
+  },
+  "icu:Preferences__EditChatFolderPage__FolderNameField__Placeholder": {
+    "messageformat": "Folder name (required)"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__Title": {
+    "messageformat": "Included chats"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__Help": {
+    "messageformat": "Choose chats that you want to appear in this folder"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__AddChatsButton": {
+    "messageformat": "Add chats"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog--IncludedChats__Title": {
+    "messageformat": "Included chats"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog--ExcludedChats__Title": {
+    "messageformat": "Excluded chats"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__Search__Placeholder": {
+    "messageformat": "Search"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__Title": {
+    "messageformat": "Chat types"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__DirectChats": {
+    "messageformat": "1:1 chats"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__GroupChats": {
+    "messageformat": "Groups"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__RecentChats__Title": {
+    "messageformat": "Recent chats"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__DoneButton": {
+    "messageformat": "Done"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__Title": {
+    "messageformat": "Exceptions"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__Help": {
+    "messageformat": "Choose chats that you do not want to appear in this folder"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__ExcludeChatsButton": {
+    "messageformat": "Exclude chats"
+  },
+  "icu:Preferences__EditChatFolderPage__OnlyShowUnreadChatsCheckbox__Label": {
+    "messageformat": "Only show unread chats"
+  },
+  "icu:Preferences__EditChatFolderPage__OnlyShowUnreadChatsCheckbox__Description": {
+    "messageformat": "Only chats with unread messages will be shown in this folder."
+  },
+  "icu:Preferences__EditChatFolderPage__IncludeMutedChatsCheckbox__Label": {
+    "messageformat": "Include muted chats"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteFolderButton": {
+    "messageformat": "Delete folder"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__Title": {
+    "messageformat": "Delete this chat folder?"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__Description": {
+    "messageformat": "This folder will be removed from your chat list."
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__DeleteButton": {
+    "messageformat": "Delete"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__CancelButton": {
+    "messageformat": "Cancel"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__Title": {
+    "messageformat": "Save changes?"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__Description": {
+    "messageformat": "Do you want to save the changes you’ve made to this chat folder?"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__SaveButton": {
+    "messageformat": "Save"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__DiscardButton": {
+    "messageformat": "Discard"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveButton": {
+    "messageformat": "Save"
+  },
+  "icu:Preferences__EditChatFolderPage__CancelButton": {
+    "messageformat": "Cancel"
   },
   "icu:initialSync": {
     "messageformat": "กำลังปรับประสานรายชื่อผู้ติดต่อและกลุ่ม"
@@ -1231,6 +1507,9 @@
   },
   "icu:calling__call-link-default-title": {
     "messageformat": "โทร Signal"
+  },
+  "icu:calling__call-link-delete-failed": {
+    "messageformat": "ไม่สามารถลบลิงก์ได้ ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง"
   },
   "icu:calling__join-request-denied": {
     "messageformat": "คำขอเข้าร่วมการโทรของคุณถูกปฏิเสธ"
@@ -1373,6 +1652,9 @@
   "icu:calling__pre-call-info--many-people-in-call": {
     "messageformat": "{others, plural, other {{first}, {second} และคนอื่นๆ อีก {others,number} คน อยู่ในสายนี้}}"
   },
+  "icu:calling__pre-call-info--only-unknown-contacts-in-call": {
+    "messageformat": "{count, plural, other {{count,number} คนอยู่ในสายนี้}}"
+  },
   "icu:calling__pre-call-info--will-ring-1": {
     "messageformat": "Signal จะส่งเสียงเรียก {person}"
   },
@@ -1415,6 +1697,9 @@
   "icu:calling__missing-media-keys": {
     "messageformat": "ไม่สามารถเสียงและวิดีโอจาก {name}"
   },
+  "icu:calling__missing-media-keys--unknown-contact": {
+    "messageformat": "ไม่สามารถรับเสียงและวิดีโอได้"
+  },
   "icu:calling__missing-media-keys-info": {
     "messageformat": "เหตุนี้อาจเกิดขึ้นเนื่องจากผู้ใช้คนนี้ยังไม่ได้ยืนยันหมายเลขความปลอดภัยที่เปลี่ยนไปของคุณ อุปกรณ์ของผู้ใช้มีปัญหา หรือผู้ใช้บล็อกคุณไว้"
   },
@@ -1438,6 +1723,9 @@
   },
   "icu:calling__presenting--info": {
     "messageformat": "Signal กำลังแบ่งปัน {window}"
+  },
+  "icu:calling__presenting--info--unknown": {
+    "messageformat": "กำลังใช้งานการแชร์หน้าจอของ Signal"
   },
   "icu:calling__presenting--reconnecting": {
     "messageformat": "กำลังเชื่อมต่อใหม่…"
@@ -1524,10 +1812,10 @@
     "messageformat": "ลบข้อมูลทั้งหมดหรือไม่"
   },
   "icu:deleteAllDataBody": {
-    "messageformat": "คุณต้องการลบข้อมูลและข้อความทั้งหมดออกจาก Signal เดสก์ท็อปเวอร์ชันนี้ใช่หรือไม่ คุณสามารถเชื่อมโยงอุปกรณ์เดสก์ท็อปนี้ใหม่อีกครั้งได้ทุกเมื่อ แต่ข้อความของคุณจะไม่ได้รับการกู้คืนกลับมา อย่างไรก็ดี ระบบจะไม่ลบบัญชี Signal และข้อมูลของคุณที่อยู่บนมือถือหรืออุปกรณ์ที่เชื่อมโยงอยู่เครื่องอื่นๆ"
+    "messageformat": "คุณต้องการลบข้อมูลและข้อความทั้งหมดออกจาก Signal เดสก์ท็อปเวอร์ชันนี้ใช่หรือไม่ อย่างไรก็ดี ระบบจะไม่ลบบัญชี Signal และข้อมูลของคุณที่อยู่บนมือถือหรืออุปกรณ์ที่เชื่อมโยงอยู่เครื่องอื่นๆ"
   },
   "icu:deleteAllDataProgress": {
-    "messageformat": "กำลังยกเลิกการเชื่อมต่อและลบข้อมูลทั้งหมด"
+    "messageformat": "กำลังยกเลิกการเชื่อมต่อและลบข้อมูลทั้งหมด…"
   },
   "icu:deleteOldIndexedDBData": {
     "messageformat": "คุณมีข้อมูลที่ล้าสมัยจากการติดตั้ง Signal เดสก์ท็อปครั้งก่อนหน้า หากเลือกที่จะดำเนินการต่อ ข้อมูลดังกล่าวจะถูกลบและทุกอย่างจะเริ่มต้นใหม่ทั้งหมด"
@@ -1549,9 +1837,6 @@
   },
   "icu:notificationSenderInGroup": {
     "messageformat": "{sender} ใน {group}"
-  },
-  "icu:notificationReaction": {
-    "messageformat": "{sender} แสดงความรู้สึก {emoji} ต่อข้อความของคุณ"
   },
   "icu:notificationReactionMessage": {
     "messageformat": "{sender} แสดงความรู้สึก {emoji} ต่อ: {message}"
@@ -1621,6 +1906,9 @@
   },
   "icu:timestampFormat__long--yesterday": {
     "messageformat": "เมื่อวาน {time}"
+  },
+  "icu:messageLoop": {
+    "messageformat": "Signal อาจประสบปัญหาในการประมวลผลข้อความขาเข้า"
   },
   "icu:messageBodyTooLong": {
     "messageformat": "ตัวข้อความยาวเกินไป"
@@ -1700,6 +1988,12 @@
   "icu:ConversationDetails__HeaderButton--Message": {
     "messageformat": "ส่งข้อความ"
   },
+  "icu:ConversationDetails--help-section": {
+    "messageformat": "ช่วยเหลือ"
+  },
+  "icu:ConversationDetails--support-center": {
+    "messageformat": "ศูนย์ความช่วยเหลือ"
+  },
   "icu:SafetyNumberNotification__viewSafetyNumber": {
     "messageformat": "ดูหมายเลขความปลอดภัย"
   },
@@ -1759,6 +2053,9 @@
   },
   "icu:Toast--failed-to-fetch-phone-number": {
     "messageformat": "ไม่สามารถดึงหมายเลขโทรศัพท์ได้ ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง"
+  },
+  "icu:Toast--download-failed": {
+    "messageformat": "ดาวน์โหลดไม่สำเร็จ"
   },
   "icu:ToastManager__CannotEditMessage_24": {
     "messageformat": "สามารถแก้ไขข้อความนี้ได้ภายใน 24 ชั่วโมงนับจากเวลาที่คุณส่ง"
@@ -2138,6 +2435,213 @@
   "icu:EmojiPicker__button--flag": {
     "messageformat": "ธง"
   },
+  "icu:FunPicker__Tab--Emojis": {
+    "messageformat": "อีโมจิ"
+  },
+  "icu:FunPicker__Tab--Stickers": {
+    "messageformat": "สติกเกอร์"
+  },
+  "icu:FunPicker__Tab--Gifs": {
+    "messageformat": "GIF"
+  },
+  "icu:FunPanelEmojis__SearchLabel": {
+    "messageformat": "หาอีโมจิ"
+  },
+  "icu:FunPanelEmojis__SearchPlaceholder": {
+    "messageformat": "หาอีโมจิ"
+  },
+  "icu:FunPanelEmojis__SubNavLabel": {
+    "messageformat": "หมวดหมู่ของอีโมจิ"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Recents": {
+    "messageformat": "เพิ่งใช้"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--SmileysAndPeople": {
+    "messageformat": "หน้ายิ้มและผู้คน"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--AnimalsAndNature": {
+    "messageformat": "สัตว์และธรรมชาติ"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--FoodAndDrink": {
+    "messageformat": "อาหารและเครื่องดื่ม"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Activities": {
+    "messageformat": "กิจกรรม"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--TravelAndPlaces": {
+    "messageformat": "เดินทางและสถานที่"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Objects": {
+    "messageformat": "วัตถุ"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Symbols": {
+    "messageformat": "สัญลักษณ์"
+  },
+  "icu:FunPanelEmojis__SubNavCategoryLabel--Flags": {
+    "messageformat": "ธง"
+  },
+  "icu:FunPanelEmojis__SearchResults__EmptyHeading": {
+    "messageformat": "ไม่พบอีโมจิ"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__SelectSkinToneForSelectedEmoji": {
+    "messageformat": "เลือกโทนสีผิวสำหรับ {emojiName}"
+  },
+  "icu:FunPanelEmojis__ChangeSkinToneButtonLabel": {
+    "messageformat": "เปลี่ยนการตั้งค่าโทนสีผิว"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__LongPressAccessibilityDescription": {
+    "messageformat": "กดค้างเพื่อเลือกโทนสีผิว"
+  },
+  "icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel": {
+    "messageformat": "เลือกค่าเริ่มต้นของโทนสีผิว"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SearchResults": {
+    "messageformat": "ผลการค้นหา"
+  },
+  "icu:FunPanelEmojis__SectionTitle--ThisMessage": {
+    "messageformat": "ข้อความนี้"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Recents": {
+    "messageformat": "เพิ่งใช้"
+  },
+  "icu:FunPanelEmojis__SectionTitle--SmileysAndPeople": {
+    "messageformat": "หน้ายิ้มและผู้คน"
+  },
+  "icu:FunPanelEmojis__SectionTitle--AnimalsAndNature": {
+    "messageformat": "สัตว์และธรรมชาติ"
+  },
+  "icu:FunPanelEmojis__SectionTitle--FoodAndDrink": {
+    "messageformat": "อาหารและเครื่องดื่ม"
+  },
+  "icu:FunPanelEmojis__SectionTitle--TravelAndPlaces": {
+    "messageformat": "เดินทางและสถานที่"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Activities": {
+    "messageformat": "กิจกรรม"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Objects": {
+    "messageformat": "วัตถุ"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Symbols": {
+    "messageformat": "สัญลักษณ์"
+  },
+  "icu:FunPanelEmojis__SectionTitle--Flags": {
+    "messageformat": "ธง"
+  },
+  "icu:FunPanelEmojis__CustomizeReactionsButtonLabel": {
+    "messageformat": "ปรับแต่งการแสดงความรู้สึก"
+  },
+  "icu:FunPanelStickers__SearchLabel": {
+    "messageformat": "หาสติกเกอร์"
+  },
+  "icu:FunPanelStickers__SearchPlaceholder": {
+    "messageformat": "หาสติกเกอร์"
+  },
+  "icu:FunPanelSticker__SubNavLabel": {
+    "messageformat": "ชุดสติกเกอร์"
+  },
+  "icu:FunPanelStickers__SubNavCategoryLabel--Recents": {
+    "messageformat": "เพิ่งใช้"
+  },
+  "icu:FunPanelStickers__SectionTitle--SearchResults": {
+    "messageformat": "ผลการค้นหา"
+  },
+  "icu:FunPanelStickers__SectionTitle--Recents": {
+    "messageformat": "เพิ่งใช้"
+  },
+  "icu:FunPanelStickers__SectionTitle--Featured": {
+    "messageformat": "แนะนำ"
+  },
+  "icu:FunPanelStickers__SearchResults__EmptyHeading": {
+    "messageformat": "ไม่พบสติกเกอร์"
+  },
+  "icu:FunPanelStickers__LightboxDialog__Label": {
+    "messageformat": "ตัวอย่างสติกเกอร์"
+  },
+  "icu:FunPanelGifs__SearchLabel--Tenor": {
+    "messageformat": "ค้นหาไฟล์ GIF จากใน Tenor"
+  },
+  "icu:FunPanelGifs__SearchPlaceholder--Tenor": {
+    "messageformat": "ค้นหาใน Tenor"
+  },
+  "icu:FunPanelGifs__SubNavLabel": {
+    "messageformat": "หมวดหมู่ของ GIF"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Recents": {
+    "messageformat": "เพิ่งใช้"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Trending": {
+    "messageformat": "กำลังเป็นที่นิยม"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Celebrate": {
+    "messageformat": "เฉลิมฉลอง"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Love": {
+    "messageformat": "รัก"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--ThumbsUp": {
+    "messageformat": "ยอดเยี่ยม"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Surprised": {
+    "messageformat": "เซอร์ไพรส์"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Excited": {
+    "messageformat": "ตื่นเต้น"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Sad": {
+    "messageformat": "เศร้า"
+  },
+  "icu:FunPanelGifs__SubNavCategoryLabel--Angry": {
+    "messageformat": "โกรธ"
+  },
+  "icu:FunPanelGifs__SearchResults__LoadingLabel": {
+    "messageformat": "กำลังโหลดไฟล์ GIF"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorHeading": {
+    "messageformat": "ไม่สามารถโหลดไฟล์ GIF ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง"
+  },
+  "icu:FunPanelGifs__SearchResults__ErrorRetryButton": {
+    "messageformat": "ลองอีกครั้ง"
+  },
+  "icu:FunPanelGifs__SearchResults__EmptyHeading": {
+    "messageformat": "ไม่พบไฟล์ GIF"
+  },
+  "icu:FunPanelGifs__LightboxDialog__Label": {
+    "messageformat": "ตัวอย่าง GIF"
+  },
+  "icu:FunSearch__ClearButtonLabel": {
+    "messageformat": "ล้างการค้นหา"
+  },
+  "icu:FunSkinTones__List": {
+    "messageformat": "โทนสีผิว"
+  },
+  "icu:FunSkinTones__ListItem--None": {
+    "messageformat": "ไม่มี"
+  },
+  "icu:FunSkinTones__ListItem--Light": {
+    "messageformat": "สีผิวโทนอ่อน"
+  },
+  "icu:FunSkinTones__ListItem--MediumLight": {
+    "messageformat": "สีผิวโทนอ่อน-กลาง"
+  },
+  "icu:FunSkinTones__ListItem--Medium": {
+    "messageformat": "สีผิวโทนกลาง"
+  },
+  "icu:FunSkinTones__ListItem--MediumDark": {
+    "messageformat": "สีผิวโทนกลาง-เข้ม"
+  },
+  "icu:FunSkinTones__ListItem--Dark": {
+    "messageformat": "สีผิวโทนเข้ม"
+  },
+  "icu:FunButton__Label--FunPicker": {
+    "messageformat": "เพิ่มอีโมจิ สติกเกอร์ หรือไฟล์ GIF"
+  },
+  "icu:FunButton__Label--EmojiPicker": {
+    "messageformat": "เพิ่มอีโมจิ"
+  },
+  "icu:FunButton__Label--StickerPicker": {
+    "messageformat": "เพิ่มสติกเกอร์"
+  },
   "icu:confirmation-dialog--Cancel": {
     "messageformat": "ยกเลิก"
   },
@@ -2174,11 +2678,11 @@
   "icu:Message--update-signal": {
     "messageformat": "ปรับปรุง Signal"
   },
-  "icu:Message--tap-to-view-expired": {
+  "icu:Message--tap-to-view--viewed": {
     "messageformat": "เห็นแล้ว"
   },
-  "icu:Message--tap-to-view--outgoing": {
-    "messageformat": "สื่อ"
+  "icu:Message--tap-to-view--media": {
+    "messageformat": "สื่อที่ดูได้ครั้งเดียว"
   },
   "icu:Message--tap-to-view--incoming--expired-toast": {
     "messageformat": "คุณเคยดูข้อความนี้แล้ว"
@@ -2186,11 +2690,14 @@
   "icu:Message--tap-to-view--outgoing--expired-toast": {
     "messageformat": "ข้อความแบบที่ดูได้ครั้งเดียวจะไม่ถูกจัดเก็บในประวัติการแชทของคุณ"
   },
-  "icu:Message--tap-to-view--incoming": {
-    "messageformat": "ดูรูปภาพ"
+  "icu:Message--tap-to-view--video": {
+    "messageformat": "ไฟล์วิดีโอแบบที่ดูได้ครั้งเดียว"
   },
-  "icu:Message--tap-to-view--incoming-video": {
-    "messageformat": "ดูวิดีโอ"
+  "icu:Message--tap-to-view--photo": {
+    "messageformat": "ไฟล์รูปภาพแบบที่ดูได้ครั้งเดียว"
+  },
+  "icu:Message--tap-to-view--helper-text": {
+    "messageformat": "คลิกเพื่อดู"
   },
   "icu:Conversation--getDraftPreview--attachment": {
     "messageformat": "(แฟ้มแนบ)"
@@ -2251,6 +2758,9 @@
   },
   "icu:Keyboard--open-sticker-chooser": {
     "messageformat": "เปิดตัวเลือกสติกเกอร์"
+  },
+  "icu:Keyboard--open-gif-chooser": {
+    "messageformat": "เปิดตัวเลือก GIF"
   },
   "icu:Keyboard--begin-recording-voice-note": {
     "messageformat": "เริ่มการอัดบันทึกแบบเสียง"
@@ -2384,6 +2894,9 @@
   "icu:Keyboard--toggle-video": {
     "messageformat": "ตัวเลือกเปิดและปิดวิดีโอ"
   },
+  "icu:Keyboard--toggle-preview": {
+    "messageformat": "เปิดปิดการขยายมุมมองของหน้าต่าง"
+  },
   "icu:Keyboard--accept-video-call": {
     "messageformat": "รับสายโดยเปิดวิดีโอ (เฉพาะวิดีโอคอล)"
   },
@@ -2446,6 +2959,12 @@
   },
   "icu:SafetyTipsModal__Description": {
     "messageformat": "โปรดใช้ความระมัดระวังในการตอบรับคำขอส่งข้อความจากคนที่คุณไม่รู้จัก ลองตรวจสอบตามข้อสังเกตนี้:"
+  },
+  "icu:SafetyTipsModal__TipTitle--Fake": {
+    "messageformat": "ชื่อและบัญชีปลอม"
+  },
+  "icu:SafetyTipsModal__TipDescription--Fake": {
+    "messageformat": "Signal ไม่มีนโยบายในการติดต่อคุณเพื่อขอรหัสสำหรับลงทะเบียนหรือ PIN โปรดระวังคำขอที่แอบอ้างเป็นบุคคลอื่น และโปรดทราบว่าชื่อโปรไฟล์ที่แสดงเป็นชื่อที่เจ้าของบัญชีนั้นตั้งเองและไม่ได้ผ่านการตรวจยืนยัน"
   },
   "icu:SafetyTipsModal__TipTitle--Crypto": {
     "messageformat": "การหลอกลวงทางการเงินหรือคริปโต"
@@ -2579,6 +3098,12 @@
   "icu:MessageRequests--accept": {
     "messageformat": "ตอบรับ"
   },
+  "icu:MessageRequests--accept-confirm-title": {
+    "messageformat": "ตอบรับคำขอใช่หรือไม่"
+  },
+  "icu:MessageRequests--accept-confirm-body": {
+    "messageformat": "โปรดตรวจสอบคำขออย่างถี่ถ้วน และโปรดทราบว่าชื่อโปรไฟล์ที่แสดงเป็นชื่อที่เจ้าของบัญชีนั้นตั้งเองและไม่ได้ผ่านการตรวจยืนยัน"
+  },
   "icu:MessageRequests--continue": {
     "messageformat": "ดำเนินการต่อ"
   },
@@ -2590,6 +3115,51 @@
   },
   "icu:ConversationHero--members": {
     "messageformat": "{count, plural, other {สมาชิก {count,number} คน}}"
+  },
+  "icu:ConversationHero--member-list-and-invited": {
+    "messageformat": "{invitesCount, plural, other {{memberList} (+{invitesCount,number} สมาชิกที่เชิญ)}}"
+  },
+  "icu:ConversationHero--group-members-zero": {
+    "messageformat": "ไม่มีสมาชิกในกลุ่ม"
+  },
+  "icu:ConversationHero--group-members-only-you": {
+    "messageformat": "ยังไม่มีสมาชิกกลุ่มคนอื่น"
+  },
+  "icu:ConversationHero--group-members-one": {
+    "messageformat": "{member}"
+  },
+  "icu:ConversationHero--group-members-one-and-you": {
+    "messageformat": "{member} และคุณ"
+  },
+  "icu:ConversationHero--group-members-two": {
+    "messageformat": "{member1} และ {member2}"
+  },
+  "icu:ConversationHero--group-members-two-and-you": {
+    "messageformat": "{member1}, {member2} และคุณ"
+  },
+  "icu:ConversationHero--group-members-three": {
+    "messageformat": "{member1}, {member2} และ {member3}"
+  },
+  "icu:ConversationHero--group-members-other": {
+    "messageformat": "{remainingCount, plural, other {{member1}, {member2}, {member3} และอีก <clickable>{remainingCount,number} คน</clickable>}}"
+  },
+  "icu:ConversationHero--group-members-other-and-you": {
+    "messageformat": "{remainingCount, plural, other {{member1}, {member2}, {member3} และอีก <clickable>{remainingCount,number} คน</clickable>}}"
+  },
+  "icu:ConversationHero--review-carefully": {
+    "messageformat": "โปรดตรวจสอบอย่างถี่ถ้วน"
+  },
+  "icu:ConversationHero--group-names": {
+    "messageformat": "<clickable>ชื่อกลุ่ม</clickable>ไม่ได้ผ่านการตรวจยืนยัน"
+  },
+  "icu:ConversationHero--profile-names": {
+    "messageformat": "<clickable>ชื่อโปรไฟล์</clickable>ไม่ได้ผ่านการตรวจยืนยัน"
+  },
+  "icu:ConversationHero--signal-official-chat": {
+    "messageformat": "นี่คือแชทอย่างเป็นทางการและแชทเดียวจาก Signal"
+  },
+  "icu:ConversationHero--release-notes": {
+    "messageformat": "ติดตามข่าวสารและบันทึกรุ่นอัปเดตล่าสุด"
   },
   "icu:member-of-1-group": {
     "messageformat": "สมาชิกของ {group}"
@@ -2684,6 +3254,9 @@
   "icu:incomingGroupCall__ringing-many": {
     "messageformat": "{remaining, plural, other {{ringer} กำลังโทรหาคุณ {first}, {second}, และ {remaining,number} อื่นๆ}}"
   },
+  "icu:outgoingCallConnecting": {
+    "messageformat": "กำลังเชื่อมต่อ…"
+  },
   "icu:outgoingCallRinging": {
     "messageformat": "กำลังเรียกสาย…"
   },
@@ -2723,11 +3296,35 @@
   "icu:CallControls__JoinLeaveButton--hangup-group": {
     "messageformat": "ออก"
   },
+  "icu:CallControls__JoinLeaveButton--hangup-1-1-tooltip": {
+    "messageformat": "วางสาย"
+  },
+  "icu:CallControls__JoinLeaveButton--hangup-group-tooltip": {
+    "messageformat": "ออกจากสาย"
+  },
   "icu:CallControls__MutedToast--muted": {
     "messageformat": "ไมค์ปิดอยู่"
   },
   "icu:CallControls__MutedToast--unmuted": {
     "messageformat": "ไมค์เปิดอยู่"
+  },
+  "icu:CallControls__MutedBySomeoneToast": {
+    "messageformat": "{otherName} ปิดเสียงของคุณ"
+  },
+  "icu:CallControls__SomeoneMutedSomeoneToast": {
+    "messageformat": "{name} ปิดเสียงของ {otherName}"
+  },
+  "icu:CallControls__YouMutedSomeoneToast": {
+    "messageformat": "คุณปิดเสียงของ {otherName}"
+  },
+  "icu:CallControls__YouMutedYourselfToast": {
+    "messageformat": "คุณปิดเสียงของตัวเองจากอุปกรณ์อีกเครื่อง"
+  },
+  "icu:CallControls__LowerHandSuggestionToast": {
+    "messageformat": "เอามือลงหรือไม่"
+  },
+  "icu:CallControls__LowerHandSuggestionToast--button": {
+    "messageformat": "เอามือลง"
   },
   "icu:CallControls__RingingToast--ringing-on": {
     "messageformat": "การส่งเสียงเรียกสายเปิดอยู่"
@@ -2795,6 +3392,12 @@
   "icu:calling__pip--off": {
     "messageformat": "โทรเต็มจอ"
   },
+  "icu:calling__preview--maximize": {
+    "messageformat": "ขยายหน้าต่าง"
+  },
+  "icu:calling__preview--minimize": {
+    "messageformat": "ย่อหน้าต่าง"
+  },
   "icu:calling__change-view": {
     "messageformat": "เปลี่ยนมุมมอง"
   },
@@ -2809,9 +3412,6 @@
   },
   "icu:calling__view_mode--updated": {
     "messageformat": "เปลี่ยนมุมมองแล้ว"
-  },
-  "icu:calling__hangup": {
-    "messageformat": "ออกจากสาย"
   },
   "icu:calling__SelectPresentingSourcesModal--title": {
     "messageformat": "แบ่งปันหน้าจอของคุณ"
@@ -2967,10 +3567,10 @@
     "messageformat": "ไม่สามารถเข้าร่วมกลุ่มได้"
   },
   "icu:GroupV2--join--link-forbidden": {
-    "messageformat": "คุณเข้าร่วมกลุ่มนี้ด้วยลิงก์กลุ่มไม่ได้เพราะผู้ดูแลลบคุณออกไปแล้ว"
+    "messageformat": "คุณเข้าร่วมกลุ่มนี้ด้วยลิงก์กลุ่มไม่ได้เพราะผู้ดูแลลบคุณออกไปแล้ว โปรดติดต่อผู้ดูแลให้เพิ่มคุณกลับเข้ากลุ่มอีกครั้ง"
   },
   "icu:GroupV2--join--prompt-with-approval": {
-    "messageformat": "ผู้ดูแลระบบของกลุ่มนี้ต้องอนุมัติคำขอเข้าร่วมของคุณก่อนจึงจะสามารถเข้าร่วมกลุ่มนี้ได้ หากได้รับการอนุมัติชื่อและรูปถ่ายของคุณจะถูกเปิดเผยกับสมาชิกในกลุ่ม"
+    "messageformat": "ผู้ดูแลของกลุ่มนี้จะต้องอนุมัติคำขอเข้าร่วมของคุณก่อนที่คุณจะสามารถเข้าร่วมกลุ่มนี้ได้ เมื่อคุณส่งคำร้องขอเข้าร่วม สมาชิกคนอื่นๆ จะเห็นชื่อและรูปของคุณ"
   },
   "icu:GroupV2--join--join-button": {
     "messageformat": "เข้าร่วม"
@@ -3506,6 +4106,9 @@
   "icu:next": {
     "messageformat": "ถ้ดไป"
   },
+  "icu:ClearingData__description": {
+    "messageformat": "ขั้นตอนนี้อาจใช้เวลาสักครู่"
+  },
   "icu:BadgeDialog__become-a-sustainer-button": {
     "messageformat": "บริจาคให้ Signal"
   },
@@ -3524,44 +4127,83 @@
   "icu:BadgeSustainerInstructions__instructions__3": {
     "messageformat": "แตะที่ \"บริจาคให้ Signal\" แล้วสมัคร"
   },
+  "icu:ProfileMovedModal__title": {
+    "messageformat": "วิธีใหม่ในการเข้าถึงโปรไฟล์คุณ"
+  },
+  "icu:ProfileMovedModal__description": {
+    "messageformat": "เปิดแท็บการตั้งค่าเพื่อดูและแก้ไขโปรไฟล์ของคุณ"
+  },
   "icu:BackupImportScreen__title": {
     "messageformat": "กำลังซิงค์ข้อความ"
   },
   "icu:BackupImportScreen__progressbar-hint": {
     "messageformat": "กำลังดาวน์โหลด {currentSize} จาก {totalSize} ({fractionComplete,number,percent})..."
   },
+  "icu:BackupImportScreen__progressbar-hint--processing": {
+    "messageformat": "กำลังดำเนินการถ่ายโอนข้อความให้เสร็จสิ้น..."
+  },
+  "icu:BackupImportScreen__progressbar-hint--canceling": {
+    "messageformat": "กำลังยกเลิก..."
+  },
   "icu:BackupImportScreen__progressbar-hint--preparing": {
     "messageformat": "กำลังเตรียมการดาวน์โหลด..."
   },
   "icu:BackupImportScreen__description": {
-    "messageformat": "ขั้นตอนนี้อาจใช้เวลาสักครู่ โดยขึ้นอยู่กับขนาดข้อมูลสำรองของคุณ"
+    "messageformat": "ขั้นตอนนี้อาจใช้เวลาสักครู่"
   },
   "icu:BackupImportScreen__cancel": {
-    "messageformat": "ยกเลิกการถ่ายโอน"
+    "messageformat": "ยกเลิก"
+  },
+  "icu:BackupImportScreen__security-description": {
+    "messageformat": "ปกป้องข้อความและข้อมูลการแชทด้วยการเข้ารหัสตั้งแต่ต้นทางถึงปลายทาง รวมถึงในขั้นตอนการซิงค์ <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
   },
   "icu:BackupImportScreen__cancel-confirmation__title": {
-    "messageformat": "ยกเลิกการถ่ายโอนใช่หรือไม่"
+    "messageformat": "ยกเลิกการเชื่อมโยงอุปกรณ์ใช่หรือไม่"
   },
   "icu:BackupImportScreen__cancel-confirmation__body": {
-    "messageformat": "ยังกู้คืนข้อความและไฟล์สื่อของคุณไม่เสร็จสมบูรณ์ โดยหากยกเลิก คุณยังสามารถเลือกถ่ายโอนข้อมูลได้อีกจากเมนูการตั้งค่า"
+    "messageformat": "หากยกเลิก ระบบจะไม่เชื่อมโยงอุปกรณ์เครื่องนี้และจะไม่ถ่ายโอนข้อความหรือไฟล์สื่อใดๆ"
   },
   "icu:BackupImportScreen__cancel-confirmation__cancel": {
-    "messageformat": "ถ่ายโอนต่อ"
+    "messageformat": "ดำเนินการเชื่อมโยงต่อ"
   },
   "icu:BackupImportScreen__cancel-confirmation__confirm": {
-    "messageformat": "ยกเลิกการถ่ายโอน"
+    "messageformat": "ยกเลิกการเชื่อมโยง"
+  },
+  "icu:BackupImportScreen__error__title": {
+    "messageformat": "เกิดข้อผิดพลาดในการถ่ายโอนข้อความ"
+  },
+  "icu:BackupImportScreen__error__body": {
+    "messageformat": "ไม่สามารถถ่ายโอนข้อความของคุณได้ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง"
+  },
+  "icu:BackupImportScreen__error-fatal__body": {
+    "messageformat": "ไม่สามารถถ่ายโอนข้อความของคุณได้เนื่องจากมีข้อผิดพลาดเกิดขึ้น โปรดลองใหม่ด้วยการเชื่อมโยงเดสก์ท็อปเครื่องนี้อีกครั้ง"
+  },
+  "icu:BackupImportScreen__error__confirm": {
+    "messageformat": "ลองอีกครั้ง"
   },
   "icu:BackupMediaDownloadProgress__title-in-progress": {
     "messageformat": "กำลังกู้คืนไฟล์สื่อ"
   },
   "icu:BackupMediaDownloadProgress__title-paused": {
-    "messageformat": "Restore paused"
+    "messageformat": "การกู้คืนหยุดชั่วคราว"
+  },
+  "icu:BackupMediaDownloadProgress__title-idle": {
+    "messageformat": "กู้คืน {currentSize} จาก {totalSize}"
+  },
+  "icu:BackupMediaDownloadProgress__description-idle": {
+    "messageformat": "การดาวน์โหลดไฟล์สื่อจะยังคงดำเนินต่อในพื้นหลัง"
+  },
+  "icu:BackupMediaDownloadProgress__title-offline": {
+    "messageformat": "การกู้คืนไฟล์สื่อหยุดชั่วคราว"
+  },
+  "icu:BackupMediaDownloadProgress__description-offline": {
+    "messageformat": "กำลังรอการเชื่อมต่ออินเทอร์เน็ต..."
   },
   "icu:BackupMediaDownloadProgress__button-pause": {
-    "messageformat": "Pause transfer"
+    "messageformat": "หยุดการถ่ายโอนชั่วคราว"
   },
   "icu:BackupMediaDownloadProgress__button-resume": {
-    "messageformat": "Resume transfer"
+    "messageformat": "ถ่ายโอนต่อ"
   },
   "icu:BackupMediaDownloadProgress__button-cancel": {
     "messageformat": "ยกเลิกการถ่ายโอน"
@@ -3576,7 +4218,7 @@
     "messageformat": "{currentSize} ของ {totalSize}"
   },
   "icu:BackupMediaDownloadCancelConfirmation__title": {
-    "messageformat": "Cancel media transfer?"
+    "messageformat": "ยกเลิกการถ่ายโอนไฟล์สื่อใช่หรือไม่"
   },
   "icu:BackupMediaDownloadCancelConfirmation__description": {
     "messageformat": "ยังกู้คืนข้อความและไฟล์สื่อของคุณไม่เสร็จสมบูรณ์ โดยหากยกเลิก คุณยังสามารถเลือกถ่ายโอนข้อมูลได้อีกจากเมนูการตั้งค่า"
@@ -3586,6 +4228,18 @@
   },
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
     "messageformat": "ยกเลิกการถ่ายโอน"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__title": {
+    "messageformat": "ต้องดำเนินการเพื่อรักษาบัญชี"
+  },
+  "icu:CriticalIdlePrimaryDeviceModal__description": {
+    "messageformat": "คุณต้องเปิด Signal บนโทรศัพท์เพื่อใช้งานบัญชีนี้ต่อไป โดยบัญชีของคุณจะถูกลบในไม่ช้าหากไม่ดำเนินการ <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
+  },
+  "icu:LowDiskSpaceBackupImportModal__title": {
+    "messageformat": "ไม่สามารถกู้คืนไฟล์สื่อได้"
+  },
+  "icu:LowDiskSpaceBackupImportModal__description": {
+    "messageformat": "อุปกรณ์ของคุณมีพื้นที่จัดเก็บไม่เพียงพอ โปรดเพิ่มพื้นที่จัดเก็บ {diskSpaceAmount} เพื่อกู้คืนไฟล์สื่อของคุณ"
   },
   "icu:CompositionArea--expand": {
     "messageformat": "ขยาย"
@@ -3607,6 +4261,15 @@
   },
   "icu:CompositionArea__edit-action--send": {
     "messageformat": "ส่งข้อความที่แก้ไข"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Title": {
+    "messageformat": "แทนที่ไฟล์แนบใช่หรือไม่"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__Body": {
+    "messageformat": "ไฟล์ GIF นี้จะถูกเพิ่มเข้าไปแทนที่ไฟล์เดิมในข้อความที่คุณร่างไว้"
+  },
+  "icu:CompositionArea__ConfirmGifSelection__ReplaceButton": {
+    "messageformat": "แทนที่"
   },
   "icu:CompositionInput__editing-message": {
     "messageformat": "แก้ไขข้อความ"
@@ -3634,9 +4297,6 @@
   },
   "icu:ContactModal--remove-from-group": {
     "messageformat": "ลบจากกลุ่ม"
-  },
-  "icu:ContactModal--already-in-call": {
-    "messageformat": "คุณอยู่ในสายแล้ว"
   },
   "icu:ContactModal--voice": {
     "messageformat": "เสียง"
@@ -3826,6 +4486,9 @@
   },
   "icu:GroupLinkManagement--approve-info": {
     "messageformat": "กําหนดให้ผู้ดูแลอนุมัติให้สมาชิกใหม่เข้าร่วมกลุ่มผ่านลิงก์กลุ่ม"
+  },
+  "icu:GroupLinkManagement__CopyGroupLinkButtonLabel": {
+    "messageformat": "คัดลอกลิงก์กลุ่มของ Signal ไปยังคลิปบอร์ด"
   },
   "icu:PendingInvites--tab-requests": {
     "messageformat": "คำขอ ({count,number})"
@@ -4031,17 +4694,8 @@
   "icu:ShareCallLinkViaSignal__DraftMessageText": {
     "messageformat": "ใช้ลิงก์นี้เพื่อเข้าร่วมการโทรของ Signal: {url}"
   },
-  "icu:MessageRequestWarning__learn-more": {
-    "messageformat": "เรียนรู้เพิ่มเติม"
-  },
   "icu:MessageRequestWarning__safety-tips": {
     "messageformat": "คำแนะนำเพื่อความปลอดภัย"
-  },
-  "icu:MessageRequestWarning__dialog__details": {
-    "messageformat": "คุณไม่ได้อยู่ในกลุ่มใดที่เหมือนกับบุคคลนี้เลย โปรดพิจารณาคำขออย่างถี่ถ้วน ก่อนจะยอมรับ เพื่อเลี่ยงข้อความไม่พึงประสงค์"
-  },
-  "icu:MessageRequestWarning__dialog__learn-even-more": {
-    "messageformat": "เกี่ยวกับคำขอส่งข้อความ"
   },
   "icu:ContactSpoofing__same-name--link": {
     "messageformat": "โปรดตรวจสอบคำขออย่างถี่ถ้วน Signal พบผู้ติดต่ออีกคนที่ใช้ชื่อเหมือนกัน <reviewRequestLink>ตรวจสอบคำขอ</reviewRequestLink>"
@@ -4137,7 +4791,7 @@
     "messageformat": "รีเซ็ตสีแชททั้งหมด"
   },
   "icu:ChatColorPicker__confirm-reset-default": {
-    "messageformat": "รีเซ็ตเป็นค่าเริ่มต้น"
+    "messageformat": "รีเซ็ตสีเริ่มต้น"
   },
   "icu:ChatColorPicker__confirm-reset": {
     "messageformat": "รีเซ็ต"
@@ -4186,6 +4840,9 @@
   },
   "icu:GradientDial__knob-end": {
     "messageformat": "สิ้นสุดการไล่สี"
+  },
+  "icu:GIF--download": {
+    "messageformat": "ดาวน์โหลดไฟล์แนบ GIF"
   },
   "icu:customDisappearingTimeOption": {
     "messageformat": "กำหนดเวลา…"
@@ -4442,6 +5099,9 @@
   "icu:ProfileEditorModal--error": {
     "messageformat": "โปรไฟล์ของคุณไม่สามารถปรับปรุงได้ โปรดลองอีกครั้ง"
   },
+  "icu:ProfileEditorModal--sharing": {
+    "messageformat": "แชร์"
+  },
   "icu:AnnouncementsOnlyGroupBanner--modal": {
     "messageformat": "ส่งข้อความถึงผู้ดูแล"
   },
@@ -4457,6 +5117,12 @@
   "icu:AvatarColorPicker--choose": {
     "messageformat": "เลือกสี"
   },
+  "icu:AttachmentDetailPill__retryDownload": {
+    "messageformat": "ลองดาวน์โหลดอีกครั้ง"
+  },
+  "icu:AttachmentDetailPill__retryDownloadShort": {
+    "messageformat": "ลองอีกครั้ง"
+  },
   "icu:LeftPaneSetGroupMetadataHelper__avatar-modal-title": {
     "messageformat": "อวตารกลุ่ม"
   },
@@ -4468,6 +5134,9 @@
   },
   "icu:Preferences__button--general": {
     "messageformat": "ทั่วไป"
+  },
+  "icu:Preferences__button--donate": {
+    "messageformat": "บริจาคให้ Signal"
   },
   "icu:Preferences__button--appearance": {
     "messageformat": "หน้าตา"
@@ -4483,6 +5152,57 @@
   },
   "icu:Preferences__button--privacy": {
     "messageformat": "ความเป็นส่วนตัว"
+  },
+  "icu:Preferences__button--data-usage": {
+    "messageformat": "การใช้ข้อมูล"
+  },
+  "icu:Preferences__media-auto-download": {
+    "messageformat": "ดาวน์โหลดสื่ออัตโนมัติ"
+  },
+  "icu:Preferences__media-auto-download__photos": {
+    "messageformat": "รูปภาพ"
+  },
+  "icu:Preferences__media-auto-download__videos": {
+    "messageformat": "วิดีโอ"
+  },
+  "icu:Preferences__media-auto-download__audio": {
+    "messageformat": "เสียง"
+  },
+  "icu:Preferences__media-auto-download__documents": {
+    "messageformat": "เอกสาร"
+  },
+  "icu:Preferences__media-auto-download__description": {
+    "messageformat": "ระบบจะดาวน์โหลดข้อความเสียงและสติกเกอร์โดยอัตโนมัติเสมอ"
+  },
+  "icu:Preferences__button--backups": {
+    "messageformat": "ข้อมูลสำรอง"
+  },
+  "icu:Preferences__button--internal": {
+    "messageformat": "ภายใน"
+  },
+  "icu:Preferences__button--manage": {
+    "messageformat": "จัดการ"
+  },
+  "icu:Preferences__button--choose-folder": {
+    "messageformat": "เลือกโฟลเดอร์"
+  },
+  "icu:Preferences__button--set-up": {
+    "messageformat": "ตั้งค่า"
+  },
+  "icu:Preferences__internal__local-backups": {
+    "messageformat": "ข้อมูลสำรองในเครื่อง"
+  },
+  "icu:Preferences__internal__export-local-backup": {
+    "messageformat": "ส่งออก…"
+  },
+  "icu:Preferences__internal__export-local-backup--description": {
+    "messageformat": "ส่งออกข้อมูลสำรองที่เข้ารหัสในเครื่องไปยังโฟลเดอร์และตรวจสอบความถูกต้อง"
+  },
+  "icu:Preferences__internal__validate-backup--description": {
+    "messageformat": "ส่งออกข้อมูลสำรองที่เข้ารหัสไปยังหน่วยความจำและดำเนินการตรวจสอบความถูกต้อง"
+  },
+  "icu:Preferences__internal__validate-backup": {
+    "messageformat": "ตรวจสอบ"
   },
   "icu:Preferences--lastSynced": {
     "messageformat": "นำเข้าครั้งสุดท้ายเมื่อ {date} {time}"
@@ -4513,6 +5233,135 @@
   },
   "icu:Preferences--blocked": {
     "messageformat": "ถูกบล็อก"
+  },
+  "icu:Preferences--signal-backups": {
+    "messageformat": "การสำรองข้อมูลของ Signal"
+  },
+  "icu:Preferences--signal-backups-off-description": {
+    "messageformat": "สำรองข้อมูลอัตโนมัติด้วยบริการจัดเก็บที่ปลอดภัยและถูกเข้ารหัสตั้งแต่ต้นทางถึงปลายทางของ Signal เริ่มต้นใช้งานบนโทรศัพท์ของคุณ <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
+  },
+  "icu:Preferences--backup-section-description": {
+    "messageformat": "สำรองประวัติการส่งข้อความของคุณ ช่วยเก็บรักษาข้อมูลแม้ในกรณีที่คุณเปลี่ยนโทรศัพท์เครื่องใหม่หรือติดตั้ง Signal อีกครั้ง"
+  },
+  "icu:Preferences--backup-details__header": {
+    "messageformat": "รายละเอียดการสำรองข้อมูล"
+  },
+  "icu:Preferences--backup-media-plan__description": {
+    "messageformat": "สำรองข้อความ + สื่อทั้งหมด"
+  },
+  "icu:Preferences--backup-plan-not-found__description": {
+    "messageformat": "ไม่พบการสมัครแพ็กเกจของคุณ โปรดต่ออายุเพื่อการใช้งานแพ็กเกจสำรองข้อมูลของ Signal อย่างต่อเนื่อง"
+  },
+  "icu:Preferences--backup-messages-plan__description": {
+    "messageformat": "{mediaDayCount, plural, other {สำรองข้อความ + สื่อจาก {mediaDayCount,number} วัน}}"
+  },
+  "icu:Preferences--backup-messages-plan__cost-description": {
+    "messageformat": "แพ็กเกจสำรองข้อมูลที่คุณเลือกไม่มีค่าใช้จ่าย"
+  },
+  "icu:Preferences--backup-plan__renewal-date": {
+    "messageformat": "ต่ออายุ {date}"
+  },
+  "icu:Preferences--backup-plan__expiry-date": {
+    "messageformat": "หมดอายุ {date}"
+  },
+  "icu:Preferences--backup-plan__canceled": {
+    "messageformat": "ยกเลิกการสมัครแล้ว"
+  },
+  "icu:Preferences--backup-media-plan__note": {
+    "messageformat": "คุณสามารถจัดการหรือยกเลิกการสมัครแพ็กเกจสำรองข้อมูลของ Signal ได้บนโทรศัพท์"
+  },
+  "icu:Preferences--backup-messages-plan__note": {
+    "messageformat": "คุณสามารถจัดการหรืออัปเกรดแพ็กเกจสำรองข้อมูลของ Signal ได้บนโทรศัพท์"
+  },
+  "icu:Preferences--backup-plan__not-found__note": {
+    "messageformat": "คุณสามารถจัดการหรือต่ออายุการสมัครแพ็กเกจสำรองข้อมูลของ Signal ได้บนโทรศัพท์"
+  },
+  "icu:Preferences--backup-created-at__label": {
+    "messageformat": "การสำรองข้อมูลครั้งล่าสุด"
+  },
+  "icu:Preferences--backup-created-by-phone": {
+    "messageformat": "โทรศัพท์ของคุณ"
+  },
+  "icu:Preferences--backup-size__label": {
+    "messageformat": "ขนาดของข้อมูลสำรอง"
+  },
+  "icu:Preferences__local-backups": {
+    "messageformat": "สำรองข้อมูลบนเดสก์ท็อป"
+  },
+  "icu:Preferences__local-backups-section__description": {
+    "messageformat": "ข้อมูลสำรองจะถูกเข้ารหัสด้วยกุญแจและจัดเก็บในคอมพิวเตอร์ของคุณ"
+  },
+  "icu:Preferences--local-backups-off-description": {
+    "messageformat": "สร้างข้อมูลสำรองที่ถูกเข้ารหัสตั้งแต่ต้นทางถึงปลายทางซึ่งคุณสามารถกู้คืนได้บนโทรศัพท์ "
+  },
+  "icu:Preferences--local-backups-restore-info": {
+    "messageformat": "กู้คืนข้อมูลสำรองด้วยการติดตั้ง Signal ใหม่ โดยเปิดแอปแล้วแตะเลือกกู้คืนจากข้อมูลสำรอง จากนั้นจึงไปที่โฟลเดอร์ที่สำรองข้อมูลไว้ <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-setup-folder": {
+    "messageformat": "เลือกโฟลเดอร์"
+  },
+  "icu:Preferences--local-backups-setup-folder-description": {
+    "messageformat": "เลือกโฟลเดอร์ในคอมพิวเตอร์ซึ่งคุณต้องการใช้จัดเก็บข้อมูลสำรองที่ถูกเข้ารหัสตั้งแต่ต้นทางถึงปลายทาง"
+  },
+  "icu:Preferences--local-backups-setup-next": {
+    "messageformat": "ถัดไป"
+  },
+  "icu:Preferences--local-backups-view-backup-key-done": {
+    "messageformat": "เสร็จสิ้น"
+  },
+  "icu:Preferences--local-backups-backup-key-text-box": {
+    "messageformat": "กล่องข้อความระบุกุญแจสำรอง"
+  },
+  "icu:Preferences--local-backups-enter-backup-key": {
+    "messageformat": "ใส่กุญแจ"
+  },
+  "icu:Preferences--local-backups-record-backup-key": {
+    "messageformat": "บันทึกกุญแจสำรองของคุณ"
+  },
+  "icu:Preferences--local-backups-record-backup-key-description": {
+    "messageformat": "คุณจำเป็นต้องใช้กุญแจนี้ในการกู้คืนบัญชีและข้อมูล โปรดเก็บกุญแจนี้ไว้ในที่ปลอดภัย คุณจะไม่สามารถกู้คืนบัญชีได้หากทำกุญแจหาย <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key": {
+    "messageformat": "ยืนยันกุญแจสำรองของคุณ"
+  },
+  "icu:Preferences--local-backups-confirm-backup-key-description": {
+    "messageformat": "ใส่กุญแจสำรองที่คุณเพิ่งบันทึกไว้"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-title": {
+    "messageformat": "เก็บกุญแจของคุณให้ปลอดภัย"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-body": {
+    "messageformat": "หากทำกุญแจหาย Signal จะไม่สามารถช่วยกู้คืนข้อมูลสำรองของคุณได้ โปรดเก็บรักษากุญแจนี้ไว้ในที่ปลอดภัยและไม่บอกรหัสของคุณกับใคร"
+  },
+  "icu:Preferences__local-backups-confirm-key-modal-continue": {
+    "messageformat": "ดำเนินการต่อ"
+  },
+  "icu:Preferences--local-backups-see-backup-key-again": {
+    "messageformat": "ดูกุญแจอีกครั้ง"
+  },
+  "icu:Preferences__local-backups-folder": {
+    "messageformat": "โฟลเดอร์ข้อมูลสำรอง"
+  },
+  "icu:Preferences__local-backups-folder__change": {
+    "messageformat": "เปลี่ยน"
+  },
+  "icu:Preferences__local-backups-copy-key": {
+    "messageformat": "คัดลอกไปยังคลิปบอร์ด"
+  },
+  "icu:Preferences__local-backups-copied-key": {
+    "messageformat": "คัดลอกกุญแจสำรองแล้ว"
+  },
+  "icu:Preferences__view-key": {
+    "messageformat": "ดูกุญแจ"
+  },
+  "icu:Preferences__backup-key": {
+    "messageformat": "กุญแจสำรอง"
+  },
+  "icu:Preferences__backup-key-description": {
+    "messageformat": "กุญแจสำรองคือรหัส 64 หลักที่ใช้ในการกู้คืนข้อมูลสำรองของคุณ"
+  },
+  "icu:Preferences__backup-other-ways": {
+    "messageformat": "วิธีอื่นในการสำรองข้อมูล"
   },
   "icu:Preferences--blocked-count": {
     "messageformat": "{num, plural, other {ผู้ติดต่อ {num,number} คน}}"
@@ -4631,6 +5480,24 @@
   "icu:Preferences__LanguageModal__Restart__Button": {
     "messageformat": "รีสตาร์ท"
   },
+  "icu:Preferences__Privacy__Application": {
+    "messageformat": "แอปพลิเคชัน"
+  },
+  "icu:Preferences__content-protection--label": {
+    "messageformat": "ความปลอดภัยหน้าจอ"
+  },
+  "icu:Preferences__content-protection--description": {
+    "messageformat": "ป้องกันไม่ให้มีการบันทึกภาพหน้าจอของ Signal บนคอมพิวเตอร์เครื่องนี้เพื่อรักษาความเป็นส่วนตัวยิ่งขึ้น"
+  },
+  "icu:Preferences__content-protection__modal--title": {
+    "messageformat": "ปิดใช้งานการรักษาความปลอดภัยของหน้าจอใช่หรือไม่"
+  },
+  "icu:Preferences__content-protection__modal--body": {
+    "messageformat": "การปิดใช้งานตัวเลือกนี้อาจทำให้ Microsoft Windows สามารถบันทึกภาพหน้าจอของ Signal และนำไปใช้กับฟีเจอร์ที่อาจไม่เป็นส่วนตัว"
+  },
+  "icu:Preferences__content-protection__modal--disable": {
+    "messageformat": "ปิดใช้งาน"
+  },
   "icu:DialogUpdate--version-available": {
     "messageformat": "ปรับรุ่นเป็น {version}"
   },
@@ -4640,8 +5507,29 @@
   "icu:DialogUpdate__downloaded": {
     "messageformat": "ดาวน์โหลดการอัปเดตแล้ว"
   },
+  "icu:CriticalIdlePrimaryDevice__title": {
+    "messageformat": "เปิด Signal บนโทรศัพท์ของคุณ"
+  },
+  "icu:CriticalIdlePrimaryDevice__body": {
+    "messageformat": "หากไม่มีการเปิด Signal บนโทรศัพท์ บัญชีของคุณจะถูกลบในอีกไม่ช้า โดยข้อความนี้จะหายไปเมื่อคุณดำเนินการสำเร็จ <learnMoreLink>เรียนรู้เพิ่มเติม</learnMoreLink>"
+  },
+  "icu:IdlePrimaryDevice__body": {
+    "messageformat": "เปิด Signal บนโทรศัพท์เพื่อรักษาสถานะการใช้งานบัญชีของคุณ"
+  },
+  "icu:IdlePrimaryDevice__learnMore": {
+    "messageformat": "เรียนรู้เพิ่มเติม"
+  },
   "icu:DialogNetworkStatus__outage": {
     "messageformat": "Signal กำลังพบกับอุปสรรคทางเทคนิค เรากำลังทำงานอย่างหนักเพื่อให้สามารถกลับมาให้บริการได้โดยเร็วที่สุดเท่าที่จะเป็นไปได้"
+  },
+  "icu:InstallScreenUpdateDialog--update-required__title": {
+    "messageformat": "จำเป็นต้องอัปเดต"
+  },
+  "icu:InstallScreenUpdateDialog--update-required__body": {
+    "messageformat": "โปรดอัปเดต Signal เดสก์ท็อปเพื่อซิงค์ข้อความของคุณให้เสร็จสมบูรณ์"
+  },
+  "icu:InstallScreenUpdateDialog--update-required__action-update": {
+    "messageformat": "อัปเดต"
   },
   "icu:InstallScreenUpdateDialog--unsupported-os__title": {
     "messageformat": "จำเป็นต้องอัปเดต"
@@ -4771,6 +5659,30 @@
   },
   "icu:MediaEditor__crop-preset--9-16": {
     "messageformat": "9:16"
+  },
+  "icu:MediaPermissionsModal__title--microphone": {
+    "messageformat": "อนุญาตให้เข้าถึงไมโครโฟนของคุณ"
+  },
+  "icu:MediaPermissionsModal__title--camera": {
+    "messageformat": "อนุญาตให้เข้าถึงกล้องของคุณ"
+  },
+  "icu:MediaPermissionsModal__subtitle--call": {
+    "messageformat": "วิธีการเข้าร่วมหรือเริ่มต้นการโทร:"
+  },
+  "icu:MediaPermissionsModal__subtitle--call--camera": {
+    "messageformat": "วิธีการเปิดใช้งานวิดีโอ:"
+  },
+  "icu:MediaPermissionsModal__subtitle--voice-note": {
+    "messageformat": "วิธีส่งข้อความเสียง:"
+  },
+  "icu:MediaPermissionsModal__step-1": {
+    "messageformat": "คลิกที่ “{buttonName}” ด้านล่าง"
+  },
+  "icu:MediaPermissionsModal__step-2": {
+    "messageformat": "เปิดใช้งาน “Signal”"
+  },
+  "icu:MediaPermissionsModal__open": {
+    "messageformat": "ไปที่การตั้งค่า"
   },
   "icu:MyStories__title": {
     "messageformat": "สตอรี่ของฉัน"
@@ -4924,9 +5836,6 @@
   },
   "icu:Stories__placeholder--text": {
     "messageformat": "คลิกเพื่อดูสตอรี่"
-  },
-  "icu:Stories__placeholder-with-icon--text": {
-    "messageformat": "คลิก<newStoryIcon>เพิ่มสตอรี่</newStoryIcon>เพื่อเพิ่มสตอรี่ใหม่"
   },
   "icu:Stories__placeholder-with-icon--text-2": {
     "messageformat": "คลิก <newStoryButtonIcon></newStoryButtonIcon> เพื่อเพิ่มสตอรี่ใหม่"
@@ -5171,9 +6080,6 @@
   "icu:StoryViewsNRepliesModal__tab--replies": {
     "messageformat": "ตอบกลับ"
   },
-  "icu:StoryViewsNRepliesModal__reacted": {
-    "messageformat": "แสดงความรู้สึกต่อสตอรี่"
-  },
   "icu:StoryViewsNRepliesModal__reacted--you": {
     "messageformat": "แสดงความรู้สึกต่อสตอรี่"
   },
@@ -5196,7 +6102,7 @@
     "messageformat": "สตอรี่"
   },
   "icu:StoryListItem__unhide": {
-    "messageformat": "แสดงสตอรี่"
+    "messageformat": "ยกเลิกการซ่อนสตอรี่"
   },
   "icu:StoryListItem__hide": {
     "messageformat": "ซ่อนสตอรี่"
@@ -5436,6 +6342,15 @@
   "icu:MessageMetadata__edited": {
     "messageformat": "แก้ไข"
   },
+  "icu:DraftGifMessageSendModal__Title": {
+    "messageformat": "เพิ่มข้อความ"
+  },
+  "icu:DraftGifMessageSendModal__SendButtonLabel": {
+    "messageformat": "ส่ง"
+  },
+  "icu:DraftGifMessageSendModal__CancelButtonLabel": {
+    "messageformat": "ยกเลิก"
+  },
   "icu:EditHistoryMessagesModal__title": {
     "messageformat": "ประวัติการแก้ไข"
   },
@@ -5469,20 +6384,32 @@
   "icu:CallsTab__ConfirmClearCallHistory__Body": {
     "messageformat": "การดำเนินการนี้จะลบประวัติการโทรทั้งหมดอย่างถาวร"
   },
+  "icu:CallsTab__ConfirmClearCallHistory__Body--call-links": {
+    "messageformat": "การดำเนินการนี้จะลบประวัติการโทรทั้งหมดอย่างถาวร ผู้ติดต่อที่มีลิงก์การโทรที่คุณสร้างจะไม่สามารถใช้ลิงก์ดังกล่าวได้อีกต่อไป "
+  },
   "icu:CallsTab__ConfirmClearCallHistory__ConfirmButton": {
     "messageformat": "ล้าง"
   },
   "icu:CallsTab__ToastCallHistoryCleared": {
     "messageformat": "ล้างประวัติการโทรแล้ว"
   },
-  "icu:CallsTab__EmptyStateText--with-icon": {
-    "messageformat": "คลิก<newCallIcon>การโทรใหม่</newCallIcon>เพื่อเริ่มต้นการโทรด้วยเสียงหรือวิดีโอคอล"
+  "icu:CallsTab__ClearCallHistoryError--call-links": {
+    "messageformat": "ไม่สามารถลบลิงก์การโทรทั้งหมดได้ ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง"
+  },
+  "icu:CallsTab__ClearCallHistoryError": {
+    "messageformat": "ไม่สามารถล้างประวัติการโทรทั้งหมดได้ ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง"
   },
   "icu:CallsTab__EmptyStateText--with-icon-2": {
     "messageformat": "คลิก <newCallButtonIcon></newCallButtonIcon> เพื่อเริ่มต้นการโทรด้วยเสียงหรือวิดีโอคอล"
   },
+  "icu:CallsList__SearchInputPlaceholder--missed-calls": {
+    "messageformat": "ค้นหาสายที่ไม่ได้รับ"
+  },
   "icu:CallsList__SearchInputPlaceholder": {
     "messageformat": "ค้นหา"
+  },
+  "icu:CallsList__FilteredByMissedHeader": {
+    "messageformat": "กรองสายที่ไม่ได้รับ"
   },
   "icu:CallsList__ToggleFilterByMissedLabel": {
     "messageformat": "กรองเฉพาะสายที่ไม่ได้รับ"
@@ -5496,14 +6423,14 @@
   "icu:CallsList__EmptyState--noQuery__subtitle": {
     "messageformat": "การโทรล่าสุดจะปรากฏที่นี่"
   },
-  "icu:CallsList__EmptyState--noQuery--missed__title": {
-    "messageformat": "ไม่มีสายที่ไม่ได้รับ"
-  },
-  "icu:CallsList__EmptyState--noQuery--missed__subtitle": {
-    "messageformat": "สายที่ไม่ได้รับจะปรากฏที่นี่"
-  },
   "icu:CallsList__EmptyState--hasQuery": {
     "messageformat": "ไม่พบผลลัพธ์สำหรับ “{query}”"
+  },
+  "icu:CallsList__EmptyState--hasQueryAndMissedCalls": {
+    "messageformat": "ไม่มีผลลัพธ์สำหรับ “{query}” ในสายที่ไม่ได้รับ"
+  },
+  "icu:CallsList__EmptyState--missedCalls": {
+    "messageformat": "ไม่มีสายที่ไม่ได้รับ"
   },
   "icu:CallsList__CreateCallLink": {
     "messageformat": "สร้างลิงก์การโทร"
@@ -5643,8 +6570,56 @@
   "icu:WhoCanFindMeReadOnlyToast": {
     "messageformat": "หากต้องการเปลี่ยนการตั้งค่านี้ ให้ไปที่หัวข้อ “คนที่สามารถเห็นหมายเลขโทรศัพท์ของฉัน” แล้วเลือก “ไม่อนุญาตให้ใครเห็น”"
   },
+  "icu:ProfileNameWarningModal__description--direct": {
+    "messageformat": "ชื่อโปรไฟล์บน Signal เป็นชื่อที่เจ้าของบัญชีนั้นตั้งเอง:"
+  },
+  "icu:ProfileNameWarningModal__list--item1--direct": {
+    "messageformat": "ชื่อโปรไฟล์ไม่ได้ผ่านการตรวจยืนยัน"
+  },
+  "icu:ProfileNameWarningModal__list--item2--direct": {
+    "messageformat": "โปรดระวังบัญชีที่แอบอ้างเป็นบุคคลอื่น"
+  },
+  "icu:ProfileNameWarningModal__list--item3--direct": {
+    "messageformat": "อย่าให้ข้อมูลส่วนตัวกับบุคคลที่คุณไม่รู้จัก"
+  },
+  "icu:ProfileNameWarningModal__description--group": {
+    "messageformat": "ชื่อกลุ่มเป็นชื่อที่สมาชิกกลุ่มนั้นตั้งเอง"
+  },
+  "icu:ProfileNameWarningModal__list--item1--group": {
+    "messageformat": "โปรดระวังกลุ่มที่แอบอ้างเป็นองค์กรหรือหน่วยงานอื่น"
+  },
+  "icu:ProfileNameWarningModal__list--item2--group": {
+    "messageformat": "ชื่อโปรไฟล์ของสมาชิกในกลุ่มไม่ได้ผ่านการตรวจยืนยัน"
+  },
+  "icu:ProfileNameWarningModal__list--item3--group": {
+    "messageformat": "อย่าให้ข้อมูลส่วนตัวกับบุคคลที่คุณไม่รู้จัก"
+  },
+  "icu:SaveMultiDialog__title": {
+    "messageformat": "บันทึกไฟล์แนบ"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "ฟีเจอร์และบริการใหม่ๆ"
+  },
+  "icu:DonationReceipt__title": {
+    "messageformat": "Donation receipt"
+  },
+  "icu:DonationReceipt__amount-label": {
+    "messageformat": "Amount"
+  },
+  "icu:DonationReceipt__type-label": {
+    "messageformat": "Type"
+  },
+  "icu:DonationReceipt__date-paid-label": {
+    "messageformat": "Date paid"
+  },
+  "icu:DonationReceipt__type-value--one-time": {
+    "messageformat": "One-time"
+  },
+  "icu:DonationReceipt__payment-method-label": {
+    "messageformat": "Payment method"
+  },
+  "icu:DonationReceipt__footer-text": {
+    "messageformat": "Thank you for supporting Signal. Your contribution helps fuel the mission of protecting free expression and enabling secure global communication for millions around the world, through open source privacy technology. If you’re a resident of the United States, please retain this receipt for your tax records. Signal Technology Foundation is a tax-exempt nonprofit organization in the United States under section 501c3 of the Internal Revenue Code. Our Federal Tax ID is 82-4506840."
   },
   "icu:WhatsNew__bugfixes": {
     "messageformat": "รุ่นนี้มาพร้อมการปรับเปลี่ยนเล็กๆ น้อยๆ และการแก้ไขบั๊กต่างๆ เพื่อให้ Signal ทำงานได้อย่างราบรื่นไร้ปัญหา",
@@ -5674,19 +6649,13 @@
     "messageformat": "มีการปรับเปลี่ยนเล็กน้อย พร้อมแก้ไขบั๊ก และการพัฒนาประสิทธิภาพให้ดียิ่งขึ้น ขอขอบคุณที่เลือกใช้ Signal!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.23--0": {
-    "messageformat": "การปรับปรุงประสิทธิภาพครั้งใหม่นี้ทำให้คุณเปิดแชทได้เร็วขึ้นอีกขั้น ทันใจยิ่งกว่าเดิม"
+  "icu:WhatsNew__v7.58--0": {
+    "messageformat": "เพิ่มมุมมองใหม่ให้คุณสามารถเห็นอีโมจิแสดงความรู้สึกทั้งหมดของข้อความที่กดเลือกได้ทันที"
   },
-  "icu:WhatsNew__v7.23--1": {
-    "messageformat": "เรายังจัดการแก้ไขบั๊กหลายตัว รวมถึงบั๊กที่เคยทำให้หน้ารายการแชทขึ้นสถานะว่า \"ผู้ติดต่อที่ไม่รู้จักเริ่มวิดีโอคอล\" เมื่อคุณเป็นคนเริ่มต้นการโทรนั้น"
+  "icu:WhatsNew__v7.59--0": {
+    "messageformat": "พัฒนาประสิทธิภาพให้การใช้งานบนเครื่อง Linux ลื่นไหลยิ่งขึ้นอีก"
   },
-  "icu:WhatsNew__v7.24--0": {
-    "messageformat": "การอัปเดตครั้งนี้มาพร้อมการแก้ไขบั๊กเพื่อการใช้งานที่ไม่สะดุด โดยเมื่อคุณเปิดดูสายที่ไม่ได้รับบนอุปกรณ์เครื่องหนึ่ง ระบบจะซิงค์ให้สถานะบนอุปกรณ์อีกเครื่องเปลี่ยนตามแบบอัตโนมัติ"
-  },
-  "icu:WhatsNew__v7.25--0": {
-    "messageformat": "พัฒนารูปแบบในการแสดงสื่อให้ดียิ่งขึ้นอีก โดยเมื่อคลิกที่แถบด้านบนของแชท แล้วเลือก \"ดูทั้งหมด\" ตรงหัวข้อไฟล์สื่อ รูปภาพและวิดีโอที่เคยแชร์จะปรากฏเพิ่มขึ้นเรื่อยๆ โดยอัตโนมัติขณะที่คุณเลื่อนดู"
-  },
-  "icu:WhatsNew__v7.26--0": {
-    "messageformat": "Sometimes leaving something behind is the best way to discover that you want to find it again, so we fixed a bug that made it difficult to search for groups that you're no longer a part of anymore but that still remain in your conversation list (and quite possibly in your heart)."
+  "icu:WhatsNew__v7.61--0": {
+    "messageformat": "This update improves audio quality and reliability during voice and video calls, and introduces better automatic configuration of connected microphones and speakers. Thanks to <padenot></padenot>, <kinetiknz></kinetiknz>, and <Pehrsons></Pehrsons> at Mozilla for their help with this project."
   }
 }

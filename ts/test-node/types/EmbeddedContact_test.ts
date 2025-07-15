@@ -4,18 +4,22 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 
-import * as logger from '../../logging/log';
+import { createLogger } from '../../logging/log';
 import { IMAGE_GIF, IMAGE_PNG } from '../../types/MIME';
 import type { MessageAttributesType } from '../../model-types.d';
 import type { Avatar, Email, Phone } from '../../types/EmbeddedContact';
 import {
   _validate,
+  ContactFormType,
   embeddedContactSelector,
   getName,
   parseAndWriteAvatar,
+  parsePhoneItem,
 } from '../../types/EmbeddedContact';
-import { fakeAttachment } from '../../test-both/helpers/fakeAttachment';
+import { fakeAttachment } from '../../test-helpers/fakeAttachment';
 import { generateAci } from '../../types/ServiceId';
+
+const logger = createLogger('EmbeddedContact_test');
 
 describe('Contact', () => {
   const NUMBER = '+12025550099';
@@ -47,41 +51,39 @@ describe('Contact', () => {
   };
 
   describe('getName', () => {
-    it('returns displayName if provided', () => {
+    it('returns displayName if available', () => {
       const contact = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
         organization: 'Somewhere, Inc.',
       };
-      const expected = 'displayName';
+      const expected = 'nickname';
       const actual = getName(contact);
       assert.strictEqual(actual, expected);
     });
 
-    it('returns organization if no displayName', () => {
+    it('returns full name if no displayName', () => {
       const contact = {
         name: {
           givenName: 'givenName',
           familyName: 'familyName',
         },
+        organization: 'Somewhere, Inc.',
+      };
+      const expected = 'givenName familyName';
+      const actual = getName(contact);
+      assert.strictEqual(actual, expected);
+    });
+
+    it('returns organization  if no displayName or full name', () => {
+      const contact = {
+        name: {},
         organization: 'Somewhere, Inc.',
       };
       const expected = 'Somewhere, Inc.';
-      const actual = getName(contact);
-      assert.strictEqual(actual, expected);
-    });
-
-    it('returns givenName + familyName if no displayName or organization', () => {
-      const contact = {
-        name: {
-          givenName: 'givenName',
-          familyName: 'familyName',
-        },
-      };
-      const expected = 'givenName familyName';
       const actual = getName(contact);
       assert.strictEqual(actual, expected);
     });
@@ -117,7 +119,7 @@ describe('Contact', () => {
     it('eliminates avatar if it has had an attachment download error', () => {
       const contact = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -132,7 +134,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -153,7 +155,7 @@ describe('Contact', () => {
     it('does not calculate absolute path if avatar is pending', () => {
       const contact = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -169,7 +171,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -199,7 +201,7 @@ describe('Contact', () => {
 
       const contact = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -214,7 +216,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'displayName',
+          nickname: 'nickname',
           givenName: 'givenName',
           familyName: 'familyName',
         },
@@ -251,7 +253,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -262,12 +264,15 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        message,
-        logger,
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          logger,
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+        },
+        message
+      );
       assert.deepEqual(result, message.contact[0]);
     });
 
@@ -282,7 +287,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -295,7 +300,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
         number: [
           {
@@ -304,12 +309,15 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        message,
-        getRegionCode: () => 'US',
-        logger,
-        writeNewAttachmentData,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => 'US',
+          logger,
+          writeNewAttachmentData,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -324,7 +332,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -340,7 +348,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
         number: [
           {
@@ -349,12 +357,15 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -372,7 +383,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -404,7 +415,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
         number: [
           {
@@ -434,12 +445,15 @@ describe('Contact', () => {
         },
       };
 
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -454,7 +468,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -472,7 +486,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
         email: [
           {
@@ -481,12 +495,15 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -501,7 +518,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -519,7 +536,7 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
         number: [
           {
@@ -528,12 +545,15 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -551,7 +571,7 @@ describe('Contact', () => {
         contact: [
           {
             name: {
-              displayName: 'Someone Somewhere',
+              nickname: 'Someone Somewhere',
             },
             number: [
               {
@@ -568,15 +588,18 @@ describe('Contact', () => {
       };
       const expected = {
         name: {
-          displayName: 'Someone Somewhere',
+          nickname: 'Someone Somewhere',
         },
       };
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, expected);
     });
 
@@ -600,13 +623,58 @@ describe('Contact', () => {
           },
         ],
       };
-      const result = await upgradeVersion(message.contact[0], {
-        getRegionCode: () => '1',
-        writeNewAttachmentData,
-        message,
-        logger,
-      });
+      const result = await upgradeVersion(
+        message.contact[0],
+        {
+          getRegionCode: () => '1',
+          writeNewAttachmentData,
+          logger,
+        },
+        message
+      );
       assert.deepEqual(result, message.contact[0]);
+    });
+  });
+
+  describe('parsePhoneItem', () => {
+    it('adds default phone type', () => {
+      const phone: Phone = {
+        value: '+18005550000',
+        // @ts-expect-error Forcing an invalid value here
+        type: null,
+      };
+      const expected = {
+        value: '+18005550000',
+        type: ContactFormType.HOME,
+      };
+      const actual = parsePhoneItem(phone, { regionCode: '805' });
+      assert.deepEqual(actual, expected);
+    });
+
+    it('passes invalid phone numbers through', () => {
+      const phone: Phone = {
+        value: '+1800555u000',
+        type: ContactFormType.WORK,
+      };
+      const expected = {
+        value: '+1800555u000',
+        type: ContactFormType.WORK,
+      };
+      const actual = parsePhoneItem(phone, { regionCode: '805' });
+      assert.deepEqual(actual, expected);
+    });
+
+    it('returns original data if regionCode not provided', () => {
+      const phone: Phone = {
+        value: '+18005550000',
+        type: ContactFormType.MOBILE,
+      };
+      const expected = {
+        value: '+18005550000',
+        type: ContactFormType.MOBILE,
+      };
+      const actual = parsePhoneItem(phone, { regionCode: undefined });
+      assert.deepEqual(actual, expected);
     });
   });
 
@@ -626,22 +694,6 @@ describe('Contact', () => {
       };
       const expected =
         "Message the-message-id: Contact had neither 'displayName' nor 'organization'";
-
-      const result = _validate(contact, { messageId });
-      assert.deepEqual(result?.message, expected);
-    });
-
-    it('logs if no values remain in contact', async () => {
-      const messageId = 'the-message-id';
-      const contact = {
-        name: {
-          displayName: 'Someone Somewhere',
-        },
-        number: [],
-        email: [],
-      };
-      const expected =
-        'Message the-message-id: Contact had no included numbers, email or addresses';
 
       const result = _validate(contact, { messageId });
       assert.deepEqual(result?.message, expected);

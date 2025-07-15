@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { ZodSchema } from 'zod';
 
 import { drop } from './drop';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import * as DeletesForMe from '../messageModifiers/DeletesForMe';
 import {
   deleteMessageSchema,
@@ -17,11 +17,8 @@ import {
   receiptSyncTaskSchema,
   onReceipt,
 } from '../messageModifiers/MessageReceipts';
-import {
-  deleteConversation,
-  deleteLocalOnlyConversation,
-  getConversationFromTarget,
-} from './deleteForMe';
+import { deleteConversation, deleteLocalOnlyConversation } from './deleteForMe';
+import { getConversationFromTarget } from './syncIdentifiers';
 import {
   onSync as onReadSync,
   readSyncTaskSchema,
@@ -30,6 +27,10 @@ import {
   onSync as onViewSync,
   viewSyncTaskSchema,
 } from '../messageModifiers/ViewSyncs';
+import { safeParseUnknown } from './schemas';
+import { DataWriter } from '../sql/Client';
+
+const log = createLogger('syncTasks');
 
 const syncTaskDataSchema = z.union([
   deleteMessageSchema,
@@ -84,16 +85,16 @@ export async function queueSyncTasks(
       log.error(`${innerLogId}: Schema not found. Deleting.`);
       // eslint-disable-next-line no-await-in-loop
       await removeSyncTaskById(id);
-      return;
+      continue;
     }
-    const parseResult = syncTaskDataSchema.safeParse(data);
+    const parseResult = safeParseUnknown(syncTaskDataSchema, data);
     if (!parseResult.success) {
       log.error(
         `${innerLogId}: Failed to parse. Deleting. Error: ${parseResult.error}`
       );
       // eslint-disable-next-line no-await-in-loop
       await removeSyncTaskById(id);
-      return;
+      continue;
     }
 
     const { data: parsed } = parseResult;
@@ -222,4 +223,37 @@ export async function queueSyncTasks(
       await removeSyncTaskById(id);
     }
   }
+
+  // Note: There may still be some tasks in the database, but we expect to be
+  // called again some time later to process them.
+}
+
+async function processSyncTasksBatch(
+  logId: string,
+  previousRowId: number | null
+): Promise<number | null> {
+  log.info('Fetching tasks');
+  const result = await DataWriter.dequeueOldestSyncTasks({ previousRowId });
+  const syncTasks = result.tasks;
+
+  if (syncTasks.length === 0) {
+    log.info(`${logId}/syncTasks: No sync tasks to process, stopping`);
+  } else {
+    log.info(`${logId}/syncTasks: Queueing ${syncTasks.length} sync tasks`);
+    await queueSyncTasks(syncTasks, DataWriter.removeSyncTaskById);
+  }
+
+  return result.lastRowId;
+}
+
+const A_TICK = Promise.resolve();
+
+export async function runAllSyncTasks(): Promise<void> {
+  let lastRowId: number | null = null;
+  do {
+    // eslint-disable-next-line no-await-in-loop
+    lastRowId = await processSyncTasksBatch('Startup', lastRowId);
+    // eslint-disable-next-line no-await-in-loop
+    await A_TICK;
+  } while (lastRowId != null);
 }

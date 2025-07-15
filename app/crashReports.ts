@@ -12,6 +12,7 @@ import * as Errors from '../ts/types/errors';
 import { isProduction } from '../ts/util/version';
 import { isNotNil } from '../ts/util/isNotNil';
 import OS from '../ts/util/os/osMain';
+import { parseUnknown } from '../ts/util/schemas';
 
 // See https://github.com/rust-minidump/rust-minidump/blob/main/minidump-processor/json-schema.md
 const dumpString = z.string().or(z.null()).optional();
@@ -98,14 +99,14 @@ async function eraseDumps(
 }
 
 export function setup(
-  getLogger: () => LoggerType,
+  logger: LoggerType,
   showDebugLogWindow: () => Promise<void>,
   forceEnable = false
 ): void {
   const isEnabled = !isProduction(app.getVersion()) || forceEnable;
 
   if (isEnabled) {
-    getLogger().info(`crashReporter: ${forceEnable ? 'force ' : ''}enabled`);
+    logger.info(`crashReporter: ${forceEnable ? 'force ' : ''}enabled`);
     crashReporter.start({ uploadToServer: false });
   }
 
@@ -120,14 +121,13 @@ export function setup(
         pendingDumps.map(async fullPath => {
           const content = await readFile(fullPath);
           try {
-            const dump = dumpSchema.parse(
-              JSON.parse(dumpToJSONString(content))
-            );
+            const json: unknown = JSON.parse(dumpToJSONString(content));
+            const dump = parseUnknown(dumpSchema, json);
             if (dump.crash_info?.type !== 'Simulated Exception') {
               return fullPath;
             }
           } catch (error) {
-            getLogger().error(
+            logger.error(
               `crashReports: failed to read crash report ${fullPath} due to error`,
               Errors.toLogFormat(error)
             );
@@ -136,7 +136,7 @@ export function setup(
           try {
             await unlink(fullPath);
           } catch (error) {
-            getLogger().error(
+            logger.error(
               `crashReports: failed to unlink crash report ${fullPath}`,
               Errors.toLogFormat(error)
             );
@@ -147,9 +147,7 @@ export function setup(
     ).filter(isNotNil);
 
     if (filteredDumps.length !== 0) {
-      getLogger().warn(
-        `crashReports: ${filteredDumps.length} pending dumps found`
-      );
+      logger.warn(`crashReports: ${filteredDumps.length} pending dumps found`);
     }
     return filteredDumps.length;
   });
@@ -164,7 +162,6 @@ export function setup(
       return;
     }
 
-    const logger = getLogger();
     logger.warn(`crashReports: logging ${pendingDumps.length} dumps`);
 
     await Promise.all(
@@ -173,7 +170,8 @@ export function setup(
           const content = await readFile(fullPath);
           const { mtime } = await stat(fullPath);
 
-          const dump = dumpSchema.parse(JSON.parse(dumpToJSONString(content)));
+          const json: unknown = JSON.parse(dumpToJSONString(content));
+          const dump = parseUnknown(dumpSchema, json);
 
           if (dump.crash_info?.type === 'Simulated Exception') {
             return undefined;
@@ -224,6 +222,6 @@ export function setup(
 
     const pendingDumps = await getPendingDumps();
 
-    await eraseDumps(getLogger(), pendingDumps);
+    await eraseDumps(logger, pendingDumps);
   });
 }

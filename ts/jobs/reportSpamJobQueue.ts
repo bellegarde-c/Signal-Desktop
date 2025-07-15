@@ -17,6 +17,7 @@ import { parseIntWithFallback } from '../util/parseIntWithFallback';
 import type { WebAPIType } from '../textsecure/WebAPI';
 import { HTTPError } from '../textsecure/Errors';
 import { sleeper } from '../util/sleeper';
+import { parseUnknown } from '../util/schemas';
 
 const RETRY_WAIT_TIME = durations.MINUTE;
 const RETRYABLE_4XX_FAILURE_STATUSES = new Set([
@@ -37,14 +38,14 @@ const reportSpamJobDataSchema = z.object({
 export type ReportSpamJobData = z.infer<typeof reportSpamJobDataSchema>;
 
 export class ReportSpamJobQueue extends JobQueue<ReportSpamJobData> {
-  private server?: WebAPIType;
+  #server?: WebAPIType;
 
   public initialize({ server }: { server: WebAPIType }): void {
-    this.server = server;
+    this.#server = server;
   }
 
   protected parseData(data: unknown): ReportSpamJobData {
-    return reportSpamJobDataSchema.parse(data);
+    return parseUnknown(reportSpamJobDataSchema, data);
   }
 
   protected async run(
@@ -58,13 +59,13 @@ export class ReportSpamJobQueue extends JobQueue<ReportSpamJobData> {
     });
 
     if (!isDeviceLinked()) {
-      log.info("reportSpamJobQueue: skipping this job because we're unlinked");
+      log.info("skipping this job because we're unlinked");
       return undefined;
     }
 
     await waitForOnline();
 
-    const { server } = this;
+    const server = this.#server;
     strictAssert(server !== undefined, 'ReportSpamJobQueue not initialized');
 
     try {
@@ -88,15 +89,13 @@ export class ReportSpamJobQueue extends JobQueue<ReportSpamJobData> {
       }
 
       if (code === 508) {
-        log.info(
-          'reportSpamJobQueue: server responded with 508. Giving up on this job'
-        );
+        log.info('server responded with 508. Giving up on this job');
         return undefined;
       }
 
       if (isRetriable4xxStatus(code) || is5xxStatus(code)) {
         log.info(
-          `reportSpamJobQueue: server responded with ${code} status code. Sleeping before our next attempt`
+          `server responded with ${code} status code. Sleeping before our next attempt`
         );
         await sleeper.sleep(
           RETRY_WAIT_TIME,
@@ -107,7 +106,7 @@ export class ReportSpamJobQueue extends JobQueue<ReportSpamJobData> {
 
       if (is4xxStatus(code)) {
         log.error(
-          `reportSpamJobQueue: server responded with ${code} status code. Giving up on this job`
+          `server responded with ${code} status code. Giving up on this job`
         );
         return undefined;
       }

@@ -34,21 +34,20 @@ export type PropsType = Pick<ConversationStoryType, 'group' | 'isHidden'> & {
 };
 
 function StoryListItemAvatar({
-  acceptedMessageRequest,
+  avatarPlaceholderGradient,
   avatarUrl,
   avatarStoryRing,
   badges,
   color,
   getPreferredBadge,
   i18n,
-  isMe,
   profileName,
   sharedGroupNames,
   title,
   theme,
 }: Pick<
   ConversationType,
-  | 'acceptedMessageRequest'
+  | 'avatarPlaceholderGradient'
   | 'avatarUrl'
   | 'color'
   | 'profileName'
@@ -59,18 +58,16 @@ function StoryListItemAvatar({
   badges?: ConversationType['badges'];
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
-  isMe?: boolean;
   theme: ThemeType;
 }): JSX.Element {
   return (
     <Avatar
-      acceptedMessageRequest={acceptedMessageRequest}
+      avatarPlaceholderGradient={avatarPlaceholderGradient}
       avatarUrl={avatarUrl}
       badge={badges ? getPreferredBadge(badges) : undefined}
       color={getAvatarColor(color)}
       conversationType="direct"
       i18n={i18n}
-      isMe={Boolean(isMe)}
       profileName={profileName}
       sharedGroupNames={sharedGroupNames}
       size={AvatarSize.FORTY_EIGHT}
@@ -117,21 +114,24 @@ export function StoryListItem({
     repliesElement = <div className="StoryListItem__info--replies--others" />;
   }
 
-  const menuOptions = [
-    {
-      icon: 'StoryListItem__icon--hide',
-      label: isHidden
-        ? i18n('icu:StoryListItem__unhide')
-        : i18n('icu:StoryListItem__hide'),
+  const menuOptions = [];
+  if (isHidden) {
+    menuOptions.push({
+      icon: 'StoryListItem__icon--unhide',
+      label: i18n('icu:StoryListItem__unhide'),
       onClick: () => {
-        if (isHidden) {
-          onHideStory(conversationId);
-        } else {
-          setHasConfirmHideStory(true);
-        }
+        onHideStory(conversationId);
       },
-    },
-  ];
+    });
+  } else {
+    menuOptions.push({
+      icon: 'StoryListItem__icon--hide',
+      label: i18n('icu:StoryListItem__hide'),
+      onClick: () => {
+        setHasConfirmHideStory(true);
+      },
+    });
+  }
 
   if (!isSignalOfficial) {
     menuOptions.push({

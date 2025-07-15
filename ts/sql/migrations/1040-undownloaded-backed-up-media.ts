@@ -1,21 +1,28 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from '@signalapp/better-sqlite3';
+import type { Database } from '@signalapp/sqlcipher';
+import * as z from 'zod';
 
 import type { LoggerType } from '../../types/Logging';
 import {
-  attachmentDownloadJobSchema,
+  attachmentDownloadTypeSchema,
   type AttachmentDownloadJobType,
   type AttachmentDownloadJobTypeType,
 } from '../../types/AttachmentDownload';
 import type { AttachmentType } from '../../types/Attachment';
 import { jsonToObject, objectToJSON, sql } from '../util';
 import { AttachmentDownloadSource } from '../Interface';
+import { parsePartial } from '../../util/schemas';
+import { MIMETypeSchema } from '../../types/MIME';
+import {
+  jobManagerJobSchema,
+  type JobManagerJobType,
+} from '../../jobs/JobManager';
 
 export const version = 1040;
 
-export type LegacyAttachmentDownloadJobType = {
+export type _AttachmentDownloadJobTypeV1030 = {
   attachment: AttachmentType;
   attempts: number;
   id: string;
@@ -25,6 +32,29 @@ export type LegacyAttachmentDownloadJobType = {
   timestamp: number;
   type: AttachmentDownloadJobTypeType;
 };
+
+const attachmentDownloadJobSchemaV1040 = z
+  .object({
+    attachment: z
+      .object({ size: z.number(), contentType: MIMETypeSchema })
+      .passthrough(),
+    attachmentType: attachmentDownloadTypeSchema,
+    ciphertextSize: z.number(),
+    contentType: MIMETypeSchema,
+    digest: z.string(),
+    isManualDownload: z.boolean().optional(),
+    messageId: z.string(),
+    messageIdForLogging: z.string().optional(),
+    receivedAt: z.number(),
+    sentAt: z.number(),
+    size: z.number(),
+    source: z.nativeEnum(AttachmentDownloadSource),
+  })
+  .and(jobManagerJobSchema);
+export type _AttachmentDownloadJobTypeV1040 = Omit<
+  AttachmentDownloadJobType,
+  'attachmentSignature'
+> & { digest: string };
 
 export function updateToSchemaVersion1040(
   currentVersion: number,
@@ -68,7 +98,7 @@ export function updateToSchemaVersion1040(
           attempts INTEGER NOT NULL,
           retryAfter INTEGER,
           lastAttemptTimestamp INTEGER,
-          
+
           PRIMARY KEY (messageId, attachmentType, digest)
         ) STRICT;
     `);
@@ -84,7 +114,7 @@ export function updateToSchemaVersion1040(
     // 5. Add new index on active & receivedAt. For most queries when there are lots of
     //    jobs (like during backup restore), many jobs will match the the WHERE clause, so
     //    the ORDER BY on receivedAt is probably the most expensive part.
-    db.exec(`      
+    db.exec(`
       CREATE INDEX attachment_downloads_active_receivedAt
         ON attachment_downloads (
           active, receivedAt
@@ -94,7 +124,7 @@ export function updateToSchemaVersion1040(
     // 6. Add new index on active & messageId. In order to prioritize visible messages,
     //    we'll also query for rows with a matching messageId. For these, the messageId
     //    matching is likely going to be the most expensive part.
-    db.exec(` 
+    db.exec(`
       CREATE INDEX attachment_downloads_active_messageId
         ON attachment_downloads (
           active, messageId
@@ -103,7 +133,7 @@ export function updateToSchemaVersion1040(
 
     // 7. Add new index just on messageId, for the ON DELETE CASCADE foreign key
     //    constraint
-    db.exec(` 
+    db.exec(`
       CREATE INDEX attachment_downloads_messageId
         ON attachment_downloads (
           messageId
@@ -111,15 +141,17 @@ export function updateToSchemaVersion1040(
     `);
 
     // 8. Rewrite old rows to match new schema
-    const rowsToTransfer: Array<AttachmentDownloadJobType> = [];
+    const rowsToTransfer: Array<
+      _AttachmentDownloadJobTypeV1040 & JobManagerJobType
+    > = [];
 
     for (const existingJob of existingJobs) {
       try {
         // Type this as partial in case there is missing data
-        const existingJobData: Partial<LegacyAttachmentDownloadJobType> =
+        const existingJobData: Partial<_AttachmentDownloadJobTypeV1030> =
           jsonToObject(existingJob.json ?? '');
 
-        const updatedJob: Partial<AttachmentDownloadJobType> = {
+        const updatedJob: Partial<_AttachmentDownloadJobTypeV1040> = {
           messageId: existingJobData.messageId,
           attachmentType: existingJobData.type,
           attachment: existingJobData.attachment,
@@ -139,9 +171,12 @@ export function updateToSchemaVersion1040(
           ciphertextSize: 0,
         };
 
-        const parsed = attachmentDownloadJobSchema.parse(updatedJob);
+        const parsed = parsePartial(
+          attachmentDownloadJobSchemaV1040,
+          updatedJob
+        );
 
-        rowsToTransfer.push(parsed as AttachmentDownloadJobType);
+        rowsToTransfer.push(parsed);
       } catch {
         logger.warn(
           `updateToSchemaVersion1040: unable to transfer job ${existingJob.id} to new table; invalid data`
@@ -160,13 +195,13 @@ export function updateToSchemaVersion1040(
             (
               messageId,
               attachmentType,
-              receivedAt, 
+              receivedAt,
               sentAt,
               digest,
               contentType,
               size,
               attachmentJson,
-              active, 
+              active,
               attempts,
               retryAfter,
               lastAttemptTimestamp
@@ -181,7 +216,7 @@ export function updateToSchemaVersion1040(
               ${row.contentType},
               ${row.size},
               ${objectToJSON(row.attachment)},
-              ${row.active ? 1 : 0}, 
+              ${row.active ? 1 : 0},
               ${row.attempts},
               ${row.retryAfter},
               ${row.lastAttemptTimestamp}

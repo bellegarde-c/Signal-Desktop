@@ -33,6 +33,7 @@ function patchDeepEqual(method: 'deepEqual' | 'deepStrictEqual'): void {
       return originalFn(...args);
     } catch (error) {
       reporters.base.useColors = false;
+      (reporters.base as unknown as { maxDiffSize: number }).maxDiffSize = 0;
       error.message = reporters.base.generateDiff(
         inspect(error.actual, { depth: Infinity, sorted: true }),
         inspect(error.expected, { depth: Infinity, sorted: true })
@@ -103,6 +104,9 @@ window.testUtilities = {
       callLinks: [],
       callHistory: [],
       callHistoryUnreadCount: 0,
+      gifs: {
+        recentGifs: [],
+      },
       mainWindowStats: {
         isFullScreen: false,
         isMaximized: false,
@@ -111,14 +115,20 @@ window.testUtilities = {
         development: false,
         devTools: false,
         includeSetup: false,
+        isNightly: false,
         isProduction: false,
         platform: 'test',
       },
+      notificationProfiles: [],
       recentEmoji: {
         recents: [],
       },
       stories: [],
       storyDistributionLists: [],
+      donations: {
+        currentWorkflow: undefined,
+        receipts: [],
+      },
       stickers: {
         installedPack: null,
         packs: {},

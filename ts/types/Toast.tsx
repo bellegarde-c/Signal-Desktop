@@ -6,6 +6,8 @@ export enum ToastType {
   AddedUsersToCall = 'AddedUsersToCall',
   AlreadyGroupMember = 'AlreadyGroupMember',
   AlreadyRequestedToJoin = 'AlreadyRequestedToJoin',
+  AttachmentDownloadFailed = 'AttachmentDownloadFailed',
+  AttachmentDownloadStillInProgress = 'AttachmentDownloadStillInProgress',
   Blocked = 'Blocked',
   BlockedGroup = 'BlockedGroup',
   CallHistoryCleared = 'CallHistoryCleared',
@@ -21,6 +23,7 @@ export enum ToastType {
   ConversationMarkedUnread = 'ConversationMarkedUnread',
   ConversationRemoved = 'ConversationRemoved',
   ConversationUnarchived = 'ConversationUnarchived',
+  CopiedBackupKey = 'CopiedBackupKey',
   CopiedCallLink = 'CopiedCallLink',
   CopiedUsername = 'CopiedUsername',
   CopiedUsernameLink = 'CopiedUsernameLink',
@@ -34,14 +37,17 @@ export enum ToastType {
   FailedToFetchPhoneNumber = 'FailedToFetchPhoneNumber',
   FailedToFetchUsername = 'FailedToFetchUsername',
   FailedToSendWithEndorsements = 'FailedToSendWithEndorsements',
+  FailedToImportBackup = 'FailedToImportBackup',
   FileSaved = 'FileSaved',
   FileSize = 'FileSize',
   GroupLinkCopied = 'GroupLinkCopied',
   InvalidConversation = 'InvalidConversation',
+  InvalidStorageServiceHeaders = 'InvalidStorageServiceHeaders',
   LeftGroup = 'LeftGroup',
   LinkCopied = 'LinkCopied',
   LoadingFullLogs = 'LoadingFullLogs',
   MaxAttachments = 'MaxAttachments',
+  MediaNoLongerAvailable = 'MediaNoLongerAvailable',
   MessageBodyTooLong = 'MessageBodyTooLong',
   MessageLoop = 'MessageLoop',
   OriginalMessageNotFound = 'OriginalMessageNotFound',
@@ -49,6 +55,7 @@ export enum ToastType {
   ReactionFailed = 'ReactionFailed',
   ReportedSpam = 'ReportedSpam',
   ReportedSpamAndBlocked = 'ReportedSpamAndBlocked',
+  SQLError = 'SQLError',
   StickerPackInstallFailed = 'StickerPackInstallFailed',
   StoryMuted = 'StoryMuted',
   StoryReact = 'StoryReact',
@@ -78,6 +85,14 @@ export type AnyToast =
     }
   | { toastType: ToastType.AlreadyGroupMember }
   | { toastType: ToastType.AlreadyRequestedToJoin }
+  | {
+      toastType: ToastType.AttachmentDownloadFailed;
+      parameters: { messageId: string };
+    }
+  | {
+      toastType: ToastType.AttachmentDownloadStillInProgress;
+      parameters: { count: number };
+    }
   | { toastType: ToastType.Blocked }
   | { toastType: ToastType.BlockedGroup }
   | { toastType: ToastType.CallHistoryCleared }
@@ -96,6 +111,7 @@ export type AnyToast =
   | { toastType: ToastType.ConversationMarkedUnread }
   | { toastType: ToastType.ConversationRemoved; parameters: { title: string } }
   | { toastType: ToastType.ConversationUnarchived }
+  | { toastType: ToastType.CopiedBackupKey }
   | { toastType: ToastType.CopiedCallLink }
   | { toastType: ToastType.CopiedUsername }
   | { toastType: ToastType.CopiedUsernameLink }
@@ -108,7 +124,11 @@ export type AnyToast =
   | { toastType: ToastType.FailedToFetchPhoneNumber }
   | { toastType: ToastType.FailedToFetchUsername }
   | { toastType: ToastType.FailedToSendWithEndorsements }
-  | { toastType: ToastType.FileSaved; parameters: { fullPath: string } }
+  | { toastType: ToastType.FailedToImportBackup }
+  | {
+      toastType: ToastType.FileSaved;
+      parameters: { fullPath: string; countOfFiles?: number };
+    }
   | {
       toastType: ToastType.FileSize;
       parameters: { limit: number; units: string };
@@ -122,10 +142,12 @@ export type AnyToast =
       };
     }
   | { toastType: ToastType.InvalidConversation }
+  | { toastType: ToastType.InvalidStorageServiceHeaders }
   | { toastType: ToastType.LeftGroup }
   | { toastType: ToastType.LinkCopied }
   | { toastType: ToastType.LoadingFullLogs }
   | { toastType: ToastType.MaxAttachments }
+  | { toastType: ToastType.MediaNoLongerAvailable }
   | { toastType: ToastType.MessageBodyTooLong }
   | { toastType: ToastType.MessageLoop }
   | { toastType: ToastType.OriginalMessageNotFound }
@@ -134,6 +156,7 @@ export type AnyToast =
   | { toastType: ToastType.ReportedSpam }
   | { toastType: ToastType.ReportedSpamAndBlocked }
   | { toastType: ToastType.StickerPackInstallFailed }
+  | { toastType: ToastType.SQLError }
   | { toastType: ToastType.StoryMuted }
   | { toastType: ToastType.StoryReact }
   | { toastType: ToastType.StoryReply }

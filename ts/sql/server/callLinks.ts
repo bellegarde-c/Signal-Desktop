@@ -6,21 +6,25 @@ import type {
   CallLinkRecord,
   CallLinkStateType,
   CallLinkType,
+  DefunctCallLinkType,
 } from '../../types/CallLink';
 import {
   callLinkRestrictionsSchema,
   callLinkRecordSchema,
+  defunctCallLinkRecordSchema,
 } from '../../types/CallLink';
 import { toAdminKeyBytes } from '../../util/callLinks';
 import {
   callLinkToRecord,
   callLinkFromRecord,
+  defunctCallLinkToRecord,
+  defunctCallLinkFromRecord,
 } from '../../util/callLinksRingrtc';
 import type { ReadableDB, WritableDB } from '../Interface';
-import { prepare } from '../Server';
 import { sql } from '../util';
 import { strictAssert } from '../../util/assert';
-import { CallStatusValue } from '../../types/CallDisposition';
+import { CallStatusValue, DirectCallStatus } from '../../types/CallDisposition';
+import { parseStrict, parseUnknown } from '../../util/schemas';
 
 export function callLinkExists(db: ReadableDB, roomId: string): boolean {
   const [query, params] = sql`
@@ -28,7 +32,13 @@ export function callLinkExists(db: ReadableDB, roomId: string): boolean {
     FROM callLinks
     WHERE roomId = ${roomId};
   `;
-  return db.prepare(query).pluck(true).get(params) === 1;
+  return (
+    db
+      .prepare(query, {
+        pluck: true,
+      })
+      .get(params) === 1
+  );
 }
 
 export function getCallLinkByRoomId(
@@ -48,17 +58,15 @@ export function getCallLinkRecordByRoomId(
   db: ReadableDB,
   roomId: string
 ): CallLinkRecord | undefined {
-  const row = prepare(db, 'SELECT * FROM callLinks WHERE roomId = $roomId').get(
-    {
-      roomId,
-    }
-  );
+  const row = db.prepare('SELECT * FROM callLinks WHERE roomId = $roomId').get({
+    roomId,
+  });
 
   if (!row) {
     return undefined;
   }
 
-  return callLinkRecordSchema.parse(row);
+  return parseUnknown(callLinkRecordSchema, row as unknown);
 }
 
 export function getAllCallLinks(db: ReadableDB): ReadonlyArray<CallLinkType> {
@@ -68,7 +76,9 @@ export function getAllCallLinks(db: ReadableDB): ReadonlyArray<CallLinkType> {
   return db
     .prepare(query)
     .all()
-    .map(item => callLinkFromRecord(callLinkRecordSchema.parse(item)));
+    .map((item: unknown) =>
+      callLinkFromRecord(parseUnknown(callLinkRecordSchema, item))
+    );
 }
 
 function _insertCallLink(db: WritableDB, callLink: CallLinkType): void {
@@ -76,8 +86,7 @@ function _insertCallLink(db: WritableDB, callLink: CallLinkType): void {
   assertRoomIdMatchesRootKey(roomId, rootKey);
 
   const data = callLinkToRecord(callLink);
-  prepare(
-    db,
+  db.prepare(
     `
     INSERT INTO callLinks (
       roomId,
@@ -112,6 +121,41 @@ export function insertCallLink(db: WritableDB, callLink: CallLinkType): void {
   _insertCallLink(db, callLink);
 }
 
+export type InsertOrUpdateCallLinkFromSyncResult = Readonly<{
+  callLink: CallLinkType;
+  inserted: boolean;
+  updated: boolean;
+}>;
+
+export function insertOrUpdateCallLinkFromSync(
+  db: WritableDB,
+  callLink: CallLinkType
+): InsertOrUpdateCallLinkFromSyncResult {
+  const { roomId, adminKey } = callLink;
+  return db.transaction(() => {
+    const existingCallLink = getCallLinkByRoomId(db, roomId);
+    if (existingCallLink) {
+      if (adminKey && adminKey !== existingCallLink.adminKey) {
+        updateCallLinkAdminKeyByRoomId(db, roomId, adminKey);
+        return {
+          callLink: { ...existingCallLink, adminKey },
+          inserted: false,
+          updated: true,
+        };
+      }
+
+      return {
+        callLink: existingCallLink,
+        inserted: false,
+        updated: false,
+      };
+    }
+
+    insertCallLink(db, callLink);
+    return { callLink, inserted: true, updated: false };
+  })();
+}
+
 export function updateCallLink(db: WritableDB, callLink: CallLinkType): void {
   const { roomId, rootKey } = callLink;
   assertRoomIdMatchesRootKey(roomId, rootKey);
@@ -142,7 +186,10 @@ export function updateCallLinkState(
   callLinkState: CallLinkStateType
 ): CallLinkType {
   const { name, restrictions, expiration, revoked } = callLinkState;
-  const restrictionsValue = callLinkRestrictionsSchema.parse(restrictions);
+  const restrictionsValue = parseStrict(
+    callLinkRestrictionsSchema,
+    restrictions
+  );
   const [query, params] = sql`
     UPDATE callLinks
     SET
@@ -153,9 +200,9 @@ export function updateCallLinkState(
     WHERE roomId = ${roomId}
     RETURNING *;
   `;
-  const row = db.prepare(query).get(params);
+  const row: unknown = db.prepare(query).get(params);
   strictAssert(row, 'Expected row to be returned');
-  return callLinkFromRecord(callLinkRecordSchema.parse(row));
+  return callLinkFromRecord(parseUnknown(callLinkRecordSchema, row));
 }
 
 export function updateCallLinkAdminKeyByRoomId(
@@ -164,8 +211,7 @@ export function updateCallLinkAdminKeyByRoomId(
   adminKey: string
 ): void {
   const adminKeyBytes = toAdminKeyBytes(adminKey);
-  prepare(
-    db,
+  db.prepare(
     `
     UPDATE callLinks
     SET adminKey = $adminKeyBytes
@@ -184,7 +230,10 @@ function assertRoomIdMatchesRootKey(roomId: string, rootKey: string): void {
   );
 }
 
-function deleteCallHistoryByRoomId(db: WritableDB, roomId: string) {
+export function deleteCallHistoryByRoomId(
+  db: WritableDB,
+  roomId: string
+): void {
   const [
     markCallHistoryDeleteByPeerIdQuery,
     markCallHistoryDeleteByPeerIdParams,
@@ -216,17 +265,14 @@ export function deleteCallLinkFromSync(db: WritableDB, roomId: string): void {
   })();
 }
 
-export type DeleteCallLinkOptions = {
-  storageNeedsSync: boolean;
-  deletedAt?: number;
-};
-
-export function beginDeleteCallLink(
-  db: WritableDB,
-  roomId: string,
-  options: DeleteCallLinkOptions
-): void {
-  db.transaction(() => {
+/**
+ * Deletes a non-admin call link from the local database, or if it's an admin call link,
+ * then marks it for deletion and storage sync.
+ *
+ *  @returns boolean: True if storage sync is needed; False if not
+ */
+export function beginDeleteCallLink(db: WritableDB, roomId: string): boolean {
+  return db.transaction(() => {
     // If adminKey is null, then we should delete the call link
     const [deleteNonAdminCallLinksQuery, deleteNonAdminCallLinksParams] = sql`
       DELETE FROM callLinks
@@ -238,35 +284,62 @@ export function beginDeleteCallLink(
       .prepare(deleteNonAdminCallLinksQuery)
       .run(deleteNonAdminCallLinksParams);
 
-    // Skip this query if the call is already deleted
-    if (result.changes === 0) {
-      const { storageNeedsSync } = options;
-      const deletedAt = options.deletedAt ?? new Date().getTime();
-
-      // If the admin key is not null, we should mark it for deletion
-      const [markAdminCallLinksDeletedQuery, markAdminCallLinksDeletedParams] =
-        sql`
-          UPDATE callLinks
-          SET
-            deleted = 1,
-            deletedAt = ${deletedAt},
-            storageNeedsSync = ${storageNeedsSync ? 1 : 0}
-          WHERE adminKey IS NOT NULL
-          AND roomId = ${roomId};
-        `;
-
-      db.prepare(markAdminCallLinksDeletedQuery).run(
-        markAdminCallLinksDeletedParams
-      );
+    // If we successfully deleted the call link, then it was a non-admin call link
+    // and we're done
+    if (result.changes !== 0) {
+      return false;
     }
 
-    deleteCallHistoryByRoomId(db, roomId);
+    const deletedAt = new Date().getTime();
+
+    // If the admin key is not null, we should mark it for deletion
+    const [markAdminCallLinksDeletedQuery, markAdminCallLinksDeletedParams] =
+      sql`
+        UPDATE callLinks
+        SET
+          deleted = 1,
+          deletedAt = ${deletedAt},
+          storageNeedsSync = 1
+        WHERE adminKey IS NOT NULL
+        AND deleted IS NOT 1
+        AND roomId = ${roomId};
+      `;
+
+    const deleteAdminLinkResult = db
+      .prepare(markAdminCallLinksDeletedQuery)
+      .run(markAdminCallLinksDeletedParams);
+    return deleteAdminLinkResult.changes > 0;
   })();
 }
 
-export function beginDeleteAllCallLinks(db: WritableDB): void {
-  const deletedAt = new Date().getTime();
+export function deleteCallLinkAndHistory(db: WritableDB, roomId: string): void {
   db.transaction(() => {
+    const [deleteCallLinkQuery, deleteCallLinkParams] = sql`
+      DELETE FROM callLinks
+        WHERE roomId = ${roomId};
+    `;
+    db.prepare(deleteCallLinkQuery).run(deleteCallLinkParams);
+
+    const [deleteCallHistoryQuery, clearCallHistoryParams] = sql`
+      UPDATE callsHistory
+      SET
+        status = ${DirectCallStatus.Deleted},
+        timestamp = ${Date.now()}
+      WHERE peerId = ${roomId};
+    `;
+    db.prepare(deleteCallHistoryQuery).run(clearCallHistoryParams);
+  })();
+}
+
+/**
+ * Deletes all non-admin call link from the local database, and marks all admin call links
+ * for deletion and storage sync.
+ *
+ *  @returns boolean: True if storage sync is needed; False if not
+ */
+export function beginDeleteAllCallLinks(db: WritableDB): boolean {
+  const deletedAt = new Date().getTime();
+  return db.transaction(() => {
     const [markAdminCallLinksDeletedQuery, markAdminCallLinksDeletedParams] =
       sql`
       UPDATE callLinks
@@ -274,12 +347,13 @@ export function beginDeleteAllCallLinks(db: WritableDB): void {
         deleted = 1,
         deletedAt = ${deletedAt},
         storageNeedsSync = 1
-      WHERE adminKey IS NOT NULL;
+      WHERE adminKey IS NOT NULL
+      AND deleted IS NOT 1;
     `;
 
-    db.prepare(markAdminCallLinksDeletedQuery).run(
-      markAdminCallLinksDeletedParams
-    );
+    const markAdminCallLinksDeletedResult = db
+      .prepare(markAdminCallLinksDeletedQuery)
+      .run(markAdminCallLinksDeletedParams);
 
     const [deleteNonAdminCallLinksQuery] = sql`
       DELETE FROM callLinks
@@ -287,6 +361,9 @@ export function beginDeleteAllCallLinks(db: WritableDB): void {
     `;
 
     db.prepare(deleteNonAdminCallLinksQuery).run();
+
+    // If admin call links were marked deleted, then storage will need sync
+    return markAdminCallLinksDeletedResult.changes > 0;
   })();
 }
 
@@ -302,7 +379,15 @@ export function getAllCallLinkRecordsWithAdminKey(
   return db
     .prepare(query)
     .all()
-    .map(item => callLinkRecordSchema.parse(item));
+    .map((item: unknown) => parseUnknown(callLinkRecordSchema, item));
+}
+
+export function getAllAdminCallLinks(
+  db: ReadableDB
+): ReadonlyArray<CallLinkType> {
+  return getAllCallLinkRecordsWithAdminKey(db).map((record: CallLinkRecord) =>
+    callLinkFromRecord(record)
+  );
 }
 
 export function getAllMarkedDeletedCallLinkRoomIds(
@@ -311,7 +396,11 @@ export function getAllMarkedDeletedCallLinkRoomIds(
   const [query] = sql`
     SELECT roomId FROM callLinks WHERE deleted = 1;
   `;
-  return db.prepare(query).pluck().all();
+  return db
+    .prepare(query, {
+      pluck: true,
+    })
+    .all();
 }
 
 // TODO: Run this after uploading storage records, maybe periodically on startup
@@ -330,4 +419,89 @@ export function _removeAllCallLinks(db: WritableDB): void {
     DELETE FROM callLinks;
   `;
   db.prepare(query).run(params);
+}
+
+export function defunctCallLinkExists(db: ReadableDB, roomId: string): boolean {
+  const [query, params] = sql`
+    SELECT 1
+    FROM defunctCallLinks
+    WHERE roomId = ${roomId};
+  `;
+  return (
+    db
+      .prepare(query, {
+        pluck: true,
+      })
+      .get(params) === 1
+  );
+}
+
+export function getAllDefunctCallLinksWithAdminKey(
+  db: ReadableDB
+): ReadonlyArray<DefunctCallLinkType> {
+  const [query] = sql`
+    SELECT *
+    FROM defunctCallLinks
+    WHERE adminKey IS NOT NULL;
+  `;
+  return db
+    .prepare(query)
+    .all()
+    .map((item: unknown) =>
+      defunctCallLinkFromRecord(parseUnknown(defunctCallLinkRecordSchema, item))
+    );
+}
+
+export function insertDefunctCallLink(
+  db: WritableDB,
+  defunctCallLink: DefunctCallLinkType
+): void {
+  const { roomId, rootKey } = defunctCallLink;
+  assertRoomIdMatchesRootKey(roomId, rootKey);
+
+  const data = defunctCallLinkToRecord(defunctCallLink);
+  db.prepare(
+    `
+    INSERT INTO defunctCallLinks (
+      roomId,
+      rootKey,
+      adminKey,
+      storageID,
+      storageVersion,
+      storageUnknownFields,
+      storageNeedsSync
+    ) VALUES (
+      $roomId,
+      $rootKey,
+      $adminKey,
+      $storageID,
+      $storageVersion,
+      $storageUnknownFields,
+      $storageNeedsSync
+    )
+    ON CONFLICT (roomId) DO NOTHING;
+    `
+  ).run(data);
+}
+
+export function updateDefunctCallLink(
+  db: WritableDB,
+  defunctCallLink: DefunctCallLinkType
+): void {
+  const { roomId, rootKey } = defunctCallLink;
+  assertRoomIdMatchesRootKey(roomId, rootKey);
+
+  const data = defunctCallLinkToRecord(defunctCallLink);
+  // Do not write roomId or rootKey since they should never change
+  db.prepare(
+    `
+    UPDATE callLinks
+    SET
+      storageID = $storageID,
+      storageVersion = $storageVersion,
+      storageUnknownFields = $storageUnknownFields,
+      storageNeedsSync = $storageNeedsSync
+    WHERE roomId = $roomId
+    `
+  ).run(data);
 }

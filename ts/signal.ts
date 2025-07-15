@@ -35,6 +35,7 @@ import { initializeUpdateListener } from './services/updateListener';
 import { calling } from './services/calling';
 import * as storage from './services/storage';
 import { backupsService } from './services/backups';
+import * as donations from './services/donations';
 
 import type { LoggerType } from './types/Logging';
 import type {
@@ -54,6 +55,7 @@ import type {
   LinkPreviewWithHydratedData,
 } from './types/message/LinkPreviews';
 import type { StickerType, StickerWithHydratedData } from './types/Stickers';
+import { beforeNavigateService } from './services/BeforeNavigate';
 
 type EncryptedReader = (
   attachment: Partial<AddressableAttachmentType>
@@ -86,6 +88,10 @@ type MigrationsModuleType = {
   getAbsoluteDraftPath: (path: string) => string;
   getAbsoluteStickerPath: (path: string) => string;
   getAbsoluteTempPath: (path: string) => string;
+  getUnusedFilename: (options: {
+    filename: string;
+    baseDir?: string;
+  }) => string;
   loadAttachmentData: (
     attachment: Partial<AttachmentType>
   ) => Promise<AttachmentWithHydratedData>;
@@ -112,6 +118,7 @@ type MigrationsModuleType = {
   saveAttachmentToDisk: (options: {
     data: Uint8Array;
     name: string;
+    baseDir?: string;
   }) => Promise<null | { fullPath: string; name: string }>;
   processNewAttachment: (attachment: AttachmentType) => Promise<AttachmentType>;
   processNewSticker: (stickerData: Uint8Array) => Promise<
@@ -168,6 +175,7 @@ export function initializeMigrations({
     getStickersPath,
     getBadgesPath,
     getTempPath,
+    getUnusedFilename,
     readAndDecryptDataFromDisk,
     saveAttachmentToDisk,
   } = Attachments;
@@ -298,6 +306,7 @@ export function initializeMigrations({
     getAbsoluteDraftPath,
     getAbsoluteStickerPath,
     getAbsoluteTempPath,
+    getUnusedFilename,
     loadAttachmentData,
     loadContactData,
     loadMessage: MessageType.createAttachmentLoader(loadAttachmentData),
@@ -341,6 +350,7 @@ export function initializeMigrations({
 
       return MessageType.upgradeSchema(message, {
         deleteOnDisk,
+        doesAttachmentExist,
         getImageDimensions,
         getRegionCode,
         makeImageThumbnail,
@@ -350,7 +360,6 @@ export function initializeMigrations({
         revokeObjectUrl,
         writeNewAttachmentData,
         writeNewStickerData,
-
         logger,
         maxVersion,
       });
@@ -396,12 +405,18 @@ type AttachmentsModuleType = {
   ) => (relativePath: string) => string;
 
   createDoesExist: (root: string) => (relativePath: string) => Promise<boolean>;
+  getUnusedFilename: (options: {
+    filename: string;
+    baseDir?: string;
+  }) => string;
   saveAttachmentToDisk: ({
     data,
     name,
+    dirName,
   }: {
     data: Uint8Array;
     name: string;
+    dirName?: string;
   }) => Promise<null | { fullPath: string; name: string }>;
 
   readAndDecryptDataFromDisk: (options: {
@@ -444,12 +459,14 @@ export const setup = (options: {
 
   const Services = {
     backups: backupsService,
+    beforeNavigate: beforeNavigateService,
     calling,
     initializeGroupCredentialFetcher,
     initializeNetworkObserver,
     initializeUpdateListener,
 
     // Testing
+    donations,
     storage,
   };
 

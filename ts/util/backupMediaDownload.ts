@@ -1,14 +1,21 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { AttachmentDownloadManager } from '../jobs/AttachmentDownloadManager';
 import { DataWriter } from '../sql/Client';
+
+export async function startBackupMediaDownload(): Promise<void> {
+  await window.storage.put('backupMediaDownloadPaused', false);
+
+  await AttachmentDownloadManager.start();
+}
 
 export async function pauseBackupMediaDownload(): Promise<void> {
   await window.storage.put('backupMediaDownloadPaused', true);
 }
 
 export async function resumeBackupMediaDownload(): Promise<void> {
-  await window.storage.put('backupMediaDownloadPaused', false);
+  return startBackupMediaDownload();
 }
 
 export async function resetBackupMediaDownloadItems(): Promise<void> {

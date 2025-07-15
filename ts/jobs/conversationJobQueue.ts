@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import type PQueue from 'p-queue';
-import * as globalLogger from '../logging/log';
+import { createLogger } from '../logging/log';
 
 import * as durations from '../util/durations';
 import { exponentialBackoffMaxAttempts } from '../util/exponentialBackoff';
@@ -50,6 +50,9 @@ import { drop } from '../util/drop';
 import { isInPast } from '../util/timestamp';
 import { clearTimeoutIfNecessary } from '../util/clearTimeoutIfNecessary';
 import { FIBONACCI } from '../util/BackOff';
+import { parseUnknown } from '../util/schemas';
+
+const globalLogger = createLogger('conversationJobQueue');
 
 // Note: generally, we only want to add to this list. If you do need to change one of
 //   these values, you'll likely need to write a database migration.
@@ -63,6 +66,7 @@ export const conversationQueueJobEnum = z.enum([
   'NormalMessage',
   'NullMessage',
   'ProfileKey',
+  'ProfileKeyForCall',
   'Reaction',
   'ResendRequest',
   'SavedProto',
@@ -77,9 +81,10 @@ const callingMessageJobDataSchema = z.object({
   conversationId: z.string(),
   protoBase64: z.string(),
   urgent: z.boolean(),
-  // These two are group-only
+  // These are group-only
   recipients: z.array(serviceIdSchema).optional(),
   isPartialSend: z.boolean().optional(),
+  groupId: z.string().optional(),
 });
 export type CallingMessageJobData = z.infer<typeof callingMessageJobDataSchema>;
 
@@ -164,7 +169,10 @@ const nullMessageJobDataSchema = z.object({
 export type NullMessageJobData = z.infer<typeof nullMessageJobDataSchema>;
 
 const profileKeyJobDataSchema = z.object({
-  type: z.literal(conversationQueueJobEnum.enum.ProfileKey),
+  type: z.union([
+    z.literal(conversationQueueJobEnum.enum.ProfileKey),
+    z.literal(conversationQueueJobEnum.enum.ProfileKeyForCall),
+  ]),
   conversationId: z.string(),
   // Note: we will use whichever recipients list is up to date when this job runs
   revision: z.number().optional(),
@@ -296,6 +304,9 @@ function shouldSendShowCaptcha(type: ConversationQueueJobEnum): boolean {
   if (type === 'ProfileKey') {
     return false;
   }
+  if (type === 'ProfileKeyForCall') {
+    return true;
+  }
   if (type === 'Reaction') {
     return false;
   }
@@ -375,12 +386,14 @@ type ConversationData = Readonly<
 >;
 
 export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
-  private readonly perConversationData = new Map<
+  readonly #perConversationData = new Map<
     string,
     ConversationData | undefined
   >();
-  private readonly inMemoryQueues = new InMemoryQueues();
-  private readonly verificationWaitMap = new Map<
+
+  readonly #inMemoryQueues = new InMemoryQueues();
+
+  readonly #verificationWaitMap = new Map<
     string,
     {
       resolve: (value: unknown) => unknown;
@@ -388,10 +401,11 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       promise: Promise<unknown>;
     }
   >();
-  private callbackCount = 0;
+
+  #callbackCount = 0;
 
   override getQueues(): ReadonlySet<PQueue> {
-    return this.inMemoryQueues.allQueues;
+    return this.#inMemoryQueues.allQueues;
   }
 
   public override async add(
@@ -415,17 +429,17 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
   }
 
   protected parseData(data: unknown): ConversationQueueJobData {
-    return conversationQueueJobDataSchema.parse(data);
+    return parseUnknown(conversationQueueJobDataSchema, data);
   }
 
   protected override getInMemoryQueue({
     data,
   }: Readonly<{ data: ConversationQueueJobData }>): PQueue {
-    return this.inMemoryQueues.get(data.conversationId);
+    return this.#inMemoryQueues.get(data.conversationId);
   }
 
-  private startVerificationWaiter(conversationId: string): Promise<unknown> {
-    const existing = this.verificationWaitMap.get(conversationId);
+  #startVerificationWaiter(conversationId: string): Promise<unknown> {
+    const existing = this.#verificationWaitMap.get(conversationId);
     if (existing) {
       globalLogger.info(
         `startVerificationWaiter: Found existing waiter for conversation ${conversationId}. Returning it.`
@@ -437,7 +451,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       `startVerificationWaiter: Starting new waiter for conversation ${conversationId}.`
     );
     const { resolve, reject, promise } = explodePromise();
-    this.verificationWaitMap.set(conversationId, {
+    this.#verificationWaitMap.set(conversationId, {
       resolve,
       reject,
       promise,
@@ -447,25 +461,25 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
   }
 
   public resolveVerificationWaiter(conversationId: string): void {
-    const existing = this.verificationWaitMap.get(conversationId);
+    const existing = this.#verificationWaitMap.get(conversationId);
     if (existing) {
       globalLogger.info(
         `resolveVerificationWaiter: Found waiter for conversation ${conversationId}. Resolving.`
       );
       existing.resolve('resolveVerificationWaiter: success');
-      this.verificationWaitMap.delete(conversationId);
+      this.#verificationWaitMap.delete(conversationId);
     } else {
       globalLogger.warn(
         `resolveVerificationWaiter: Missing waiter for conversation ${conversationId}.`
       );
-      this.unblockConversationRetries(conversationId);
+      this.#unblockConversationRetries(conversationId);
     }
   }
 
-  private unblockConversationRetries(conversationId: string) {
+  #unblockConversationRetries(conversationId: string) {
     const logId = `unblockConversationRetries/${conversationId}`;
 
-    const perConversationData = this.perConversationData.get(conversationId);
+    const perConversationData = this.#perConversationData.get(conversationId);
     if (!perConversationData) {
       return;
     }
@@ -475,7 +489,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       globalLogger.info(
         `${logId}: Previously BLOCKED, moving to RUNNING state`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.RUNNING,
         attempts,
         callback: undefined,
@@ -487,7 +501,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       globalLogger.info(
         `${logId}: Moving previous BLOCKED state to UNBLOCKED, calling callback directly`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         ...perConversationData,
         status: RETRY_STATUS.UNBLOCKED,
         retryAt: undefined,
@@ -507,10 +521,10 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
     }
   }
 
-  private recordSuccessfulSend(conversationId: string) {
+  #recordSuccessfulSend(conversationId: string) {
     const logId = `recordSuccessfulSend/${conversationId}`;
 
-    const perConversationData = this.perConversationData.get(conversationId);
+    const perConversationData = this.#perConversationData.get(conversationId);
     if (!perConversationData) {
       return;
     }
@@ -518,7 +532,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
     const { status } = perConversationData;
     if (status === RETRY_STATUS.RUNNING || status === RETRY_STATUS.BLOCKED) {
       globalLogger.info(`${logId}: Previously ${status}; clearing state`);
-      this.perConversationData.delete(conversationId);
+      this.#perConversationData.delete(conversationId);
     } else if (
       status === RETRY_STATUS.BLOCKED_WITH_JOBS ||
       status === RETRY_STATUS.UNBLOCKED
@@ -527,23 +541,23 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         `${logId}: We're still in ${status} state; calling unblockConversationRetries`
       );
       // We have to do this because in these states there are jobs that need to be retried
-      this.unblockConversationRetries(conversationId);
+      this.#unblockConversationRetries(conversationId);
     } else {
       throw missingCaseError(status);
     }
   }
 
-  private getRetryWithBackoff(attempts: number) {
+  #getRetryWithBackoff(attempts: number) {
     return (
       Date.now() +
       MINUTE * (FIBONACCI[attempts] ?? FIBONACCI[FIBONACCI.length - 1])
     );
   }
 
-  private captureRetryAt(conversationId: string, retryAt: number | undefined) {
+  #captureRetryAt(conversationId: string, retryAt: number | undefined) {
     const logId = `captureRetryAt/${conversationId}`;
 
-    const perConversationData = this.perConversationData.get(conversationId);
+    const perConversationData = this.#perConversationData.get(conversationId);
     if (!perConversationData) {
       const newRetryAt = retryAt || Date.now() + MINUTE;
       if (!retryAt) {
@@ -551,7 +565,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
           `${logId}: No existing data, using retryAt of ${newRetryAt}`
         );
       }
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.BLOCKED,
         attempts: 1,
         retryAt: newRetryAt,
@@ -564,7 +578,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
 
     const { status, retryAt: existingRetryAt } = perConversationData;
     const attempts = perConversationData.attempts + 1;
-    const retryWithBackoff = this.getRetryWithBackoff(attempts);
+    const retryWithBackoff = this.#getRetryWithBackoff(attempts);
 
     if (existingRetryAt && existingRetryAt >= retryWithBackoff) {
       globalLogger.warn(
@@ -580,7 +594,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       globalLogger.info(
         `${logId}: Updating to new retryAt ${retryWithBackoff} (attempts ${attempts}) from existing retryAt ${existingRetryAt}, status ${status}`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         ...perConversationData,
         retryAt: retryWithBackoff,
       });
@@ -588,7 +602,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       globalLogger.info(
         `${logId}: Updating to new retryAt ${retryWithBackoff} (attempts ${attempts}) from previous UNBLOCKED status`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         ...perConversationData,
         status: RETRY_STATUS.BLOCKED_WITH_JOBS,
         retryAt: retryWithBackoff,
@@ -597,7 +611,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       globalLogger.info(
         `${logId}: Updating to new retryAt ${retryWithBackoff} (attempts ${attempts}) from previous RUNNING status`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.BLOCKED,
         attempts,
         retryAt: retryWithBackoff,
@@ -620,7 +634,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
   }): Promise<boolean> {
     const { conversationId } = job.data;
     const logId = `retryJobOnQueueIdle/${conversationId}/${job.id}`;
-    const perConversationData = this.perConversationData.get(conversationId);
+    const perConversationData = this.#perConversationData.get(conversationId);
 
     if (!perConversationData) {
       logger.warn(`${logId}: no data for conversation; using default retryAt`);
@@ -644,13 +658,13 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
     );
 
     const newCallback =
-      callback || this.createRetryCallback(conversationId, job.id);
+      callback || this.#createRetryCallback(conversationId, job.id);
 
     if (
       status === RETRY_STATUS.BLOCKED ||
       status === RETRY_STATUS.BLOCKED_WITH_JOBS
     ) {
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.BLOCKED_WITH_JOBS,
         attempts,
         retryAt,
@@ -659,11 +673,11 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       });
     } else if (status === RETRY_STATUS.RUNNING) {
       const newAttempts = attempts + 1;
-      const newRetryAt = this.getRetryWithBackoff(newAttempts);
+      const newRetryAt = this.#getRetryWithBackoff(newAttempts);
       logger.warn(
         `${logId}: Moving from state RUNNING to BLOCKED_WITH_JOBS, with retryAt ${newRetryAt}, (attempts ${newAttempts})`
       );
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.BLOCKED_WITH_JOBS,
         attempts: newAttempts,
         retryAt: newRetryAt,
@@ -671,7 +685,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         callback: newCallback,
       });
     } else {
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         status: RETRY_STATUS.UNBLOCKED,
         attempts,
         retryAt,
@@ -694,9 +708,9 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
     return true;
   }
 
-  private createRetryCallback(conversationId: string, jobId: string) {
-    this.callbackCount += 1;
-    const id = this.callbackCount;
+  #createRetryCallback(conversationId: string, jobId: string) {
+    this.#callbackCount += 1;
+    const id = this.#callbackCount;
 
     globalLogger.info(
       `createRetryCallback/${conversationId}/${id}: callback created for job ${jobId}`
@@ -705,7 +719,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
     return () => {
       const logId = `retryCallback/${conversationId}/${id}`;
 
-      const perConversationData = this.perConversationData.get(conversationId);
+      const perConversationData = this.#perConversationData.get(conversationId);
       if (!perConversationData) {
         globalLogger.warn(`${logId}: no perConversationData, returning early.`);
         return;
@@ -732,7 +746,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         // We're starting to retry jobs; remove the challenge handler
         drop(window.Signal.challengeHandler?.unregister(conversationId, logId));
 
-        this.perConversationData.set(conversationId, {
+        this.#perConversationData.set(conversationId, {
           status: RETRY_STATUS.RUNNING,
           attempts,
           callback: undefined,
@@ -752,7 +766,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         `${logId}: retryAt ${retryAt} is in the future, scheduling timeout for ${timeLeft}ms`
       );
 
-      this.perConversationData.set(conversationId, {
+      this.#perConversationData.set(conversationId, {
         ...perConversationData,
         retryAtTimeout: setTimeout(() => {
           globalLogger.info(`${logId}: Running callback due to timeout`);
@@ -771,7 +785,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
   ): Promise<typeof JOB_STATUS.NEEDS_RETRY | undefined> {
     const { type, conversationId } = data;
     const isFinalAttempt = attempt >= MAX_ATTEMPTS;
-    const perConversationData = this.perConversationData.get(conversationId);
+    const perConversationData = this.#perConversationData.get(conversationId);
 
     await window.ConversationController.load();
 
@@ -809,7 +823,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       const isChallengeRegistered =
         window.Signal.challengeHandler?.isRegistered(conversationId);
       if (!isChallengeRegistered) {
-        this.unblockConversationRetries(conversationId);
+        this.#unblockConversationRetries(conversationId);
       }
 
       if (isChallengeRegistered && shouldSendShowCaptcha(type)) {
@@ -829,7 +843,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         );
         // eslint-disable-next-line no-await-in-loop
         await Promise.race([
-          this.startVerificationWaiter(conversation.id),
+          this.#startVerificationWaiter(conversation.id),
           // don't resolve on shutdown, otherwise we end up in an infinite loop
           sleeper.sleep(
             5 * MINUTE,
@@ -868,7 +882,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
         );
         // eslint-disable-next-line no-await-in-loop
         await Promise.race([
-          this.startVerificationWaiter(conversation.id),
+          this.#startVerificationWaiter(conversation.id),
           // don't resolve on shutdown, otherwise we end up in an infinite loop
           sleeper.sleep(
             5 * MINUTE,
@@ -945,6 +959,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
           await sendNullMessage(conversation, jobBundle, data);
           break;
         case jobSet.ProfileKey:
+        case jobSet.ProfileKeyForCall:
           await sendProfileKey(conversation, jobBundle, data);
           break;
         case jobSet.Reaction:
@@ -969,14 +984,12 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
           // Note: This should never happen, because the zod call in parseData wouldn't
           //   accept data that doesn't look like our type specification.
           const problem: never = type;
-          log.error(
-            `conversationJobQueue: Got job with type ${problem}; Cancelling job.`
-          );
+          log.error(`Got job with type ${problem}; Cancelling job.`);
         }
       }
 
       if (shouldContinue && !this.isShuttingDown) {
-        this.recordSuccessfulSend(conversationId);
+        this.#recordSuccessfulSend(conversationId);
       }
 
       return undefined;
@@ -1020,7 +1033,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
           );
 
           if (silent) {
-            this.captureRetryAt(conversationId, toProcess.retryAt);
+            this.#captureRetryAt(conversationId, toProcess.retryAt);
             return JOB_STATUS.NEEDS_RETRY;
           }
         }
@@ -1041,7 +1054,7 @@ export class ConversationJobQueue extends JobQueue<ConversationQueueJobData> {
       }
 
       if (untrustedServiceIds.length) {
-        if (type === jobSet.ProfileKey) {
+        if (type === jobSet.ProfileKey || type === jobSet.ProfileKeyForCall) {
           log.warn(
             `Cancelling profile share, since there were ${untrustedServiceIds.length} untrusted send targets.`
           );

@@ -1,44 +1,32 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useSpring, animated } from '@react-spring/web';
 
-import type { AvatarColorType } from '../types/Colors';
+import type { MutableRefObject } from 'react';
+
 import { AvatarColors } from '../types/Colors';
-import type {
-  AvatarDataType,
-  AvatarUpdateOptionsType,
-  DeleteAvatarFromDiskActionType,
-  ReplaceAvatarActionType,
-  SaveAvatarToDiskActionType,
-} from '../types/Avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { AvatarPreview } from './AvatarPreview';
 import { Button, ButtonVariant } from './Button';
-import { ConfirmDiscardDialog } from './ConfirmDiscardDialog';
-import { Emoji } from './emoji/Emoji';
-import type { Props as EmojiButtonProps } from './emoji/EmojiButton';
 import { EmojiButton, EmojiButtonVariant } from './emoji/EmojiButton';
-import type { EmojiPickDataType } from './emoji/EmojiPicker';
 import { Input } from './Input';
-import type { LocalizerType } from '../types/Util';
-import { Modal } from './Modal';
 import { PanelRow } from './conversation/conversation-details/PanelRow';
-import type {
-  ProfileDataType,
-  SaveAttachmentActionCreatorType,
-} from '../state/ducks/conversations';
 import { UsernameEditState } from '../state/ducks/usernameEnums';
-import type { UsernameLinkState } from '../state/ducks/usernameEnums';
 import { ToastType } from '../types/Toast';
-import type { ShowToastAction } from '../state/ducks/toast';
 import { getEmojiData, unifiedToEmoji } from './emoji/lib';
-import { assertDev } from '../util/assert';
+import { assertDev, strictAssert } from '../util/assert';
 import { missingCaseError } from '../util/missingCaseError';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { ContextMenu } from './ContextMenu';
-import { UsernameLinkModalBody } from './UsernameLinkModalBody';
+import { UsernameLinkEditor } from './UsernameLinkEditor';
 import {
   ConversationDetailsIcon,
   IconType,
@@ -48,6 +36,42 @@ import { UserText } from './UserText';
 import { Tooltip, TooltipPlacement } from './Tooltip';
 import { offsetDistanceModifier } from '../util/popperUtil';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { FunStaticEmoji } from './fun/FunEmoji';
+import {
+  EmojiSkinTone,
+  getEmojiParentKeyByEnglishShortName,
+  getEmojiVariantByKey,
+  getEmojiVariantByParentKeyAndSkinTone,
+  getEmojiVariantKeyByValue,
+  isEmojiEnglishShortName,
+  isEmojiVariantValue,
+} from './fun/data/emojis';
+import { FunEmojiPicker } from './fun/FunEmojiPicker';
+import { FunEmojiPickerButton } from './fun/FunButton';
+import { isFunPickerEnabled } from './fun/isFunPickerEnabled';
+import { useFunEmojiLocalizer } from './fun/useFunEmojiLocalizer';
+import { PreferencesContent } from './Preferences';
+
+import type { AvatarColorType } from '../types/Colors';
+import type {
+  AvatarDataType,
+  AvatarUpdateOptionsType,
+  DeleteAvatarFromDiskActionType,
+  ReplaceAvatarActionType,
+  SaveAvatarToDiskActionType,
+} from '../types/Avatar';
+import type { Props as EmojiButtonProps } from './emoji/EmojiButton';
+import type { EmojiPickDataType } from './emoji/EmojiPicker';
+import type { LocalizerType } from '../types/Util';
+import type {
+  ProfileDataType,
+  SaveAttachmentActionCreatorType,
+} from '../state/ducks/conversations';
+import type { UsernameLinkState } from '../state/ducks/usernameEnums';
+import type { ShowToastAction } from '../state/ducks/toast';
+import type { EmojiVariantKey } from './fun/data/emojis';
+import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis';
+import { useConfirmDiscard } from '../hooks/useConfirmDiscard';
 
 export enum EditState {
   None = 'None',
@@ -59,50 +83,47 @@ export enum EditState {
 }
 
 type PropsExternalType = {
-  onEditStateChanged: (editState: EditState) => unknown;
   onProfileChanged: (
     profileData: ProfileDataType,
     avatarUpdateOptions: AvatarUpdateOptionsType
   ) => unknown;
-  renderEditUsernameModalBody: (props: {
-    isRootModal: boolean;
-    onClose: () => void;
-  }) => JSX.Element;
+  renderUsernameEditor: (props: { onClose: () => void }) => JSX.Element;
 };
 
 export type PropsDataType = {
   aboutEmoji?: string;
   aboutText?: string;
-  profileAvatarUrl?: string;
   color?: AvatarColorType;
+  contentsRef: MutableRefObject<HTMLDivElement | null>;
   conversationId: string;
   familyName?: string;
   firstName: string;
   hasCompletedUsernameLinkOnboarding: boolean;
   i18n: LocalizerType;
+  editState: EditState;
+  profileAvatarUrl?: string;
   userAvatarData: ReadonlyArray<AvatarDataType>;
   username?: string;
-  initialEditState?: EditState;
   usernameCorrupted: boolean;
   usernameEditState: UsernameEditState;
-  usernameLinkState: UsernameLinkState;
-  usernameLinkColor?: number;
   usernameLink?: string;
+  usernameLinkColor?: number;
   usernameLinkCorrupted: boolean;
-} & Pick<EmojiButtonProps, 'recentEmojis' | 'skinTone'>;
+  usernameLinkState: UsernameLinkState;
+} & Pick<EmojiButtonProps, 'recentEmojis' | 'emojiSkinToneDefault'>;
 
 type PropsActionType = {
   deleteAvatarFromDisk: DeleteAvatarFromDiskActionType;
   markCompletedUsernameLinkOnboarding: () => void;
-  onSetSkinTone: (tone: number) => unknown;
+  onEmojiSkinToneDefaultChange: (emojiSkinTone: EmojiSkinTone) => void;
   replaceAvatar: ReplaceAvatarActionType;
   saveAttachment: SaveAttachmentActionCreatorType;
   saveAvatarToDisk: SaveAvatarToDiskActionType;
   setUsernameEditState: (editState: UsernameEditState) => void;
   setUsernameLinkColor: (color: number) => void;
-  toggleProfileEditor: () => void;
   resetUsernameLink: () => void;
   deleteUsername: () => void;
+  setEditState: (editState: EditState) => void;
   showToast: ShowToastAction;
   openUsernameReservationModal: () => void;
 };
@@ -139,35 +160,48 @@ function getDefaultBios(i18n: LocalizerType): Array<DefaultBio> {
   ];
 }
 
+function BioEmoji(props: { emoji: EmojiVariantKey }) {
+  const emojiLocalizer = useFunEmojiLocalizer();
+  const emojiVariant = getEmojiVariantByKey(props.emoji);
+  return (
+    <FunStaticEmoji
+      role="img"
+      aria-label={emojiLocalizer.getLocaleShortName(props.emoji)}
+      emoji={emojiVariant}
+      size={24}
+    />
+  );
+}
+
 export function ProfileEditor({
   aboutEmoji,
   aboutText,
   color,
   conversationId,
+  contentsRef,
   deleteAvatarFromDisk,
   deleteUsername,
   familyName,
   firstName,
   hasCompletedUsernameLinkOnboarding,
   i18n,
-  initialEditState = EditState.None,
+  editState,
   markCompletedUsernameLinkOnboarding,
-  onEditStateChanged,
   onProfileChanged,
-  onSetSkinTone,
+  onEmojiSkinToneDefaultChange,
   openUsernameReservationModal,
   profileAvatarUrl,
   recentEmojis,
-  renderEditUsernameModalBody,
+  renderUsernameEditor,
   replaceAvatar,
   resetUsernameLink,
-  toggleProfileEditor,
   saveAttachment,
   saveAvatarToDisk,
+  setEditState,
   setUsernameEditState,
   setUsernameLinkColor,
   showToast,
-  skinTone,
+  emojiSkinToneDefault,
   userAvatarData,
   username,
   usernameCorrupted,
@@ -178,10 +212,21 @@ export function ProfileEditor({
   usernameLinkCorrupted,
 }: PropsType): JSX.Element {
   const focusInputRef = useRef<HTMLInputElement | null>(null);
-  const [editState, setEditState] = useState<EditState>(initialEditState);
-  const [confirmDiscardAction, setConfirmDiscardAction] = useState<
-    (() => unknown) | undefined
-  >(undefined);
+  const tryClose = useRef<() => void | undefined>();
+  const [confirmDiscardModal, confirmDiscardIf] = useConfirmDiscard({
+    i18n,
+    name: 'ProfileEditor',
+    tryClose,
+  });
+
+  const TITLES_BY_EDIT_STATE: Record<EditState, string | undefined> = {
+    [EditState.BetterAvatar]: i18n('icu:ProfileEditorModal--avatar'),
+    [EditState.Bio]: i18n('icu:ProfileEditorModal--about'),
+    [EditState.None]: i18n('icu:ProfileEditorModal--profile'),
+    [EditState.ProfileName]: i18n('icu:ProfileEditorModal--name'),
+    [EditState.Username]: i18n('icu:ProfileEditorModal--username'),
+    [EditState.UsernameLink]: i18n('icu:ProfileEditorModal--sharing'),
+  };
 
   // This is here to avoid component re-render jitters in the time it takes
   // redux to come back with the correct state
@@ -209,6 +254,17 @@ export function ProfileEditor({
   });
   const [isResettingUsername, setIsResettingUsername] = useState(false);
   const [isResettingUsernameLink, setIsResettingUsernameLink] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const stagedAboutEmojiVariantKey = useMemo(() => {
+    if (
+      stagedProfile.aboutEmoji == null ||
+      !isEmojiVariantValue(stagedProfile.aboutEmoji)
+    ) {
+      return null;
+    }
+    return getEmojiVariantKeyByValue(stagedProfile.aboutEmoji);
+  }, [stagedProfile.aboutEmoji]);
 
   // Reset username edit state when leaving
   useEffect(() => {
@@ -220,19 +276,37 @@ export function ProfileEditor({
   // To make AvatarEditor re-render less often
   const handleBack = useCallback(() => {
     setEditState(EditState.None);
-    onEditStateChanged(EditState.None);
-  }, [setEditState, onEditStateChanged]);
+  }, [setEditState]);
+
+  const handleEmojiPickerOpenChange = useCallback((open: boolean) => {
+    setEmojiPickerOpen(open);
+  }, []);
 
   // To make EmojiButton re-render less often
   const setAboutEmoji = useCallback(
     (ev: EmojiPickDataType) => {
-      const emojiData = getEmojiData(ev.shortName, skinTone);
+      const emojiData = getEmojiData(
+        ev.shortName,
+        emojiSkinToneDefault ?? EmojiSkinTone.None
+      );
       setStagedProfile(profileData => ({
         ...profileData,
         aboutEmoji: unifiedToEmoji(emojiData.unified),
       }));
     },
-    [setStagedProfile, skinTone]
+    [setStagedProfile, emojiSkinToneDefault]
+  );
+
+  const handleSelectEmoji = useCallback(
+    (emojiSelection: FunEmojiSelection) => {
+      const emojiVariant = getEmojiVariantByKey(emojiSelection.variantKey);
+
+      setStagedProfile(profileData => ({
+        ...profileData,
+        aboutEmoji: emojiVariant.value,
+      }));
+    },
+    [setStagedProfile]
   );
 
   // To make AvatarEditor re-render less often
@@ -242,7 +316,6 @@ export function ProfileEditor({
       setStartingAvatarUrl(undefined);
 
       setAvatarBuffer(avatar);
-      setEditState(EditState.None);
       onProfileChanged(
         {
           ...stagedProfile,
@@ -257,8 +330,9 @@ export function ProfileEditor({
         }
       );
       setOldAvatarBuffer(avatar);
+      handleBack();
     },
-    [onProfileChanged, stagedProfile, oldAvatarBuffer]
+    [handleBack, oldAvatarBuffer, onProfileChanged, stagedProfile]
   );
 
   const getFullNameText = () => {
@@ -275,25 +349,33 @@ export function ProfileEditor({
     focusNode.setSelectionRange(focusNode.value.length, focusNode.value.length);
   }, [editState]);
 
-  useEffect(() => {
-    onEditStateChanged(editState);
-  }, [editState, onEditStateChanged]);
-
-  useEffect(() => {
-    // If we opened at a nested sub-modal - close when leaving it.
-    if (editState === EditState.None && initialEditState !== EditState.None) {
-      toggleProfileEditor();
-    }
-  }, [initialEditState, editState, toggleProfileEditor]);
-
   // To make AvatarEditor re-render less often
   const handleAvatarLoaded = useCallback(
-    avatar => {
+    (avatar: Uint8Array) => {
       setAvatarBuffer(avatar);
       setOldAvatarBuffer(avatar);
     },
     [setAvatarBuffer, setOldAvatarBuffer]
   );
+
+  const onTryClose = useCallback(() => {
+    const hasNameChanges =
+      stagedProfile.familyName !== fullName.familyName ||
+      stagedProfile.firstName !== fullName.firstName;
+    const hasAboutChanges =
+      stagedProfile.aboutText !== fullBio.aboutText ||
+      stagedProfile.aboutEmoji !== fullBio.aboutEmoji;
+    const onDiscard = () => {
+      setStagedProfile(profileData => ({
+        ...profileData,
+        ...fullName,
+        ...fullBio,
+      }));
+    };
+
+    confirmDiscardIf(hasNameChanges || hasAboutChanges, onDiscard);
+  }, [confirmDiscardIf, stagedProfile, fullName, fullBio, setStagedProfile]);
+  tryClose.current = onTryClose;
 
   let content: JSX.Element;
 
@@ -350,29 +432,8 @@ export function ProfileEditor({
           placeholder={i18n('icu:ProfileEditor--last-name')}
           value={stagedProfile.familyName}
         />
-        <Modal.ButtonFooter>
-          <Button
-            onClick={() => {
-              const handleCancel = () => {
-                handleBack();
-                setStagedProfile(profileData => ({
-                  ...profileData,
-                  familyName,
-                  firstName,
-                }));
-              };
-
-              const hasChanges =
-                stagedProfile.familyName !== fullName.familyName ||
-                stagedProfile.firstName !== fullName.firstName;
-              if (hasChanges) {
-                setConfirmDiscardAction(() => handleCancel);
-              } else {
-                handleCancel();
-              }
-            }}
-            variant={ButtonVariant.Secondary}
-          >
+        <div className="ProfileEditor__button-footer">
+          <Button onClick={handleBack} variant={ButtonVariant.Secondary}>
             {i18n('icu:cancel')}
           </Button>
           <Button
@@ -387,12 +448,14 @@ export function ProfileEditor({
               });
 
               onProfileChanged(stagedProfile, { keepAvatar: true });
-              handleBack();
+
+              // Delay navigation until setFullName resolves and we are no longer dirty
+              setTimeout(() => handleBack(), 500);
             }}
           >
             {i18n('icu:save')}
           </Button>
-        </Modal.ButtonFooter>
+        </div>
       </>
     );
   } else if (editState === EditState.Bio) {
@@ -410,16 +473,32 @@ export function ProfileEditor({
           i18n={i18n}
           icon={
             <div className="module-composition-area__button-cell">
-              <EmojiButton
-                variant={EmojiButtonVariant.ProfileEditor}
-                closeOnPick
-                emoji={stagedProfile.aboutEmoji}
-                i18n={i18n}
-                onPickEmoji={setAboutEmoji}
-                onSetSkinTone={onSetSkinTone}
-                recentEmojis={recentEmojis}
-                skinTone={skinTone}
-              />
+              {!isFunPickerEnabled() && (
+                <EmojiButton
+                  variant={EmojiButtonVariant.ProfileEditor}
+                  closeOnPick
+                  emoji={stagedProfile.aboutEmoji}
+                  i18n={i18n}
+                  onPickEmoji={setAboutEmoji}
+                  onEmojiSkinToneDefaultChange={onEmojiSkinToneDefaultChange}
+                  recentEmojis={recentEmojis}
+                  emojiSkinToneDefault={emojiSkinToneDefault}
+                />
+              )}
+              {isFunPickerEnabled() && (
+                <FunEmojiPicker
+                  open={emojiPickerOpen}
+                  onOpenChange={handleEmojiPickerOpenChange}
+                  placement="bottom"
+                  onSelectEmoji={handleSelectEmoji}
+                  closeOnSelect
+                >
+                  <FunEmojiPickerButton
+                    i18n={i18n}
+                    selectedEmoji={stagedAboutEmojiVariantKey}
+                  />
+                </FunEmojiPicker>
+              )}
             </div>
           }
           maxLengthCount={140}
@@ -446,50 +525,47 @@ export function ProfileEditor({
           whenToShowRemainingCount={40}
         />
 
-        {defaultBios.map(defaultBio => (
-          <PanelRow
-            className="ProfileEditor__row"
-            key={defaultBio.shortName}
-            icon={
-              <div className="ProfileEditor__icon--container">
-                <Emoji shortName={defaultBio.shortName} size={24} />
-              </div>
-            }
-            label={defaultBio.i18nLabel}
-            onClick={() => {
-              const emojiData = getEmojiData(defaultBio.shortName, skinTone);
+        {defaultBios.map(defaultBio => {
+          strictAssert(
+            isEmojiEnglishShortName(defaultBio.shortName),
+            'Must be valid english short name'
+          );
+          const emojiParentKey = getEmojiParentKeyByEnglishShortName(
+            defaultBio.shortName
+          );
+          const emojiVariant = getEmojiVariantByParentKeyAndSkinTone(
+            emojiParentKey,
+            emojiSkinToneDefault ?? EmojiSkinTone.None
+          );
 
-              setStagedProfile(profileData => ({
-                ...profileData,
-                aboutEmoji: unifiedToEmoji(emojiData.unified),
-                aboutText: defaultBio.i18nLabel,
-              }));
-            }}
-          />
-        ))}
+          return (
+            <PanelRow
+              className="ProfileEditor__row"
+              key={defaultBio.shortName}
+              icon={
+                <div className="ProfileEditor__icon--container">
+                  <BioEmoji emoji={emojiVariant.key} />
+                </div>
+              }
+              label={defaultBio.i18nLabel}
+              onClick={() => {
+                const emojiData = getEmojiData(
+                  defaultBio.shortName,
+                  emojiSkinToneDefault ?? EmojiSkinTone.None
+                );
 
-        <Modal.ButtonFooter>
-          <Button
-            onClick={() => {
-              const handleCancel = () => {
-                handleBack();
                 setStagedProfile(profileData => ({
                   ...profileData,
-                  ...fullBio,
+                  aboutEmoji: unifiedToEmoji(emojiData.unified),
+                  aboutText: defaultBio.i18nLabel,
                 }));
-              };
+              }}
+            />
+          );
+        })}
 
-              const hasChanges =
-                stagedProfile.aboutText !== fullBio.aboutText ||
-                stagedProfile.aboutEmoji !== fullBio.aboutEmoji;
-              if (hasChanges) {
-                setConfirmDiscardAction(() => handleCancel);
-              } else {
-                handleCancel();
-              }
-            }}
-            variant={ButtonVariant.Secondary}
-          >
+        <div className="ProfileEditor__button-footer">
+          <Button onClick={handleBack} variant={ButtonVariant.Secondary}>
             {i18n('icu:cancel')}
           </Button>
           <Button
@@ -501,22 +577,23 @@ export function ProfileEditor({
               });
 
               onProfileChanged(stagedProfile, { keepAvatar: true });
-              handleBack();
+
+              // Delay navigation until setFullBio resolves and we are no longer dirty
+              setTimeout(() => handleBack(), 500);
             }}
           >
             {i18n('icu:save')}
           </Button>
-        </Modal.ButtonFooter>
+        </div>
       </>
     );
   } else if (editState === EditState.Username) {
-    content = renderEditUsernameModalBody({
-      isRootModal: initialEditState === editState,
-      onClose: () => setEditState(EditState.None),
+    content = renderUsernameEditor({
+      onClose: handleBack,
     });
   } else if (editState === EditState.UsernameLink) {
     content = (
-      <UsernameLinkModalBody
+      <UsernameLinkEditor
         i18n={i18n}
         link={usernameLink}
         username={username ?? ''}
@@ -712,9 +789,11 @@ export function ProfileEditor({
         <PanelRow
           className="ProfileEditor__row"
           icon={
-            fullBio.aboutEmoji ? (
+            fullBio.aboutEmoji && isEmojiVariantValue(fullBio.aboutEmoji) ? (
               <div className="ProfileEditor__icon--container">
-                <Emoji emoji={fullBio.aboutEmoji} size={24} />
+                <BioEmoji
+                  emoji={getEmojiVariantKeyByValue(fullBio.aboutEmoji)}
+                />
               </div>
             ) : (
               <i className="ProfileEditor__icon--container ProfileEditor__icon ProfileEditor__icon--bio" />
@@ -739,6 +818,16 @@ export function ProfileEditor({
     throw missingCaseError(editState);
   }
 
+  const backButton =
+    editState !== EditState.None ? (
+      <button
+        aria-label={i18n('icu:goBack')}
+        className="Preferences__back-icon"
+        onClick={handleBack}
+        type="button"
+      />
+    ) : undefined;
+
   return (
     <>
       {usernameEditState === UsernameEditState.ConfirmingDelete && (
@@ -760,18 +849,12 @@ export function ProfileEditor({
         </ConfirmationDialog>
       )}
 
-      {confirmDiscardAction && (
-        <ConfirmDiscardDialog
-          i18n={i18n}
-          onDiscard={confirmDiscardAction}
-          onClose={() => setConfirmDiscardAction(undefined)}
-        />
-      )}
+      {confirmDiscardModal}
 
       {isResettingUsernameLink && (
         <ConfirmationDialog
           i18n={i18n}
-          dialogName="UsernameLinkModal__error"
+          dialogName="ProfileEditor__resettingUsername"
           onClose={() => setIsResettingUsernameLink(false)}
           cancelButtonVariant={ButtonVariant.Secondary}
           cancelText={i18n('icu:cancel')}
@@ -811,7 +894,12 @@ export function ProfileEditor({
         </ConfirmationDialog>
       )}
 
-      <div className="ProfileEditor">{content}</div>
+      <PreferencesContent
+        backButton={backButton}
+        contents={<div className="ProfileEditor">{content}</div>}
+        contentsRef={contentsRef}
+        title={TITLES_BY_EDIT_STATE[editState]}
+      />
     </>
   );
 }

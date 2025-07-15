@@ -1,7 +1,7 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import uuid from 'uuid';
+import { v4 as uuid } from 'uuid';
 import { assert } from 'chai';
 
 import { type AciString, generateAci } from '../types/ServiceId';
@@ -26,6 +26,11 @@ describe('MessageReceipts', () => {
     await window.textsecure.storage.put('uuid_id', `${ourAci}.1`);
     await window.textsecure.storage.put('read-receipt-setting', true);
     await window.ConversationController.load();
+  });
+
+  afterEach(async () => {
+    await DataWriter.removeAll();
+    await window.storage.fetch();
   });
 
   function generateReceipt(
@@ -78,9 +83,8 @@ describe('MessageReceipts', () => {
       },
     };
 
-    await DataWriter.saveMessage(messageAttributes, {
+    await window.MessageCache.saveMessage(messageAttributes, {
       forceSave: true,
-      ourAci,
     });
 
     await Promise.all([
@@ -155,9 +159,8 @@ describe('MessageReceipts', () => {
       ],
     };
 
-    await DataWriter.saveMessage(messageAttributes, {
+    await window.MessageCache.saveMessage(messageAttributes, {
       forceSave: true,
-      ourAci,
     });
     await DataWriter.saveEditedMessage(messageAttributes, ourAci, {
       conversationId: messageAttributes.conversationId,

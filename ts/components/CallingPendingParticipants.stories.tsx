@@ -6,11 +6,9 @@ import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
 import type { PropsType } from './CallingPendingParticipants';
 import { CallingPendingParticipants } from './CallingPendingParticipants';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
 import { allRemoteParticipants } from './CallScreen.stories';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const createProps = (storyProps: Partial<PropsType> = {}): PropsType => ({
   i18n,
@@ -55,6 +53,26 @@ export function Many(): JSX.Element {
     <CallingPendingParticipants
       {...createProps({
         participants: allRemoteParticipants.slice(0, 10),
+      })}
+    />
+  );
+}
+
+export function Changing(): JSX.Element {
+  const counts = [0, 1, 2, 3, 2, 1];
+  const [countIndex, setCountIndex] = React.useState<number>(0);
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCountIndex((countIndex + 1) % counts.length);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [countIndex, counts.length]);
+
+  return (
+    <CallingPendingParticipants
+      {...createProps({
+        participants: allRemoteParticipants.slice(0, counts[countIndex]),
       })}
     />
   );

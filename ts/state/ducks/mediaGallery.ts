@@ -1,10 +1,11 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { orderBy } from 'lodash';
 import type { ThunkAction } from 'redux-thunk';
 import type { ReadonlyDeep } from 'type-fest';
 
-import * as log from '../../logging/log';
+import { createLogger } from '../../logging/log';
 import * as Errors from '../../types/errors';
 import { DataReader } from '../../sql/Client';
 import {
@@ -32,9 +33,14 @@ import type { MIMEType } from '../../types/MIME';
 import type { MediaItemType } from '../../types/MediaItem';
 import type { StateType as RootStateType } from '../reducer';
 import type { MessageAttributesType } from '../../model-types';
+import { MessageModel } from '../../models/messages';
+import { isTapToView } from '../selectors/message';
+
+const log = createLogger('mediaGallery');
 
 type MediaItemMessage = ReadonlyDeep<{
   attachments: Array<AttachmentType>;
+  // Note that this reflects the sender, and not the parent conversation
   conversationId: string;
   id: string;
   receivedAt: number;
@@ -107,6 +113,19 @@ type MediaGalleryActionType = ReadonlyDeep<
   | SetLoadingActionType
 >;
 
+function _sortMedia(media: ReadonlyArray<MediaType>): ReadonlyArray<MediaType> {
+  return orderBy(media, [
+    'message.receivedAt',
+    'message.sentAt',
+    'message.index',
+  ]);
+}
+function _sortDocuments(
+  documents: ReadonlyArray<MediaItemType>
+): ReadonlyArray<MediaItemType> {
+  return orderBy(documents, ['message.receivedAt', 'message.sentAt']);
+}
+
 function _getMediaItemMessage(
   message: ReadonlyDeep<MessageAttributesType>
 ): MediaItemMessage {
@@ -126,13 +145,18 @@ function _getMediaItemMessage(
 }
 
 function _cleanVisualAttachments(
-  rawMedia: ReadonlyDeep<ReadonlyArray<MessageAttributesType>>
+  rawMedia: ReadonlyDeep<ReadonlyArray<MessageModel>>
 ): ReadonlyArray<MediaType> {
-  let index = 0;
-
   return rawMedia
     .flatMap(message => {
-      return (message.attachments || []).map(
+      let index = 0;
+
+      // Also checked via the DB query
+      if (isTapToView(message.attributes)) {
+        return [];
+      }
+
+      return (message.get('attachments') || []).map(
         (attachment: AttachmentType): MediaType | undefined => {
           if (
             !attachment.path ||
@@ -153,7 +177,7 @@ function _cleanVisualAttachments(
             contentType: attachment.contentType,
             index,
             attachment,
-            message: _getMediaItemMessage(message),
+            message: _getMediaItemMessage(message.attributes),
           };
 
           index += 1;
@@ -166,11 +190,14 @@ function _cleanVisualAttachments(
 }
 
 function _cleanFileAttachments(
-  rawDocuments: ReadonlyDeep<ReadonlyArray<MessageAttributesType>>
+  rawDocuments: ReadonlyDeep<ReadonlyArray<MessageModel>>
 ): ReadonlyArray<MediaItemType> {
   return rawDocuments
     .map(message => {
-      const attachments = message.attachments || [];
+      if (isTapToView(message.attributes)) {
+        return;
+      }
+      const attachments = message.get('attachments') || [];
       const attachment = attachments[0];
       if (!attachment) {
         return;
@@ -181,7 +208,7 @@ function _cleanFileAttachments(
         index: 0,
         attachment,
         message: {
-          ..._getMediaItemMessage(message),
+          ..._getMediaItemMessage(message.attributes),
           attachments: [attachment],
         },
       };
@@ -190,27 +217,25 @@ function _cleanFileAttachments(
 }
 
 async function _upgradeMessages(
-  messages: ReadonlyArray<MessageAttributesType>
-): Promise<ReadonlyArray<MessageAttributesType>> {
+  messages: ReadonlyArray<MessageModel>
+): Promise<void> {
   // We upgrade these messages so they are sure to have thumbnails
-  const upgraded = await Promise.all(
+  await Promise.all(
     messages.map(async message => {
       try {
-        return await window.MessageCache.upgradeSchema(
+        await window.MessageCache.upgradeSchema(
           message,
           VERSION_NEEDED_FOR_DISPLAY
         );
       } catch (error) {
         log.warn(
           '_upgradeMessages: Failed to upgrade message ' +
-            `${getMessageIdForLogging(message)}: ${Errors.toLogFormat(error)}`
+            `${getMessageIdForLogging(message.attributes)}: ${Errors.toLogFormat(error)}`
         );
         return undefined;
       }
     })
   );
-
-  return upgraded.filter(isNotNil);
 }
 
 function initialLoad(
@@ -227,24 +252,28 @@ function initialLoad(
       payload: { loading: true },
     });
 
-    const rawMedia = await DataReader.getOlderMessagesByConversation({
-      conversationId,
-      includeStoryReplies: false,
-      limit: FETCH_CHUNK_COUNT,
-      requireVisualMediaAttachments: true,
-      storyId: undefined,
-    });
-    const rawDocuments = await DataReader.getOlderMessagesByConversation({
-      conversationId,
-      includeStoryReplies: false,
-      limit: FETCH_CHUNK_COUNT,
-      requireFileAttachments: true,
-      storyId: undefined,
-    });
+    const rawMedia = (
+      await DataReader.getOlderMessagesByConversation({
+        conversationId,
+        includeStoryReplies: false,
+        limit: FETCH_CHUNK_COUNT,
+        requireVisualMediaAttachments: true,
+        storyId: undefined,
+      })
+    ).map(item => window.MessageCache.register(new MessageModel(item)));
+    const rawDocuments = (
+      await DataReader.getOlderMessagesByConversation({
+        conversationId,
+        includeStoryReplies: false,
+        limit: FETCH_CHUNK_COUNT,
+        requireFileAttachments: true,
+        storyId: undefined,
+      })
+    ).map(item => window.MessageCache.register(new MessageModel(item)));
 
-    const upgraded = await _upgradeMessages(rawMedia);
-    const media = _cleanVisualAttachments(upgraded);
+    await _upgradeMessages(rawMedia);
 
+    const media = _cleanVisualAttachments(rawMedia);
     const documents = _cleanFileAttachments(rawDocuments);
 
     dispatch({
@@ -276,8 +305,8 @@ function loadMoreMedia(
       return;
     }
 
-    const firstMedia = previousMedia[0];
-    if (!firstMedia) {
+    const oldestLoadedMedia = previousMedia[0];
+    if (!oldestLoadedMedia) {
       log.warn('loadMoreMedia: no previous media; calling initialLoad()');
       initialLoad(conversationId)(dispatch, getState, {});
       return;
@@ -288,21 +317,24 @@ function loadMoreMedia(
       payload: { loading: true },
     });
 
-    const { sentAt, receivedAt, id: messageId } = firstMedia.message;
+    const { sentAt, receivedAt, id: messageId } = oldestLoadedMedia.message;
 
-    const rawMedia = await DataReader.getOlderMessagesByConversation({
-      conversationId,
-      includeStoryReplies: false,
-      limit: FETCH_CHUNK_COUNT,
-      messageId,
-      receivedAt,
-      requireVisualMediaAttachments: true,
-      sentAt,
-      storyId: undefined,
-    });
+    const rawMedia = (
+      await DataReader.getOlderMessagesByConversation({
+        conversationId,
+        includeStoryReplies: false,
+        limit: FETCH_CHUNK_COUNT,
+        messageId,
+        receivedAt,
+        requireVisualMediaAttachments: true,
+        sentAt,
+        storyId: undefined,
+      })
+    ).map(item => window.MessageCache.register(new MessageModel(item)));
 
-    const upgraded = await _upgradeMessages(rawMedia);
-    const media = _cleanVisualAttachments(upgraded);
+    await _upgradeMessages(rawMedia);
+
+    const media = _cleanVisualAttachments(rawMedia);
 
     dispatch({
       type: LOAD_MORE_MEDIA,
@@ -336,8 +368,8 @@ function loadMoreDocuments(
       return;
     }
 
-    const firstDocument = previousDocuments[0];
-    if (!firstDocument) {
+    const oldestLoadedDocument = previousDocuments[0];
+    if (!oldestLoadedDocument) {
       log.warn(
         'loadMoreDocuments: no previous documents; calling initialLoad()'
       );
@@ -350,18 +382,20 @@ function loadMoreDocuments(
       payload: { loading: true },
     });
 
-    const { sentAt, receivedAt, id: messageId } = firstDocument.message;
+    const { sentAt, receivedAt, id: messageId } = oldestLoadedDocument.message;
 
-    const rawDocuments = await DataReader.getOlderMessagesByConversation({
-      conversationId,
-      includeStoryReplies: false,
-      limit: FETCH_CHUNK_COUNT,
-      messageId,
-      receivedAt,
-      requireFileAttachments: true,
-      sentAt,
-      storyId: undefined,
-    });
+    const rawDocuments = (
+      await DataReader.getOlderMessagesByConversation({
+        conversationId,
+        includeStoryReplies: false,
+        limit: FETCH_CHUNK_COUNT,
+        messageId,
+        receivedAt,
+        requireFileAttachments: true,
+        sentAt,
+        storyId: undefined,
+      })
+    ).map(item => window.MessageCache.register(new MessageModel(item)));
 
     const documents = _cleanFileAttachments(rawDocuments);
 
@@ -415,7 +449,9 @@ export function reducer(
     return {
       ...state,
       loading: false,
-      ...payload,
+      conversationId: payload.conversationId,
+      media: _sortMedia(payload.media),
+      documents: _sortDocuments(payload.documents),
       haveOldestMedia: payload.media.length === 0,
       haveOldestDocument: payload.documents.length === 0,
     };
@@ -431,7 +467,7 @@ export function reducer(
       ...state,
       loading: false,
       haveOldestMedia: media.length === 0,
-      media: media.concat(state.media),
+      media: _sortMedia(media.concat(state.media)),
     };
   }
 
@@ -445,21 +481,18 @@ export function reducer(
       ...state,
       loading: false,
       haveOldestDocument: documents.length === 0,
-      documents: documents.concat(state.documents),
+      documents: _sortDocuments(documents.concat(state.documents)),
     };
   }
 
-  // We don't capture the initial message add, but we do capture the moment when its
-  // attachments have been downloaded
+  // A time-ordered subset of all conversation media is loaded at once.
+  // When a message changes, check that the changed message falls within this time range,
+  // and if so insert it into the loaded media.
   if (action.type === MESSAGE_CHANGED) {
     const { payload } = action;
     const { conversationId, data: message } = payload;
 
     if (conversationId !== state.conversationId) {
-      return state;
-    }
-
-    if (!message.attachments || message.attachments.length === 0) {
       return state;
     }
 
@@ -469,27 +502,64 @@ export function reducer(
     const documentsWithout = state.documents.filter(
       item => item.message.id !== message.id
     );
+    const mediaDifference = state.media.length - mediaWithout.length;
+    const documentDifference = state.documents.length - documentsWithout.length;
 
-    if (message.deletedForEveryone) {
-      return {
-        ...state,
-        media: mediaWithout,
-        documents: documentsWithout,
-      };
+    if (message.deletedForEveryone || message.isErased) {
+      if (mediaDifference > 0 || documentDifference > 0) {
+        return {
+          ...state,
+          media: mediaWithout,
+          documents: documentsWithout,
+        };
+      }
+      return state;
     }
 
-    // Check whether we have new downloaded media, or an attachment has been deleted
-    const mediaCount = state.media.length - mediaWithout.length;
-    const documentCount = state.documents.length - mediaWithout.length;
+    const oldestLoadedMedia = state.media[0];
+    const oldestLoadedDocument = state.documents[0];
 
-    const media = _cleanVisualAttachments([message]);
-    const documents = _cleanFileAttachments([message]);
+    const newMedia = _cleanVisualAttachments([
+      window.MessageCache.register(new MessageModel(message)),
+    ]);
+    const newDocuments = _cleanFileAttachments([
+      window.MessageCache.register(new MessageModel(message)),
+    ]);
 
-    if (mediaCount !== media.length || documentCount !== documents.length) {
+    let { documents, haveOldestDocument, haveOldestMedia, media } = state;
+
+    const inMediaTimeRange =
+      !oldestLoadedMedia ||
+      (message.received_at >= oldestLoadedMedia.message.receivedAt &&
+        message.sent_at >= oldestLoadedMedia.message.sentAt);
+    if (mediaDifference !== media.length && inMediaTimeRange) {
+      media = _sortMedia(mediaWithout.concat(newMedia));
+    } else if (!inMediaTimeRange) {
+      haveOldestMedia = false;
+    }
+
+    const inDocumentTimeRange =
+      !oldestLoadedDocument ||
+      (message.received_at >= oldestLoadedDocument.message.receivedAt &&
+        message.sent_at >= oldestLoadedDocument.message.sentAt);
+    if (documentDifference !== documents.length && inDocumentTimeRange) {
+      documents = _sortDocuments(documentsWithout.concat(newDocuments));
+    } else if (!inDocumentTimeRange) {
+      haveOldestDocument = false;
+    }
+
+    if (
+      state.haveOldestDocument !== haveOldestDocument ||
+      state.haveOldestMedia !== haveOldestMedia ||
+      state.documents !== documents ||
+      state.media !== media
+    ) {
       return {
         ...state,
-        media: mediaWithout.concat(media),
-        documents: documentsWithout.concat(documents),
+        documents,
+        haveOldestDocument,
+        haveOldestMedia,
+        media,
       };
     }
 
