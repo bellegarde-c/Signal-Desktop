@@ -1145,28 +1145,6 @@ async function readyForUpdates() {
 
   // Discard value even if we don't handle a saved URL.
   macInitialOpenUrlRoute = undefined;
-
-  // Second, start checking for app updates
-  try {
-    strictAssert(
-      settingsChannel !== undefined,
-      'SettingsChannel must be initialized'
-    );
-    await updater.start({
-      canRunSilently: () => {
-        return (
-          systemTrayService?.isVisible() === true &&
-          mainWindow?.isVisible() !== true &&
-          mainWindow?.webContents?.getBackgroundThrottling() !== false
-        );
-      },
-      getMainWindow,
-      logger: log,
-      sql,
-    });
-  } catch (error) {
-    log.error('Error starting update checks:', Errors.toLogFormat(error));
-  }
 }
 
 async function forceUpdate() {
