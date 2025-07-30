@@ -1,7 +1,7 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { createRef, Component, type JSX } from 'react';
+import { createRef, Component, type JSX, useCallback } from 'react';
 import Quill from '@signalapp/quill-cjs';
 import Emitter from '@signalapp/quill-cjs/core/emitter.js';
 import type { Delta } from '@signalapp/quill-cjs';
@@ -64,7 +64,7 @@ export class SimpleQuillWrapper extends Component<Props> {
       formats: this.props.formats,
       modules: this.props.modules,
       placeholder: this.props.placeholder,
-      readOnly: this.props.readOnly,
+      readOnly: true
     });
   }
 
@@ -72,10 +72,21 @@ export class SimpleQuillWrapper extends Component<Props> {
     return this.quill;
   }
 
-  override render(): JSX.Element {
+  handleClick = () => {
+    const el = this.quillElement.current;
+    if (el) {
+      el.removeAttribute('inert');
+    }
+    // Focus the Quill editor programmatically
+    if (this.quill) {
+      this.quill.focus();
+    }
+  };
+
+  override render(): React.JSX.Element {
     return (
-      <div className={classNames('quill', this.props.className)}>
-        <div ref={this.quillElement} />
+      <div className={classNames('quill', this.props.className)} onClick={this.handleClick} >
+        <div ref={this.quillElement} inert="true" />
       </div>
     );
   }
