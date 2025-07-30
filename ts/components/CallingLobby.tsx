@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React from 'react';
-import FocusTrap from 'focus-trap-react';
 import classNames from 'classnames';
+import { FocusScope } from 'react-aria';
 import type {
   SetLocalAudioType,
-  SetLocalPreviewType,
   SetLocalVideoType,
 } from '../state/ducks/calling';
 import { CallingButton, CallingButtonType } from './CallingButton';
@@ -36,9 +35,11 @@ export type PropsType = {
   callMode: CallMode;
   conversation: Pick<
     CallingConversationType,
+    | 'avatarPlaceholderGradient'
     | 'acceptedMessageRequest'
     | 'avatarUrl'
     | 'color'
+    | 'hasAvatar'
     | 'isMe'
     | 'memberships'
     | 'name'
@@ -49,7 +50,6 @@ export type PropsType = {
     | 'systemNickname'
     | 'title'
     | 'type'
-    | 'unblurredAvatarUrl'
   >;
   getIsSharingPhoneNumberWithEverybody: () => boolean;
   groupMembers?: Array<
@@ -72,9 +72,9 @@ export type PropsType = {
   onJoinCall: () => void;
   outgoingRing: boolean;
   peekedParticipants: Array<ConversationType>;
-  setLocalAudio: (_: SetLocalAudioType) => void;
-  setLocalVideo: (_: SetLocalVideoType) => void;
-  setLocalPreview: (_: SetLocalPreviewType) => void;
+  setLocalAudio: SetLocalAudioType;
+  setLocalVideo: SetLocalVideoType;
+  setLocalPreviewContainer: (container: HTMLDivElement | null) => void;
   setOutgoingRing: (_: boolean) => void;
   showParticipantsList: boolean;
   toggleParticipants: () => void;
@@ -100,7 +100,7 @@ export function CallingLobby({
   onJoinCall,
   peekedParticipants,
   setLocalAudio,
-  setLocalPreview,
+  setLocalPreviewContainer,
   setLocalVideo,
   setOutgoingRing,
   toggleParticipants,
@@ -108,8 +108,6 @@ export function CallingLobby({
   toggleSettings,
   outgoingRing,
 }: PropsType): JSX.Element {
-  const localVideoRef = React.useRef<null | HTMLVideoElement>(null);
-
   const shouldShowLocalVideo = hasLocalVideo && availableCameras.length > 0;
 
   const isGroupOrAdhocCall = isGroupOrAdhocCallMode(callMode);
@@ -129,14 +127,6 @@ export function CallingLobby({
   const togglePipForCallingHeader = isAdhocJoinRequestPending
     ? togglePip
     : undefined;
-
-  React.useEffect(() => {
-    setLocalPreview({ element: localVideoRef });
-
-    return () => {
-      setLocalPreview({ element: undefined });
-    };
-  }, [setLocalPreview]);
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -263,22 +253,12 @@ export function CallingLobby({
   useWasInitiallyMutedToast(hasLocalAudio, i18n);
 
   return (
-    <FocusTrap
-      focusTrapOptions={{
-        allowOutsideClick: ({ target }) => {
-          if (!target || !(target instanceof HTMLElement)) {
-            return false;
-          }
-          return target.matches('.Toast, .Toast *');
-        },
-      }}
-    >
+    <FocusScope contain restoreFocus>
       <div className="module-calling__container dark-theme">
         {shouldShowLocalVideo ? (
-          <video
+          <div
             className="module-CallingLobby__local-preview module-CallingLobby__local-preview--camera-is-on"
-            ref={localVideoRef}
-            autoPlay
+            ref={setLocalPreviewContainer}
           />
         ) : (
           <CallBackgroundBlur
@@ -398,7 +378,7 @@ export function CallingLobby({
           <div className="module-calling__spacer CallControls__OuterSpacer" />
         </div>
       </div>
-    </FocusTrap>
+    </FocusScope>
   );
 }
 

@@ -36,14 +36,18 @@ import { SearchResultsLoadingFakeRow as SearchResultsLoadingFakeRowComponent } f
 import { UsernameSearchResultListItem } from './conversationList/UsernameSearchResultListItem';
 import { GroupListItem } from './conversationList/GroupListItem';
 import { ListView } from './ListView';
+import { Button, ButtonVariant } from './Button';
+import { ListTile } from './ListTile';
 
 export enum RowType {
   ArchiveButton = 'ArchiveButton',
   Blank = 'Blank',
   Contact = 'Contact',
+  ClearFilterButton = 'ClearFilterButton',
   ContactCheckbox = 'ContactCheckbox',
   PhoneNumberCheckbox = 'PhoneNumberCheckbox',
   UsernameCheckbox = 'UsernameCheckbox',
+  GenericCheckbox = 'GenericCheckbox',
   Conversation = 'Conversation',
   CreateNewGroup = 'CreateNewGroup',
   FindByUsername = 'FindByUsername',
@@ -56,6 +60,7 @@ export enum RowType {
   SelectSingleGroup = 'SelectSingleGroup',
   StartNewConversation = 'StartNewConversation',
   UsernameSearchResult = 'UsernameSearchResult',
+  EmptyResults = 'EmptyResults',
 }
 
 type ArchiveButtonRowType = {
@@ -70,6 +75,11 @@ type ContactRowType = {
   contact: ContactListItemPropsType;
   isClickable?: boolean;
   hasContextMenu?: boolean;
+};
+
+type ClearFilterButtonRowType = {
+  type: RowType.ClearFilterButton;
+  isOnNoResultsPage: boolean;
 };
 
 type ContactCheckboxRowType = {
@@ -91,6 +101,19 @@ type UsernameCheckboxRowType = {
   username: string;
   isChecked: boolean;
   isFetching: boolean;
+};
+
+export enum GenericCheckboxRowIcon {
+  Contact = 'contact',
+  Group = 'group',
+}
+
+type GenericCheckboxRowType = {
+  type: RowType.GenericCheckbox;
+  icon: GenericCheckboxRowIcon;
+  label: string;
+  isChecked: boolean;
+  onClick: () => void;
 };
 
 type ConversationRowType = {
@@ -153,13 +176,20 @@ type UsernameRowType = {
   isFetchingUsername: boolean;
 };
 
+type EmptyResultsRowType = {
+  type: RowType.EmptyResults;
+  message: string;
+};
+
 export type Row =
   | ArchiveButtonRowType
   | BlankRowType
   | ContactRowType
   | ContactCheckboxRowType
+  | ClearFilterButtonRowType
   | PhoneNumberCheckboxRowType
   | UsernameCheckboxRowType
+  | GenericCheckboxRowType
   | ConversationRowType
   | CreateNewGroupRowType
   | FindByUsername
@@ -170,7 +200,8 @@ export type Row =
   | SearchResultsLoadingFakeRowType
   | StartNewConversationRowType
   | SelectSingleGroupRowType
-  | UsernameRowType;
+  | UsernameRowType
+  | EmptyResultsRowType;
 
 export type PropsType = {
   dimensions?: {
@@ -186,6 +217,7 @@ export type PropsType = {
   scrollToRowIndex?: number;
   shouldRecomputeRowHeights: boolean;
   scrollable?: boolean;
+  hasDialogPadding?: boolean;
 
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
@@ -197,6 +229,7 @@ export type PropsType = {
     conversationId: string,
     disabledReason: undefined | ContactCheckboxDisabledReason
   ) => void;
+  onClickClearFilterButton: () => void;
   onPreloadConversation: (conversationId: string, messageId?: string) => void;
   onSelectConversation: (conversationId: string, messageId?: string) => void;
   onOutgoingAudioCallInConversation: (conversationId: string) => void;
@@ -212,6 +245,7 @@ export type PropsType = {
 const NORMAL_ROW_HEIGHT = 76;
 const SELECT_ROW_HEIGHT = 52;
 const HEADER_ROW_HEIGHT = 40;
+const EMPTY_RESULTS_ROW_HEIGHT = 48 + 20 + 48;
 
 export function ConversationList({
   dimensions,
@@ -221,6 +255,7 @@ export function ConversationList({
   blockConversation,
   onClickArchiveButton,
   onClickContactCheckbox,
+  onClickClearFilterButton,
   onPreloadConversation,
   onSelectConversation,
   onOutgoingAudioCallInConversation,
@@ -231,6 +266,7 @@ export function ConversationList({
   scrollBehavior = ScrollBehavior.Default,
   scrollToRowIndex,
   scrollable = true,
+  hasDialogPadding = false,
   shouldRecomputeRowHeights,
   showChooseGroupMembers,
   showFindByUsername,
@@ -248,19 +284,34 @@ export function ConversationList({
         assertDev(false, `Expected a row at index ${index}`);
         return NORMAL_ROW_HEIGHT;
       }
-      switch (row.type) {
+      const { type } = row;
+      switch (type) {
         case RowType.Header:
         case RowType.SearchResultsLoadingFakeHeader:
           return HEADER_ROW_HEIGHT;
         case RowType.SelectSingleGroup:
         case RowType.ContactCheckbox:
+        case RowType.GenericCheckbox:
         case RowType.Contact:
         case RowType.CreateNewGroup:
         case RowType.FindByUsername:
         case RowType.FindByPhoneNumber:
           return SELECT_ROW_HEIGHT;
-        default:
+        case RowType.ArchiveButton:
+        case RowType.Blank:
+        case RowType.ClearFilterButton:
+        case RowType.PhoneNumberCheckbox:
+        case RowType.UsernameCheckbox:
+        case RowType.Conversation:
+        case RowType.MessageSearchResult:
+        case RowType.SearchResultsLoadingFakeRow:
+        case RowType.StartNewConversation:
+        case RowType.UsernameSearchResult:
           return NORMAL_ROW_HEIGHT;
+        case RowType.EmptyResults:
+          return EMPTY_RESULTS_ROW_HEIGHT;
+        default:
+          throw missingCaseError(type);
       }
     },
     [getRow]
@@ -332,6 +383,24 @@ export function ConversationList({
             />
           );
           break;
+        case RowType.ClearFilterButton:
+          result = (
+            <div className="ClearFilterButton module-conversation-list__item--clear-filter-button">
+              <Button
+                variant={ButtonVariant.SecondaryAffirmative}
+                className={classNames('ClearFilterButton__inner', {
+                  // The clear filter button should be closer to the empty state
+                  // text than to the search results.
+                  'ClearFilterButton__inner-vertical-center':
+                    !row.isOnNoResultsPage,
+                })}
+                onClick={onClickClearFilterButton}
+              >
+                {i18n('icu:clearFilterButton')}
+              </Button>
+            </div>
+          );
+          break;
         case RowType.PhoneNumberCheckbox:
           result = (
             <PhoneNumberCheckboxComponent
@@ -370,14 +439,31 @@ export function ConversationList({
             />
           );
           break;
+        case RowType.GenericCheckbox:
+          result = (
+            <ListTile.checkbox
+              leading={
+                <i
+                  className={`module-conversation-list__generic-checkbox-icon module-conversation-list__generic-checkbox-icon--${row.icon}`}
+                />
+              }
+              title={row.label}
+              isChecked={row.isChecked}
+              onClick={row.onClick}
+              clickable
+            />
+          );
+          break;
         case RowType.Conversation: {
           const itemProps = pick(row.conversation, [
+            'avatarPlaceholderGradient',
             'acceptedMessageRequest',
             'avatarUrl',
             'badges',
             'color',
             'draftPreview',
             'groupId',
+            'hasAvatar',
             'id',
             'isBlocked',
             'isMe',
@@ -395,7 +481,6 @@ export function ConversationList({
             'title',
             'type',
             'typingContactIdTimestamps',
-            'unblurredAvatarUrl',
             'unreadCount',
             'unreadMentionsCount',
             'serviceId',
@@ -508,6 +593,13 @@ export function ConversationList({
             />
           );
           break;
+        case RowType.EmptyResults:
+          result = (
+            <div className="module-conversation-list__empty-results">
+              {row.message}
+            </div>
+          );
+          break;
         default:
           throw missingCaseError(row);
       }
@@ -527,6 +619,7 @@ export function ConversationList({
       i18n,
       lookupConversationWithoutServiceId,
       onClickArchiveButton,
+      onClickClearFilterButton,
       onClickContactCheckbox,
       onOutgoingAudioCallInConversation,
       onOutgoingVideoCallInConversation,
@@ -554,7 +647,8 @@ export function ConversationList({
     <ListView
       className={classNames(
         'module-conversation-list',
-        `module-conversation-list--width-${widthBreakpoint}`
+        `module-conversation-list--width-${widthBreakpoint}`,
+        hasDialogPadding && 'module-conversation-list--has-dialog-padding'
       )}
       width={dimensions.width}
       height={dimensions.height}

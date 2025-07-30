@@ -13,8 +13,16 @@ import {
   getDistributionListsForRedux,
   loadDistributionLists,
 } from './distributionListLoader';
+import {
+  getDonationReceiptsForRedux,
+  loadDonationReceipts,
+} from './donationReceiptsLoader';
 import { getStoriesForRedux, loadStories } from './storyLoader';
 import { getUserDataForRedux, loadUserData } from './userLoader';
+import {
+  loadCachedProfiles as loadNotificationProfiles,
+  getCachedProfiles as getNotificationProfiles,
+} from './notificationProfilesService';
 
 // old-style loaders
 import {
@@ -26,7 +34,9 @@ import {
   getInitialState as getStickersReduxState,
 } from '../types/Stickers';
 
-import type { ReduxInitData } from '../state/initializeRedux';
+import { type ReduxInitData } from '../state/initializeRedux';
+import { reinitializeRedux } from '../state/reinitializeRedux';
+import { getGifsStateForRedux, loadGifsState } from './gifsLoader';
 
 export async function loadAll(): Promise<void> {
   await Promise.all([
@@ -34,11 +44,19 @@ export async function loadAll(): Promise<void> {
     loadCallHistory(),
     loadCallLinks(),
     loadDistributionLists(),
+    loadDonationReceipts(),
+    loadGifsState(),
+    loadNotificationProfiles(),
     loadRecentEmojis(),
     loadStickers(),
     loadStories(),
     loadUserData(),
   ]);
+}
+
+export async function loadAllAndReinitializeRedux(): Promise<void> {
+  await loadAll();
+  reinitializeRedux(getParametersForRedux());
 }
 
 export function getParametersForRedux(): ReduxInitData {
@@ -49,8 +67,11 @@ export function getParametersForRedux(): ReduxInitData {
     callHistory: getCallsHistoryForRedux(),
     callHistoryUnreadCount: getCallsHistoryUnreadCountForRedux(),
     callLinks: getCallLinksForRedux(),
+    donations: getDonationReceiptsForRedux(),
+    gifs: getGifsStateForRedux(),
     mainWindowStats,
     menuOptions,
+    notificationProfiles: getNotificationProfiles(),
     recentEmoji: getEmojiReducerState(),
     stickers: getStickersReduxState(),
     stories: getStoriesForRedux(),

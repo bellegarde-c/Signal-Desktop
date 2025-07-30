@@ -1,7 +1,7 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Database } from '@signalapp/better-sqlite3';
+import type { Database } from '@signalapp/sqlcipher';
 import type { LoggerType } from '../../types/Logging';
 
 export default function updateToSchemaVersion84(
@@ -35,6 +35,8 @@ export default function updateToSchemaVersion84(
       INSERT INTO mentions (messageId, mentionUuid, start, length)
       ${selectMentionsFromMessages};
 
+      -- Note: any changes to this trigger must be reflected in 
+      -- Server.ts: enableMessageInsertTriggersAndBackfill
       CREATE TRIGGER messages_on_insert_insert_mentions AFTER INSERT ON messages
       BEGIN
         INSERT INTO mentions (messageId, mentionUuid, start, length)

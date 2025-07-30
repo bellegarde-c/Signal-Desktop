@@ -4,8 +4,11 @@
 import { debounce, isNumber } from 'lodash';
 
 import { strictAssert } from './assert';
+import { safeParseInteger } from './numbers';
 import { DataReader } from '../sql/Client';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
+
+const log = createLogger('incrementMessageCounter');
 
 let receivedAtCounter: number | undefined;
 
@@ -15,7 +18,9 @@ export async function initializeMessageCounter(): Promise<void> {
     'incrementMessageCounter: already initialized'
   );
 
-  const storedCounter = Number(localStorage.getItem('lastReceivedAtCounter'));
+  const storedCounter = safeParseInteger(
+    localStorage.getItem('lastReceivedAtCounter') ?? ''
+  );
   const dbCounter = await DataReader.getMaxMessageCounter();
 
   if (isNumber(dbCounter) && isNumber(storedCounter)) {

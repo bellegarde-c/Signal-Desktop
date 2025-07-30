@@ -56,7 +56,6 @@ export function CallLinkAddNameModal({
       modalName="CallLinkAddNameModal"
       i18n={i18n}
       hasXButton
-      noEscapeClose
       noMouseClose
       title={
         callLink.name === ''
@@ -92,8 +91,6 @@ export function CallLinkAddNameModal({
           color={getColorForCallLink(callLink.rootKey)}
           conversationType="callLink"
           size={AvatarSize.SIXTY_FOUR}
-          acceptedMessageRequest
-          isMe={false}
           sharedGroupNames={[]}
           title={
             callLink.name === ''

@@ -3,19 +3,23 @@
 
 import { Transform } from 'stream';
 
+import { createLogger } from '../logging/log';
 import { SignalService as Proto } from '../protobuf';
 import protobuf from '../protobuf/wrap';
-import { normalizeAci } from '../util/normalizeAci';
-import { isAciString } from '../util/isAciString';
 import { DurationInSeconds } from '../util/durations';
-import * as log from '../logging/log';
 import type { ContactAvatarType } from '../types/Avatar';
 import type { AttachmentType } from '../types/Attachment';
+import type { AciString } from '../types/ServiceId';
 import { computeHash } from '../Crypto';
 import { dropNull } from '../util/dropNull';
+import { fromAciUuidBytesOrString } from '../util/ServiceId';
+import * as Bytes from '../Bytes';
 import { decryptAttachmentV2ToSink } from '../AttachmentCrypto';
 
 import Avatar = Proto.ContactDetails.IAvatar;
+import { stringToMIMEType } from '../types/MIME';
+
+const log = createLogger('ContactsParser');
 
 const { Reader } = protobuf;
 
@@ -27,8 +31,9 @@ type OptionalFields = {
 
 type MessageWithAvatar<Message extends OptionalFields> = Omit<
   Message,
-  'avatar' | 'toJSON'
+  'avatar' | 'toJSON' | 'aci' | 'aciBinary'
 > & {
+  aci: AciString;
   avatar?: ContactAvatarType;
   expireTimer?: DurationInSeconds;
   expireTimerVersion: number | null;
@@ -78,7 +83,7 @@ export class ParseContactsTransform extends Transform {
   public contacts: Array<ContactDetailsWithAvatar> = [];
 
   public activeContact: Proto.ContactDetails | undefined;
-  private unused: Uint8Array | undefined;
+  #unused: Uint8Array | undefined;
 
   override async _transform(
     chunk: Buffer | undefined,
@@ -92,9 +97,9 @@ export class ParseContactsTransform extends Transform {
 
     try {
       let data = chunk;
-      if (this.unused) {
-        data = Buffer.concat([this.unused, data]);
-        this.unused = undefined;
+      if (this.#unused) {
+        data = Buffer.concat([this.#unused, data]);
+        this.#unused = undefined;
       }
 
       const reader = Reader.create(data);
@@ -109,7 +114,7 @@ export class ParseContactsTransform extends Transform {
             if (err instanceof RangeError) {
               // Note: A failed decodeDelimited() does in fact update reader.pos, so we
               //   must reset to startPos
-              this.unused = data.subarray(startPos);
+              this.#unused = data.subarray(startPos);
               done();
               return;
             }
@@ -142,7 +147,7 @@ export class ParseContactsTransform extends Transform {
         const spaceLeftAfterRead = reader.len - (reader.pos + attachmentSize);
         if (spaceLeftAfterRead >= 0) {
           // We've read enough data to read the entire attachment
-          const avatarData = reader.buf.slice(
+          const avatarData = reader.buf.subarray(
             reader.pos,
             reader.pos + attachmentSize
           );
@@ -152,9 +157,13 @@ export class ParseContactsTransform extends Transform {
             // eslint-disable-next-line no-await-in-loop
             await window.Signal.Migrations.writeNewAttachmentData(avatarData);
 
+          const contentType = this.activeContact.avatar?.contentType;
           const prepared = prepareContact(this.activeContact, {
             ...this.activeContact.avatar,
             ...local,
+            contentType: contentType
+              ? stringToMIMEType(contentType)
+              : undefined,
             hash,
           });
           if (prepared) {
@@ -169,7 +178,7 @@ export class ParseContactsTransform extends Transform {
         } else {
           // We have an attachment, but we haven't read enough data yet. We need to
           //   wait for another chunk.
-          this.unused = data.subarray(reader.pos);
+          this.#unused = data.subarray(reader.pos);
           done();
           return;
         }
@@ -186,7 +195,7 @@ export class ParseContactsTransform extends Transform {
 }
 
 function prepareContact(
-  proto: Proto.ContactDetails,
+  { aci: rawAci, aciBinary, ...proto }: Proto.ContactDetails,
   avatar?: ContactAvatarType
 ): ContactDetailsWithAvatar | undefined {
   const expireTimer =
@@ -194,16 +203,12 @@ function prepareContact(
       ? DurationInSeconds.fromSeconds(proto.expireTimer)
       : undefined;
 
-  // We reject incoming contacts with invalid aci information
-  if (proto.aci && !isAciString(proto.aci)) {
-    log.warn('ParseContactsTransform: Dropping contact with invalid aci');
+  const aci = fromAciUuidBytesOrString(aciBinary, rawAci, 'ContactBuffer.aci');
 
+  if ((Bytes.isNotEmpty(aciBinary) || rawAci) && aci == null) {
+    log.warn('ParseContactsTransform: Dropping contact with invalid aci');
     return undefined;
   }
-
-  const aci = proto.aci
-    ? normalizeAci(proto.aci, 'ContactBuffer.aci')
-    : proto.aci;
 
   const result = {
     ...proto,

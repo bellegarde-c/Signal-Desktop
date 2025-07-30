@@ -54,14 +54,21 @@ import {
   NavSidebarSearchHeader,
 } from './NavSidebar';
 import { ContextMenu } from './ContextMenu';
-import { EditState as ProfileEditorEditState } from './ProfileEditor';
 import type { UnreadStats } from '../util/countUnreadStats';
 import { BackupMediaDownloadProgress } from './BackupMediaDownloadProgress';
+import type { ServerAlertsType } from '../util/handleServerAlerts';
+import { getServerAlertDialog } from './ServerAlerts';
+import { NavTab } from '../state/ducks/nav';
+import type { Location } from '../state/ducks/nav';
+import { Page } from './Preferences';
+import { EditState } from './ProfileEditor';
 
 export type PropsType = {
   backupMediaDownloadProgress: {
+    isBackupMediaEnabled: boolean;
     totalBytes: number;
     downloadedBytes: number;
+    isIdle: boolean;
     isPaused: boolean;
     downloadBannerDismissed: boolean;
   };
@@ -73,6 +80,7 @@ export type PropsType = {
   hasRelinkDialog: boolean;
   hasUpdateDialog: boolean;
   isUpdateDownloaded: boolean;
+  isOnline: boolean;
   unsupportedOSDialogType: 'error' | 'warning' | undefined;
   usernameCorrupted: boolean;
   usernameLinkCorrupted: boolean;
@@ -118,9 +126,10 @@ export type PropsType = {
 
   // Action Creators
   blockConversation: (conversationId: string) => void;
+  changeLocation: (location: Location) => void;
   clearConversationSearch: () => void;
   clearGroupCreationError: () => void;
-  clearSearch: () => void;
+  clearSearchQuery: () => void;
   closeMaximumGroupSizeModal: () => void;
   closeRecommendedGroupSizeModal: () => void;
   composeDeleteAvatarFromDisk: DeleteAvatarFromDiskActionType;
@@ -145,6 +154,7 @@ export type PropsType = {
   setComposeGroupName: (_: string) => void;
   setComposeSearchTerm: (composeSearchTerm: string) => void;
   setComposeSelectedRegion: (newRegion: string) => void;
+  serverAlerts?: ServerAlertsType;
   showArchivedConversations: () => void;
   showChooseGroupMembers: () => void;
   showFindByUsername: () => void;
@@ -158,8 +168,8 @@ export type PropsType = {
   toggleComposeEditingAvatar: () => unknown;
   toggleConversationInChooseMembers: (conversationId: string) => void;
   toggleNavTabsCollapse: (navTabsCollapsed: boolean) => void;
-  toggleProfileEditor: (initialEditState?: ProfileEditorEditState) => void;
-  updateSearchTerm: (_: string) => void;
+  updateSearchTerm: (query: string) => void;
+  updateFilterByUnread: (filterByUnread: boolean) => void;
 
   // Render Props
   renderMessageSearchResult: (id: string) => JSX.Element;
@@ -189,9 +199,10 @@ export function LeftPane({
   blockConversation,
   cancelBackupMediaDownload,
   challengeStatus,
+  changeLocation,
   clearConversationSearch,
   clearGroupCreationError,
-  clearSearch,
+  clearSearchQuery,
   closeMaximumGroupSizeModal,
   closeRecommendedGroupSizeModal,
   composeDeleteAvatarFromDisk,
@@ -211,6 +222,7 @@ export function LeftPane({
   i18n,
   lookupConversationWithoutServiceId,
   isMacOS,
+  isOnline,
   isUpdateDownloaded,
   modeSpecificProps,
   navTabsCollapsed,
@@ -237,7 +249,6 @@ export function LeftPane({
   selectedConversationId,
   targetedMessageId,
   toggleNavTabsCollapse,
-  toggleProfileEditor,
   setChallengeStatus,
   setComposeGroupAvatar,
   setComposeGroupExpireTimer,
@@ -252,6 +263,7 @@ export function LeftPane({
   showConversation,
   showInbox,
   showUserNotFoundModal,
+  serverAlerts,
   startComposing,
   startSearch,
   startSettingGroupMetadata,
@@ -263,6 +275,7 @@ export function LeftPane({
   usernameLinkCorrupted,
   updateSearchTerm,
   dismissBackupMediaDownloadBanner,
+  updateFilterByUnread,
 }: PropsType): JSX.Element {
   const previousModeSpecificProps = usePrevious(
     modeSpecificProps,
@@ -459,7 +472,7 @@ export function LeftPane({
         const { conversationId, messageId } = conversationToOpen;
         showConversation({ conversationId, messageId });
         if (openedByNumber) {
-          clearSearch();
+          clearSearchQuery();
         }
         event.preventDefault();
         event.stopPropagation();
@@ -477,7 +490,7 @@ export function LeftPane({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [
-    clearSearch,
+    clearSearchQuery,
     helper,
     isMacOS,
     searchInConversation,
@@ -497,7 +510,7 @@ export function LeftPane({
   const preRowsNode = helper.getPreRowsNode({
     clearConversationSearch,
     clearGroupCreationError,
-    clearSearch,
+    clearSearchQuery,
     closeMaximumGroupSizeModal,
     closeRecommendedGroupSizeModal,
     composeDeleteAvatarFromDisk,
@@ -535,26 +548,6 @@ export function LeftPane({
     [showConversation]
   );
 
-  const previousSelectedConversationId = usePrevious(
-    selectedConversationId,
-    selectedConversationId
-  );
-
-  const isScrollable = helper.isScrollable();
-
-  let rowIndexToScrollTo: undefined | number;
-  let scrollBehavior: ScrollBehavior;
-  if (isScrollable) {
-    rowIndexToScrollTo =
-      previousSelectedConversationId === selectedConversationId
-        ? undefined
-        : helper.getRowIndexToScrollTo(selectedConversationId);
-    scrollBehavior = ScrollBehavior.Default;
-  } else {
-    rowIndexToScrollTo = 0;
-    scrollBehavior = ScrollBehavior.Hard;
-  }
-
   // We ensure that the listKey differs between some modes (e.g. inbox/archived), ensuring
   //   that AutoSizer properly detects the new size of its slot in the flexbox. The
   //   archive explainer text at the top of the archive view causes problems otherwise.
@@ -563,6 +556,8 @@ export function LeftPane({
 
   const measureRef = useRef<HTMLDivElement>(null);
   const measureSize = useSizeObserver(measureRef);
+
+  const previousMeasureSize = usePrevious(null, measureSize);
 
   const widthBreakpoint = getNavSidebarWidthBreakpoint(
     measureSize?.width ?? preferredWidthFromStorage
@@ -573,6 +568,51 @@ export function LeftPane({
     containerWidthBreakpoint: widthBreakpoint,
   };
 
+  // Control scroll position
+  const previousSelectedConversationId = usePrevious(
+    selectedConversationId,
+    selectedConversationId
+  );
+
+  const isScrollable = helper.isScrollable();
+
+  let rowIndexToScrollTo: undefined | number;
+  let scrollBehavior: ScrollBehavior;
+
+  const hasChangedModes =
+    previousModeSpecificProps?.mode !== modeSpecificProps.mode;
+
+  const hasSwitchedToInbox =
+    hasChangedModes && modeSpecificProps.mode === LeftPaneMode.Inbox;
+
+  const hasChangedConversations =
+    previousSelectedConversationId !== selectedConversationId;
+
+  const hasJustMounted = previousMeasureSize == null;
+  if (isScrollable) {
+    const rowIndexForSelectedConversation = helper.getRowIndexToScrollTo(
+      selectedConversationId
+    );
+    if (hasSwitchedToInbox) {
+      rowIndexToScrollTo = rowIndexForSelectedConversation;
+    } else if (
+      modeSpecificProps.mode === LeftPaneMode.Inbox &&
+      (hasChangedConversations || hasJustMounted)
+    ) {
+      rowIndexToScrollTo = rowIndexForSelectedConversation;
+    } else if (hasChangedModes) {
+      rowIndexToScrollTo = 0;
+    }
+    scrollBehavior = ScrollBehavior.Default;
+  } else {
+    rowIndexToScrollTo = 0;
+    scrollBehavior = ScrollBehavior.Hard;
+  }
+
+  const maybeServerAlert = getServerAlertDialog(
+    serverAlerts,
+    commonDialogProps
+  );
   // Yellow dialogs
   let maybeYellowDialog: JSX.Element | undefined;
 
@@ -585,6 +625,8 @@ export function LeftPane({
     maybeYellowDialog = renderNetworkStatus(commonDialogProps);
   } else if (hasRelinkDialog) {
     maybeYellowDialog = renderRelinkDialog(commonDialogProps);
+  } else if (maybeServerAlert) {
+    maybeYellowDialog = maybeServerAlert;
   }
 
   // Update dialog
@@ -629,7 +671,13 @@ export function LeftPane({
         actionText={i18n('icu:LeftPane--corrupted-username--action-text')}
         onClick={() => {
           openUsernameReservationModal();
-          toggleProfileEditor(ProfileEditorEditState.Username);
+          changeLocation({
+            tab: NavTab.Settings,
+            details: {
+              page: Page.Profile,
+              state: EditState.Username,
+            },
+          });
         }}
       >
         {i18n('icu:LeftPane--corrupted-username--text')}
@@ -639,7 +687,15 @@ export function LeftPane({
     maybeBanner = (
       <LeftPaneBanner
         actionText={i18n('icu:LeftPane--corrupted-username-link--action-text')}
-        onClick={() => toggleProfileEditor(ProfileEditorEditState.UsernameLink)}
+        onClick={() => {
+          changeLocation({
+            tab: NavTab.Settings,
+            details: {
+              page: Page.Profile,
+              state: EditState.UsernameLink,
+            },
+          });
+        }}
       >
         {i18n('icu:LeftPane--corrupted-username-link--text')}
       </LeftPaneBanner>
@@ -650,27 +706,6 @@ export function LeftPane({
     dialogs.push({ key: 'banner', dialog: maybeBanner });
   }
 
-  const hasMediaBeenQueuedForBackup =
-    backupMediaDownloadProgress?.totalBytes > 0;
-  if (
-    hasMediaBeenQueuedForBackup &&
-    !backupMediaDownloadProgress.downloadBannerDismissed
-  ) {
-    dialogs.push({
-      key: 'backupMediaDownload',
-      dialog: (
-        <BackupMediaDownloadProgress
-          i18n={i18n}
-          {...backupMediaDownloadProgress}
-          handleClose={dismissBackupMediaDownloadBanner}
-          handlePause={pauseBackupMediaDownload}
-          handleResume={resumeBackupMediaDownload}
-          handleCancel={cancelBackupMediaDownload}
-        />
-      ),
-    });
-  }
-
   const hideHeader =
     modeSpecificProps.mode === LeftPaneMode.Archive ||
     modeSpecificProps.mode === LeftPaneMode.Compose ||
@@ -678,6 +713,13 @@ export function LeftPane({
     modeSpecificProps.mode === LeftPaneMode.FindByPhoneNumber ||
     modeSpecificProps.mode === LeftPaneMode.ChooseGroupMembers ||
     modeSpecificProps.mode === LeftPaneMode.SetGroupMetadata;
+
+  const showBackupMediaDownloadProgress =
+    !hideHeader &&
+    backupMediaDownloadProgress.isBackupMediaEnabled &&
+    !backupMediaDownloadProgress.downloadBannerDismissed;
+
+  const hasDialogs = dialogs.length ? !hideHeader : false;
 
   return (
     <NavSidebar
@@ -752,7 +794,7 @@ export function LeftPane({
           <NavSidebarSearchHeader>
             {helper.getSearchInput({
               clearConversationSearch,
-              clearSearch,
+              clearSearchQuery,
               endConversationSearch,
               endSearch,
               i18n,
@@ -766,15 +808,30 @@ export function LeftPane({
               showUserNotFoundModal,
               setIsFetchingUUID,
               showInbox,
+              updateFilterByUnread,
             })}
           </NavSidebarSearchHeader>
         )}
-        <div className="module-left-pane__dialogs">
-          {!hideHeader &&
-            dialogs.map(({ key, dialog }) => (
+
+        {hasDialogs ? (
+          <div className="module-left-pane__dialogs">
+            {dialogs.map(({ key, dialog }) => (
               <React.Fragment key={key}>{dialog}</React.Fragment>
             ))}
-        </div>
+          </div>
+        ) : null}
+        {showBackupMediaDownloadProgress ? (
+          <BackupMediaDownloadProgress
+            i18n={i18n}
+            widthBreakpoint={widthBreakpoint}
+            isOnline={isOnline}
+            {...backupMediaDownloadProgress}
+            handleClose={dismissBackupMediaDownloadBanner}
+            handlePause={pauseBackupMediaDownload}
+            handleResume={resumeBackupMediaDownload}
+            handleCancel={cancelBackupMediaDownload}
+          />
+        ) : null}
         {preRowsNode && <React.Fragment key={0}>{preRowsNode}</React.Fragment>}
         <div className="module-left-pane__list--measure" ref={measureRef}>
           <div className="module-left-pane__list--wrapper">
@@ -791,6 +848,7 @@ export function LeftPane({
                 getPreferredBadge={getPreferredBadge}
                 getRow={getRow}
                 i18n={i18n}
+                hasDialogPadding={hasDialogs}
                 onClickArchiveButton={showArchivedConversations}
                 onClickContactCheckbox={(
                   conversationId: string,
@@ -807,6 +865,9 @@ export function LeftPane({
                     default:
                       throw missingCaseError(disabledReason);
                   }
+                }}
+                onClickClearFilterButton={() => {
+                  updateFilterByUnread(false);
                 }}
                 showUserNotFoundModal={showUserNotFoundModal}
                 setIsFetchingUUID={setIsFetchingUUID}

@@ -3,7 +3,7 @@
 
 import { assert } from 'chai';
 import type { PeekInfo } from '@signalapp/ringrtc';
-import uuid from 'uuid';
+import { v4 as uuid } from 'uuid';
 import {
   getPeerIdFromConversation,
   getCallIdFromEra,
@@ -12,7 +12,7 @@ import {
 import {
   getDefaultConversation,
   getDefaultGroup,
-} from '../../test-both/helpers/getDefaultConversation';
+} from '../../test-helpers/getDefaultConversation';
 import { uuidToBytes } from '../../util/uuidToBytes';
 
 const MOCK_ERA = 'abc';

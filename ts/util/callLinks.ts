@@ -1,12 +1,10 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import { v4 as generateUuid } from 'uuid';
-import * as RemoteConfig from '../RemoteConfig';
 import * as Bytes from '../Bytes';
 import type { CallLinkConversationType, CallLinkType } from '../types/CallLink';
 import { CallLinkRestrictions } from '../types/CallLink';
 import type { LocalizerType } from '../types/Util';
-import { isTestOrMockEnvironment } from '../environment';
 import { getColorForCallLink } from './getColorForCallLink';
 import {
   AdhocCallStatus,
@@ -15,7 +13,6 @@ import {
   type CallHistoryDetails,
   CallMode,
 } from '../types/CallDisposition';
-import { DAY } from './durations';
 
 export const CALL_LINK_DEFAULT_STATE: Pick<
   CallLinkType,
@@ -28,8 +25,6 @@ export const CALL_LINK_DEFAULT_STATE: Pick<
   storageNeedsSync: false,
 };
 
-export const CALL_LINK_DELETED_STORAGE_RECORD_TTL = 30 * DAY;
-
 export function getKeyFromCallLink(callLink: string): string {
   const url = new URL(callLink);
   if (url == null) {
@@ -40,13 +35,6 @@ export function getKeyFromCallLink(callLink: string): string {
   const hashParams = new URLSearchParams(hash);
 
   return hashParams.get('key') || '';
-}
-
-export function isCallLinksCreateEnabled(): boolean {
-  if (isTestOrMockEnvironment()) {
-    return true;
-  }
-  return RemoteConfig.getValue('desktop.calling.adhoc.create') === 'TRUE';
 }
 
 export function callLinkToConversation(
@@ -104,4 +92,27 @@ export function toCallHistoryFromUnusedCallLink(
     endedTimestamp: null,
     status: AdhocCallStatus.Pending,
   };
+}
+
+export function isCallHistoryForUnusedCallLink(
+  callHistory: CallHistoryDetails
+): boolean {
+  const {
+    ringerId,
+    startedById,
+    endedTimestamp,
+    mode,
+    type,
+    direction,
+    status,
+  } = callHistory;
+  return (
+    ringerId == null &&
+    startedById == null &&
+    endedTimestamp == null &&
+    mode === CallMode.Adhoc &&
+    type === CallType.Adhoc &&
+    direction === CallDirection.Incoming &&
+    status === AdhocCallStatus.Pending
+  );
 }

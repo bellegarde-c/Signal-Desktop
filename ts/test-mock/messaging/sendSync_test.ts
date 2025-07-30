@@ -33,7 +33,7 @@ describe('sendSync', function (this: Mocha.Suite) {
     await bootstrap.teardown();
   });
 
-  it('processes a synd sync in a group', async () => {
+  it('processes a send sync in a group', async () => {
     const { contacts, desktop, phone } = bootstrap;
 
     const window = await app.getWindow();
@@ -68,7 +68,7 @@ describe('sendSync', function (this: Mocha.Suite) {
           timestamp: Long.fromNumber(timestamp),
           message: originalDataMessage,
           unidentifiedStatus: members.map(member => ({
-            destinationServiceId: member.device.aci,
+            destinationServiceIdBinary: member.device.aciBinary,
             destination: member.device.number,
           })),
         },

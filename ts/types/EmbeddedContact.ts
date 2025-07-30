@@ -10,10 +10,11 @@ import type { ReadonlyMessageAttributesType } from '../model-types.d';
 import { isNotNil } from '../util/isNotNil';
 import {
   format as formatPhoneNumber,
-  parse as parsePhoneNumber,
+  normalize as normalizePhoneNumber,
 } from './PhoneNumber';
 import type {
   AttachmentType,
+  AttachmentForUIType,
   AttachmentWithHydratedData,
   LocalAttachmentV2Type,
   UploadedAttachmentType,
@@ -26,9 +27,9 @@ import { getLocalAttachmentUrl } from '../util/getLocalAttachmentUrl';
 
 type GenericEmbeddedContactType<AvatarType> = {
   name?: Name;
-  number?: Array<Phone>;
-  email?: Array<Email>;
-  address?: Array<PostalAddress>;
+  number?: ReadonlyArray<Phone>;
+  email?: ReadonlyArray<Email>;
+  address?: ReadonlyArray<PostalAddress>;
   avatar?: AvatarType;
   organization?: string;
 
@@ -38,6 +39,7 @@ type GenericEmbeddedContactType<AvatarType> = {
 };
 
 export type EmbeddedContactType = GenericEmbeddedContactType<Avatar>;
+export type EmbeddedContactForUIType = GenericEmbeddedContactType<AvatarForUI>;
 export type EmbeddedContactWithHydratedAvatar =
   GenericEmbeddedContactType<AvatarWithHydratedData>;
 export type EmbeddedContactWithUploadedAvatar =
@@ -49,7 +51,7 @@ type Name = {
   prefix?: string;
   suffix?: string;
   middleName?: string;
-  displayName?: string;
+  nickname?: string;
 };
 
 export enum ContactFormType {
@@ -95,6 +97,7 @@ type GenericAvatar<Attachment> = {
 };
 
 export type Avatar = GenericAvatar<AttachmentType>;
+export type AvatarForUI = GenericAvatar<AttachmentForUIType>;
 export type AvatarWithHydratedData = GenericAvatar<AttachmentWithHydratedData>;
 export type UploadedAvatar = GenericAvatar<UploadedAttachmentType>;
 
@@ -154,21 +157,25 @@ export function embeddedContactSelector(
     firstNumber?: string;
     serviceId?: ServiceIdString;
   }
-): ReadonlyDeep<EmbeddedContactType> {
+): ReadonlyDeep<EmbeddedContactForUIType> {
   const { firstNumber, serviceId, regionCode } = options;
 
-  let { avatar } = contact;
+  const { avatar } = contact;
+  let avatarForUI: EmbeddedContactForUIType['avatar'];
   if (avatar && avatar.avatar) {
     if (avatar.avatar.error) {
-      avatar = undefined;
+      avatarForUI = undefined;
     } else {
-      avatar = {
+      avatarForUI = {
         ...avatar,
         avatar: {
           ...avatar.avatar,
           path: avatar.avatar.path
             ? getLocalAttachmentUrl(avatar.avatar)
             : undefined,
+
+          // `error` case is handled above
+          isPermanentlyUndownloadable: false,
         },
       };
     }
@@ -178,7 +185,7 @@ export function embeddedContactSelector(
     ...contact,
     firstNumber,
     serviceId,
-    avatar,
+    avatar: avatarForUI,
     number:
       contact.number &&
       contact.number.map(item => ({
@@ -190,17 +197,31 @@ export function embeddedContactSelector(
   };
 }
 
+export function getDisplayName({
+  name,
+  organization,
+}: ReadonlyDeep<EmbeddedContactType>): string | undefined {
+  // See https://github.com/signalapp/Signal-iOS-Private/blob/210a46037f12cdc6ad97ac6dceb64fbc43469f67/SignalServiceKit/Messages/Interactions/ContactShare/OWSContactName.swift#L87-L104
+  if (name?.nickname) {
+    return name.nickname;
+  }
+  if (name?.givenName && name?.familyName) {
+    return `${name.givenName} ${name.familyName}`;
+  }
+  if (organization) {
+    return organization;
+  }
+  return undefined;
+}
+
 export function getName(
   contact: ReadonlyDeep<EmbeddedContactType>
 ): string | undefined {
-  const { name, organization } = contact;
-  const displayName = (name && name.displayName) || undefined;
+  const { name } = contact;
   const givenName = (name && name.givenName) || undefined;
   const familyName = (name && name.familyName) || undefined;
-  const backupName =
-    (givenName && familyName && `${givenName} ${familyName}`) || undefined;
 
-  return displayName || organization || backupName || givenName || familyName;
+  return getDisplayName(contact) || givenName || familyName;
 }
 
 export function parseAndWriteAvatar(
@@ -209,15 +230,15 @@ export function parseAndWriteAvatar(
   return async (
     contact: EmbeddedContactType,
     context: {
-      message: ReadonlyMessageAttributesType;
       getRegionCode: () => string | undefined;
       logger: LoggerType;
       writeNewAttachmentData: (
         data: Uint8Array
       ) => Promise<LocalAttachmentV2Type>;
-    }
+    },
+    message: ReadonlyMessageAttributesType
   ): Promise<EmbeddedContactType> => {
-    const { message, getRegionCode, logger } = context;
+    const { getRegionCode, logger } = context;
     const { avatar } = contact;
 
     const contactWithUpdatedAvatar =
@@ -292,28 +313,18 @@ export function _validate(
   contact: EmbeddedContactType,
   { messageId }: { messageId: string }
 ): Error | undefined {
-  const { name, number, email, address, organization } = contact;
+  const { organization } = contact;
 
-  if ((!name || !name.displayName) && !organization) {
+  if (!getDisplayName(contact) && !organization) {
     return new Error(
       `Message ${messageId}: Contact had neither 'displayName' nor 'organization'`
-    );
-  }
-
-  if (
-    (!number || !number.length) &&
-    (!email || !email.length) &&
-    (!address || !address.length)
-  ) {
-    return new Error(
-      `Message ${messageId}: Contact had no included numbers, email or addresses`
     );
   }
 
   return undefined;
 }
 
-function parsePhoneItem(
+export function parsePhoneItem(
   item: Phone,
   { regionCode }: { regionCode: string | undefined }
 ): Phone | undefined {
@@ -321,10 +332,14 @@ function parsePhoneItem(
     return undefined;
   }
 
+  const value = regionCode
+    ? normalizePhoneNumber(item.value, { regionCode })
+    : item.value;
+
   return {
     ...item,
     type: item.type || DEFAULT_PHONE_TYPE,
-    value: parsePhoneNumber(item.value, { regionCode }),
+    value: value ?? item.value,
   };
 }
 

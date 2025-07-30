@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import createDebug from 'debug';
+import { assert } from 'chai';
 import { expect } from 'playwright/test';
 import { type PrimaryDevice, StorageState } from '@signalapp/mock-server';
 import * as path from 'path';
@@ -17,6 +18,15 @@ import * as durations from '../../util/durations';
 import { strictAssert } from '../../util/assert';
 
 export const debug = createDebug('mock:test:attachments');
+
+const CAT_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'fixtures',
+  'cat-screenshot.png'
+);
 
 describe('attachments', function (this: Mocha.Suite) {
   this.timeout(durations.MINUTE);
@@ -65,7 +75,7 @@ describe('attachments', function (this: Mocha.Suite) {
       page,
       pinned,
       'This is my cat',
-      [path.join(__dirname, '..', '..', '..', 'fixtures', 'cat-screenshot.png')]
+      [CAT_PATH]
     );
 
     const Message = getTimelineMessageWithText(page, 'This is my cat');
@@ -77,6 +87,12 @@ describe('attachments', function (this: Mocha.Suite) {
     await MessageSent.waitFor();
     const timestamp = await Message.getAttribute('data-testid');
     strictAssert(timestamp, 'timestamp must exist');
+
+    const sentMessage = (
+      await app.getMessagesBySentAt(parseInt(timestamp, 10))
+    )[0];
+    strictAssert(sentMessage, 'message exists in DB');
+    const sentAttachment = sentMessage.attachments?.[0];
 
     // For this test, just send back the same attachment that was uploaded to test a
     // round-trip
@@ -95,5 +111,14 @@ describe('attachments', function (this: Mocha.Suite) {
         'img.module-image__image'
       )
     ).toBeVisible();
+
+    const incomingMessage = (
+      await app.getMessagesBySentAt(incomingTimestamp)
+    )[0];
+    strictAssert(incomingMessage, 'message exists in DB');
+    const incomingAttachment = incomingMessage.attachments?.[0];
+
+    assert.strictEqual(incomingAttachment?.key, sentAttachment?.key);
+    assert.strictEqual(incomingAttachment?.digest, sentAttachment?.digest);
   });
 });

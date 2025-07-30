@@ -16,6 +16,7 @@ import type { AnyToast } from '../types/Toast';
 import { ToastType } from '../types/Toast';
 import type { AnyActionableMegaphone } from '../types/Megaphone';
 import { MegaphoneType } from '../types/Megaphone';
+import { AttachmentNotAvailableModalType } from './AttachmentNotAvailableModal';
 
 export type PropsType = {
   hideToast: () => unknown;
@@ -27,6 +28,9 @@ export type PropsType = {
     conversationId: string,
     options?: { wasPinned?: boolean }
   ) => unknown;
+  showAttachmentNotAvailableModal: (
+    type: AttachmentNotAvailableModalType
+  ) => void;
   toast?: AnyToast;
   megaphone?: AnyActionableMegaphone;
   centerToast?: boolean;
@@ -43,6 +47,7 @@ export function renderToast({
   openFileInFolder,
   onShowDebugLog,
   onUndoArchive,
+  showAttachmentNotAvailableModal,
   OS,
   toast,
 }: PropsType): JSX.Element | null {
@@ -84,6 +89,22 @@ export function renderToast({
     return (
       <Toast onClose={hideToast}>
         {i18n('icu:GroupV2--join--already-awaiting-approval')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.AttachmentDownloadFailed) {
+    return (
+      <Toast onClose={hideToast}>{i18n('icu:Toast--download-failed')}</Toast>
+    );
+  }
+
+  if (toastType === ToastType.AttachmentDownloadStillInProgress) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:attachmentStillDownloading', {
+          count: toast.parameters.count,
+        })}
       </Toast>
     );
   }
@@ -204,6 +225,14 @@ export function renderToast({
     );
   }
 
+  if (toastType === ToastType.CopiedBackupKey) {
+    return (
+      <Toast onClose={hideToast} timeout={3 * SECOND}>
+        {i18n('icu:Preferences__local-backups-copied-key')}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.CopiedCallLink) {
     return (
       <Toast onClose={hideToast} timeout={3 * SECOND}>
@@ -299,6 +328,34 @@ export function renderToast({
     );
   }
 
+  if (toastType === ToastType.FailedToImportBackup) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:Toast__ActionLabel--SubmitLog'),
+          onClick: onShowDebugLog,
+        }}
+      >
+        {i18n('icu:Toast--FailedToImportBackup')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.InvalidStorageServiceHeaders) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:Toast__ActionLabel--SubmitLog'),
+          onClick: onShowDebugLog,
+        }}
+      >
+        {i18n('icu:Toast--InvalidStorageServiceHeaders')}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.FileSaved) {
     return (
       <Toast
@@ -310,7 +367,9 @@ export function renderToast({
           },
         }}
       >
-        {i18n('icu:attachmentSaved')}
+        {i18n('icu:attachmentSavedPlural', {
+          count: toast.parameters.countOfFiles ?? 1,
+        })}
       </Toast>
     );
   }
@@ -381,6 +440,23 @@ export function renderToast({
     return <Toast onClose={hideToast}>{i18n('icu:maximumAttachments')}</Toast>;
   }
 
+  if (toastType === ToastType.MediaNoLongerAvailable) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:attachmentNoLongerAvailable__learnMore'),
+          onClick: () =>
+            showAttachmentNotAvailableModal(
+              AttachmentNotAvailableModalType.VisualMedia
+            ),
+        }}
+      >
+        {i18n('icu:mediaNotAvailable')}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.MessageBodyTooLong) {
     return <Toast onClose={hideToast}>{i18n('icu:messageBodyTooLong')}</Toast>;
   }
@@ -415,6 +491,28 @@ export function renderToast({
     return <Toast onClose={hideToast}>{i18n('icu:Reactions--error')}</Toast>;
   }
 
+  if (toastType === ToastType.ReceiptSaved) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:attachmentSavedShow'),
+          onClick: () => {
+            openFileInFolder(toast.parameters.fullPath);
+          },
+        }}
+      >
+        {i18n('icu:Toast--ReceiptSaved')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.ReceiptSaveFailed) {
+    return (
+      <Toast onClose={hideToast}>{i18n('icu:Toast--ReceiptSaveFailed')}</Toast>
+    );
+  }
+
   if (toastType === ToastType.ReportedSpam) {
     return (
       <Toast onClose={hideToast}>
@@ -435,6 +533,20 @@ export function renderToast({
     return (
       <Toast onClose={hideToast}>
         {i18n('icu:stickers--toast--InstallFailed')}
+      </Toast>
+    );
+  }
+  if (toastType === ToastType.SQLError) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:Toast__ActionLabel--SubmitLog'),
+          onClick: onShowDebugLog,
+        }}
+        autoDismissDisabled
+      >
+        {i18n('icu:Toast--SQLError')}
       </Toast>
     );
   }

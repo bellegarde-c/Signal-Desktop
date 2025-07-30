@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import PQueue from 'p-queue';
+import { noop } from 'lodash';
 
 import { DataWriter } from '../sql/Client';
 import type { ContactSyncEvent } from '../textsecure/messageReceiverEvents';
@@ -9,28 +10,34 @@ import {
   parseContactsV2,
   type ContactDetailsWithAvatar,
 } from '../textsecure/ContactsParser';
-import { normalizeAci } from '../util/normalizeAci';
 import * as Conversation from '../types/Conversation';
 import * as Errors from '../types/errors';
 import type { ValidateConversationType } from '../model-types.d';
 import type { ConversationModel } from '../models/conversations';
 import { validateConversation } from '../util/validateConversation';
 import { isDirectConversation, isMe } from '../util/whatTypeOfConversation';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import { dropNull } from '../util/dropNull';
 import type { ProcessedAttachment } from '../textsecure/Types';
 import { downloadAttachment } from '../textsecure/downloadAttachment';
 import { strictAssert } from '../util/assert';
 import type { ReencryptedAttachmentV2 } from '../AttachmentCrypto';
 import { SECOND } from '../util/durations';
+import { AttachmentVariant } from '../types/Attachment';
+import { MediaTier } from '../types/AttachmentDownload';
+
+const log = createLogger('contactSync');
 
 // When true - we are running the very first storage and contact sync after
 // linking.
 let isInitialSync = false;
 
-export function setIsInitialSync(newValue: boolean): void {
-  log.info(`setIsInitialSync(${newValue})`);
+export function setIsInitialContactSync(newValue: boolean): void {
+  log.info(`setIsInitialContactSync(${newValue})`);
   isInitialSync = newValue;
+}
+export function getIsInitialContactSync(): boolean {
+  return isInitialSync;
 }
 
 async function updateConversationFromContactSync(
@@ -100,12 +107,16 @@ async function downloadAndParseContactAttachment(
   strictAssert(window.textsecure.server, 'server must exist');
   let downloaded: ReencryptedAttachmentV2 | undefined;
   try {
+    const abortController = new AbortController();
     downloaded = await downloadAttachment(
       window.textsecure.server,
-      contactAttachment,
+      { attachment: contactAttachment, mediaTier: MediaTier.STANDARD },
       {
+        variant: AttachmentVariant.Default,
+        onSizeUpdate: noop,
         disableRetries: true,
         timeout: 90 * SECOND,
+        abortSignal: abortController.signal,
       }
     );
 
@@ -140,7 +151,7 @@ async function doContactSync({
   for (const details of contacts) {
     const partialConversation: ValidateConversationType = {
       e164: details.number,
-      serviceId: normalizeAci(details.aci, 'doContactSync'),
+      serviceId: details.aci,
       type: 'private',
     };
 
@@ -155,7 +166,7 @@ async function doContactSync({
 
     const { conversation } = window.ConversationController.maybeMergeContacts({
       e164: details.number,
-      aci: normalizeAci(details.aci, 'contactSync.aci'),
+      aci: details.aci,
       reason: logId,
     });
 
@@ -224,6 +235,10 @@ async function doContactSync({
 
   await window.storage.put('synced_at', Date.now());
   window.Whisper.events.trigger('contactSync:complete');
+  if (isInitialSync) {
+    isInitialSync = false;
+  }
+  window.SignalCI?.handleEvent('contactSync', isFullSync);
 
   log.info(`${logId}: done`);
 }
