@@ -34,10 +34,6 @@ type MaybeNotifyArgs = {
 );
 
 export async function maybeNotify(args: MaybeNotifyArgs): Promise<void> {
-  if (!notificationService.isEnabled) {
-    return;
-  }
-
   const { conversation, reaction } = args;
 
   let warrantsNotification: boolean;
