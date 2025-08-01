@@ -139,6 +139,7 @@
     "config": "3.3.12",
     "copy-text-to-clipboard": "2.1.0",
     "dashdash": "2.0.0",
+    "dbus-native": "0.4.0",
     "direction": "1.0.4",
     "emoji-datasource": "15.1.2",
     "emoji-datasource-apple": "15.1.2",
