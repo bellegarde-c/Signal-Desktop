@@ -11,6 +11,7 @@ import type { AttachmentForUIType } from '../../types/Attachment';
 import type { LocalizerType } from '../../types/I18N';
 import { Spinner } from '../Spinner';
 import { isKeyboardActivation } from '../../hooks/useKeyboardShortcuts';
+import { roundFractionForProgressBar } from '../../util/numbers';
 
 export type PropsType = {
   attachments: ReadonlyArray<AttachmentForUIType>;
@@ -126,11 +127,13 @@ export function AttachmentDetailPill({
       );
       text = (
         <div className="AttachmentDetailPill__text-wrapper">
-          {formatFileSize(totalSize, 2)}
+          {formatFileSize(totalSize)}
         </div>
       );
     } else if (totalDownloadedSize > 0) {
-      const downloadFraction = totalDownloadedSize / totalSize;
+      const downloadFraction = roundFractionForProgressBar(
+        totalDownloadedSize / totalSize
+      );
 
       ariaLabel = i18n('icu:cancelDownload');
       onClick = cancelDownloadClick;
@@ -148,9 +151,9 @@ export function AttachmentDetailPill({
       text = (
         <div className="AttachmentDetailPill__text-wrapper">
           {totalDownloadedSize > 0 && areAnyPending
-            ? `${formatFileSize(totalDownloadedSize, 2)} / `
+            ? `${formatFileSize(totalDownloadedSize)} / `
             : undefined}
-          {formatFileSize(totalSize, 2)}
+          {formatFileSize(totalSize)}
         </div>
       );
     } else {
@@ -165,7 +168,7 @@ export function AttachmentDetailPill({
       );
       text = (
         <div className="AttachmentDetailPill__text-wrapper">
-          {formatFileSize(totalSize, 2)}
+          {formatFileSize(totalSize)}
         </div>
       );
     }
@@ -191,9 +194,9 @@ export function AttachmentDetailPill({
     <div className="AttachmentDetailPill">
       <div className="AttachmentDetailPill__text-wrapper">
         {totalDownloadedSize > 0 && areAnyPending
-          ? `${formatFileSize(totalDownloadedSize, 2)} / `
+          ? `${formatFileSize(totalDownloadedSize)} / `
           : undefined}
-        {formatFileSize(totalSize, 2)}
+        {formatFileSize(totalSize)}
         {isGif ? ' · GIF' : undefined}
       </div>
     </div>

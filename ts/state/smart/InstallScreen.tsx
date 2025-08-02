@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ComponentProps } from 'react';
-import React, { memo, useCallback, useState, useEffect } from 'react';
+import React, { memo, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 
 import { getIntl } from '../selectors/user';
@@ -17,10 +17,11 @@ import { InstallScreen } from '../../components/InstallScreen';
 import { WidthBreakpoint } from '../../components/_util';
 import { InstallScreenStep } from '../../types/InstallScreen';
 import OS from '../../util/os/osMain';
-import { fileToBytes } from '../../util/fileToBytes';
 import { isStagingServer } from '../../util/isStagingServer';
-import * as log from '../../logging/log';
+import { createLogger } from '../../logging/log';
 import { SmartToastManager } from './ToastManager';
+
+const log = createLogger('InstallScreen');
 
 type PropsType = ComponentProps<typeof InstallScreen>;
 
@@ -28,49 +29,19 @@ export const SmartInstallScreen = memo(function SmartInstallScreen() {
   const i18n = useSelector(getIntl);
   const installerState = useSelector(getInstallerState);
   const updates = useSelector(getUpdatesState);
-  const { startInstaller, finishInstall, retryBackupImport } =
-    useInstallerActions();
+  const { startInstaller, retryBackupImport } = useInstallerActions();
   const { startUpdate, forceUpdate } = useUpdatesActions();
   const hasExpired = useSelector(hasExpiredSelector);
-
-  const [deviceName, setDeviceName] = useState<string>('');
-  const [backupFile, setBackupFile] = useState<File | undefined>();
-
-  const onSubmitDeviceName = useCallback(async () => {
-    if (backupFile != null) {
-      // This is only for testing so don't bother catching errors
-      finishInstall({
-        deviceName,
-        backupFile: await fileToBytes(backupFile),
-        isLinkAndSync: false,
-      });
-    } else {
-      finishInstall({
-        deviceName,
-        backupFile: undefined,
-        isLinkAndSync: false,
-      });
-    }
-  }, [backupFile, deviceName, finishInstall]);
 
   const onCancelBackupImport = useCallback((): void => {
     backupsService.cancelDownloadAndImport();
   }, []);
 
-  const suggestedDeviceName =
-    installerState.step === InstallScreenStep.ChoosingDeviceName
-      ? installerState.deviceName
-      : undefined;
-
-  useEffect(() => {
-    setDeviceName(suggestedDeviceName ?? '');
-  }, [suggestedDeviceName]);
-
   let props: PropsType;
 
   switch (installerState.step) {
     case InstallScreenStep.NotStarted:
-      log.error('InstallScreen: Installer not started');
+      log.error('Installer not started');
       return null;
 
     case InstallScreenStep.QrCodeNotScanned:
@@ -90,18 +61,6 @@ export const SmartInstallScreen = memo(function SmartInstallScreen() {
         },
       };
       break;
-    case InstallScreenStep.ChoosingDeviceName:
-      props = {
-        step: InstallScreenStep.ChoosingDeviceName,
-        screenSpecificProps: {
-          i18n,
-          deviceName,
-          setDeviceName,
-          setBackupFile,
-          onSubmit: onSubmitDeviceName,
-        },
-      };
-      break;
     case InstallScreenStep.LinkInProgress:
       props = {
         step: InstallScreenStep.LinkInProgress,
@@ -116,7 +75,6 @@ export const SmartInstallScreen = memo(function SmartInstallScreen() {
           ...installerState,
           onCancel: onCancelBackupImport,
           onRetry: retryBackupImport,
-          onRestartLink: startInstaller,
           updates,
           currentVersion: window.getVersion(),
           forceUpdate,

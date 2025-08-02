@@ -6,6 +6,7 @@ export enum ToastType {
   AddedUsersToCall = 'AddedUsersToCall',
   AlreadyGroupMember = 'AlreadyGroupMember',
   AlreadyRequestedToJoin = 'AlreadyRequestedToJoin',
+  AttachmentDownloadFailed = 'AttachmentDownloadFailed',
   AttachmentDownloadStillInProgress = 'AttachmentDownloadStillInProgress',
   Blocked = 'Blocked',
   BlockedGroup = 'BlockedGroup',
@@ -22,6 +23,7 @@ export enum ToastType {
   ConversationMarkedUnread = 'ConversationMarkedUnread',
   ConversationRemoved = 'ConversationRemoved',
   ConversationUnarchived = 'ConversationUnarchived',
+  CopiedBackupKey = 'CopiedBackupKey',
   CopiedCallLink = 'CopiedCallLink',
   CopiedUsername = 'CopiedUsername',
   CopiedUsernameLink = 'CopiedUsernameLink',
@@ -29,6 +31,12 @@ export enum ToastType {
   DecryptionError = 'DecryptionError',
   DebugLogError = 'DebugLogError',
   DeleteForEveryoneFailed = 'DeleteForEveryoneFailed',
+  DonationCancelled = 'DonationCancelled',
+  DonationCompleted = 'DonationCompleted',
+  DonationError = 'DonationError',
+  DonationProcessing = 'DonationProcessing',
+  DonationVerificationNeeded = 'DonationVerificationNeeded',
+  DonationVerificationFailed = 'DonationVerificationFailed',
   Error = 'Error',
   Expired = 'Expired',
   FailedToDeleteUsername = 'FailedToDeleteUsername',
@@ -40,6 +48,7 @@ export enum ToastType {
   FileSize = 'FileSize',
   GroupLinkCopied = 'GroupLinkCopied',
   InvalidConversation = 'InvalidConversation',
+  InvalidStorageServiceHeaders = 'InvalidStorageServiceHeaders',
   LeftGroup = 'LeftGroup',
   LinkCopied = 'LinkCopied',
   LoadingFullLogs = 'LoadingFullLogs',
@@ -50,8 +59,11 @@ export enum ToastType {
   OriginalMessageNotFound = 'OriginalMessageNotFound',
   PinnedConversationsFull = 'PinnedConversationsFull',
   ReactionFailed = 'ReactionFailed',
+  ReceiptSaved = 'ReceiptSaved',
+  ReceiptSaveFailed = 'ReceiptSaveFailed',
   ReportedSpam = 'ReportedSpam',
   ReportedSpamAndBlocked = 'ReportedSpamAndBlocked',
+  SQLError = 'SQLError',
   StickerPackInstallFailed = 'StickerPackInstallFailed',
   StoryMuted = 'StoryMuted',
   StoryReact = 'StoryReact',
@@ -82,6 +94,10 @@ export type AnyToast =
   | { toastType: ToastType.AlreadyGroupMember }
   | { toastType: ToastType.AlreadyRequestedToJoin }
   | {
+      toastType: ToastType.AttachmentDownloadFailed;
+      parameters: { messageId: string };
+    }
+  | {
       toastType: ToastType.AttachmentDownloadStillInProgress;
       parameters: { count: number };
     }
@@ -103,12 +119,19 @@ export type AnyToast =
   | { toastType: ToastType.ConversationMarkedUnread }
   | { toastType: ToastType.ConversationRemoved; parameters: { title: string } }
   | { toastType: ToastType.ConversationUnarchived }
+  | { toastType: ToastType.CopiedBackupKey }
   | { toastType: ToastType.CopiedCallLink }
   | { toastType: ToastType.CopiedUsername }
   | { toastType: ToastType.CopiedUsernameLink }
   | { toastType: ToastType.DangerousFileType }
   | { toastType: ToastType.DebugLogError }
   | { toastType: ToastType.DeleteForEveryoneFailed }
+  | { toastType: ToastType.DonationCancelled }
+  | { toastType: ToastType.DonationCompleted }
+  | { toastType: ToastType.DonationError }
+  | { toastType: ToastType.DonationProcessing }
+  | { toastType: ToastType.DonationVerificationFailed }
+  | { toastType: ToastType.DonationVerificationNeeded }
   | { toastType: ToastType.Error }
   | { toastType: ToastType.Expired }
   | { toastType: ToastType.FailedToDeleteUsername }
@@ -133,6 +156,7 @@ export type AnyToast =
       };
     }
   | { toastType: ToastType.InvalidConversation }
+  | { toastType: ToastType.InvalidStorageServiceHeaders }
   | { toastType: ToastType.LeftGroup }
   | { toastType: ToastType.LinkCopied }
   | { toastType: ToastType.LoadingFullLogs }
@@ -143,9 +167,15 @@ export type AnyToast =
   | { toastType: ToastType.OriginalMessageNotFound }
   | { toastType: ToastType.PinnedConversationsFull }
   | { toastType: ToastType.ReactionFailed }
+  | {
+      toastType: ToastType.ReceiptSaved;
+      parameters: { fullPath: string };
+    }
+  | { toastType: ToastType.ReceiptSaveFailed }
   | { toastType: ToastType.ReportedSpam }
   | { toastType: ToastType.ReportedSpamAndBlocked }
   | { toastType: ToastType.StickerPackInstallFailed }
+  | { toastType: ToastType.SQLError }
   | { toastType: ToastType.StoryMuted }
   | { toastType: ToastType.StoryReact }
   | { toastType: ToastType.StoryReply }

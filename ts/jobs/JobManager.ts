@@ -8,7 +8,7 @@ import {
 } from '../util/explodePromise';
 import { clearTimeoutIfNecessary } from '../util/clearTimeoutIfNecessary';
 import { drop } from '../util/drop';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import { missingCaseError } from '../util/missingCaseError';
 import {
   type ExponentialBackoffOptionsType,
@@ -16,6 +16,8 @@ import {
 } from '../util/exponentialBackoff';
 import * as Errors from '../types/errors';
 import { sleep } from '../util/sleep';
+
+const log = createLogger('JobManager');
 
 export type JobManagerJobType = {
   active: boolean;
@@ -118,11 +120,11 @@ export abstract class JobManager<CoreJobType> {
   }
 
   async waitForIdle(): Promise<void> {
-    if (this.#activeJobs.size === 0) {
-      return;
-    }
-
-    await new Promise<void>(resolve => this.#idleCallbacks.push(resolve));
+    const idledPromise = new Promise<void>(resolve =>
+      this.#idleCallbacks.push(resolve)
+    );
+    this.#tick();
+    return idledPromise;
   }
 
   #tick(): void {
@@ -190,11 +192,6 @@ export abstract class JobManager<CoreJobType> {
       if (runningJob) {
         log.info(`${logId}: already running; resetting attempts`);
         runningJob.attempts = 0;
-
-        await this.params.saveJob({
-          ...runningJob,
-          attempts: 0,
-        });
 
         return { isAlreadyRunning: true };
       }

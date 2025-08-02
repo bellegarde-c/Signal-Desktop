@@ -10,16 +10,18 @@ import type { LocalizerType, ThemeType } from '../../types/Util';
 import type { AttachmentForUIType } from '../../types/Attachment';
 import {
   hasNotResolved,
-  getImageDimensions,
+  getImageDimensionsForTimeline,
   defaultBlurHash,
   isDownloadable,
 } from '../../types/Attachment';
 import * as Errors from '../../types/errors';
-import * as log from '../../logging/log';
+import { createLogger } from '../../logging/log';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AttachmentDetailPill } from './AttachmentDetailPill';
 import { getSpinner } from './Image';
 import { useUndownloadableMediaHandler } from '../../hooks/useUndownloadableMediaHandler';
+
+const log = createLogger('GIF');
 
 const MAX_GIF_REPEAT = 4;
 const MAX_GIF_TIME = 8;
@@ -63,7 +65,7 @@ export function GIF(props: Props): JSX.Element {
   const tapToPlay = useReducedMotion() || _forceTapToPlay;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const { height, width } = getImageDimensions(attachment, size);
+  const { height, width } = getImageDimensionsForTimeline(attachment, size);
 
   const [repeatCount, setRepeatCount] = useState(0);
   const [playTime, setPlayTime] = useState(MAX_GIF_TIME);
@@ -264,6 +266,7 @@ export function GIF(props: Props): JSX.Element {
       <button
         type="button"
         className={className}
+        aria-label={i18n('icu:GIF--download')}
         onClick={onOverlayClick}
         onKeyDown={onOverlayKeyDown}
         tabIndex={tabIndex}
@@ -271,7 +274,7 @@ export function GIF(props: Props): JSX.Element {
         <span />
       </button>
     );
-  } else if (!isMediaDownloadable) {
+  } else if (attachment.isPermanentlyUndownloadable) {
     overlay = (
       <button
         type="button"
@@ -285,7 +288,7 @@ export function GIF(props: Props): JSX.Element {
     );
   }
 
-  const detailPill = isDownloadable(attachment) ? (
+  const detailPill = isMediaDownloadable ? (
     <AttachmentDetailPill
       attachments={[attachment]}
       cancelDownload={cancelDownload}

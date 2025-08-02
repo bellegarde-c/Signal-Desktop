@@ -8,7 +8,7 @@ import type { MessageAttributesType } from '../model-types.d';
 import { MessageModel } from '../models/messages';
 
 import * as Errors from '../types/errors';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 
 import { DataReader, DataWriter } from '../sql/Client';
 import { deletePackReference } from '../types/Stickers';
@@ -27,6 +27,9 @@ import { drop } from './drop';
 import { hydrateStoryContext } from './hydrateStoryContext';
 import { update as updateExpiringMessagesService } from '../services/expiringMessagesDeletion';
 import { tapToViewMessagesDeletionService } from '../services/tapToViewMessagesDeletionService';
+import { throttledUpdateBackupMediaDownloadProgress } from './updateBackupMediaDownloadProgress';
+
+const log = createLogger('cleanup');
 
 export async function postSaveUpdates(): Promise<void> {
   await updateExpiringMessagesService();
@@ -113,6 +116,12 @@ export async function cleanupMessages(
     )
   );
   await unloadedQueue.onIdle();
+
+  drop(
+    throttledUpdateBackupMediaDownloadProgress(
+      DataReader.getBackupAttachmentDownloadProgress
+    )
+  );
 }
 
 /** Removes a message from redux caches & backbone, but does NOT delete files on disk,

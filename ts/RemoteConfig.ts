@@ -4,7 +4,7 @@
 import { get, throttle } from 'lodash';
 
 import type { WebAPIType } from './textsecure/WebAPI';
-import * as log from './logging/log';
+import { createLogger } from './logging/log';
 import type { AciString } from './types/ServiceId';
 import { parseIntOrThrow } from './util/parseIntOrThrow';
 import { HOUR } from './util/durations';
@@ -13,13 +13,17 @@ import { uuidToBytes } from './util/uuidToBytes';
 import { dropNull } from './util/dropNull';
 import { HashType } from './types/Crypto';
 import { getCountryCode } from './types/PhoneNumber';
+import { parseRemoteClientExpiration } from './util/parseRemoteClientExpiration';
+
+const log = createLogger('RemoteConfig');
 
 export type ConfigKeyType =
-  | 'desktop.calling.ringrtcAdmFull'
-  | 'desktop.calling.ringrtcAdmInternal'
-  | 'desktop.calling.ringrtcAdmPreStable'
+  | 'desktop.chatFolders.alpha'
+  | 'desktop.chatFolders.beta'
+  | 'desktop.chatFolders.prod'
   | 'desktop.clientExpiration'
   | 'desktop.backup.credentialFetch'
+  | 'desktop.donations'
   | 'desktop.internalUser'
   | 'desktop.mediaQuality.levels'
   | 'desktop.messageCleanup'
@@ -29,13 +33,17 @@ export type ConfigKeyType =
   | 'desktop.experimentalTransport.enableAuth'
   | 'desktop.experimentalTransportEnabled.alpha'
   | 'desktop.experimentalTransportEnabled.beta'
-  | 'desktop.experimentalTransportEnabled.prod'
+  | 'desktop.experimentalTransportEnabled.prod.2'
+  | 'desktop.libsignalNet.enforceMinimumTls'
   | 'desktop.cdsiViaLibsignal'
-  | 'desktop.releaseNotes'
-  | 'desktop.releaseNotes.beta'
-  | 'desktop.releaseNotes.dev'
+  | 'desktop.cdsiViaLibsignal.disableNewConnectionLogic'
+  | 'desktop.funPicker' // alpha
+  | 'desktop.funPicker.beta'
+  | 'desktop.funPicker.prod'
+  | 'desktop.usePqRatchet'
   | 'global.attachments.maxBytes'
   | 'global.attachments.maxReceiveBytes'
+  | 'global.backups.mediaTierFallbackCdnNumber'
   | 'global.calling.maxGroupCallRingSize'
   | 'global.groupsv2.groupSizeHardLimit'
   | 'global.groupsv2.maxGroupSize'
@@ -135,13 +143,23 @@ export const _refreshRemoteConfig = async (
     };
   }, {});
 
-  // If remote configuration fetch worked - we are not expired anymore.
-  if (
-    !getValue('desktop.clientExpiration') &&
-    window.storage.get('remoteBuildExpiration') != null
-  ) {
-    log.warn('Remote Config: clearing remote expiration on successful fetch');
+  const remoteExpirationValue = getValue('desktop.clientExpiration');
+  if (!remoteExpirationValue) {
+    // If remote configuration fetch worked - we are not expired anymore.
+    if (window.storage.get('remoteBuildExpiration') != null) {
+      log.warn('Remote Config: clearing remote expiration on successful fetch');
+    }
     await window.storage.remove('remoteBuildExpiration');
+  } else {
+    const remoteBuildExpirationTimestamp = parseRemoteClientExpiration(
+      remoteExpirationValue
+    );
+    if (remoteBuildExpirationTimestamp) {
+      await window.storage.put(
+        'remoteBuildExpiration',
+        remoteBuildExpirationTimestamp
+      );
+    }
   }
 
   await window.storage.put('remoteConfig', config);
@@ -254,5 +272,5 @@ export function getBucketValue(aci: AciString, flagName: string): number {
     hashInput
   );
 
-  return Number(Bytes.readBigUint64BE(hashResult.slice(0, 8)) % 1_000_000n);
+  return Number(Bytes.readBigUint64BE(hashResult.subarray(0, 8)) % 1_000_000n);
 }

@@ -24,13 +24,22 @@ import type {
 } from '../sql/Interface';
 import { DataReader, DataWriter } from '../sql/Client';
 import { SignalService as Proto } from '../protobuf';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import type { StickersStateType } from '../state/ducks/stickers';
 import { MINUTE } from '../util/durations';
 import { drop } from '../util/drop';
 import { isNotNil } from '../util/isNotNil';
 import { encryptLegacyAttachment } from '../util/encryptLegacyAttachment';
 import { AttachmentDisposition } from '../util/getLocalAttachmentUrl';
+import { getPlaintextHashForInMemoryAttachment } from '../AttachmentCrypto';
+
+const log = createLogger('Stickers');
+
+export type ActionSourceType =
+  | 'startup'
+  | 'syncMessage'
+  | 'storageService'
+  | 'ui';
 
 export type StickerType = {
   packId: string;
@@ -121,9 +130,16 @@ const STICKER_PACK_DEFAULTS: StickerPackType = {
 
 const VALID_PACK_ID_REGEXP = /^[0-9a-f]{32}$/i;
 
+const DOWNLOAD_PRIORITY_NORMAL = 0;
+const DOWNLOAD_PRIORITY_HIGH = 1;
+
 let initialState: StickersStateType | undefined;
 let packsToDownload: DownloadMap | undefined;
 const downloadQueue = new Queue({ concurrency: 1, timeout: MINUTE * 30 });
+const downloadQueueData = new Map<
+  string,
+  { depth: number; finalStatus: StickerPackStatusType | undefined }
+>();
 
 export async function load(): Promise<void> {
   const [packs, recentStickers] = await Promise.all([
@@ -265,6 +281,7 @@ export function downloadQueuedPacks(): void {
       downloadStickerPack(id, key, {
         finalStatus: status,
         suppressError: true,
+        actionSource: 'startup',
       })
     );
   }
@@ -502,11 +519,20 @@ export async function downloadEphemeralPack(
       existingPack.status === 'installed' ||
       existingPack.status === 'pending')
   ) {
-    log.warn(
-      `Ephemeral download for pack ${redactPackId(
-        packId
-      )} requested, we already know about it. Skipping.`
-    );
+    if (existingPack.status === 'pending') {
+      log.info(
+        `Ephemeral download for pending sticker pack ${redactPackId(
+          packId
+        )} requested, redownloading with priority.`
+      );
+      drop(downloadStickerPack(packId, packKey, { actionSource: 'ui' }));
+    } else {
+      log.warn(
+        `Ephemeral download for sticker pack ${redactPackId(
+          packId
+        )} requested, we already know about it. Skipping.`
+      );
+    }
     return;
   }
 
@@ -634,9 +660,7 @@ export async function downloadEphemeralPack(
 }
 
 export type DownloadStickerPackOptions = Readonly<{
-  fromSync?: boolean;
-  fromStorageService?: boolean;
-  fromBackup?: boolean;
+  actionSource: ActionSourceType;
   finalStatus?: StickerPackStatusType;
   suppressError?: boolean;
 }>;
@@ -644,19 +668,45 @@ export type DownloadStickerPackOptions = Readonly<{
 export async function downloadStickerPack(
   packId: string,
   packKey: string,
-  options: DownloadStickerPackOptions = {}
+  options: DownloadStickerPackOptions
 ): Promise<void> {
+  // Store finalStatus. When we click on a sticker we want to redownload with priority
+  // while retaining the finalStatus, so we need a way to look up the last finalStatus.
+  const data = downloadQueueData.get(packId);
+  const finalStatus = options.finalStatus ?? data?.finalStatus;
+  const depth = data ? data.depth + 1 : 1;
+  downloadQueueData.set(packId, { depth, finalStatus });
+
+  const queueOptions = {
+    priority:
+      options.actionSource === 'ui'
+        ? DOWNLOAD_PRIORITY_HIGH
+        : DOWNLOAD_PRIORITY_NORMAL,
+  };
+
   // This will ensure that only one download process is in progress at any given time
   return downloadQueue.add(async () => {
     try {
-      await doDownloadStickerPack(packId, packKey, options);
+      await doDownloadStickerPack(packId, packKey, { ...options, finalStatus });
     } catch (error) {
       log.error(
         'doDownloadStickerPack threw an error:',
         Errors.toLogFormat(error)
       );
+    } finally {
+      const dataAfter = downloadQueueData.get(packId);
+      if (dataAfter) {
+        if (dataAfter.depth <= 1) {
+          downloadQueueData.delete(packId);
+        } else {
+          downloadQueueData.set(packId, {
+            ...dataAfter,
+            depth: dataAfter.depth - 1,
+          });
+        }
+      }
     }
-  });
+  }, queueOptions);
 }
 
 async function doDownloadStickerPack(
@@ -664,9 +714,7 @@ async function doDownloadStickerPack(
   packKey: string,
   {
     finalStatus = 'downloaded',
-    fromSync = false,
-    fromStorageService = false,
-    fromBackup = false,
+    actionSource,
     suppressError = false,
   }: DownloadStickerPackOptions
 ): Promise<void> {
@@ -788,9 +836,11 @@ async function doDownloadStickerPack(
       status: 'pending',
       createdAt: Date.now(),
       stickers: {},
-      storageNeedsSync: !fromStorageService && !fromBackup,
       title: proto.title ?? '',
       author: proto.author ?? '',
+
+      // Redux handles these
+      storageNeedsSync: false,
     };
     await DataWriter.createOrUpdateStickerPack(pack);
     stickerPackAdded(pack);
@@ -865,9 +915,7 @@ async function doDownloadStickerPack(
       // No-op
     } else if (finalStatus === 'installed') {
       await installStickerPack(packId, packKey, {
-        fromSync,
-        fromStorageService,
-        fromBackup,
+        actionSource,
       });
     } else {
       // Mark the pack as complete
@@ -1049,7 +1097,6 @@ export async function copyStickerToAttachments(
     // Fall-back
     contentType: IMAGE_WEBP,
   };
-
   const data = await window.Signal.Migrations.readAttachmentData(newSticker);
 
   const sniffedMimeType = sniffImageMimeType(data);
@@ -1060,6 +1107,8 @@ export async function copyStickerToAttachments(
       'copyStickerToAttachments: Unable to sniff sticker MIME type; falling back to WebP'
     );
   }
+
+  newSticker.plaintextHash = getPlaintextHashForInMemoryAttachment(data);
 
   return newSticker;
 }
