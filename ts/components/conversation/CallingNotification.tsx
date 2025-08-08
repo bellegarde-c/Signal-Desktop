@@ -17,6 +17,7 @@ import {
   DirectCallStatus,
   GroupCallStatus,
 } from '../../types/CallDisposition';
+import { toLogFormat } from '../../types/errors';
 import type { CallingNotificationType } from '../../util/callingNotification';
 import {
   getCallingIcon,
@@ -24,7 +25,7 @@ import {
 } from '../../util/callingNotification';
 import { missingCaseError } from '../../util/missingCaseError';
 import { Tooltip, TooltipPlacement } from '../Tooltip';
-import * as log from '../../logging/log';
+import { createLogger } from '../../logging/log';
 import {
   type ContextMenuTriggerType,
   MessageContextMenu,
@@ -38,6 +39,9 @@ import {
 import { MINUTE } from '../../util/durations';
 import { isMoreRecentThan } from '../../util/timestamp';
 import { InAnotherCallTooltip } from './InAnotherCallTooltip';
+import type { InteractionModeType } from '../../state/ducks/conversations';
+
+const log = createLogger('CallingNotification');
 
 export type PropsActionsType = {
   onOutgoingAudioCallInConversation: (conversationId: string) => void;
@@ -50,6 +54,7 @@ type PropsHousekeeping = {
   i18n: LocalizerType;
   id: string;
   conversationId: string;
+  interactionMode: InteractionModeType;
   isNextItemCallingNotification: boolean;
 };
 
@@ -120,6 +125,7 @@ export const CallingNotification: React.FC<PropsType> = React.memo(
         <MessageContextMenu
           i18n={i18n}
           triggerId={props.id}
+          interactionMode={props.interactionMode}
           onDeleteMessage={() => {
             props.toggleDeleteMessagesModal({
               conversationId: props.conversationId,
@@ -235,10 +241,10 @@ function renderCallingNotificationButton(
       break;
     }
     case CallMode.Adhoc:
-      log.warn('CallingNotification for adhoc call, should never happen');
+      log.warn('for adhoc call, should never happen');
       return null;
     default:
-      log.error(missingCaseError(props.callHistory.mode));
+      log.error(toLogFormat(missingCaseError(props.callHistory.mode)));
       return null;
   }
 

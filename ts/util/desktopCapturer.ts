@@ -3,9 +3,9 @@
 /* eslint-disable max-classes-per-file */
 
 import { ipcRenderer, type DesktopCapturerSource } from 'electron';
-import * as macScreenShare from '@indutny/mac-screen-share';
+import type { Stream, StreamOptions } from '@indutny/mac-screen-share';
 
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import * as Errors from '../types/errors';
 import type { PresentableSource } from '../types/Calling';
 import type { LocalizerType } from '../types/Util';
@@ -18,6 +18,10 @@ import { strictAssert } from './assert';
 import { explodePromise } from './explodePromise';
 import { isNotNil } from './isNotNil';
 import { drop } from './drop';
+import { SECOND } from './durations';
+import { isOlderThan } from './timestamp';
+
+const log = createLogger('desktopCapturer');
 
 // Chrome-only API for now, thus a declaration:
 declare class MediaStreamTrackGenerator extends MediaStreamTrack {
@@ -56,7 +60,7 @@ type State = Readonly<
     }
   | {
       step: Step.NativeMacOS;
-      stream: macScreenShare.Stream;
+      stream: Stream;
     }
   | {
       step: Step.Done;
@@ -85,7 +89,9 @@ export type DesktopCapturerBaton = Readonly<{
 }>;
 
 export class DesktopCapturer {
-  private state: State;
+  #state: State;
+
+  private static getDisplayMediaPromise: Promise<MediaStream> | undefined;
 
   private static isInitialized = false;
 
@@ -97,48 +103,48 @@ export class DesktopCapturer {
       DesktopCapturer.initialize();
     }
 
-    if (macScreenShare.isSupported) {
-      this.state = {
+    if (isNativeMacScreenShareSupported()) {
+      this.#state = {
         step: Step.NativeMacOS,
-        stream: this.getNativeMacOSStream(),
+        stream: this.#getNativeMacOSStream(),
       };
     } else {
-      this.state = { step: Step.RequestingMedia, promise: this.getStream() };
+      this.#state = { step: Step.RequestingMedia, promise: this.#getStream() };
     }
   }
 
   public abort(): void {
-    if (this.state.step === Step.NativeMacOS) {
-      this.state.stream.stop();
+    if (this.#state.step === Step.NativeMacOS) {
+      this.#state.stream.stop();
     }
 
-    if (this.state.step === Step.SelectingSource) {
-      this.state.onSource(undefined);
+    if (this.#state.step === Step.SelectingSource) {
+      this.#state.onSource(undefined);
     }
 
-    this.state = { step: Step.Error };
+    this.#state = { step: Step.Error };
   }
 
   public selectSource(id: string): void {
     strictAssert(
-      this.state.step === Step.SelectingSource,
-      `Invalid state in "selectSource" ${this.state.step}`
+      this.#state.step === Step.SelectingSource,
+      `Invalid state in "selectSource" ${this.#state.step}`
     );
 
-    const { promise, sources, onSource } = this.state;
+    const { promise, sources, onSource } = this.#state;
     const source = id == null ? undefined : sources.find(s => s.id === id);
-    this.state = { step: Step.SelectedSource, promise };
+    this.#state = { step: Step.SelectedSource, promise };
 
     onSource(source);
   }
 
   /** @internal */
-  private onSources(
+  #onSources(
     sources: ReadonlyArray<DesktopCapturerSource>
   ): Promise<DesktopCapturerSource | undefined> {
     strictAssert(
-      this.state.step === Step.RequestingMedia,
-      `Invalid state in "onSources" ${this.state.step}`
+      this.#state.step === Step.RequestingMedia,
+      `Invalid state in "onSources" ${this.#state.step}`
     );
 
     const presentableSources = sources
@@ -154,66 +160,80 @@ export class DesktopCapturer {
               ? source.appIcon.toDataURL()
               : undefined,
           id: source.id,
-          name: this.translateSourceName(source),
+          name: this.#translateSourceName(source),
           isScreen: isScreenSource(source),
           thumbnail: source.thumbnail.toDataURL(),
         };
       })
       .filter(isNotNil);
 
-    const { promise } = this.state;
+    const { promise } = this.#state;
 
     const { promise: source, resolve: onSource } = explodePromise<
       DesktopCapturerSource | undefined
     >();
-    this.state = { step: Step.SelectingSource, promise, sources, onSource };
+    this.#state = { step: Step.SelectingSource, promise, sources, onSource };
 
     this.options.onPresentableSources(presentableSources);
     return source;
   }
 
-  private async getStream(): Promise<void> {
+  async #getStream(): Promise<void> {
     liveCapturers.add(this);
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: {
-            max: REQUESTED_SCREEN_SHARE_WIDTH,
-            ideal: REQUESTED_SCREEN_SHARE_WIDTH,
-          },
-          height: {
-            max: REQUESTED_SCREEN_SHARE_HEIGHT,
-            ideal: REQUESTED_SCREEN_SHARE_HEIGHT,
-          },
-          frameRate: {
-            max: REQUESTED_SCREEN_SHARE_FRAMERATE,
-            ideal: REQUESTED_SCREEN_SHARE_FRAMERATE,
-          },
+      // Only allow one global getDisplayMedia() request at a time
+      if (!DesktopCapturer.getDisplayMediaPromise) {
+        DesktopCapturer.getDisplayMediaPromise =
+          navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+      }
+      const stream = await DesktopCapturer.getDisplayMediaPromise;
+      DesktopCapturer.getDisplayMediaPromise = undefined;
+
+      const videoTrack = stream.getVideoTracks()[0];
+      strictAssert(videoTrack, 'videoTrack does not exist');
+
+      // Apply constraints and ensure that there is at least 1 frame per second.
+      await videoTrack.applyConstraints({
+        width: {
+          max: REQUESTED_SCREEN_SHARE_WIDTH,
+          ideal: REQUESTED_SCREEN_SHARE_WIDTH,
+        },
+        height: {
+          max: REQUESTED_SCREEN_SHARE_HEIGHT,
+          ideal: REQUESTED_SCREEN_SHARE_HEIGHT,
+        },
+        frameRate: {
+          min: 1,
+          max: REQUESTED_SCREEN_SHARE_FRAMERATE,
+          ideal: REQUESTED_SCREEN_SHARE_FRAMERATE,
         },
       });
 
       strictAssert(
-        this.state.step === Step.RequestingMedia ||
-          this.state.step === Step.SelectedSource,
-        `Invalid state in "getStream.success" ${this.state.step}`
+        this.#state.step === Step.RequestingMedia ||
+          this.#state.step === Step.SelectedSource,
+        `Invalid state in "getStream.success" ${this.#state.step}`
       );
 
       this.options.onMediaStream(stream);
-      this.state = { step: Step.Done };
+      this.#state = { step: Step.Done };
     } catch (error) {
       strictAssert(
-        this.state.step === Step.RequestingMedia ||
-          this.state.step === Step.SelectedSource,
-        `Invalid state in "getStream.error" ${this.state.step}`
+        this.#state.step === Step.RequestingMedia ||
+          this.#state.step === Step.SelectedSource,
+        `Invalid state in "getStream.error" ${this.#state.step}`
       );
       this.options.onError(error);
-      this.state = { step: Step.Error };
+      this.#state = { step: Step.Error };
     } finally {
       liveCapturers.delete(this);
+      DesktopCapturer.getDisplayMediaPromise = undefined;
     }
   }
 
-  private getNativeMacOSStream(): macScreenShare.Stream {
+  #getNativeMacOSStream(): Stream {
     const track = new MediaStreamTrackGenerator({ kind: 'video' });
     const writer = track.writable.getWriter();
 
@@ -222,13 +242,42 @@ export class DesktopCapturer {
 
     let isRunning = false;
 
-    const stream = new macScreenShare.Stream({
+    let lastFrame: VideoFrame | undefined;
+    let lastFrameSentAt = 0;
+
+    let frameRepeater: NodeJS.Timeout | undefined;
+
+    const cleanup = () => {
+      lastFrame?.close();
+      if (frameRepeater != null) {
+        clearInterval(frameRepeater);
+      }
+      frameRepeater = undefined;
+      lastFrame = undefined;
+    };
+
+    // process.dlopen() for the addon takes roughly 34ms so avoid running it
+    // until requested by user.
+    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+    const macScreenShare = require('@indutny/mac-screen-share');
+    const stream: Stream = new macScreenShare.Stream({
       width: REQUESTED_SCREEN_SHARE_WIDTH,
       height: REQUESTED_SCREEN_SHARE_HEIGHT,
       frameRate: REQUESTED_SCREEN_SHARE_FRAMERATE,
 
       onStart: () => {
         isRunning = true;
+
+        // Repeat last frame every second to match "min" constraint above.
+        frameRepeater = setInterval(() => {
+          if (isRunning && track.readyState !== 'ended' && lastFrame != null) {
+            if (isOlderThan(lastFrameSentAt, SECOND)) {
+              drop(writer.write(lastFrame.clone()));
+            }
+          } else {
+            cleanup();
+          }
+        }, SECOND);
 
         this.options.onMediaStream(mediaStream);
       },
@@ -253,20 +302,22 @@ export class DesktopCapturer {
           return;
         }
 
-        const videoFrame = new VideoFrame(frame, {
+        lastFrame?.close();
+        lastFrameSentAt = Date.now();
+        lastFrame = new VideoFrame(frame, {
           format: 'NV12',
           codedWidth: width,
           codedHeight: height,
           timestamp: 0,
         });
-        drop(writer.write(videoFrame));
+        drop(writer.write(lastFrame.clone()));
       },
-    });
+    } satisfies StreamOptions);
 
     return stream;
   }
 
-  private translateSourceName(source: DesktopCapturerSource): string {
+  #translateSourceName(source: DesktopCapturerSource): string {
     const { i18n } = this.options;
 
     const { name } = source;
@@ -300,7 +351,7 @@ export class DesktopCapturer {
           strictAssert(!done, 'No capturer available for incoming sources');
           liveCapturers.delete(capturer);
 
-          selected = await capturer.onSources(sources);
+          selected = await capturer.#onSources(sources);
         } catch (error) {
           log.error(
             'desktopCapturer: failed to get the source',
@@ -315,4 +366,11 @@ export class DesktopCapturer {
 
 function isScreenSource(source: DesktopCapturerSource): boolean {
   return source.id.startsWith('screen');
+}
+
+export function isNativeMacScreenShareSupported(): boolean {
+  // process.dlopen() for the addon takes roughly 34ms so avoid running it
+  // until requested by user.
+  // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+  return require('@indutny/mac-screen-share').isSupported;
 }

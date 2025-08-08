@@ -1,12 +1,15 @@
 // Copyright 2015 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { assert } from 'chai';
 import { readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
-
 import { createCipheriv } from 'crypto';
-import * as log from '../logging/log';
+import { PassThrough } from 'stream';
+import { emptyDir } from 'fs-extra';
+import { assert } from 'chai';
+import { isNumber } from 'lodash';
+
+import { createLogger } from '../logging/log';
 import * as Bytes from '../Bytes';
 import * as Curve from '../Curve';
 import {
@@ -17,6 +20,7 @@ import {
   decryptProfile,
   getRandomBytes,
   constantTimeEqual,
+  generateAvatarColor,
   generateRegistrationId,
   deriveSecrets,
   encryptDeviceName,
@@ -37,7 +41,6 @@ import {
   CipherType,
 } from '../Crypto';
 import {
-  type HardcodedIVForEncryptionType,
   _generateAttachmentIv,
   decryptAttachmentV2,
   encryptAttachmentV2ToDisk,
@@ -46,9 +49,14 @@ import {
   splitKeys,
   generateAttachmentKeys,
   type DecryptedAttachmentV2,
+  decryptAttachmentV2ToSink,
 } from '../AttachmentCrypto';
+import type { AciString, PniString } from '../types/ServiceId';
 import { createTempDir, deleteTempDir } from '../updater/common';
 import { uuidToBytes, bytesToUuid } from '../util/uuidToBytes';
+import { getPath } from '../windows/main/attachments';
+
+const log = createLogger('Crypto_test');
 
 const GHOST_KITTY_HASH =
   '7bc77f27d92d00b4a1d57c480ca86dacc43d57bc318339c92119d1fbf6b557a5';
@@ -353,8 +361,8 @@ describe('Crypto', () => {
       const deviceName = 'v1.19.0 on Windows 10';
       const identityKey = Curve.generateKeyPair();
 
-      const encrypted = encryptDeviceName(deviceName, identityKey.pubKey);
-      const decrypted = decryptDeviceName(encrypted, identityKey.privKey);
+      const encrypted = encryptDeviceName(deviceName, identityKey.publicKey);
+      const decrypted = decryptDeviceName(encrypted, identityKey.privateKey);
 
       assert.strictEqual(decrypted, deviceName);
     });
@@ -363,10 +371,10 @@ describe('Crypto', () => {
       const deviceName = 'v1.19.0 on Windows 10';
       const identityKey = Curve.generateKeyPair();
 
-      const encrypted = encryptDeviceName(deviceName, identityKey.pubKey);
+      const encrypted = encryptDeviceName(deviceName, identityKey.publicKey);
       encrypted.syntheticIv = getRandomBytes(16);
       try {
-        decryptDeviceName(encrypted, identityKey.privKey);
+        decryptDeviceName(encrypted, identityKey.privateKey);
       } catch (error) {
         assert.strictEqual(
           error.message,
@@ -381,7 +389,7 @@ describe('Crypto', () => {
       const key = getRandomBytes(32);
       const plaintext = Bytes.fromString('Hello world');
       const ourMac = hmacSha256(key, plaintext);
-      const theirMac = ourMac.slice(0, -1);
+      const theirMac = ourMac.subarray(0, -1);
       let error;
       try {
         verifyHmacSha256(plaintext, key, theirMac, ourMac.byteLength);
@@ -454,7 +462,7 @@ describe('Crypto', () => {
     it('resolves with undefined if the first `length` bytes of the MACs match', () => {
       const key = getRandomBytes(32);
       const plaintext = Bytes.fromString('Hello world');
-      const theirMac = hmacSha256(key, plaintext).slice(0, -5);
+      const theirMac = hmacSha256(key, plaintext).subarray(0, -5);
       const result = verifyHmacSha256(
         plaintext,
         key,
@@ -583,7 +591,12 @@ describe('Crypto', () => {
           idForLogging: 'test',
           ...splitKeys(keys),
           size: FILE_CONTENTS.byteLength,
-          theirDigest: encryptedAttachment.digest,
+          integrityCheck: {
+            type: 'encrypted',
+            digest: encryptedAttachment.digest,
+          },
+          theirIncrementalMac: undefined,
+          theirChunkSize: undefined,
           getAbsoluteAttachmentPath:
             window.Signal.Migrations.getAbsoluteAttachmentPath,
         });
@@ -604,20 +617,94 @@ describe('Crypto', () => {
       }
     });
 
+    describe('decryptAttachmentV2ToSink', () => {
+      afterEach(async () => {
+        await emptyDir(getPath(window.SignalContext.config.userDataPath));
+      });
+
+      it('throws if digest is wrong', async () => {
+        const keys = generateAttachmentKeys();
+        const encryptedAttachment = await encryptAttachmentV2ToDisk({
+          keys,
+          plaintext: { data: FILE_CONTENTS },
+          getAbsoluteAttachmentPath:
+            window.Signal.Migrations.getAbsoluteAttachmentPath,
+          needIncrementalMac: true,
+        });
+
+        await assert.isRejected(
+          decryptAttachmentV2ToSink(
+            {
+              type: 'standard',
+              ciphertextPath:
+                window.Signal.Migrations.getAbsoluteAttachmentPath(
+                  encryptedAttachment.path
+                ),
+              idForLogging: 'test',
+              ...splitKeys(keys),
+              size: FILE_CONTENTS.byteLength,
+              integrityCheck: {
+                type: 'encrypted',
+                digest: sha256(new Uint8Array([1, 2, 3])),
+              },
+              theirIncrementalMac: encryptedAttachment.incrementalMac,
+              theirChunkSize: encryptedAttachment.chunkSize,
+            },
+            new PassThrough().resume()
+          ),
+          /Bad digest/
+        );
+      });
+
+      it('throws if plaintextHash is wrong', async () => {
+        const keys = generateAttachmentKeys();
+        const encryptedAttachment = await encryptAttachmentV2ToDisk({
+          keys,
+          plaintext: { data: FILE_CONTENTS },
+          getAbsoluteAttachmentPath:
+            window.Signal.Migrations.getAbsoluteAttachmentPath,
+          needIncrementalMac: true,
+        });
+
+        await assert.isRejected(
+          decryptAttachmentV2ToSink(
+            {
+              type: 'standard',
+              ciphertextPath:
+                window.Signal.Migrations.getAbsoluteAttachmentPath(
+                  encryptedAttachment.path
+                ),
+              idForLogging: 'test',
+              ...splitKeys(keys),
+              size: FILE_CONTENTS.byteLength,
+              integrityCheck: {
+                type: 'plaintext',
+                plaintextHash: sha256(new Uint8Array([1, 2, 3])),
+              },
+              theirIncrementalMac: encryptedAttachment.incrementalMac,
+              theirChunkSize: encryptedAttachment.chunkSize,
+            },
+            new PassThrough().resume()
+          ),
+          /Bad plaintextHash/
+        );
+      });
+    });
+
     describe('v2 roundtrips', () => {
       async function testV2RoundTripData({
         path,
         data,
         plaintextHash,
         encryptionKeys,
-        dangerousIv,
+        modifyIncrementalMac,
         overrideSize,
       }: {
         path?: string;
         data: Uint8Array;
         plaintextHash?: Uint8Array;
         encryptionKeys?: Uint8Array;
-        dangerousIv?: HardcodedIVForEncryptionType;
+        modifyIncrementalMac?: boolean;
         overrideSize?: number;
       }): Promise<DecryptedAttachmentV2> {
         let plaintextPath;
@@ -628,13 +715,41 @@ describe('Crypto', () => {
           const encryptedAttachment = await encryptAttachmentV2ToDisk({
             keys,
             plaintext: path ? { absolutePath: path } : { data },
-            dangerousIv,
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
+            needIncrementalMac: true,
           });
 
           ciphertextPath = window.Signal.Migrations.getAbsoluteAttachmentPath(
             encryptedAttachment.path
+          );
+
+          const macLength = encryptedAttachment.incrementalMac?.length;
+          if (
+            modifyIncrementalMac &&
+            isNumber(macLength) &&
+            encryptedAttachment.incrementalMac
+          ) {
+            encryptedAttachment.incrementalMac[macLength / 2] += 1;
+          }
+
+          // Decrypt it via plaintextHash first
+          await decryptAttachmentV2ToSink(
+            {
+              type: 'standard',
+              ciphertextPath,
+              idForLogging: 'test',
+              ...splitKeys(keys),
+              size: overrideSize ?? data.byteLength,
+              integrityCheck: {
+                type: 'plaintext',
+                plaintextHash: Bytes.fromHex(encryptedAttachment.plaintextHash),
+              },
+
+              theirIncrementalMac: encryptedAttachment.incrementalMac,
+              theirChunkSize: encryptedAttachment.chunkSize,
+            },
+            new PassThrough().resume()
           );
 
           const decryptedAttachment = await decryptAttachmentV2({
@@ -643,29 +758,21 @@ describe('Crypto', () => {
             idForLogging: 'test',
             ...splitKeys(keys),
             size: overrideSize ?? data.byteLength,
-            theirDigest: encryptedAttachment.digest,
+            integrityCheck: {
+              type: 'encrypted',
+              digest: encryptedAttachment.digest,
+            },
+            theirIncrementalMac: encryptedAttachment.incrementalMac,
+            theirChunkSize: encryptedAttachment.chunkSize,
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
           });
+
           plaintextPath = window.Signal.Migrations.getAbsoluteAttachmentPath(
             decryptedAttachment.path
           );
 
           const plaintext = readFileSync(plaintextPath);
-
-          assert.deepStrictEqual(
-            encryptedAttachment.iv,
-            decryptedAttachment.iv
-          );
-          if (dangerousIv) {
-            assert.deepStrictEqual(encryptedAttachment.iv, dangerousIv.iv);
-            if (dangerousIv.reason === 'reencrypting-for-backup') {
-              assert.deepStrictEqual(
-                encryptedAttachment.digest,
-                dangerousIv.digestToMatch
-              );
-            }
-          }
 
           assert.strictEqual(
             encryptedAttachment.ciphertextSize,
@@ -736,6 +843,25 @@ describe('Crypto', () => {
           unlinkSync(sourcePath);
         }
       });
+      it('v2 fails decrypt for large disk file if incrementalMac is wrong', async () => {
+        const sourcePath = join(tempDir, 'random');
+        const data = getRandomBytes(5 * 1024 * 1024);
+        const plaintextHash = sha256(data);
+        writeFileSync(sourcePath, data);
+        try {
+          await assert.isRejected(
+            testV2RoundTripData({
+              path: sourcePath,
+              data,
+              plaintextHash,
+              modifyIncrementalMac: true,
+            }),
+            /Corrupted/
+          );
+        } finally {
+          unlinkSync(sourcePath);
+        }
+      });
 
       it('v2 roundtrips large file from memory', async () => {
         // Get sufficient large data to have more than 64kb of padding and
@@ -745,73 +871,6 @@ describe('Crypto', () => {
         await testV2RoundTripData({
           data,
           plaintextHash,
-        });
-      });
-
-      describe('isPaddingAllZeros', () => {
-        it('detects all zeros', async () => {
-          const decryptedResult = await testV2RoundTripData({
-            data: FILE_CONTENTS,
-          });
-          assert.isTrue(decryptedResult.isReencryptableToSameDigest);
-        });
-        it('detects non-zero padding', async () => {
-          const modifiedData = Buffer.concat([FILE_CONTENTS, Buffer.from([1])]);
-          const decryptedResult = await testV2RoundTripData({
-            data: modifiedData,
-            overrideSize: FILE_CONTENTS.byteLength,
-            // setting the size as one less than the actual file size will cause the last
-            // byte (`1`) to be considered padding during decryption
-          });
-          assert.isFalse(decryptedResult.isReencryptableToSameDigest);
-        });
-      });
-      describe('dangerousIv', () => {
-        it('uses hardcodedIv in tests', async () => {
-          await testV2RoundTripData({
-            data: FILE_CONTENTS,
-            plaintextHash: FILE_HASH,
-            dangerousIv: {
-              reason: 'test',
-              iv: _generateAttachmentIv(),
-            },
-          });
-        });
-
-        it('uses hardcodedIv when re-encrypting for backup', async () => {
-          const keys = generateAttachmentKeys();
-          const previouslyEncrypted = await encryptAttachmentV2ToDisk({
-            keys,
-            plaintext: { data: FILE_CONTENTS },
-            getAbsoluteAttachmentPath:
-              window.Signal.Migrations.getAbsoluteAttachmentPath,
-          });
-
-          await testV2RoundTripData({
-            data: FILE_CONTENTS,
-            plaintextHash: FILE_HASH,
-            encryptionKeys: keys,
-            dangerousIv: {
-              reason: 'reencrypting-for-backup',
-              iv: previouslyEncrypted.iv,
-              digestToMatch: previouslyEncrypted.digest,
-            },
-          });
-
-          // If the digest is wrong, it should throw
-          await assert.isRejected(
-            testV2RoundTripData({
-              data: FILE_CONTENTS,
-              plaintextHash: FILE_HASH,
-              encryptionKeys: keys,
-              dangerousIv: {
-                reason: 'reencrypting-for-backup',
-                iv: previouslyEncrypted.iv,
-                digestToMatch: getRandomBytes(32),
-              },
-            }),
-            'iv was hardcoded for backup re-encryption, but digest does not match'
-          );
         });
       });
     });
@@ -826,6 +885,7 @@ describe('Crypto', () => {
           plaintext: { absolutePath: FILE_PATH },
           getAbsoluteAttachmentPath:
             window.Signal.Migrations.getAbsoluteAttachmentPath,
+          needIncrementalMac: false,
         });
         ciphertextPath = window.Signal.Migrations.getAbsoluteAttachmentPath(
           encryptedAttachment.path
@@ -879,9 +939,10 @@ describe('Crypto', () => {
         const encryptedAttachmentV2 = await encryptAttachmentV2ToDisk({
           keys,
           plaintext: { absolutePath: FILE_PATH },
-          dangerousIv: { iv: dangerousTestOnlyIv, reason: 'test' },
+          _testOnlyDangerousIv: dangerousTestOnlyIv,
           getAbsoluteAttachmentPath:
             window.Signal.Migrations.getAbsoluteAttachmentPath,
+          needIncrementalMac: false,
         });
         ciphertextPath = window.Signal.Migrations.getAbsoluteAttachmentPath(
           encryptedAttachmentV2.path
@@ -918,6 +979,7 @@ describe('Crypto', () => {
             plaintext: { absolutePath: plaintextAbsolutePath },
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
+            needIncrementalMac: true,
           });
           innerCiphertextPath =
             window.Signal.Migrations.getAbsoluteAttachmentPath(
@@ -928,9 +990,10 @@ describe('Crypto', () => {
             keys: outerKeys,
             plaintext: { absolutePath: innerCiphertextPath },
             // We (and the server!) don't pad the second layer
-            dangerousTestOnlySkipPadding: true,
+            _testOnlyDangerousSkipPadding: true,
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
+            needIncrementalMac: false,
           });
 
           outerCiphertextPath =
@@ -968,7 +1031,13 @@ describe('Crypto', () => {
             idForLogging: 'test',
             ...splitKeys(innerKeys),
             size: FILE_CONTENTS.byteLength,
-            theirDigest: encryptResult.innerEncryptedAttachment.digest,
+            integrityCheck: {
+              type: 'encrypted',
+              digest: encryptResult.innerEncryptedAttachment.digest,
+            },
+            theirIncrementalMac:
+              encryptResult.innerEncryptedAttachment.incrementalMac,
+            theirChunkSize: encryptResult.innerEncryptedAttachment.chunkSize,
             outerEncryption: splitKeys(outerKeys),
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
@@ -1024,7 +1093,13 @@ describe('Crypto', () => {
             idForLogging: 'test',
             ...splitKeys(innerKeys),
             size: data.byteLength,
-            theirDigest: encryptResult.innerEncryptedAttachment.digest,
+            integrityCheck: {
+              type: 'encrypted',
+              digest: encryptResult.innerEncryptedAttachment.digest,
+            },
+            theirIncrementalMac:
+              encryptResult.innerEncryptedAttachment.incrementalMac,
+            theirChunkSize: encryptResult.innerEncryptedAttachment.chunkSize,
             outerEncryption: splitKeys(outerKeys),
             getAbsoluteAttachmentPath:
               window.Signal.Migrations.getAbsoluteAttachmentPath,
@@ -1074,7 +1149,13 @@ describe('Crypto', () => {
               idForLogging: 'test',
               ...splitKeys(innerKeys),
               size: data.byteLength,
-              theirDigest: encryptResult.innerEncryptedAttachment.digest,
+              integrityCheck: {
+                type: 'encrypted',
+                digest: encryptResult.innerEncryptedAttachment.digest,
+              },
+              theirIncrementalMac:
+                encryptResult.innerEncryptedAttachment.incrementalMac,
+              theirChunkSize: encryptResult.innerEncryptedAttachment.chunkSize,
               outerEncryption: {
                 aesKey: splitKeys(outerKeys).aesKey,
                 macKey: splitKeys(innerKeys).macKey, // wrong mac!
@@ -1110,6 +1191,61 @@ describe('Crypto', () => {
       for (let i = 0; i < 128; i += 1) {
         assert.strictEqual(getAesCbcCiphertextLength(i), encrypt(i).length);
       }
+    });
+  });
+
+  describe('generateAvatarColor', () => {
+    const aci = 'a025bf78-653e-44e0-beb9-deb14ba32487' as AciString;
+    const pni = 'PNI:11a175e3-fe31-4eda-87da-e0bf2a2e250b' as PniString;
+    const e164 = '+12135550124';
+    const groupId = 'BwJRIdomqOSOckHjnJsknNCibCZKJFt+RxLIpa9CWJ4=';
+
+    it('generates color based on ACI', () => {
+      assert.strictEqual(
+        generateAvatarColor({
+          aci,
+          e164,
+          pni,
+          groupId,
+        }),
+        'A140'
+      );
+    });
+
+    it('generates color based on E164', () => {
+      assert.strictEqual(
+        generateAvatarColor({
+          aci: undefined,
+          e164,
+          pni,
+          groupId,
+        }),
+        'A150'
+      );
+    });
+
+    it('generates color based on PNI', () => {
+      assert.strictEqual(
+        generateAvatarColor({
+          aci: undefined,
+          e164: undefined,
+          pni,
+          groupId,
+        }),
+        'A200'
+      );
+    });
+
+    it('generates color based on group id', () => {
+      assert.strictEqual(
+        generateAvatarColor({
+          aci: undefined,
+          e164: undefined,
+          pni: undefined,
+          groupId,
+        }),
+        'A130'
+      );
     });
   });
 });

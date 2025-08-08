@@ -14,9 +14,9 @@ import type { ConversationModel } from '../models/conversations';
 export const APP_ROOT_PATH = path.join(__dirname, '..', '..');
 
 const PHONE_NUMBER_PATTERN = /\+\d{7,12}(\d{3})/g;
-// The additional 0 in [04] and [089AB] are to include MY_STORY_ID
+// The additional 0 in [0-8] and [089AB] are to include MY_STORY_ID
 const UUID_OR_STORY_ID_PATTERN =
-  /[0-9A-F]{8}-[0-9A-F]{4}-[04][0-9A-F]{3}-[089AB][0-9A-F]{3}-[0-9A-F]{9}([0-9A-F]{3})/gi;
+  /[0-9A-F]{8}-[0-9A-F]{4}-[0-8][0-9A-F]{3}-[089AB][0-9A-F]{3}-[0-9A-F]{9}([0-9A-F]{3})/gi;
 const GROUP_ID_PATTERN = /(group\()([^)]+)(\))/g;
 const GROUP_V2_ID_PATTERN = /(groupv2\()([^=)]+)(=?=?\))/g;
 const CALL_LINK_ROOM_ID_PATTERN = /[0-9A-F]{61}([0-9A-F]{3})/gi;
@@ -24,6 +24,7 @@ const CALL_LINK_ROOT_KEY_PATTERN =
   /([A-Z]{4})-[A-Z]{4}-[A-Z]{4}-[A-Z]{4}-[A-Z]{4}-[A-Z]{4}-[A-Z]{4}-[A-Z]{4}/gi;
 const ATTACHMENT_URL_KEY_PATTERN = /(attachment:\/\/[^\s]+key=)([^\s]+)/gi;
 const REDACTION_PLACEHOLDER = '[REDACTED]';
+const CARD_NUMBER_PATTERN = /\d\d(\d[- ]?){11,16}\d/g;
 
 export type RedactFunction = (value: string) => string;
 
@@ -110,6 +111,17 @@ export const _pathToRegExp = (filePath: string): RegExp | undefined => {
 };
 
 // Public API
+
+// As part of supporting credit card donations, we also want to include an extra safety
+// layer to prevent CC #s from being logged even if a bug occurs in the payment interface.
+export const redactCardNumbers = (text: string): string => {
+  if (!isString(text)) {
+    throw new TypeError("'text' must be a string");
+  }
+
+  return text.replace(CARD_NUMBER_PATTERN, '[REDACTED]');
+};
+
 export const redactPhoneNumbers = (text: string): string => {
   if (!isString(text)) {
     throw new TypeError("'text' must be a string");
@@ -207,14 +219,22 @@ export const addSensitivePath = (filePath: string): void => {
 
 addSensitivePath(APP_ROOT_PATH);
 
-export const redactAll: RedactFunction = compose(
-  (text: string) => redactSensitivePaths(text),
-  redactGroupIds,
-  redactPhoneNumbers,
-  redactUuids,
-  redactCallLinkRoomIds,
-  redactCallLinkRootKeys,
-  redactAttachmentUrlKeys
-);
+export const redactAll: RedactFunction = text => {
+  let result = text;
+
+  // Do these first, to retain last characters
+  result = redactAttachmentUrlKeys(result);
+  result = redactCallLinkRoomIds(result);
+  result = redactCallLinkRootKeys(result);
+  result = redactGroupIds(result);
+  result = redactPhoneNumbers(result);
+  result = redactUuids(result);
+
+  // These leave nothing
+  result = redactCardNumbers(result);
+  result = redactSensitivePaths(result);
+
+  return result;
+};
 
 const removeNewlines: RedactFunction = text => text.replace(/\r?\n|\r/g, '');

@@ -16,7 +16,8 @@ import { generateAci } from '../../../types/ServiceId';
 import {
   getCallsByConversation,
   getCallSelector,
-  getIncomingCall,
+  getHasAnyAdminCallLinks,
+  getRingingCall,
   isInCall,
 } from '../../../state/selectors/calling';
 import type {
@@ -25,6 +26,10 @@ import type {
   GroupCallStateType,
 } from '../../../state/ducks/calling';
 import { getEmptyState } from '../../../state/ducks/calling';
+import {
+  FAKE_CALL_LINK,
+  FAKE_CALL_LINK_WITH_ADMIN_KEY,
+} from '../../../test-helpers/fakeCallLink';
 
 const OUR_ACI = generateAci();
 const ACI_1 = generateAci();
@@ -55,6 +60,7 @@ describe('state/selectors/calling', () => {
         isIncoming: false,
         isVideoCall: false,
         hasRemoteVideo: false,
+        remoteAudioLevel: 0,
       },
     },
   };
@@ -72,6 +78,7 @@ describe('state/selectors/calling', () => {
       showParticipantsList: false,
       outgoingRing: true,
       pip: false,
+      selfViewExpanded: false,
       settingsDialogOpen: false,
       joinedAt: null,
     },
@@ -84,6 +91,7 @@ describe('state/selectors/calling', () => {
     isIncoming: true,
     isVideoCall: false,
     hasRemoteVideo: false,
+    remoteAudioLevel: 0,
   };
 
   const stateWithIncomingDirectCall: CallingStateType = {
@@ -118,6 +126,20 @@ describe('state/selectors/calling', () => {
     },
   };
 
+  const stateWithCallLink: CallingStateType = {
+    ...getEmptyState(),
+    callLinks: {
+      [FAKE_CALL_LINK.roomId]: FAKE_CALL_LINK,
+    },
+  };
+
+  const stateWithAdminCallLink: CallingStateType = {
+    ...getEmptyState(),
+    callLinks: {
+      [FAKE_CALL_LINK_WITH_ADMIN_KEY.roomId]: FAKE_CALL_LINK_WITH_ADMIN_KEY,
+    },
+  };
+
   describe('getCallsByConversation', () => {
     it('returns state.calling.callsByConversation', () => {
       assert.deepEqual(getCallsByConversation(getEmptyRootState()), {});
@@ -132,6 +154,7 @@ describe('state/selectors/calling', () => {
             isIncoming: false,
             isVideoCall: false,
             hasRemoteVideo: false,
+            remoteAudioLevel: 0,
           },
         }
       );
@@ -157,20 +180,21 @@ describe('state/selectors/calling', () => {
           isIncoming: false,
           isVideoCall: false,
           hasRemoteVideo: false,
+          remoteAudioLevel: 0,
         }
       );
     });
   });
 
-  describe('getIncomingCall', () => {
+  describe('getRingingCall', () => {
     it('returns undefined if there are no calls', () => {
-      assert.isUndefined(getIncomingCall(getEmptyRootState()));
+      assert.isUndefined(getRingingCall(getEmptyRootState()));
     });
 
     it('returns undefined if there is no incoming call', () => {
-      assert.isUndefined(getIncomingCall(getCallingState(stateWithDirectCall)));
+      assert.isUndefined(getRingingCall(getCallingState(stateWithDirectCall)));
       assert.isUndefined(
-        getIncomingCall(getCallingState(stateWithActiveDirectCall))
+        getRingingCall(getCallingState(stateWithActiveDirectCall))
       );
     });
 
@@ -190,19 +214,19 @@ describe('state/selectors/calling', () => {
         },
       };
 
-      assert.isUndefined(getIncomingCall(getCallingState(state)));
+      assert.isUndefined(getRingingCall(getCallingState(state)));
     });
 
     it('returns an incoming direct call', () => {
       assert.deepEqual(
-        getIncomingCall(getCallingState(stateWithIncomingDirectCall)),
+        getRingingCall(getCallingState(stateWithIncomingDirectCall)),
         incomingDirectCall
       );
     });
 
     it('returns an incoming group call', () => {
       assert.deepEqual(
-        getIncomingCall(getCallingState(stateWithIncomingGroupCall)),
+        getRingingCall(getCallingState(stateWithIncomingGroupCall)),
         incomingGroupCall
       );
     });
@@ -215,6 +239,24 @@ describe('state/selectors/calling', () => {
 
     it('should be true if we are in a call', () => {
       assert.isTrue(isInCall(getCallingState(stateWithActiveDirectCall)));
+    });
+  });
+
+  describe('getHasAnyAdminCallLinks', () => {
+    it('returns true with admin call links', () => {
+      assert.isTrue(
+        getHasAnyAdminCallLinks(getCallingState(stateWithAdminCallLink))
+      );
+    });
+
+    it('returns false with only non-admin call links', () => {
+      assert.isFalse(
+        getHasAnyAdminCallLinks(getCallingState(stateWithCallLink))
+      );
+    });
+
+    it('returns false without any call links', () => {
+      assert.isFalse(getHasAnyAdminCallLinks(getEmptyRootState()));
     });
   });
 });

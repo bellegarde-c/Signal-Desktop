@@ -4,12 +4,24 @@
 export enum InstallScreenStep {
   NotStarted = 'NotStarted',
   QrCodeNotScanned = 'QrCodeNotScanned',
-  ChoosingDeviceName = 'ChoosingDeviceName',
   Error = 'Error',
 
   // Either of these two is the final state
   LinkInProgress = 'LinkInProgress',
   BackupImport = 'BackupImport',
+}
+
+export enum InstallScreenBackupStep {
+  WaitForBackup = 'WaitForBackup',
+  Download = 'Download',
+  Process = 'Process',
+}
+
+export enum InstallScreenBackupError {
+  UnsupportedVersion = 'UnsupportedVersion',
+  Retriable = 'Retriable',
+  Fatal = 'Fatal',
+  Canceled = 'Canceled',
 }
 
 export enum InstallScreenError {
@@ -20,6 +32,7 @@ export enum InstallScreenError {
 }
 
 export enum InstallScreenQRCodeError {
+  MaxRotations = 'MaxRotations',
   Timeout = 'Timeout',
   Unknown = 'Unknown',
   NetworkIssue = 'NetworkIssue',
