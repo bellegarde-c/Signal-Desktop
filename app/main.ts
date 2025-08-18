@@ -145,6 +145,9 @@ let mainWindow: BrowserWindow | undefined;
 let mainWindowCreated = false;
 let loadingWindow: BrowserWindow | undefined;
 
+let callActive = false;
+let throttlingTimeout = null;
+
 // These will be set after app fires the 'ready' event
 let preferredSystemLocales: Array<string> | undefined;
 let localeOverride: string | null | undefined;
@@ -156,6 +159,52 @@ const activeWindows = new Set<BrowserWindow>();
 
 function getMainWindow() {
   return mainWindow;
+}
+
+function startIdleHintListener() {
+  const systemBus = dbus.systemBus();
+  const service = systemBus.getService('org.freedesktop.login1');
+
+  service.getInterface(
+    '/org/freedesktop/login1/seat/seat0',
+    'org.freedesktop.DBus.Properties',
+    (err: Error | null, iface: any) => {
+      if (err) {
+        console.error('Failed to get iface:', err);
+        return;
+      }
+
+      // Listen for changes
+      iface.on('PropertiesChanged', (_ifaceName: string, changedProps: any) => {
+        if (callActive) return;
+
+        for (const [key, variant] of changedProps) {
+          if (key === 'IdleHint') {
+            const idleHint = variant[1][0] as boolean;
+
+            // Cancel any pending delayed throttling
+            if (throttlingTimeout) {
+              clearTimeout(throttlingTimeout);
+              throttlingTimeout = null;
+            }
+
+            if (idleHint) {
+              // Idle → disable throttling immediately
+              mainWindow.webContents.setBackgroundThrottling(false);
+              log.info(`IdleHint: true → throttling disabled immediately`);
+            } else {
+              // Not idle → schedule throttling in 30s (let socket manager reconnect)
+              throttlingTimeout = setTimeout(() => {
+                mainWindow.webContents.setBackgroundThrottling(true);
+                log.info(`IdleHint: false → throttling enabled after delay`);
+                throttlingTimeout = null;
+              }, 30_000);
+            }
+          }
+        }
+      });
+    }
+  );
 }
 
 function setupDbus() {
@@ -816,6 +865,7 @@ async function createWindow() {
     systemTrayService.setMainWindow(mainWindow);
   }
 
+  startIdleHintListener();
   setupDbus();
 
   function saveWindowStats() {
@@ -1156,6 +1206,7 @@ ipc.on('set-is-call-active', (_event, isCallActive) => {
     backgroundThrottling = true;
   }
 
+  callActive = isCallActive;
   mainWindow.webContents.setBackgroundThrottling(backgroundThrottling);
 });
 
