@@ -60,8 +60,6 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
         path: RELATIVE_ATTACHMENT_PATH,
         contentType: VIDEO_MP4,
         keys: 'keys=',
-        iv: 'iv==',
-        digest: 'digest=',
         version: 2,
         localKey: LOCAL_ENCRYPTION_KEYS,
         transitCdnInfo: {
@@ -142,15 +140,20 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
     const decryptAttachmentV2ToSink = sinon.stub();
 
     const { getAbsoluteAttachmentPath } = window.Signal.Migrations;
+    const abortController = new AbortController();
     runJob = sandbox.stub().callsFake((job: AttachmentBackupJobType) => {
-      return runAttachmentBackupJob(job, false, {
-        // @ts-expect-error incomplete stubbing
-        backupsService,
-        backupMediaBatch,
-        getAbsoluteAttachmentPath,
-        encryptAndUploadAttachment,
-        decryptAttachmentV2ToSink,
-      });
+      return runAttachmentBackupJob(
+        job,
+        { abortSignal: abortController.signal, isLastAttempt: false },
+        {
+          // @ts-expect-error incomplete stubbing
+          backupsService,
+          backupMediaBatch,
+          getAbsoluteAttachmentPath,
+          encryptAndUploadAttachment,
+          decryptAttachmentV2ToSink,
+        }
+      );
     });
 
     backupManager = new AttachmentBackupManager({
@@ -163,6 +166,8 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
   afterEach(async () => {
     sandbox.restore();
     await backupManager?.stop();
+    await DataWriter.removeAll();
+    await window.storage.fetch();
   });
 
   async function addJobs(

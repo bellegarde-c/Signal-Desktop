@@ -7,12 +7,18 @@ import { clearTimeoutIfNecessary } from '../util/clearTimeoutIfNecessary';
 import { getMessageQueueTime } from '../util/getMessageQueueTime';
 import * as Errors from '../types/errors';
 import { strictAssert } from '../util/assert';
+import { toBoundedDate } from '../util/timestamp';
+import { getMessageIdForLogging } from '../util/idForLogging';
+import { eraseMessageContents } from '../util/cleanup';
+import { drop } from '../util/drop';
+import { MessageModel } from '../models/messages';
+import { createLogger } from '../logging/log';
+
+const log = createLogger('tapToViewMessagesDeletionService');
 
 async function eraseTapToViewMessages() {
   try {
-    window.SignalContext.log.info(
-      'eraseTapToViewMessages: Loading messages...'
-    );
+    log.info('eraseTapToViewMessages: Loading messages...');
     const maxTimestamp = Date.now() - getMessageQueueTime();
     const messages =
       await DataReader.getTapToViewMessagesNeedingErase(maxTimestamp);
@@ -25,44 +31,70 @@ async function eraseTapToViewMessages() {
           'Must be older than maxTimestamp'
         );
 
-        const message = window.MessageCache.__DEPRECATED$register(
-          fromDB.id,
-          fromDB,
-          'eraseTapToViewMessages'
-        );
+        const message = window.MessageCache.register(new MessageModel(fromDB));
 
-        window.SignalContext.log.info(
+        log.info(
           'eraseTapToViewMessages: erasing message contents',
-          message.idForLogging()
+          getMessageIdForLogging(message.attributes)
         );
 
         // We do this to update the UI, if this message is being displayed somewhere
-        message.trigger('expired');
         window.reduxActions.conversations.messageExpired(message.id);
 
-        await message.eraseContents();
+        await eraseMessageContents(message);
       })
     );
   } catch (error) {
-    window.SignalContext.log.error(
+    log.error(
       'eraseTapToViewMessages: Error erasing messages',
       Errors.toLogFormat(error)
     );
   }
 
-  window.SignalContext.log.info('eraseTapToViewMessages: complete');
+  log.info('eraseTapToViewMessages: complete');
 }
 
 class TapToViewMessagesDeletionService {
-  public update: typeof this.checkTapToViewMessages;
+  #timeout?: ReturnType<typeof setTimeout>;
+  #isPaused = false;
+  #debouncedUpdate = debounce(this.#checkTapToViewMessages);
 
-  private timeout?: ReturnType<typeof setTimeout>;
-
-  constructor() {
-    this.update = debounce(this.checkTapToViewMessages, 1000);
+  update() {
+    drop(this.#debouncedUpdate());
   }
 
-  private async checkTapToViewMessages() {
+  pause(): void {
+    if (this.#isPaused) {
+      log.warn('checkTapToViewMessages: already paused');
+      return;
+    }
+
+    log.info('checkTapToViewMessages: pause');
+
+    this.#isPaused = true;
+    clearTimeoutIfNecessary(this.#timeout);
+    this.#timeout = undefined;
+  }
+
+  resume(): void {
+    if (!this.#isPaused) {
+      log.warn('checkTapToViewMessages: not paused');
+      return;
+    }
+
+    log.info('checkTapToViewMessages: resuming');
+    this.#isPaused = false;
+
+    this.#debouncedUpdate.cancel();
+    this.update();
+  }
+
+  async #checkTapToViewMessages() {
+    if (!this.#shouldRun()) {
+      log.info('checkTapToViewMessages: not running');
+      return;
+    }
+
     const receivedAtMsForOldestTapToViewMessage =
       await DataReader.getNextTapToViewMessageTimestampToAgeOut();
     if (!receivedAtMsForOldestTapToViewMessage) {
@@ -71,9 +103,9 @@ class TapToViewMessagesDeletionService {
 
     const nextCheck =
       receivedAtMsForOldestTapToViewMessage + getMessageQueueTime();
-    window.SignalContext.log.info(
+    log.info(
       'checkTapToViewMessages: next check at',
-      new Date(nextCheck).toISOString()
+      toBoundedDate(nextCheck).toISOString()
     );
 
     let wait = nextCheck - Date.now();
@@ -88,11 +120,20 @@ class TapToViewMessagesDeletionService {
       wait = 2147483647;
     }
 
-    clearTimeoutIfNecessary(this.timeout);
-    this.timeout = setTimeout(async () => {
+    clearTimeoutIfNecessary(this.#timeout);
+    this.#timeout = setTimeout(async () => {
+      if (!this.#shouldRun()) {
+        log.info('checkTapToViewMessages: not running');
+        return;
+      }
+
       await eraseTapToViewMessages();
-      void this.update();
+      this.update();
     }, wait);
+  }
+
+  #shouldRun(): boolean {
+    return !this.#isPaused && !window.SignalContext.isTestOrMockEnvironment();
   }
 }
 

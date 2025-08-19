@@ -30,9 +30,11 @@ type PeekedParticipantType = Pick<
 export type PropsType = {
   conversation: Pick<
     CallingConversationType,
+    | 'avatarPlaceholderGradient'
     | 'acceptedMessageRequest'
     | 'avatarUrl'
     | 'color'
+    | 'hasAvatar'
     | 'isMe'
     | 'phoneNumber'
     | 'profileName'
@@ -41,7 +43,6 @@ export type PropsType = {
     | 'systemNickname'
     | 'title'
     | 'type'
-    | 'unblurredAvatarUrl'
   >;
   i18n: LocalizerType;
   me: Pick<ConversationType, 'id' | 'serviceId'>;
@@ -55,6 +56,7 @@ export type PropsType = {
     >
   >;
   isCallFull?: boolean;
+  isConnecting?: boolean;
   peekedParticipants?: Array<PeekedParticipantType>;
 };
 
@@ -63,6 +65,7 @@ export function CallingPreCallInfo({
   groupMembers = [],
   i18n,
   isCallFull = false,
+  isConnecting = false,
   me,
   peekedParticipants = [],
   ringMode,
@@ -79,7 +82,11 @@ export function CallingPreCallInfo({
 
   let subtitle: string;
   if (ringMode === RingMode.IsRinging) {
-    subtitle = i18n('icu:outgoingCallRinging');
+    if (isConnecting) {
+      subtitle = i18n('icu:outgoingCallConnecting');
+    } else {
+      subtitle = i18n('icu:outgoingCallRinging');
+    }
   } else if (isCallFull) {
     subtitle = i18n('icu:calling__call-is-full');
   } else if (peekedParticipants.length) {
@@ -210,19 +217,18 @@ export function CallingPreCallInfo({
   return (
     <div className="module-CallingPreCallInfo">
       <Avatar
+        avatarPlaceholderGradient={conversation.avatarPlaceholderGradient}
         avatarUrl={conversation.avatarUrl}
         badge={undefined}
         color={conversation.color}
-        acceptedMessageRequest={conversation.acceptedMessageRequest}
         conversationType={conversation.type}
-        isMe={conversation.isMe}
+        hasAvatar={conversation.hasAvatar}
         noteToSelf={false}
         phoneNumber={conversation.phoneNumber}
         profileName={conversation.profileName}
         sharedGroupNames={conversation.sharedGroupNames}
         size={AvatarSize.SIXTY_FOUR}
         title={conversation.title}
-        unblurredAvatarUrl={conversation.unblurredAvatarUrl}
         i18n={i18n}
       />
       <div className="module-CallingPreCallInfo__title">

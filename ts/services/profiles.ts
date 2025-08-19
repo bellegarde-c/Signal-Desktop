@@ -6,6 +6,7 @@ import type {
   ProfileKeyCredentialRequestContext,
 } from '@signalapp/libsignal-client/zkgroup';
 import PQueue from 'p-queue';
+import { IdentityChange } from '@signalapp/libsignal-client';
 
 import type { ReadonlyDeep } from 'type-fest';
 import type { ConversationModel } from '../models/conversations';
@@ -13,7 +14,7 @@ import type { CapabilitiesType, ProfileType } from '../textsecure/WebAPI';
 import MessageSender from '../textsecure/SendMessage';
 import type { ServiceIdString } from '../types/ServiceId';
 import { DataWriter } from '../sql/Client';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import * as Errors from '../types/errors';
 import * as Bytes from '../Bytes';
 import { explodePromise } from '../util/explodePromise';
@@ -26,7 +27,6 @@ import {
   handleProfileKeyCredential,
 } from '../util/zkgroup';
 import { isMe } from '../util/whatTypeOfConversation';
-import { getUserLanguages } from '../util/userLanguages';
 import { parseBadgesFromServer } from '../badges/parseBadgesFromServer';
 import { strictAssert } from '../util/assert';
 import { drop } from '../util/drop';
@@ -43,6 +43,9 @@ import {
   maybeCreateGroupSendEndorsementState,
   onFailedToSendWithEndorsements,
 } from '../util/groupSendEndorsements';
+import { ProfileDecryptError } from '../types/errors';
+
+const log = createLogger('profiles');
 
 type JobType = {
   resolve: () => void;
@@ -69,20 +72,18 @@ type JobType = {
 
 const OBSERVED_CAPABILITY_KEYS = Object.keys({
   deleteSync: true,
-  versionedExpirationTimer: true,
   ssre2: true,
+  attachmentBackfill: true,
 } satisfies CapabilitiesType) as ReadonlyArray<keyof CapabilitiesType>;
 
 export class ProfileService {
-  private jobQueue: PQueue;
-
-  private jobsByConversationId: Map<string, JobType> = new Map();
-
-  private isPaused = false;
+  #jobQueue: PQueue;
+  #jobsByConversationId: Map<string, JobType> = new Map();
+  #isPaused = false;
 
   constructor(private fetchProfile = doGetProfile) {
-    this.jobQueue = new PQueue({ concurrency: 3, timeout: MINUTE * 2 });
-    this.jobsByConversationId = new Map();
+    this.#jobQueue = new PQueue({ concurrency: 3, timeout: MINUTE * 2 });
+    this.#jobsByConversationId = new Map();
 
     log.info('Profile Service initialized');
   }
@@ -103,13 +104,13 @@ export class ProfileService {
       return;
     }
 
-    if (this.isPaused) {
+    if (this.#isPaused) {
       throw new Error(
         `ProfileService.get: Cannot add job to paused queue for conversation ${preCheckConversation.idForLogging()}`
       );
     }
 
-    const existing = this.jobsByConversationId.get(conversationId);
+    const existing = this.#jobsByConversationId.get(conversationId);
     if (existing) {
       return existing.promise;
     }
@@ -134,13 +135,17 @@ export class ProfileService {
         await this.fetchProfile(conversation, groupId);
         resolve();
       } catch (error) {
-        reject(error);
+        resolve();
 
-        if (this.isPaused) {
+        if (this.#isPaused) {
           return;
         }
 
-        if (isRecord(error) && 'code' in error) {
+        if (error instanceof ProfileDecryptError) {
+          log.warn(
+            `ProfileServices.get: Failed to decrypt profile for ${conversation.idForLogging()}`
+          );
+        } else if (isRecord(error) && 'code' in error) {
           if (error.code === -1) {
             this.clearAll('Failed to connect to the server');
           } else if (error.code === 413 || error.code === 429) {
@@ -148,9 +153,14 @@ export class ProfileService {
             const time = findRetryAfterTimeFromError(error);
             void this.pause(time);
           }
+        } else {
+          log.error(
+            `ProfileServices.get: Error was thrown fetching ${conversation.idForLogging()}!`,
+            Errors.toLogFormat(error)
+          );
         }
       } finally {
-        this.jobsByConversationId.delete(conversationId);
+        this.#jobsByConversationId.delete(conversationId);
 
         const now = Date.now();
         const delta = now - jobData.startTime;
@@ -159,7 +169,7 @@ export class ProfileService {
             `ProfileServices.get: Job for ${conversation.idForLogging()} finished ${delta}ms after queue`
           );
         }
-        const remainingItems = this.jobQueue.size;
+        const remainingItems = this.#jobQueue.size;
         if (remainingItems && remainingItems % 10 === 0) {
           log.info(
             `ProfileServices.get: ${remainingItems} jobs remaining in the queue`
@@ -168,14 +178,14 @@ export class ProfileService {
       }
     };
 
-    this.jobsByConversationId.set(conversationId, jobData);
-    drop(this.jobQueue.add(job));
+    this.#jobsByConversationId.set(conversationId, jobData);
+    drop(this.#jobQueue.add(job));
 
     return promise;
   }
 
   public clearAll(reason: string): void {
-    if (this.isPaused) {
+    if (this.#isPaused) {
       log.warn(
         `ProfileService.clearAll: Already paused; not clearing; reason: '${reason}'`
       );
@@ -185,44 +195,42 @@ export class ProfileService {
     log.info(`ProfileService.clearAll: Clearing; reason: '${reason}'`);
 
     try {
-      this.isPaused = true;
-      this.jobQueue.pause();
+      this.#isPaused = true;
+      this.#jobQueue.pause();
 
-      this.jobsByConversationId.forEach(job => {
+      this.#jobsByConversationId.forEach(job => {
         job.reject(
-          new Error(
-            `ProfileService.clearAll: job cancelled because '${reason}'`
-          )
+          new Error(`ProfileService.clearAll: job canceled because '${reason}'`)
         );
       });
 
-      this.jobsByConversationId.clear();
-      this.jobQueue.clear();
+      this.#jobsByConversationId.clear();
+      this.#jobQueue.clear();
 
-      this.jobQueue.start();
+      this.#jobQueue.start();
     } finally {
-      this.isPaused = false;
+      this.#isPaused = false;
       log.info('ProfileService.clearAll: Done clearing');
     }
   }
 
   public async pause(timeInMS: number): Promise<void> {
-    if (this.isPaused) {
+    if (this.#isPaused) {
       log.warn('ProfileService.pause: Already paused, not pausing again.');
       return;
     }
 
     log.info(`ProfileService.pause: Pausing queue for ${timeInMS}ms`);
 
-    this.isPaused = true;
-    this.jobQueue.pause();
+    this.#isPaused = true;
+    this.#jobQueue.pause();
 
     try {
       await sleep(timeInMS);
     } finally {
       log.info('ProfileService.pause: Restarting queue');
-      this.jobQueue.start();
-      this.isPaused = false;
+      this.#jobQueue.start();
+      this.#isPaused = false;
     }
   }
 }
@@ -231,11 +239,6 @@ export const profileService = new ProfileService();
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace ProfileFetchOptions {
-  type Base = ReadonlyDeep<{
-    request: {
-      userLanguages: ReadonlyArray<string>;
-    };
-  }>;
   type WithVersioned = ReadonlyDeep<{
     profileKey: string;
     profileCredentialRequestContext: ProfileKeyCredentialRequestContext | null;
@@ -270,16 +273,16 @@ namespace ProfileFetchOptions {
 
   export type Unauth =
     // versioned (unauth)
-    | (Base & WithVersioned & WithUnauthAccessKey)
+    | (WithVersioned & WithUnauthAccessKey)
     // unversioned (unauth)
-    | (Base & WithUnversioned & WithUnauthAccessKey)
-    | (Base & WithUnversioned & WithUnauthGroupSendToken);
+    | (WithUnversioned & WithUnauthAccessKey)
+    | (WithUnversioned & WithUnauthGroupSendToken);
 
   export type Auth =
     // unversioned (auth) -- Using lastProfile
-    | (Base & WithVersioned & WithAuth)
+    | (WithVersioned & WithAuth)
     // unversioned (auth)
-    | (Base & WithUnversioned & WithAuth);
+    | (WithUnversioned & WithAuth);
 }
 
 export type ProfileFetchUnauthRequestOptions =
@@ -293,37 +296,33 @@ async function buildProfileFetchOptions({
   lastProfile,
   clientZkProfileCipher,
   groupId,
+  options,
 }: {
   conversation: ConversationModel;
   lastProfile: ConversationLastProfileType | null;
   clientZkProfileCipher: ClientZkProfileOperations;
   groupId: string | null;
+  options: { ignoreProfileKey: boolean; ignoreGroupSendToken: boolean };
 }): Promise<ProfileFetchOptions.Auth | ProfileFetchOptions.Unauth> {
   const logId = `buildGetProfileOptions(${conversation.idForLogging()})`;
-
-  const userLanguages = getUserLanguages(
-    window.SignalContext.getPreferredSystemLocales(),
-    window.SignalContext.getResolvedMessagesLocale()
-  );
 
   const profileKey = conversation.get('profileKey');
   const profileKeyVersion = conversation.deriveProfileKeyVersion();
   const accessKey = conversation.get('accessKey');
   const serviceId = conversation.getCheckedServiceId('getProfile');
 
-  if (profileKey) {
-    strictAssert(
-      profileKeyVersion != null && accessKey != null,
-      `${logId}: profileKeyVersion and accessKey are derived from profileKey`
-    );
-
+  if (
+    profileKey &&
+    profileKeyVersion &&
+    accessKey &&
+    !options.ignoreProfileKey
+  ) {
     if (!conversation.hasProfileKeyCredentialExpired()) {
       log.info(`${logId}: using unexpired profile key credential`);
       return {
         profileKey,
         profileCredentialRequestContext: null,
         request: {
-          userLanguages,
           accessKey,
           groupSendToken: null,
           profileKeyVersion,
@@ -343,7 +342,6 @@ async function buildProfileFetchOptions({
       profileKey,
       profileCredentialRequestContext: result.context,
       request: {
-        userLanguages,
         accessKey,
         groupSendToken: null,
         profileKeyVersion,
@@ -352,15 +350,12 @@ async function buildProfileFetchOptions({
     };
   }
 
-  strictAssert(
-    accessKey == null,
-    `${logId}: accessKey have to be absent because there is no profileKey`
-  );
-
-  // If we have a `lastProfile`, try getting the versioned profile with auth.
-  // Note: We can't try the group send token here because the versioned profile
-  // can't be decrypted without an up to date profile key.
+  // If we're ignoring profileKey, try getting the versioned profile with lastProfile.
+  // Note: No access key, since this is almost guaranteed not to be their current profile.
+  // Also, we can't try the group send token here because the versioned profile can't be
+  // decrypted without an up to date profile key.
   if (
+    options.ignoreProfileKey &&
     lastProfile != null &&
     lastProfile.profileKey != null &&
     lastProfile.profileKeyVersion != null
@@ -370,7 +365,6 @@ async function buildProfileFetchOptions({
       profileKey: lastProfile.profileKey,
       profileCredentialRequestContext: null,
       request: {
-        userLanguages,
         accessKey: null,
         groupSendToken: null,
         profileKeyVersion: lastProfile.profileKeyVersion,
@@ -380,7 +374,7 @@ async function buildProfileFetchOptions({
   }
 
   // Fallback to group send tokens for unversioned profiles
-  if (groupId != null) {
+  if (groupId != null && !options.ignoreGroupSendToken) {
     log.info(`${logId}: fetching group endorsements`);
     let result = await maybeCreateGroupSendEndorsementState(groupId, false);
 
@@ -399,7 +393,6 @@ async function buildProfileFetchOptions({
         profileKey: null,
         profileCredentialRequestContext: null,
         request: {
-          userLanguages,
           accessKey: null,
           groupSendToken,
           profileKeyVersion: null,
@@ -414,7 +407,6 @@ async function buildProfileFetchOptions({
     profileKey: null,
     profileCredentialRequestContext: null,
     request: {
-      userLanguages,
       accessKey: null,
       groupSendToken: null,
       profileKeyVersion: null,
@@ -457,7 +449,14 @@ function getFetchOptionsLabel(
 
 async function doGetProfile(
   c: ConversationModel,
-  groupId: string | null
+  groupId: string | null,
+  {
+    ignoreProfileKey,
+    ignoreGroupSendToken,
+  }: {
+    ignoreProfileKey: boolean;
+    ignoreGroupSendToken: boolean;
+  } = { ignoreProfileKey: false, ignoreGroupSendToken: false }
 ): Promise<void> {
   const logId = groupId
     ? `getProfile(${c.idForLogging()} in groupv2(${groupId}))`
@@ -483,10 +482,8 @@ async function doGetProfile(
 
   const serviceId = c.getCheckedServiceId('getProfile');
 
-  // Step #: Grab the profile key and version we last were successful decrypting with
-  // `lastProfile` is saved at the end of `doGetProfile` after successfully decrypting.
-  // `lastProfile` is used in case the `profileKey` was cleared because of a 401/403.
-  // `lastProfile` is cleared when we get a 404 fetching a profile.
+  // Step #: Grab the profile key and version we last were successful decrypting with.
+  // We'll use it in case we've failed to fetch with our `profileKey`.
   const lastProfile = c.get('lastProfile');
 
   // Step #: Build the request options we will use for fetching and decrypting the profile
@@ -495,6 +492,10 @@ async function doGetProfile(
     lastProfile: lastProfile ?? null,
     clientZkProfileCipher,
     groupId,
+    options: {
+      ignoreProfileKey,
+      ignoreGroupSendToken,
+    },
   });
   const { request } = options;
 
@@ -510,9 +511,9 @@ async function doGetProfile(
       profile = await messaging.server.getProfile(serviceId, request);
     }
   } catch (error) {
-    log.error(`${logId}: Failed to fetch profile`, Errors.toLogFormat(error));
-
     if (error instanceof HTTPError) {
+      log.warn(`${logId}: Failed to fetch profile. Code:`, error.code);
+
       // Unauthorized/Forbidden
       if (error.code === 401 || error.code === 403) {
         if (request.groupSendToken != null) {
@@ -524,46 +525,32 @@ async function doGetProfile(
           // Fallback from failed unauth (access key) request
           if (request.accessKey != null) {
             log.warn(
-              `${logId}: Got ${error.code} when using access key, removing profileKey and retrying`
+              `${logId}: Got ${error.code} when using access key, failing over to lastProfile`
             );
-            await c.setProfileKey(undefined, {
-              reason: 'doGetProfile/accessKey/401+403',
-            });
 
-            // Retry fetch using last known profileKeyVersion or fetch
-            // unversioned profile.
-            return doGetProfile(c, groupId);
+            // Record that the accessKey we have in the conversation is invalid
+            const sealedSender = c.get('sealedSender');
+            if (sealedSender !== SEALED_SENDER.DISABLED) {
+              c.set('sealedSender', SEALED_SENDER.DISABLED);
+            }
+
+            // Retry fetch using last known profileKey or fetch unversioned profile.
+            return doGetProfile(c, groupId, {
+              ignoreProfileKey: true,
+              ignoreGroupSendToken,
+            });
           }
 
           // Fallback from failed unauth (group send token) request
           if (request.groupSendToken != null) {
             log.warn(`${logId}: Got ${error.code} when using group send token`);
-            return doGetProfile(c, null);
-          }
-        }
-
-        // Step #: Record if the accessKey we have in the conversation is valid
-        const sealedSender = c.get('sealedSender');
-        if (
-          sealedSender === SEALED_SENDER.ENABLED ||
-          sealedSender === SEALED_SENDER.UNRESTRICTED
-        ) {
-          if (!isMe(c.attributes)) {
-            log.warn(
-              `${logId}: Got ${error.code} when using accessKey, removing profileKey`
-            );
-            await c.setProfileKey(undefined, {
-              reason: 'doGetProfile/accessKey/401+403',
+            return doGetProfile(c, null, {
+              ignoreProfileKey,
+              ignoreGroupSendToken: true,
             });
           }
-        } else if (sealedSender === SEALED_SENDER.UNKNOWN) {
-          log.warn(
-            `${logId}: Got ${error.code} fetching profile, setting sealedSender = DISABLED`
-          );
-          c.set('sealedSender', SEALED_SENDER.DISABLED);
         }
 
-        // TODO: Is it safe to ignore these errors?
         return;
       }
 
@@ -572,13 +559,13 @@ async function doGetProfile(
         log.info(`${logId}: Profile not found`);
 
         c.set('profileLastFetchedAt', Date.now());
-        // Note: Writes to DB:
-        await c.removeLastProfile(lastProfile);
 
-        if (!isVersioned) {
+        if (!isVersioned || ignoreProfileKey) {
           log.info(`${logId}: Marking conversation unregistered`);
           c.setUnregistered();
         }
+
+        return;
       }
     }
 
@@ -781,10 +768,6 @@ async function doGetProfile(
           Errors.toLogFormat(error)
         );
         isSuccessfullyDecrypted = false;
-        c.set({
-          profileName: undefined,
-          profileFamilyName: undefined,
-        });
       }
     }
   } else {
@@ -797,10 +780,10 @@ async function doGetProfile(
   try {
     if (requestDecryptionKey != null) {
       // Note: Fetches avatar
-      await c.setAndMaybeFetchProfileAvatar(
-        profile.avatar,
-        requestDecryptionKey
-      );
+      await c.setAndMaybeFetchProfileAvatar({
+        avatarUrl: profile.avatar,
+        decryptionKey: requestDecryptionKey,
+      });
     }
   } catch (error) {
     if (error instanceof HTTPError) {
@@ -847,12 +830,13 @@ export async function updateIdentityKey(
     return false;
   }
 
-  const changed = await window.textsecure.storage.protocol.saveIdentity(
+  const saveOutcome = await window.textsecure.storage.protocol.saveIdentity(
     new Address(serviceId, 1),
     identityKey,
     false,
     { noOverwrite }
   );
+  const changed = saveOutcome === IdentityChange.ReplacedExisting;
   if (changed) {
     log.info(`updateIdentityKey(${serviceId}): changed`);
     // save identity will close all sessions except for .1, so we

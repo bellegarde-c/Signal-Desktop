@@ -7,10 +7,14 @@
 html {
   height: 100%;
   cursor: inherit;
+}
 
-  body.dark-theme {
-    color-scheme: dark;
-  }
+.light-theme {
+  color-scheme: light;
+}
+
+.dark-theme {
+  color-scheme: dark;
 }
 
 body {
@@ -78,9 +82,9 @@ textarea {
 
 ::-webkit-scrollbar {
   // For vertical scrollbars
-  width: 9px;
+  width: variables.$scrollbar_width;
   // For horizontal scrollbars
-  height: 9px;
+  height: variables.$scrollbar_height;
 }
 
 ::-webkit-scrollbar-track {
@@ -613,26 +617,6 @@ $loading-height: 16px;
     text-decoration: underline;
     margin: 0.5em;
     color: variables.$color-ultramarine;
-  }
-
-  .progress {
-    text-align: center;
-    padding: 1em;
-    width: 80%;
-    margin: auto;
-
-    .bar-container {
-      height: 1em;
-      margin: 1em;
-      background-color: variables.$color-gray-02;
-    }
-    .bar {
-      width: 100%;
-      height: 100%;
-      background-color: variables.$color-ios-blue-tint;
-      transition: width 0.25s;
-      box-shadow: 2px 2px 4px variables.$color-black-alpha-40;
-    }
   }
 
   .nav {

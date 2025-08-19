@@ -24,20 +24,18 @@ import type {
 } from '../state/ducks/conversations';
 import { AvatarColors } from '../types/Colors';
 import { generateAci } from '../types/ServiceId';
-import { getDefaultConversation } from '../test-both/helpers/getDefaultConversation';
-import { fakeGetGroupCallVideoFrameSource } from '../test-both/helpers/fakeGetGroupCallVideoFrameSource';
-import { setupI18n } from '../util/setupI18n';
-import enMessages from '../../_locales/en/messages.json';
+import { getDefaultConversation } from '../test-helpers/getDefaultConversation';
+import { fakeGetGroupCallVideoFrameSource } from '../test-helpers/fakeGetGroupCallVideoFrameSource';
 import { StorySendMode } from '../types/Stories';
 import {
   FAKE_CALL_LINK,
   FAKE_CALL_LINK_WITH_ADMIN_KEY,
   getDefaultCallLinkConversation,
-} from '../test-both/helpers/fakeCallLink';
+} from '../test-helpers/fakeCallLink';
 import { allRemoteParticipants } from './CallScreen.stories';
 import { getPlaceholderContact } from '../state/selectors/conversations';
 
-const i18n = setupI18n('en', enMessages);
+const { i18n } = window.SignalContext;
 
 const getConversation = () =>
   getDefaultConversation({
@@ -81,6 +79,7 @@ const getCommonActiveCallData = () => ({
   viewMode: CallViewMode.Paginated,
   outgoingRing: true,
   pip: false,
+  selfViewExpanded: false,
   settingsDialogOpen: false,
   showParticipantsList: false,
 });
@@ -89,6 +88,7 @@ const createProps = (storyProps: Partial<PropsType> = {}): PropsType => ({
   ...storyProps,
   availableCameras: [],
   acceptCall: action('accept-call'),
+  activeNotificationProfile: undefined,
   approveUser: action('approve-user'),
   batchUserAction: action('batch-user-action'),
   bounceAppIconStart: action('bounce-app-icon-start'),
@@ -129,6 +129,7 @@ const createProps = (storyProps: Partial<PropsType> = {}): PropsType => ({
   setGroupCallVideoRequest: action('set-group-call-video-request'),
   setIsCallActive: action('set-is-call-active'),
   setLocalAudio: action('set-local-audio'),
+  setLocalAudioRemoteMuted: action('set-local-audio-remote-muted'),
   setLocalPreviewContainer: action('set-local-preview-container'),
   setLocalVideo: action('set-local-video'),
   setRendererCanvas: action('set-renderer-canvas'),
@@ -147,6 +148,7 @@ const createProps = (storyProps: Partial<PropsType> = {}): PropsType => ({
   toggleScreenRecordingPermissionsDialog: action(
     'toggle-screen-recording-permissions-dialog'
   ),
+  toggleSelfViewExpanded: action('toggle-self-view-expanded'),
   toggleSettings: action('toggle-settings'),
   pauseVoiceNotePlayer: action('pause-audio-player'),
 });
@@ -181,6 +183,8 @@ const getActiveCallForCallLink = (
     pendingParticipants: overrideProps.pendingParticipants ?? [],
     raisedHands: new Set<number>(),
     remoteAudioLevels: new Map<number, number>(),
+    selfViewExpanded: false,
+    suggestLowerHand: false,
   };
 };
 
@@ -203,6 +207,9 @@ export function OngoingDirectCall(): JSX.Element {
           callMode: CallMode.Direct,
           callState: CallState.Accepted,
           peekedParticipants: [],
+          remoteAudioLevel: 0,
+          hasRemoteAudio: true,
+          hasRemoteVideo: true,
           remoteParticipants: [
             { hasRemoteVideo: true, presenting: false, title: 'Remy' },
           ],
@@ -232,6 +239,7 @@ export function OngoingGroupCall(): JSX.Element {
           raisedHands: new Set<number>(),
           remoteParticipants: [],
           remoteAudioLevels: new Map<number, number>(),
+          suggestLowerHand: false,
         },
       })}
     />
@@ -289,6 +297,9 @@ export function CallRequestNeeded(): JSX.Element {
           callMode: CallMode.Direct,
           callState: CallState.Accepted,
           peekedParticipants: [],
+          remoteAudioLevel: 0,
+          hasRemoteAudio: true,
+          hasRemoteVideo: true,
           remoteParticipants: [
             { hasRemoteVideo: true, presenting: false, title: 'Mike' },
           ],

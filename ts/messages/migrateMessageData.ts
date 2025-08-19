@@ -12,6 +12,10 @@ import type { MessageAttributesType } from '../model-types.d';
 import type { AciString } from '../types/ServiceId';
 import * as Errors from '../types/errors';
 import { DataReader, DataWriter } from '../sql/Client';
+import { postSaveUpdates } from '../util/cleanup';
+import { createLogger } from '../logging/log';
+
+const log = createLogger('migrateMessageData');
 
 const MAX_CONCURRENCY = 5;
 
@@ -57,7 +61,7 @@ export async function _migrateMessageData({
   ) => Promise<Array<MessageAttributesType>>;
   saveMessagesIndividually: (
     data: ReadonlyArray<MessageAttributesType>,
-    options: { ourAci: AciString }
+    options: { ourAci: AciString; postSaveUpdates: () => Promise<void> }
   ) => Promise<{ failedIndices: Array<number> }>;
   incrementMessagesMigrationAttempts: (
     messageIds: ReadonlyArray<string>
@@ -82,10 +86,7 @@ export async function _migrateMessageData({
       { maxVersion }
     );
   } catch (error) {
-    window.SignalContext.log.error(
-      'migrateMessageData.getMessagesNeedingUpgrade error:',
-      Errors.toLogFormat(error)
-    );
+    log.error('getMessagesNeedingUpgrade error:', Errors.toLogFormat(error));
     return {
       done: true,
       numProcessed: 0,
@@ -102,10 +103,7 @@ export async function _migrateMessageData({
         try {
           return await upgradeMessageSchema(message, { maxVersion });
         } catch (error) {
-          window.SignalContext.log.error(
-            'migrateMessageData.upgradeMessageSchema error:',
-            Errors.toLogFormat(error)
-          );
+          log.error('upgradeMessageSchema error:', Errors.toLogFormat(error));
           failedToUpgradeMessageIds.push(message.id);
           return undefined;
         }
@@ -122,6 +120,7 @@ export async function _migrateMessageData({
     upgradedMessages,
     {
       ourAci,
+      postSaveUpdates,
     }
   );
 
@@ -174,8 +173,6 @@ export async function migrateBatchOfMessages({
 }
 
 export async function migrateAllMessages(): Promise<void> {
-  const { log } = window.SignalContext;
-
   let batch: BatchResultType | undefined;
   let total = 0;
   while (!batch?.done) {

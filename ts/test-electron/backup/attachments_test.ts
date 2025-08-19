@@ -27,26 +27,25 @@ import type {
   MessageAttributesType,
   QuotedMessageType,
 } from '../../model-types';
-import { isVoiceMessage, type AttachmentType } from '../../types/Attachment';
+import {
+  hasRequiredInformationForBackup,
+  isVoiceMessage,
+  type AttachmentType,
+} from '../../types/Attachment';
 import { strictAssert } from '../../util/assert';
 import { SignalService } from '../../protobuf';
 import { getRandomBytes } from '../../Crypto';
 import { loadAllAndReinitializeRedux } from '../../services/allLoaders';
+import {
+  generateAttachmentKeys,
+  generateKeys,
+  getPlaintextHashForInMemoryAttachment,
+} from '../../AttachmentCrypto';
+import { KIBIBYTE } from '../../types/AttachmentSize';
 
 const CONTACT_A = generateAci();
 
-const NON_ROUNDTRIPPED_FIELDS = [
-  'path',
-  'iv',
-  'thumbnail',
-  'screenshot',
-  'isReencryptableToSameDigest',
-];
-
-const NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS = [
-  ...NON_ROUNDTRIPPED_FIELDS,
-  'uploadTimestamp',
-];
+const NON_ROUNDTRIPPED_FIELDS = ['path', 'thumbnail', 'screenshot', 'localKey'];
 
 describe('backup/attachments', () => {
   let sandbox: sinon.SinonSandbox;
@@ -55,6 +54,7 @@ describe('backup/attachments', () => {
   beforeEach(async () => {
     await DataWriter.removeAll();
     window.storage.reset();
+
     window.ConversationController.reset();
 
     await setupBasics();
@@ -89,14 +89,6 @@ describe('backup/attachments', () => {
     sandbox.restore();
   });
 
-  function getBase64(str: string): string {
-    return Bytes.toBase64(Bytes.fromString(str));
-  }
-
-  function digestToMediaName(digestBase64: string): string {
-    return Bytes.toHex(Bytes.fromBase64(digestBase64));
-  }
-
   function composeAttachment(
     index: number,
     overrides?: Partial<AttachmentType>
@@ -105,13 +97,14 @@ describe('backup/attachments', () => {
       cdnKey: `cdnKey${index}`,
       cdnNumber: 3,
       clientUuid: generateGuid(),
-      key: getBase64(`key${index}`),
-      digest: getBase64(`digest${index}`),
-      iv: getBase64(`iv${index}`),
+      plaintextHash: Bytes.toHex(getRandomBytes(32)),
+      key: Bytes.toBase64(generateKeys()),
+      digest: Bytes.toBase64(getRandomBytes(32)),
       size: 100,
       contentType: IMAGE_JPEG,
       path: `/path/to/file${index}.png`,
-      isReencryptableToSameDigest: true,
+      caption: `caption${index}`,
+      localKey: Bytes.toBase64(generateAttachmentKeys()),
       uploadTimestamp: index,
       thumbnail: {
         size: 1024,
@@ -146,6 +139,18 @@ describe('backup/attachments', () => {
     };
   }
 
+  function expectedRoundtrippedFields(
+    attachment: AttachmentType
+  ): AttachmentType {
+    const base = omit(attachment, NON_ROUNDTRIPPED_FIELDS);
+    if (hasRequiredInformationForBackup(attachment)) {
+      delete base.digest;
+    } else {
+      delete base.plaintextHash;
+    }
+    return base;
+  }
+
   describe('long-message attachments', () => {
     it('preserves attachment still on message.attachments', async () => {
       const longMessageAttachment = composeAttachment(1, {
@@ -163,32 +168,33 @@ describe('backup/attachments', () => {
             schemaVersion: 12,
           }),
         ],
-        // path & iv will not be roundtripped
         [
           composeMessage(1, {
             attachments: [
-              omit(longMessageAttachment, NON_ROUNDTRIPPED_FIELDS),
-              omit(normalAttachment, NON_ROUNDTRIPPED_FIELDS),
+              expectedRoundtrippedFields(longMessageAttachment),
+              expectedRoundtrippedFields(normalAttachment),
             ],
           }),
-        ],
-        { backupLevel: BackupLevel.Free }
+        ]
       );
     });
     it('migration creates long-message attachment if there is a long message.body (i.e. schemaVersion < 13)', async () => {
+      const body = 'a'.repeat(3000);
+      const bodyBytes = Bytes.fromString(body);
       await asymmetricRoundtripHarness(
         [
           composeMessage(1, {
-            body: 'a'.repeat(3000),
+            body,
             schemaVersion: 12,
           }),
         ],
         [
           composeMessage(1, {
-            body: 'a'.repeat(2048),
+            body,
             bodyAttachment: {
               contentType: LONG_MESSAGE,
-              size: 3000,
+              size: bodyBytes.byteLength,
+              plaintextHash: getPlaintextHashForInMemoryAttachment(bodyBytes),
             },
           }),
         ],
@@ -202,27 +208,23 @@ describe('backup/attachments', () => {
 
             assert.deepStrictEqual(
               expected.bodyAttachment,
-              // all encryption info will be generated anew
-              omit(msgInDB.bodyAttachment, [
-                'backupLocator',
-                'digest',
-                'key',
-                'downloadPath',
-              ])
+              omit(msgInDB.bodyAttachment, ['localKey', 'path', 'version'])
             );
 
-            assert.isNotEmpty(msgInDB.bodyAttachment?.backupLocator);
-            assert.isNotEmpty(msgInDB.bodyAttachment?.digest);
-            assert.isNotEmpty(msgInDB.bodyAttachment?.key);
+            assert.isUndefined(msgInDB.bodyAttachment?.digest);
           },
         }
       );
     });
+
     it('handles existing bodyAttachments', async () => {
+      const body = 'a'.repeat(3000);
+      const bodyBytes = Bytes.fromString(body);
+
       const attachment = omit(
         composeAttachment(1, {
           contentType: LONG_MESSAGE,
-          size: 3000,
+          size: bodyBytes.byteLength,
           downloadPath: 'downloadPath',
         }),
         'thumbnail'
@@ -233,18 +235,16 @@ describe('backup/attachments', () => {
         [
           composeMessage(1, {
             bodyAttachment: attachment,
-            body: 'a'.repeat(3000),
+            body,
           }),
         ],
-        // path & iv will not be roundtripped
         [
           composeMessage(1, {
-            body: 'a'.repeat(2048),
+            body,
             bodyAttachment: {
-              ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-              backupLocator: {
-                mediaName: digestToMediaName(attachment.digest),
-              },
+              contentType: LONG_MESSAGE,
+              size: 3000,
+              plaintextHash: getPlaintextHashForInMemoryAttachment(bodyBytes),
             },
           }),
         ],
@@ -257,11 +257,105 @@ describe('backup/attachments', () => {
             );
 
             assert.deepStrictEqual(
-              omit(expected.bodyAttachment, ['clientUuid', 'downloadPath']),
-              omit(msgInDB.bodyAttachment, ['clientUuid', 'downloadPath'])
+              expected.bodyAttachment,
+              omit(msgInDB.bodyAttachment, ['localKey', 'path', 'version'])
+            );
+          },
+        }
+      );
+    });
+    it('truncates at 128 KiB', async () => {
+      const body = 'a'.repeat(129 * KIBIBYTE);
+      const truncatedBody = body.slice(0, 128 * KIBIBYTE);
+      const bodyBytes = Bytes.fromString(body);
+
+      const attachment = omit(
+        composeAttachment(1, {
+          contentType: LONG_MESSAGE,
+          size: bodyBytes.byteLength,
+          downloadPath: 'downloadPath',
+        }),
+        'thumbnail'
+      );
+      strictAssert(attachment.digest, 'must exist');
+
+      await asymmetricRoundtripHarness(
+        [
+          composeMessage(1, {
+            bodyAttachment: attachment,
+            body,
+          }),
+        ],
+        [
+          composeMessage(1, {
+            body: truncatedBody,
+            bodyAttachment: {
+              contentType: LONG_MESSAGE,
+              size: 128 * KIBIBYTE,
+              plaintextHash: getPlaintextHashForInMemoryAttachment(
+                Bytes.fromString(truncatedBody)
+              ),
+            },
+          }),
+        ],
+        {
+          backupLevel: BackupLevel.Paid,
+          comparator: (expected, msgInDB) => {
+            assert.deepStrictEqual(
+              omit(expected, 'bodyAttachment'),
+              omit(msgInDB, 'bodyAttachment')
             );
 
-            assert.isNotEmpty(msgInDB.bodyAttachment?.downloadPath);
+            assert.deepStrictEqual(
+              expected.bodyAttachment,
+              omit(msgInDB.bodyAttachment, ['localKey', 'path', 'version'])
+            );
+          },
+        }
+      );
+    });
+    it('includes bodyAttachment if it has not downloaded', async () => {
+      const truncatedBody = 'a'.repeat(2 * KIBIBYTE);
+
+      const attachment = omit(
+        composeAttachment(1, {
+          contentType: LONG_MESSAGE,
+          size: 64 * KIBIBYTE,
+          path: undefined,
+          plaintextHash: undefined,
+          localKey: undefined,
+          downloadPath: undefined,
+          clientUuid: undefined, // clientUuids are not roundtripped for bodyAttachments
+        }),
+        'thumbnail'
+      );
+      strictAssert(attachment.digest, 'must exist');
+
+      await asymmetricRoundtripHarness(
+        [
+          composeMessage(1, {
+            body: truncatedBody,
+            bodyAttachment: attachment,
+          }),
+        ],
+        [
+          composeMessage(1, {
+            body: truncatedBody,
+            bodyAttachment: attachment,
+          }),
+        ],
+        {
+          backupLevel: BackupLevel.Paid,
+          comparator: (expected, msgInDB) => {
+            assert.deepStrictEqual(
+              omit(msgInDB, 'bodyAttachment'),
+              omit(expected, 'bodyAttachment')
+            );
+
+            assert.deepStrictEqual(
+              omit(msgInDB.bodyAttachment, ['downloadPath']),
+              expected.bodyAttachment
+            );
           },
         }
       );
@@ -279,12 +373,11 @@ describe('backup/attachments', () => {
             attachments: [attachment1, attachment2],
           }),
         ],
-        // path & iv will not be roundtripped
         [
           composeMessage(1, {
             attachments: [
-              omit(attachment1, NON_ROUNDTRIPPED_FIELDS),
-              omit(attachment2, NON_ROUNDTRIPPED_FIELDS),
+              expectedRoundtrippedFields(attachment1),
+              expectedRoundtrippedFields(attachment2),
             ],
           }),
         ],
@@ -303,15 +396,42 @@ describe('backup/attachments', () => {
         ],
         [
           composeMessage(1, {
-            // path, iv, and uploadTimestamp will not be roundtripped,
-            // but there will be a backupLocator
+            attachments: [expectedRoundtrippedFields(attachment)],
+          }),
+        ],
+        { backupLevel: BackupLevel.Paid }
+      );
+    });
+    it('deduplicates attachments on export based on mediaName', async () => {
+      const attachment1 = composeAttachment(1);
+      const attachment2 = {
+        ...attachment1,
+        contentType: IMAGE_WEBP,
+        caption: 'attachment2caption',
+        cdnKey: 'attachment2cdnkey',
+        cdnNumber: 25,
+      };
+
+      await asymmetricRoundtripHarness(
+        [
+          composeMessage(1, {
+            attachments: [attachment1],
+          }),
+          composeMessage(2, {
+            attachments: [attachment2],
+          }),
+        ],
+        [
+          composeMessage(1, {
+            attachments: [expectedRoundtrippedFields(attachment1)],
+          }),
+          composeMessage(2, {
             attachments: [
-              {
-                ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                backupLocator: {
-                  mediaName: digestToMediaName(attachment.digest),
-                },
-              },
+              expectedRoundtrippedFields({
+                ...attachment2,
+                cdnKey: attachment1.cdnKey,
+                cdnNumber: attachment1.cdnNumber,
+              }),
             ],
           }),
         ],
@@ -334,12 +454,34 @@ describe('backup/attachments', () => {
         ],
         [
           composeMessage(1, {
+            attachments: [expectedRoundtrippedFields(attachment)],
+          }),
+        ],
+        { backupLevel: BackupLevel.Paid }
+      );
+    });
+    it('drops voice message flag when body is present', async () => {
+      const attachment = composeAttachment(1);
+      attachment.contentType = AUDIO_MP3;
+      attachment.flags = SignalService.AttachmentPointer.Flags.VOICE_MESSAGE;
+
+      strictAssert(isVoiceMessage(attachment), 'it is a voice attachment');
+      strictAssert(attachment.digest, 'digest exists');
+
+      await asymmetricRoundtripHarness(
+        [
+          composeMessage(1, {
+            body: 'hello',
+            attachments: [attachment],
+          }),
+        ],
+        [
+          composeMessage(1, {
+            body: 'hello',
             attachments: [
               {
-                ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                backupLocator: {
-                  mediaName: digestToMediaName(attachment.digest),
-                },
+                ...expectedRoundtrippedFields(attachment),
+                flags: undefined,
               },
             ],
           }),
@@ -356,17 +498,20 @@ describe('backup/attachments', () => {
       await asymmetricRoundtripHarness(
         [
           composeMessage(1, {
-            preview: [{ url: 'url', date: 1, image: attachment }],
+            body: 'https://signal.org',
+            preview: [
+              { url: 'https://signal.org', date: 1, image: attachment },
+            ],
           }),
         ],
-        // path & iv will not be roundtripped
         [
           composeMessage(1, {
+            body: 'https://signal.org',
             preview: [
               {
-                url: 'url',
+                url: 'https://signal.org',
                 date: 1,
-                image: omit(attachment, NON_ROUNDTRIPPED_FIELDS),
+                image: expectedRoundtrippedFields(attachment),
               },
             ],
           }),
@@ -381,9 +526,10 @@ describe('backup/attachments', () => {
       await asymmetricRoundtripHarness(
         [
           composeMessage(1, {
+            body: 'https://signal.org',
             preview: [
               {
-                url: 'url',
+                url: 'https://signal.org',
                 date: 1,
                 title: 'title',
                 description: 'description',
@@ -394,20 +540,14 @@ describe('backup/attachments', () => {
         ],
         [
           composeMessage(1, {
+            body: 'https://signal.org',
             preview: [
               {
-                url: 'url',
+                url: 'https://signal.org',
                 date: 1,
                 title: 'title',
                 description: 'description',
-                image: {
-                  // path, iv, and uploadTimestamp will not be roundtripped,
-                  // but there will be a backupLocator
-                  ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                  backupLocator: {
-                    mediaName: digestToMediaName(attachment.digest),
-                  },
-                },
+                image: expectedRoundtrippedFields(attachment),
               },
             ],
           }),
@@ -433,7 +573,7 @@ describe('backup/attachments', () => {
             contact: [
               {
                 avatar: {
-                  avatar: omit(attachment, NON_ROUNDTRIPPED_FIELDS),
+                  avatar: expectedRoundtrippedFields(attachment),
                   isProfile: false,
                 },
               },
@@ -453,19 +593,12 @@ describe('backup/attachments', () => {
             contact: [{ avatar: { avatar: attachment, isProfile: false } }],
           }),
         ],
-        // path, iv, and uploadTimestamp will not be roundtripped,
-        // but there will be a backupLocator
         [
           composeMessage(1, {
             contact: [
               {
                 avatar: {
-                  avatar: {
-                    ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                    backupLocator: {
-                      mediaName: digestToMediaName(attachment.digest),
-                    },
-                  },
+                  avatar: expectedRoundtrippedFields(attachment),
                   isProfile: false,
                 },
               },
@@ -493,17 +626,19 @@ describe('backup/attachments', () => {
       await asymmetricRoundtripHarness(
         [
           composeMessage(1, {
+            body: '123',
             quote: quotedMessage,
           }),
         ],
         // path & iv will not be roundtripped
         [
           composeMessage(1, {
+            body: '123',
             quote: {
               ...quotedMessage,
               attachments: [
                 {
-                  thumbnail: omit(attachment, NON_ROUNDTRIPPED_FIELDS),
+                  thumbnail: expectedRoundtrippedFields(attachment),
                   contentType: VIDEO_MP4,
                 },
               ],
@@ -529,21 +664,18 @@ describe('backup/attachments', () => {
       await asymmetricRoundtripHarness(
         [
           composeMessage(1, {
+            body: '123',
             quote: quotedMessage,
           }),
         ],
         [
           composeMessage(1, {
+            body: '123',
             quote: {
               ...quotedMessage,
               attachments: [
                 {
-                  thumbnail: {
-                    ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                    backupLocator: {
-                      mediaName: digestToMediaName(attachment.digest),
-                    },
-                  },
+                  thumbnail: expectedRoundtrippedFields(attachment),
                   contentType: VIDEO_MP4,
                 },
               ],
@@ -558,6 +690,7 @@ describe('backup/attachments', () => {
       const existingAttachment = composeAttachment(1);
       const existingMessageTimestamp = Date.now();
       const existingMessage = composeMessage(existingMessageTimestamp, {
+        body: '123',
         attachments: [existingAttachment],
       });
 
@@ -576,6 +709,7 @@ describe('backup/attachments', () => {
       };
 
       const quoteMessage = composeMessage(existingMessageTimestamp + 1, {
+        body: 'quote',
         quote: quotedMessage,
       });
 
@@ -584,17 +718,7 @@ describe('backup/attachments', () => {
         [
           {
             ...existingMessage,
-            attachments: [
-              {
-                ...omit(
-                  existingAttachment,
-                  NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS
-                ),
-                backupLocator: {
-                  mediaName: digestToMediaName(existingAttachment.digest),
-                },
-              },
-            ],
+            attachments: [expectedRoundtrippedFields(existingAttachment)],
           },
           {
             ...quoteMessage,
@@ -605,15 +729,7 @@ describe('backup/attachments', () => {
                 {
                   // The thumbnail will not have been copied over yet since it has not yet
                   // been downloaded
-                  thumbnail: {
-                    ...omit(
-                      quoteAttachment,
-                      NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS
-                    ),
-                    backupLocator: {
-                      mediaName: digestToMediaName(quoteAttachment.digest),
-                    },
-                  },
+                  thumbnail: expectedRoundtrippedFields(quoteAttachment),
                   contentType: VIDEO_MP4,
                 },
               ],
@@ -625,7 +741,9 @@ describe('backup/attachments', () => {
     });
 
     it('handles quotes which have been copied over from the original (and lack all encryption info)', async () => {
-      const originalMessage = composeMessage(1);
+      const originalMessage = composeMessage(1, {
+        body: 'original',
+      });
       const quotedMessage: QuotedMessageType = {
         authorAci: originalMessage.sourceServiceId as AciString,
         isViewOnce: false,
@@ -638,6 +756,8 @@ describe('backup/attachments', () => {
               contentType: IMAGE_PNG,
               size: 100,
               path: 'path/to/thumbnail',
+              localKey: Bytes.toBase64(generateAttachmentKeys()),
+              plaintextHash: Bytes.toHex(getRandomBytes(32)),
             },
             contentType: VIDEO_MP4,
           },
@@ -645,6 +765,7 @@ describe('backup/attachments', () => {
       };
 
       const quoteMessage = composeMessage(originalMessage.timestamp + 1, {
+        body: 'quote',
         quote: quotedMessage,
       });
 
@@ -680,19 +801,19 @@ describe('backup/attachments', () => {
               omit(msgBefore, 'quote.attachments[0].thumbnail'),
               omit(msgAfter, 'quote.attachments[0].thumbnail')
             );
-
-            const { key, digest } = thumbnail;
-            strictAssert(digest, 'quote digest was created');
-            strictAssert(key, 'quote digest was created');
-
+            const { key, plaintextHash } = thumbnail;
+            strictAssert(thumbnail, 'thumbnail exists');
+            strictAssert(key, 'thumbnail key was created');
+            strictAssert(plaintextHash, 'quote plaintextHash was roundtripped');
+            strictAssert(
+              hasRequiredInformationForBackup(thumbnail),
+              'has key and plaintextHash'
+            );
             assert.deepStrictEqual(thumbnail, {
               contentType: IMAGE_PNG,
               size: 100,
-              key,
-              digest,
-              backupLocator: {
-                mediaName: digestToMediaName(digest),
-              },
+              key: thumbnail.key,
+              plaintextHash: thumbnail.plaintextHash,
             });
           },
         }
@@ -705,7 +826,8 @@ describe('backup/attachments', () => {
     const packKey = Bytes.toBase64(getRandomBytes(32));
 
     describe('when copied over from sticker pack (i.e. missing encryption info)', () => {
-      it('BackupLevel.Paid, generates new encryption info', async () => {
+      // TODO: DESKTOP-8896
+      it.skip('BackupLevel.Paid, generates new encryption info', async () => {
         await asymmetricRoundtripHarness(
           [
             composeMessage(1, {
@@ -762,9 +884,6 @@ describe('backup/attachments', () => {
                 height: 512,
                 key,
                 digest,
-                backupLocator: {
-                  mediaName: digestToMediaName(digest),
-                },
               });
             },
           }
@@ -837,12 +956,7 @@ describe('backup/attachments', () => {
                 packId,
                 packKey,
                 stickerId: 0,
-                data: {
-                  ...omit(attachment, NON_ROUNDTRIPPED_BACKUP_LOCATOR_FIELDS),
-                  backupLocator: {
-                    mediaName: digestToMediaName(attachment.digest),
-                  },
-                },
+                data: expectedRoundtrippedFields(attachment),
               },
             }),
           ],

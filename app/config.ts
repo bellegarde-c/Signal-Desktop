@@ -12,6 +12,9 @@ import {
   setEnvironment,
   parseEnvironment,
 } from '../ts/environment';
+import { createLogger } from '../ts/logging/log';
+
+const log = createLogger('config');
 
 // In production mode, NODE_ENV cannot be customized by the user
 if (app.isPackaged) {
@@ -39,6 +42,7 @@ if (getEnvironment() === Environment.PackagedApp) {
   process.env.SIGNAL_ENABLE_HTTP = '';
   process.env.SIGNAL_CI_CONFIG = '';
   process.env.GENERATE_PRELOAD_CACHE = '';
+  process.env.REACT_DEVTOOLS = '';
 }
 
 // We load config after we've made our modifications to NODE_ENV
@@ -50,7 +54,7 @@ const config: IConfig = require('config');
 
 if (getEnvironment() !== Environment.PackagedApp) {
   config.util.getConfigSources().forEach(source => {
-    console.log(`config: Using config source ${basename(source.name)}`);
+    log.info(`Using config source ${basename(source.name)}`);
   });
 }
 

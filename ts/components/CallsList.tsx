@@ -30,9 +30,13 @@ import {
   isSameCallHistoryGroup,
   CallMode,
 } from '../types/CallDisposition';
-import { formatDateTimeShort, isMoreRecentThan } from '../util/timestamp';
+import {
+  formatDateTimeShort,
+  isMoreRecentThan,
+  toBoundedDate,
+} from '../util/timestamp';
 import type { ConversationType } from '../state/ducks/conversations';
-import * as log from '../logging/log';
+import { createLogger } from '../logging/log';
 import { refMerger } from '../util/refMerger';
 import { drop } from '../util/drop';
 import { strictAssert } from '../util/assert';
@@ -69,6 +73,8 @@ import type { StartCallData } from './ConfirmLeaveCallModal';
 import { Button, ButtonVariant } from './Button';
 import type { ICUJSXMessageParamsByKeyType } from '../types/Util';
 
+const log = createLogger('CallsList');
+
 function Timestamp({
   i18n,
   timestamp,
@@ -89,7 +95,7 @@ function Timestamp({
   }, []);
 
   const dateTime = useMemo(() => {
-    return new Date(timestamp).toISOString();
+    return toBoundedDate(timestamp).toISOString();
   }, [timestamp]);
 
   const formatted = useMemo(() => {
@@ -129,7 +135,6 @@ const defaultPendingState: SearchState = {
 
 type CallsListProps = Readonly<{
   activeCall: ActiveCallStateType | undefined;
-  canCreateCallLinks: boolean;
   getCallHistoryGroupsCount: (
     options: CallHistoryFilterOptions
   ) => Promise<number>;
@@ -179,7 +184,6 @@ type Row = CallHistoryGroup | SpecialRows;
 
 export function CallsList({
   activeCall,
-  canCreateCallLinks,
   getCallHistoryGroupsCount,
   getCallHistoryGroups,
   callHistoryEdition,
@@ -228,7 +232,7 @@ export function CallsList({
         : ['EmptyState'];
     }
 
-    if (!searchFiltering && canCreateCallLinks) {
+    if (!searchFiltering) {
       return ['CreateCallLink', ...results];
     }
 
@@ -236,12 +240,7 @@ export function CallsList({
       return ['FilterHeader', ...results, 'ClearFilterButton'];
     }
     return results;
-  }, [
-    searchState.results?.items,
-    searchFiltering,
-    canCreateCallLinks,
-    hasMissedCallFilter,
-  ]);
+  }, [searchState.results?.items, searchFiltering, hasMissedCallFilter]);
 
   const rowCount = rows.length;
 
@@ -421,15 +420,15 @@ export function CallsList({
       return;
     }
 
-    if (isGroupOrAdhocCallMode(callMode)) {
-      peekQueueArgsRef.current.set(peerId, {
-        callMode,
-        conversationId: peerId,
-      });
-      queue.add(peerId);
-    } else {
-      log.error(`Trying to peek unsupported call mode ${callMode}`);
+    if (!isGroupOrAdhocCallMode(callMode)) {
+      return;
     }
+
+    peekQueueArgsRef.current.set(peerId, {
+      callMode,
+      conversationId: peerId,
+    });
+    queue.add(peerId);
   }, []);
 
   // Get the oldest inserted peerIds by iterating the Set in insertion order.
@@ -579,7 +578,7 @@ export function CallsList({
         ]);
         results = { count, items };
       } catch (error) {
-        log.error('CallsList#fetchTotal error fetching', error);
+        log.error('fetchTotal error fetching', error);
       }
 
       // Clear the loading indicator timeout
@@ -674,7 +673,7 @@ export function CallsList({
           };
         });
       } catch (error) {
-        log.error('CallsList#loadMoreRows error fetching', error);
+        log.error('loadMoreRows error fetching', error);
       }
     },
     [enqueueCallPeeks, searchState]
@@ -903,12 +902,14 @@ export function CallsList({
             aria-selected={isSelected}
             leading={
               <Avatar
-                acceptedMessageRequest
+                avatarPlaceholderGradient={
+                  conversation.avatarPlaceholderGradient
+                }
                 avatarUrl={conversation.avatarUrl}
                 color={conversation.color}
                 conversationType={conversation.type}
+                hasAvatar={conversation.hasAvatar}
                 i18n={i18n}
-                isMe={false}
                 title={conversation.title}
                 sharedGroupNames={[]}
                 size={AvatarSize.THIRTY_SIX}
@@ -1029,6 +1030,7 @@ export function CallsList({
           content={i18n('icu:CallsList__ToggleFilterByMissedLabel')}
           theme={Theme.Dark}
           delay={600}
+          wrapperClassName="CallsList__ToggleFilterByMissedWrapper"
         >
           <button
             className={classNames('CallsList__ToggleFilterByMissed', {

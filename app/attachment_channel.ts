@@ -16,7 +16,14 @@ import { join, normalize } from 'node:path';
 import { PassThrough, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import z from 'zod';
-import { decryptAttachmentV2ToSink } from '../ts/AttachmentCrypto';
+import GrowingFile from 'growing-file';
+import { isNumber } from 'lodash';
+
+import {
+  type DecryptAttachmentToSinkOptionsType,
+  decryptAttachmentV2ToSink,
+} from '../ts/AttachmentCrypto';
+import * as Bytes from '../ts/Bytes';
 import type { MessageAttachmentsCursorType } from '../ts/sql/Interface';
 import type { MainSQL } from '../ts/sql/main';
 import {
@@ -38,6 +45,7 @@ import { safeParseInteger } from '../ts/util/numbers';
 import { parseLoose } from '../ts/util/schemas';
 import { sleep } from '../ts/util/sleep';
 import { toWebStream } from '../ts/util/toWebStream';
+import { createLogger } from '../ts/logging/log';
 import {
   deleteAll as deleteAllAttachments,
   deleteAllBadges,
@@ -57,6 +65,8 @@ import {
   getTempPath,
 } from './attachments';
 
+const log = createLogger('attachment_channel');
+
 let initialized = false;
 
 const ERASE_ATTACHMENTS_KEY = 'erase-attachments';
@@ -69,10 +79,22 @@ const CLEANUP_ORPHANED_ATTACHMENTS_KEY = 'cleanup-orphaned-attachments';
 
 const INTERACTIVITY_DELAY = 50;
 
+// Matches the value in WebAPI.ts
+const GET_ATTACHMENT_CHUNK_TIMEOUT = 10 * SECOND;
+const GROWING_FILE_TIMEOUT = GET_ATTACHMENT_CHUNK_TIMEOUT * 1.5;
+
 type RangeFinderContextType = Readonly<
   (
     | {
         type: 'ciphertext';
+        keysBase64: string;
+        size: number;
+      }
+    | {
+        type: 'incremental';
+        digest: Uint8Array;
+        incrementalMac: Uint8Array;
+        chunkSize: number;
         keysBase64: string;
         size: number;
       }
@@ -86,11 +108,11 @@ type RangeFinderContextType = Readonly<
 
 type DigestLRUEntryType = Readonly<{
   key: Buffer;
-  digest: Buffer;
+  digest: Uint8Array;
 }>;
 
 const digestLRU = new LRUCache<string, DigestLRUEntryType>({
-  // The size of each entry is roughgly 8kb per digest + 32 bytes per key. We
+  // The size of each entry is roughly 8kb per digest + 32 bytes per key. We
   // mostly need this cache for range requests, so keep it low.
   max: 100,
 });
@@ -99,17 +121,63 @@ async function safeDecryptToSink(
   ctx: RangeFinderContextType,
   sink: Writable
 ): Promise<void> {
-  strictAssert(ctx.type === 'ciphertext', 'Cannot decrypt plaintext');
-
-  const options = {
-    ciphertextPath: ctx.path,
-    idForLogging: 'attachment_channel',
-    keysBase64: ctx.keysBase64,
-    type: 'local' as const,
-    size: ctx.size,
-  };
+  strictAssert(
+    ctx.type === 'ciphertext' || ctx.type === 'incremental',
+    'Cannot decrypt plaintext'
+  );
 
   try {
+    if (ctx.type === 'incremental') {
+      const ciphertextStream = new PassThrough();
+      const file = GrowingFile.open(ctx.path, {
+        timeout: GROWING_FILE_TIMEOUT,
+      });
+      file.on('error', (error: Error) => {
+        log.warn(
+          'safeDecryptToSync/incremental: growing-file emitted an error:',
+          Errors.toLogFormat(error)
+        );
+      });
+      file.pipe(ciphertextStream);
+
+      const options: DecryptAttachmentToSinkOptionsType = {
+        ciphertextStream,
+        idForLogging: 'attachment_channel/incremental',
+        keysBase64: ctx.keysBase64,
+        size: ctx.size,
+        theirChunkSize: ctx.chunkSize,
+        theirIncrementalMac: ctx.incrementalMac,
+        type: 'standard',
+        integrityCheck: {
+          type: 'encrypted',
+          digest: ctx.digest,
+        },
+      };
+
+      const controller = new AbortController();
+
+      await Promise.race([
+        // Just use a non-existing event name to wait for an 'error'. We want
+        // to handle errors on `sink` while generating digest in case the whole
+        // request gets canceled early.
+        once(sink, 'non-error-event', { signal: controller.signal }),
+        decryptAttachmentV2ToSink(options, sink),
+      ]);
+
+      // Stop handling errors on sink
+      controller.abort();
+
+      return;
+    }
+
+    const options = {
+      ciphertextPath: ctx.path,
+      idForLogging: 'attachment_channel/ciphertext',
+      keysBase64: ctx.keysBase64,
+      size: ctx.size,
+      type: 'local' as const,
+    };
+
     const chunkSize = inferChunkSize(ctx.size);
     let entry = digestLRU.get(ctx.path);
     if (!entry) {
@@ -122,9 +190,7 @@ async function safeDecryptToSink(
       const controller = new AbortController();
 
       await Promise.race([
-        // Just use a non-existing event name to wait for an 'error'. We want
-        // to handle errors on `sink` while generating digest in case whole
-        // request get cancelled early.
+        // Same as above usage of the once() pattern
         once(sink, 'non-error-event', { signal: controller.signal }),
         decryptAttachmentV2ToSink(options, digester),
       ]);
@@ -158,7 +224,7 @@ async function safeDecryptToSink(
       return;
     }
 
-    console.error(
+    log.error(
       'handleAttachmentRequest: decryption error',
       Errors.toLogFormat(error)
     );
@@ -171,7 +237,7 @@ const storage = new DefaultStorage<RangeFinderContextType>(
       return createReadStream(ctx.path);
     }
 
-    if (ctx.type === 'ciphertext') {
+    if (ctx.type === 'ciphertext' || ctx.type === 'incremental') {
       const plaintext = new PassThrough();
       drop(safeDecryptToSink(ctx, plaintext));
       return plaintext;
@@ -183,7 +249,7 @@ const storage = new DefaultStorage<RangeFinderContextType>(
     maxSize: 10,
     ttl: SECOND,
     cacheKey: ctx => {
-      if (ctx.type === 'ciphertext') {
+      if (ctx.type === 'ciphertext' || ctx.type === 'incremental') {
         return `${ctx.type}:${ctx.path}:${ctx.size}:${ctx.keysBase64}`;
       }
       if (ctx.type === 'plaintext') {
@@ -199,10 +265,11 @@ const rangeFinder = new RangeFinder<RangeFinderContextType>(storage, {
 
 const dispositionSchema = z.enum([
   'attachment',
-  'temporary',
-  'draft',
-  'sticker',
   'avatarData',
+  'download',
+  'draft',
+  'temporary',
+  'sticker',
 ]);
 
 type DeleteOrphanedAttachmentsOptionsType = Readonly<{
@@ -215,11 +282,13 @@ type DeleteOrphanedAttachmentsOptionsType = Readonly<{
 type CleanupOrphanedAttachmentsOptionsType = Readonly<{
   sql: MainSQL;
   userDataPath: string;
+  _block?: boolean;
 }>;
 
 async function cleanupOrphanedAttachments({
   sql,
   userDataPath,
+  _block = false,
 }: CleanupOrphanedAttachmentsOptionsType): Promise<void> {
   await deleteAllBadges({
     userDataPath,
@@ -246,36 +315,40 @@ async function cleanupOrphanedAttachments({
     attachments: orphanedDraftAttachments,
   });
 
-  // Delete orphaned attachments from conversations and messages.
-
   const orphanedAttachments = new Set(await getAllAttachments(userDataPath));
-  console.log(
+  log.info(
     'cleanupOrphanedAttachments: found ' +
       `${orphanedAttachments.size} attachments on disk`
   );
 
   const orphanedDownloads = new Set(await getAllDownloads(userDataPath));
-  console.log(
+  log.info(
     'cleanupOrphanedAttachments: found ' +
       `${orphanedDownloads.size} downloads on disk`
   );
 
   {
-    const attachments: Array<string> = await sql.sqlRead(
+    const conversationAttachments: Array<string> = await sql.sqlRead(
       'getKnownConversationAttachments'
     );
 
-    let missing = 0;
-    for (const known of attachments) {
+    let missingConversationAttachments = 0;
+    for (const known of conversationAttachments) {
       if (!orphanedAttachments.delete(known)) {
-        missing += 1;
+        missingConversationAttachments += 1;
       }
     }
 
-    console.log(
-      `cleanupOrphanedAttachments: found ${attachments.length} conversation ` +
-        `attachments (${missing} missing), ${orphanedAttachments.size} remain`
+    log.info(
+      `cleanupOrphanedAttachments: Got ${conversationAttachments.length} conversation attachments,` +
+        ` ${orphanedAttachments.size} remain`
     );
+
+    if (missingConversationAttachments > 0) {
+      log.warn(
+        `cleanupOrphanedAttachments: ${missingConversationAttachments} conversation attachments were not found on disk`
+      );
+    }
   }
 
   {
@@ -288,21 +361,33 @@ async function cleanupOrphanedAttachments({
       }
     }
 
-    console.log(
-      `cleanupOrphanedAttachments: found ${downloads.length} downloads ` +
-        `(${missing} missing), ${orphanedDownloads.size} remain`
+    log.info(
+      `cleanupOrphanedAttachments: found ${downloads.length} known downloads, ` +
+        `${orphanedDownloads.size} remain`
     );
+
+    if (missing > 0) {
+      log.warn(
+        `cleanupOrphanedAttachments: ${missing} downloads were not found on disk`
+      );
+    }
   }
 
   // This call is intentionally not awaited. We block the app while running
   // all fetches above to ensure that there are no in-flight attachments that
   // are saved to disk, but not put into any message or conversation model yet.
-  deleteOrphanedAttachments({
+  const deletePromise = deleteOrphanedAttachments({
     orphanedAttachments,
     orphanedDownloads,
     sql,
     userDataPath,
   });
+
+  if (_block) {
+    await deletePromise;
+  } else {
+    drop(deletePromise);
+  }
 }
 
 function deleteOrphanedAttachments({
@@ -310,14 +395,14 @@ function deleteOrphanedAttachments({
   orphanedDownloads,
   sql,
   userDataPath,
-}: DeleteOrphanedAttachmentsOptionsType): void {
+}: DeleteOrphanedAttachmentsOptionsType): Promise<void> {
   // This function *can* throw.
   async function runWithPossibleException(): Promise<void> {
     let cursor: MessageAttachmentsCursorType | undefined;
-    let totalFound = 0;
+    let totalAttachmentsFound = 0;
     let totalMissing = 0;
     let totalDownloadsFound = 0;
-    let totalDownloadsMissing = 0;
+
     try {
       do {
         let attachments: ReadonlyArray<string>;
@@ -329,7 +414,7 @@ function deleteOrphanedAttachments({
           cursor
         ));
 
-        totalFound += attachments.length;
+        totalAttachmentsFound += attachments.length;
         totalDownloadsFound += downloads.length;
 
         for (const known of attachments) {
@@ -339,9 +424,7 @@ function deleteOrphanedAttachments({
         }
 
         for (const known of downloads) {
-          if (!orphanedDownloads.delete(known)) {
-            totalDownloadsMissing += 1;
-          }
+          orphanedDownloads.delete(known);
         }
 
         if (cursor === undefined) {
@@ -359,20 +442,24 @@ function deleteOrphanedAttachments({
       }
     }
 
-    console.log(
-      `cleanupOrphanedAttachments: found ${totalFound} message ` +
-        `attachments, (${totalMissing} missing) ` +
-        `${orphanedAttachments.size} remain`
+    log.info(
+      `cleanupOrphanedAttachments:  ${totalAttachmentsFound} message ` +
+        `attachments; ${orphanedAttachments.size} remain`
     );
+
+    if (totalMissing > 0) {
+      log.warn(
+        `cleanupOrphanedAttachments: ${totalMissing} message attachments were not found on disk`
+      );
+    }
 
     await deleteAllAttachments({
       userDataPath,
       attachments: Array.from(orphanedAttachments),
     });
 
-    console.log(
+    log.info(
       `cleanupOrphanedAttachments: found ${totalDownloadsFound} downloads ` +
-        `(${totalDownloadsMissing} missing) ` +
         `${orphanedDownloads.size} remain`
     );
     await deleteAllDownloads({
@@ -386,18 +473,14 @@ function deleteOrphanedAttachments({
     try {
       await runWithPossibleException();
     } catch (error) {
-      console.error(
-        'deleteOrphanedAttachments: error',
-        Errors.toLogFormat(error)
-      );
+      log.error('deleteOrphanedAttachments: error', Errors.toLogFormat(error));
     } finally {
       const duration = Date.now() - start;
-      console.log(`deleteOrphanedAttachments: took ${duration}ms`);
+      log.info(`deleteOrphanedAttachments: took ${duration}ms`);
     }
   }
 
-  // Intentionally not awaiting
-  void runSafe();
+  return runSafe();
 }
 
 let attachmentsDir: string | undefined;
@@ -447,18 +530,25 @@ export function initialize({
     rmSync(downloadsDir, { recursive: true, force: true });
   });
 
-  ipcMain.handle(CLEANUP_ORPHANED_ATTACHMENTS_KEY, async () => {
-    const start = Date.now();
-    await cleanupOrphanedAttachments({ sql, userDataPath: configDir });
-    const duration = Date.now() - start;
-    console.log(`cleanupOrphanedAttachments: took ${duration}ms`);
-  });
+  ipcMain.handle(
+    CLEANUP_ORPHANED_ATTACHMENTS_KEY,
+    async (_event, { _block }) => {
+      const start = Date.now();
+      await cleanupOrphanedAttachments({
+        sql,
+        userDataPath: configDir,
+        _block,
+      });
+      const duration = Date.now() - start;
+      log.info(`cleanupOrphanedAttachments: took ${duration}ms`);
+    }
+  );
 
   ipcMain.handle(CLEANUP_DOWNLOADS_KEY, async () => {
     const start = Date.now();
     await deleteStaleDownloads(configDir);
     const duration = Date.now() - start;
-    console.log(`cleanupDownloads: took ${duration}ms`);
+    log.info(`cleanupDownloads: took ${duration}ms`);
   });
 
   protocol.handle('attachment', handleAttachmentRequest);
@@ -479,6 +569,7 @@ export async function handleAttachmentRequest(req: Request): Promise<Response> {
 
   strictAssert(attachmentsDir != null, 'not initialized');
   strictAssert(tempDir != null, 'not initialized');
+  strictAssert(downloadsDir != null, 'not initialized');
   strictAssert(draftDir != null, 'not initialized');
   strictAssert(stickersDir != null, 'not initialized');
   strictAssert(avatarDataDir != null, 'not initialized');
@@ -487,6 +578,9 @@ export async function handleAttachmentRequest(req: Request): Promise<Response> {
   switch (disposition) {
     case 'attachment':
       parentDir = attachmentsDir;
+      break;
+    case 'download':
+      parentDir = downloadsDir;
       break;
     case 'temporary':
       parentDir = tempDir;
@@ -534,8 +628,8 @@ export async function handleAttachmentRequest(req: Request): Promise<Response> {
     // Encrypted attachments
 
     // Get AES+MAC key
-    const maybeKeysBase64 = url.searchParams.get('key');
-    if (maybeKeysBase64 == null) {
+    const keysBase64 = url.searchParams.get('key');
+    if (keysBase64 == null) {
       return new Response('Missing key', { status: 400 });
     }
 
@@ -544,12 +638,45 @@ export async function handleAttachmentRequest(req: Request): Promise<Response> {
       return new Response('Missing size', { status: 400 });
     }
 
-    context = {
-      type: 'ciphertext',
-      path,
-      keysBase64: maybeKeysBase64,
-      size: maybeSize,
-    };
+    if (disposition !== 'download') {
+      context = {
+        type: 'ciphertext',
+        keysBase64,
+        path,
+        size: maybeSize,
+      };
+    } else {
+      // When trying to view in-progress downloads, we need more information
+      // to validate the file before returning data.
+
+      const digestBase64 = url.searchParams.get('digest');
+      if (digestBase64 == null) {
+        return new Response('Missing digest', { status: 400 });
+      }
+
+      const incrementalMacBase64 = url.searchParams.get('incrementalMac');
+      if (incrementalMacBase64 == null) {
+        return new Response('Missing incrementalMac', { status: 400 });
+      }
+
+      const chunkSizeString = url.searchParams.get('chunkSize');
+      const chunkSize = chunkSizeString
+        ? parseInt(chunkSizeString, 10)
+        : undefined;
+      if (!isNumber(chunkSize)) {
+        return new Response('Missing chunkSize', { status: 400 });
+      }
+
+      context = {
+        type: 'incremental',
+        chunkSize,
+        digest: Bytes.fromBase64(digestBase64),
+        incrementalMac: Bytes.fromBase64(incrementalMacBase64),
+        keysBase64,
+        path,
+        size: maybeSize,
+      };
+    }
   }
 
   try {
@@ -559,7 +686,7 @@ export async function handleAttachmentRequest(req: Request): Promise<Response> {
       context,
     });
   } catch (error) {
-    console.error('handleAttachmentRequest: error', Errors.toLogFormat(error));
+    log.error('handleAttachmentRequest: error', Errors.toLogFormat(error));
     throw error;
   }
 }
@@ -612,13 +739,13 @@ function handleRangeRequest({
   // Chromium only sends open-ended ranges: "start-"
   const match = range.match(/^bytes=(\d+)-$/);
   if (match == null) {
-    console.error(`attachment_channel: invalid range header: ${range}`);
+    log.error(`invalid range header: ${range}`);
     return create200Response();
   }
 
   const startParam = safeParseInteger(match[1]);
   if (startParam == null) {
-    console.error(`attachment_channel: invalid range header: ${range}`);
+    log.error(`invalid range header: ${range}`);
     return create200Response();
   }
 
