@@ -305,9 +305,6 @@
   "icu:NavTabs__ItemLabel--Settings": {
     "messageformat": "Socruithe"
   },
-  "icu:NavTabs__ItemLabel--Update": {
-    "messageformat": "Nuashonraigh Signal"
-  },
   "icu:NavTabs__ItemLabel--Profile": {
     "messageformat": "Próifíl"
   },
@@ -605,6 +602,12 @@
   "icu:Toast--FailedToImportBackup": {
     "messageformat": "Failed to process some frames during backup import. Please share your logs."
   },
+  "icu:Toast--ReceiptSaved": {
+    "messageformat": "Admháil sábháilte"
+  },
+  "icu:Toast--ReceiptSaveFailed": {
+    "messageformat": "Earráid le sábháil na hadmhála. Triail arís."
+  },
   "icu:cannotSelectPhotosAndVideosAlongWithFiles": {
     "messageformat": "Níl féidir leat grianghraif agus comhaid a roghnú in éineacht le comhaid."
   },
@@ -664,9 +667,6 @@
   },
   "icu:joinTheBeta": {
     "messageformat": "Téigh isteach i mBéite"
-  },
-  "icu:signalDesktopPreferences": {
-    "messageformat": "Sainroghanna Dheasc Signal"
   },
   "icu:signalDesktopStickerCreator": {
     "messageformat": "Cruthaitheoir an bhirt greamán"
@@ -1285,6 +1285,168 @@
   },
   "icu:Preferences__EmojiSkinToneDefaultSetting__Label": {
     "messageformat": "Ton craicinn Emoji"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__Title": {
+    "messageformat": "Fillteáin comhráite"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__AddChatFolderItem__Title": {
+    "messageformat": "Cuir fillteán comhráite leis"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__AddChatFolderItem__Description": {
+    "messageformat": "Eagraigh do chomhráite i bhfillteáin agus aistrigh eatarthu go tapa ar do liosta comhráite."
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__ChatFolderItem__ContextMenu__EditFolder": {
+    "messageformat": "Cuir fillteán in eagar"
+  },
+  "icu:Preferences__ChatsPage__ChatFoldersSection__ChatFolderItem__ContextMenu__DeleteFolder": {
+    "messageformat": "Scrios"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__Title": {
+    "messageformat": "Scrios an fillteán?"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__Description": {
+    "messageformat": "An bhfuil fonn ort an fillteán \"{chatFolderTitle}\" a scriosadh?"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__DeleteButton": {
+    "messageformat": "Scrios"
+  },
+  "icu:Preferences__ChatsPage__DeleteChatFolderDialog__CancelButton": {
+    "messageformat": "Cuir ar ceal"
+  },
+  "icu:Preferences__ChatFoldersPage__Title": {
+    "messageformat": "Fillteáin comhráite"
+  },
+  "icu:Preferences__ChatFoldersPage__Description": {
+    "messageformat": "Eagraigh do chomhráite i bhfillteáin agus aistrigh eatarthu go tapa ar do liosta comhráite"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__Title": {
+    "messageformat": "Fillteáin"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__AllChatsFolder__Title": {
+    "messageformat": "Gach comhrá"
+  },
+  "icu:Preferences__ChatFoldersPage__FoldersSection__CreateAFolderButton": {
+    "messageformat": "Cruthaigh fillteán"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__Title": {
+    "messageformat": "Fillteáin mholta"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__AddButton": {
+    "messageformat": "Cuir leis"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__AddButton__Toast": {
+    "messageformat": "Fillteán {chatFolderTitle} curtha leis"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__UnreadFolder__Title": {
+    "messageformat": "Neamhléite"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__UnreadFolder__Description": {
+    "messageformat": "Teachtaireachtaí neamhléite ó gach comhrá"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__DirectChatsFolder__Title": {
+    "messageformat": "Comhráite 1:1"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__DirectChatsFolder__Description": {
+    "messageformat": "Teachtaireachtaí ó chomhráite díreacha amháin"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__GroupChatsFolder__Title": {
+    "messageformat": "Grúpaí"
+  },
+  "icu:Preferences__ChatFoldersPage__SuggestedFoldersSection__GroupChatsFolder__Description": {
+    "messageformat": "Teachtaireachtaí ó ghrúpchomhráite amháin"
+  },
+  "icu:Preferences__EditChatFolderPage__Title": {
+    "messageformat": "Cruthaigh fillteán"
+  },
+  "icu:Preferences__EditChatFolderPage__FolderNameField__Label": {
+    "messageformat": "Ainm an fhillteáin"
+  },
+  "icu:Preferences__EditChatFolderPage__FolderNameField__Placeholder": {
+    "messageformat": "Ainm an fhillteáin (de dhíth)"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__Title": {
+    "messageformat": "Comhráite atá san áireamh"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__Help": {
+    "messageformat": "Roghnaigh comhráite is mian leat a thaispeáint san fhillteán seo"
+  },
+  "icu:Preferences__EditChatFolderPage__IncludedChatsSection__AddChatsButton": {
+    "messageformat": "Cuir comhráite leis"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog--IncludedChats__Title": {
+    "messageformat": "Comhráite atá san áireamh"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog--ExcludedChats__Title": {
+    "messageformat": "Comhráite curtha as an áireamh"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__Search__Placeholder": {
+    "messageformat": "Cuardaigh"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__Title": {
+    "messageformat": "Cineálacha comhráite"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__DirectChats": {
+    "messageformat": "Comhráite 1:1"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__ChatTypesSection__GroupChats": {
+    "messageformat": "Grúpaí"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__RecentChats__Title": {
+    "messageformat": "Comhráite le déanaí"
+  },
+  "icu:Preferences__EditChatFolderPage__SelectChatsDialog__DoneButton": {
+    "messageformat": "Déanta"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__Title": {
+    "messageformat": "Eisceachtaí"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__Help": {
+    "messageformat": "Roghnaigh comhráite nach mian leat a thaispeáint san fhillteán seo"
+  },
+  "icu:Preferences__EditChatFolderPage__ExceptionsSection__ExcludeChatsButton": {
+    "messageformat": "Cuir comhráite as an áireamh"
+  },
+  "icu:Preferences__EditChatFolderPage__OnlyShowUnreadChatsCheckbox__Label": {
+    "messageformat": "Ná taispeáin ach comhráite neamhléite"
+  },
+  "icu:Preferences__EditChatFolderPage__OnlyShowUnreadChatsCheckbox__Description": {
+    "messageformat": "Ní thaispeánfar ach comhráite le teachtaireachtaí neamhléite san fhillteán seo."
+  },
+  "icu:Preferences__EditChatFolderPage__IncludeMutedChatsCheckbox__Label": {
+    "messageformat": "Cuir comhráite balbhaithe san áireamh"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteFolderButton": {
+    "messageformat": "Scrios fillteán"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__Title": {
+    "messageformat": "Scrios an fillteán comhráite seo?"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__Description": {
+    "messageformat": "Bainfear an fillteán seo de do liosta comhráite."
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__DeleteButton": {
+    "messageformat": "Scrios"
+  },
+  "icu:Preferences__EditChatFolderPage__DeleteChatFolderDialog__CancelButton": {
+    "messageformat": "Cuir ar ceal"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__Title": {
+    "messageformat": "Sábháil na hathruithe?"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__Description": {
+    "messageformat": "An bhfuil fonn ort na hathruithe a rinne tú ar an bhfillteán comhráite seo a shábháil?"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__SaveButton": {
+    "messageformat": "Sábháil"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveChangesFolderDialog__DiscardButton": {
+    "messageformat": "Cuileáil"
+  },
+  "icu:Preferences__EditChatFolderPage__SaveButton": {
+    "messageformat": "Sábháil"
+  },
+  "icu:Preferences__EditChatFolderPage__CancelButton": {
+    "messageformat": "Cuir ar ceal"
   },
   "icu:initialSync": {
     "messageformat": "Teagmhálaithe agus grúpaí á sioncronú"
@@ -2074,6 +2236,9 @@
   },
   "icu:message--getDescription--disappearing-video": {
     "messageformat": "Físeán amhairc aonuaire"
+  },
+  "icu:message--getDescription--gif": {
+    "messageformat": "GIF"
   },
   "icu:message--deletedForEveryone": {
     "messageformat": "Scriosadh an teachtaireacht seo."
@@ -3362,6 +3527,15 @@
   "icu:ErrorModal--description": {
     "messageformat": "Triail arís nó déan teagmháil leis an bhfoireann tacaíochta."
   },
+  "icu:DebugLogErrorModal__UnexpectedError": {
+    "messageformat": "Tharla earráid gan choinne"
+  },
+  "icu:DebugLogErrorModal__SubmitDebugLog": {
+    "messageformat": "Cuir isteach an loga dífhabhtaithe"
+  },
+  "icu:DebugLogErrorModal__SubmitDebugLog__Cancel": {
+    "messageformat": "Níl, go raibh maith agat"
+  },
   "icu:Confirmation--confirm": {
     "messageformat": "Tá go maith"
   },
@@ -3792,7 +3966,7 @@
     "messageformat": "A request to join the group from {joinerName} was denied."
   },
   "icu:GroupV2--admin-approval-bounce--pluralized": {
-    "messageformat": "{numberOfRequests, plural, one {Rinne {joinerName} iarratas ar dhul isteach tríd an nasc grúpa agus chuir sé/sí an t-iarratas sin ar ceal} two {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus chuir sé/sí na hiarratais sin ar ceal} few {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus chuir sé/sí na hiarratais sin ar ceal} many {Rinne {joinerName} {numberOfRequests,number} n-iarratas ar dhul isteach tríd an nasc grúpa agus chuir sé/sí na hiarratais sin ar ceal} other {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus chuir sé/sí na hiarratais sin ar ceal}}"
+    "messageformat": "{numberOfRequests, plural, one {Rinne {joinerName} iarratas ar dhul isteach tríd an nasc grúpa agus cuireadh an t-iarratas sin ar ceal} two {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus cuireadh na hiarratais sin ar ceal} few {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus cuireadh na hiarratais sin ar ceal} many {Rinne {joinerName} {numberOfRequests,number} n-iarratas ar dhul isteach tríd an nasc grúpa agus cuireadh na hiarratais sin ar ceal} other {Rinne {joinerName} {numberOfRequests,number} iarratas ar dhul isteach tríd an nasc grúpa agus cuireadh na hiarratais sin ar ceal}}"
   },
   "icu:GroupV2--group-link-add--disabled--you": {
     "messageformat": "Chas tú air an nasc grúpa le faomhadh riarthóra díchumasaithe."
@@ -4026,10 +4200,10 @@
     "messageformat": "Bain triail eile as"
   },
   "icu:BackupMediaDownloadProgress__title-in-progress": {
-    "messageformat": "Meáin á n-aischur"
+    "messageformat": "Meáin á sioncronú"
   },
   "icu:BackupMediaDownloadProgress__title-paused": {
-    "messageformat": "Aischur curtha ar sos"
+    "messageformat": "Sioncronú curtha ar sos"
   },
   "icu:BackupMediaDownloadProgress__title-idle": {
     "messageformat": "{currentSize} as {totalSize} aischurtha"
@@ -4044,13 +4218,13 @@
     "messageformat": "Ag feitheamh le nasc Idirlín..."
   },
   "icu:BackupMediaDownloadProgress__button-pause": {
-    "messageformat": "Cuir an t-aistriú ar sos"
+    "messageformat": "Cuir ar sos"
   },
   "icu:BackupMediaDownloadProgress__button-resume": {
-    "messageformat": "Fill ar an aistriú"
+    "messageformat": "Atosaigh"
   },
   "icu:BackupMediaDownloadProgress__button-cancel": {
-    "messageformat": "Cuir an t-aistriú ar ceal"
+    "messageformat": "Cuir sioncronú ar ceal"
   },
   "icu:BackupMediaDownloadProgress__button-more": {
     "messageformat": "Tuilleadh roghanna"
@@ -4062,16 +4236,34 @@
     "messageformat": "{currentSize} as {totalSize}"
   },
   "icu:BackupMediaDownloadCancelConfirmation__title": {
-    "messageformat": "Cuir an t-aistriú meán ar ceal?"
+    "messageformat": "Cuir sioncronú meán ar ceal?"
   },
   "icu:BackupMediaDownloadCancelConfirmation__description": {
-    "messageformat": "Níl aischur na dteachtaireachtaí agus na meán agat críochnaithe. Má roghnaíonn tú é a chur ar ceal, is féidir leat an t-aistriú a dhéanamh arís ó Shocruithe."
+    "messageformat": "Níl sioncronú do mheán críochnaithe. Má roghnaíonn tú é a chur ar ceal, beidh tú in ann sioncronú arís tríd an ngléas seo a athnascadh. <learnMoreLink>Tuilleadh faisnéise</learnMoreLink>."
   },
   "icu:BackupMediaDownloadCancelConfirmation__button-continue": {
-    "messageformat": "Lean leis an aistriú"
+    "messageformat": "Lean leis an sioncronú"
   },
   "icu:BackupMediaDownloadCancelConfirmation__button-confirm-cancel": {
-    "messageformat": "Cuir an t-aistriú ar ceal"
+    "messageformat": "Cuir sioncronú ar ceal"
+  },
+  "icu:BackupMediaDownloadProgressSettings__paused--title": {
+    "messageformat": "Sioncronú curtha ar sos"
+  },
+  "icu:BackupMediaDownloadProgressSettings__paused--description": {
+    "messageformat": "Cliceáil \"{resumeButtonText}\" le leanúint leis an sioncronú"
+  },
+  "icu:BackupMediaDownloadProgressSettings__button-resume": {
+    "messageformat": "Atosaigh"
+  },
+  "icu:BackupMediaDownloadProgressSettings__button-pause": {
+    "messageformat": "Cuir ar sos"
+  },
+  "icu:BackupMediaDownloadProgressSettings__title-in-progress": {
+    "messageformat": "Meáin á sioncronú"
+  },
+  "icu:BackupMediaDownloadProgressSettings__progressbar-hint": {
+    "messageformat": "{currentSize} as {totalSize} ({fractionComplete,number,percent})..."
   },
   "icu:CriticalIdlePrimaryDeviceModal__title": {
     "messageformat": "Gníomh de dhíth maidir le do chuntas"
@@ -4811,6 +5003,12 @@
   "icu:ProfileEditor__username-link__error-icon": {
     "messageformat": "Ní mór nasc an ainm úsáideora a athshocrú"
   },
+  "icu:ProfileEditor__open": {
+    "messageformat": "Oscail scáileán nasc an ainm úsáideora"
+  },
+  "icu:ProfileEditor__username-link__open": {
+    "messageformat": "Oscail scáileán nasc an ainm úsáideora"
+  },
   "icu:ProfileEditor__username-link__tooltip__title": {
     "messageformat": "Comhroinn d'ainm úsáideora"
   },
@@ -5069,6 +5267,12 @@
   "icu:Preferences__auto-convert-emoji--description": {
     "messageformat": "Mar shampla, tiontófar :-) ina <emojify>🙂</emojify>"
   },
+  "icu:Preferences__keep-muted-chats-archived--title": {
+    "messageformat": "Coinnigh comhráite balbhaithe sa chartlann"
+  },
+  "icu:Preferences__keep-muted-chats-archived--description": {
+    "messageformat": "Fanfaidh comhráite balbhaithe sa chartlann fós nuair a thagann teachtaireacht nua isteach."
+  },
   "icu:Preferences--advanced": {
     "messageformat": "Ardroghanna"
   },
@@ -5082,7 +5286,7 @@
     "messageformat": "Cúltacaí Signal"
   },
   "icu:Preferences--signal-backups-off-description": {
-    "messageformat": "Automatic backups with Signal’s secure, end-to-end encrypted storage service. Get started on your phone. <learnMoreLink>Learn more</learnMoreLink>."
+    "messageformat": "Cúltacaí uathoibríocha le seirbhís shlán stórála, atá criptithe ó cheann ceann, de chuid Signal. Bain úsáid astu ar do ghuthán. <learnMoreLink>Tuilleadh faisnéise</learnMoreLink>."
   },
   "icu:Preferences--backup-section-description": {
     "messageformat": "Cúltacaigh do stair teachtaireachtaí ionas nach gcaillfidh tú sonraí nuair a fhaigheann tú guthán nua nó nuair a athshuiteálann tú Signal."
@@ -5125,9 +5329,6 @@
   },
   "icu:Preferences--backup-created-by-phone": {
     "messageformat": "Do ghuthán"
-  },
-  "icu:Preferences--backup-size__label": {
-    "messageformat": "Méid an chúltaca"
   },
   "icu:Preferences__local-backups": {
     "messageformat": "Cúltacaí deisce"
@@ -6114,9 +6315,6 @@
   "icu:UsernameLinkModalBody__reset": {
     "messageformat": "Athshocraigh"
   },
-  "icu:UsernameLinkModalBody__done": {
-    "messageformat": "Déanta"
-  },
   "icu:UsernameLinkModalBody__color__radio": {
     "messageformat": "Dath naisc ainm úsáideora, {index,number} as {total,number}"
   },
@@ -6444,6 +6642,210 @@
   "icu:WhatsNew__modal-title": {
     "messageformat": "Cad Atá Nua"
   },
+  "icu:PreferencesDonations__title": {
+    "messageformat": "Príobháideachas chun tosaigh ar bhrabús"
+  },
+  "icu:PreferencesDonations__description": {
+    "messageformat": "Teachtaireachtaí príobháideacha, maoinithe agatsa. Gan aon fhógra, gan aon rianaire, gan aon chomhghéilleadh. Tabhair airgead do Signal anois chun tacú leis. <readMoreLink>Tuilleadh faisnéise</readMoreLink>"
+  },
+  "icu:PreferencesDonations__donate-button": {
+    "messageformat": "Tabhair airgead"
+  },
+  "icu:PreferencesDonations__my-support": {
+    "messageformat": "Tabhartais"
+  },
+  "icu:PreferencesDonations__badge-label-one-time": {
+    "messageformat": "{formattedCurrencyAmount} aonuaire"
+  },
+  "icu:PreferencesDonations__badge-processing-donation": {
+    "messageformat": "Tabhartas á phróiseáil…"
+  },
+  "icu:PreferencesDonations__donate-button-with-amount": {
+    "messageformat": "Tabhair {formattedCurrencyAmount}"
+  },
+  "icu:PreferencesDonations__mobile-info": {
+    "messageformat": "Is féidir suaitheantais agus síntiúis mhíosúla a bhainistiú ar do ghléas móibíleach."
+  },
+  "icu:PreferencesDonations__privacy-modal-title": {
+    "messageformat": "Tá d'fhaisnéis príobháideach"
+  },
+  "icu:PreferencesDonations__privacy-modal-content": {
+    "messageformat": "<paragraph>Ní dhéanann Signal d'fhaisnéis phearsanta a bhailiú ná a stóráil nuair a thugann tú tabhartas.</paragraph><paragraph>Úsáidimid Stripe mar ár bpróiseálaí íocaíochtaí chun do thabhartais a fháil. Ní dhéanaimid aon fhaisnéis a thugann tú dóibh a rochtain, a stóráil ná a shábháil.</paragraph><paragraph>Níl cead ag Signal do thabhartas a cheangal le do chuntas Signal agus ní déanann sé amhlaidh.</paragraph><paragraph>Go raibh maith agat as do thacaíocht!</paragraph>"
+  },
+  "icu:PreferencesDonations__receipts": {
+    "messageformat": "Admhálacha"
+  },
+  "icu:PreferencesDonations__faqs": {
+    "messageformat": "CCanna maidir le Tabhartais"
+  },
+  "icu:PreferencesDonations--receiptList__info": {
+    "messageformat": "Ní shioncronaítear admhálacha thar raon gléasanna. Má tá Signal athshuiteáilte agat, ní bheidh admhálacha ó thabhartais roimhe seo ar fáil."
+  },
+  "icu:PreferencesDonations--receiptList__empty-title": {
+    "messageformat": "Níl aon admhálacha ann"
+  },
+  "icu:PreferencesDonations__ReceiptModal--title": {
+    "messageformat": "Mionsonraí"
+  },
+  "icu:PreferencesDonations__ReceiptModal--download": {
+    "messageformat": "Íoslódáil admháil"
+  },
+  "icu:PreferencesDonations__ReceiptModal--type-label": {
+    "messageformat": "Cineál"
+  },
+  "icu:PreferencesDonations__ReceiptModal--date-paid-label": {
+    "messageformat": "Dáta íoctha"
+  },
+  "icu:DonateFlow__make-a-one-time-donation": {
+    "messageformat": "Déan tabhartas aonuaire"
+  },
+  "icu:DonateFlow__desktop-one-time-only-notice": {
+    "messageformat": "Níl ach tabhartais aonuaire ar fáil ar dheasc. Is féidir tabhartais mhíosúla a dhéanamh ar do ghléas móibíleach."
+  },
+  "icu:DonateFlow__having-issues-contact-support": {
+    "messageformat": "Fadhbanna agat? <contactSupportLink>Déan teagmháil leis an bhfoireann tacaíochta</contactSupportLink>"
+  },
+  "icu:DonateFlow__amount-picker-custom-amount-placeholder": {
+    "messageformat": "Cuir isteach méid saincheaptha"
+  },
+  "icu:DonateFlow__credit-or-debit-card": {
+    "messageformat": "Cárta creidmheasa nó dochair"
+  },
+  "icu:DonateFlow__card-form-instructions": {
+    "messageformat": "Cuir isteach sonraí do chárta creidmheasa nó dochair. Ní dhéanann Signal d'fhaisnéis phearsanta a bhailiú ná a stóráil. <learnMoreLink>Tuilleadh faisnéise</learnMoreLink>"
+  },
+  "icu:DonateFlow__card-form-card-number": {
+    "messageformat": "Uimhir an chárta"
+  },
+  "icu:DonateFlow__card-form-expiration-date": {
+    "messageformat": "Dáta as Feidhm"
+  },
+  "icu:DonateFlow__card-form-title-donate-with-amount": {
+    "messageformat": "Tabhair {formattedCurrencyAmount} do Signal"
+  },
+  "icu:DonateFlow__card-form-error-invalid-card-number": {
+    "messageformat": "Uimhir chárta neamhbhailí"
+  },
+  "icu:DonateFlow__card-form-error-expiration-expired": {
+    "messageformat": "Tá an cárta imithe as feidhm"
+  },
+  "icu:DonateFlow__card-form-error-year-missing": {
+    "messageformat": "Bliain de dhíth"
+  },
+  "icu:DonateFlow__card-form-error-invalid": {
+    "messageformat": "Neamhbhailí"
+  },
+  "icu:DonateFlow__card-form-error-cvc-too-short": {
+    "messageformat": "Cód róghearr"
+  },
+  "icu:DonateFlow__one-time-donation-boost-badge-info": {
+    "messageformat": "Faigh Suaitheantas spreagtha Signal go ceann 30 lá"
+  },
+  "icu:DonationReceipt__title": {
+    "messageformat": "Admháil tabhartais"
+  },
+  "icu:DonationReceipt__amount-label": {
+    "messageformat": "Méid"
+  },
+  "icu:DonationReceipt__type-label": {
+    "messageformat": "Cineál"
+  },
+  "icu:DonationReceipt__date-paid-label": {
+    "messageformat": "Dáta íoctha"
+  },
+  "icu:DonationReceipt__type-value--one-time": {
+    "messageformat": "Aon uair amháin"
+  },
+  "icu:DonationReceipt__footer-text": {
+    "messageformat": "Go raibh maith agat as tacú le Signal. Cabhraíonn do dheonachán cur leis an misean chun saoirse cainte a chosaint agus chun cur ar ár gcumas cumarsáid dhomhanda a chur ar fáil ag na milliúin ar fud an domhan, trí theicneolaíocht phríobháideachta foinse oscailte. Más cónaitheoir sna Stáit Aontaithe thú, coinnigh an admháil seo do do thaifid chánach. Eagraíocht neamhbhrabúis díolmhaithe ó cháin sna Stáit Aontaithe faoi alt 501c3 den Internal Revenue Code is ea Signal Technology Foundation. Is é 82–4506840 ár nUimhir Aitheantais Cánach Feidearálaí."
+  },
+  "icu:Donations__OfflineTooltip": {
+    "messageformat": "Tá tú as líne. Nasc leis an Idirlíon le tabhartas a chur i gcrích."
+  },
+  "icu:Donations__Toast__Canceled": {
+    "messageformat": "Tabhartas curtha ar ceal"
+  },
+  "icu:Donations__Toast__Completed": {
+    "messageformat": "Tabhartas críochnaithe"
+  },
+  "icu:Donations__Toast__Error": {
+    "messageformat": "Earráid le próiseáil an tabhartais"
+  },
+  "icu:Donations__Toast__Processing": {
+    "messageformat": "Tabhartas á phróiseáil"
+  },
+  "icu:Donations__Toast__VerificationFailed": {
+    "messageformat": "Theip ar dheimhniú"
+  },
+  "icu:Donations__Toast__VerificationNeeded": {
+    "messageformat": "Tá tabhartas ar bun agat a bhfuil fíorú sa bhreis ag teastáil ina leith."
+  },
+  "icu:Donations__Toast__ConfirmationNeeded": {
+    "messageformat": "Tá tabhartas ar bun agat a éilíonn fíorú."
+  },
+  "icu:Donations__DonationInterrupted": {
+    "messageformat": "Cuireadh isteach ar an tabhartas"
+  },
+  "icu:Donations__DonationInterrupted__Description": {
+    "messageformat": "Níor gearradh táille ar do chárta. An bhfuil fonn ort an tabhartas a atriail?"
+  },
+  "icu:Donations__DonationInterrupted__RetryButton": {
+    "messageformat": "Triail arís é"
+  },
+  "icu:Donations__PaymentMethodDeclined": {
+    "messageformat": "Diúltaíodh don mhodh íocaíochta"
+  },
+  "icu:Donations__PaymentMethodDeclined__Description": {
+    "messageformat": "Triail modh íocaíochta eile nó déan teagmháil le do bhanc le tuilleadh faisnéise a fháil."
+  },
+  "icu:Donations__Failed3dsValidation": {
+    "messageformat": "Theip ar Dheimhniú"
+  },
+  "icu:Donations__Failed3dsValidation__Description": {
+    "messageformat": "Theip ar an gcéim fíoraithe sa bhreis. Triail arís."
+  },
+  "icu:Donations__GenericError": {
+    "messageformat": "Tharla earráid le do dheonachán"
+  },
+  "icu:Donations__GenericError__Description": {
+    "messageformat": "Is féidir nár próiseáladh do dheonachán. Cliceáil ar \"Tabhair airgead do Signal\" agus ansin ar \"Admhálacha Tabhartas\" le do chuid admhálacha a sheiceáil agus a dheimhniú."
+  },
+  "icu:DonationsErrorBoundary__DonationUnexpectedError": {
+    "messageformat": "Triail arís nó seol isteach loga dífhabhtaithe chuig an bhFoireann Tacaíochta chun cabhair a fháil le do thabhartas a chur i gcrích. Cabhraíonn logaí dífhabhtaithe linn an fhadhb a dhiagnóisiú agus a réiteach, agus ní bhíonn faisnéis aitheantais iontu."
+  },
+  "icu:Donations__Processing": {
+    "messageformat": "Tabhartas á phróiseáil..."
+  },
+  "icu:Donations__StillProcessing": {
+    "messageformat": "Tabhartas á phróiseáil fós"
+  },
+  "icu:Donations__StillProcessing__Description": {
+    "messageformat": "Tá do thabhartas á phróiseáil fós. Tógann sé seo nóiméad nó dhó."
+  },
+  "icu:Donations__TimedOut": {
+    "messageformat": "Tabhartas curtha ar ceal"
+  },
+  "icu:Donations__TimedOut__Description": {
+    "messageformat": "Tá sé rófhada ó thosaigh tú ar do thabhartas. Tosaigh air arís."
+  },
+  "icu:Donations__3dsValidationNeeded": {
+    "messageformat": "Fíorú breise ag teastáil"
+  },
+  "icu:Donations__3dsValidationNeeded--waiting": {
+    "messageformat": "Ag feitheamh le fíorú"
+  },
+  "icu:Donations__3dsValidationNeeded__Description": {
+    "messageformat": "Éilíonn d'eisitheoir cárta creidmheasa céim fíoraithe sa bhreis i mbrabhsálaí gréasáin."
+  },
+  "icu:Donations__3dsValidationNeeded__OpenBrowser": {
+    "messageformat": "Oscail an brabhsálaí"
+  },
+  "icu:Donations__3dsValidationNeeded__OpenBrowser--opened": {
+    "messageformat": "Athoscail an brabhsálaí"
+  },
+  "icu:Donations__3dsValidationNeeded__CancelDonation": {
+    "messageformat": "Cuir an tabhartas ar ceal"
+  },
   "icu:WhatsNew__bugfixes": {
     "messageformat": "Tá roinnt mionathruithe agus paistí ar fhabhtanna sa leagan seo chun Signal a choinneáil ag rith go réidh.",
     "ignoreUnused": true
@@ -6472,10 +6874,16 @@
     "messageformat": "Mionathruithe, paistí fabhtanna agus feabhsuithe ar fheidhmíocht. Go raibh maith agat as Signal a úsáid!",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__v7.58--0": {
-    "messageformat": "Déanann cuid nua sa roghnóir freagairtí ar theachtaireachtaí gach freagairt emoji a fuarthas i dteachtaireacht a thaispeáint go huathoibríoch."
+  "icu:WhatsNew__v7.64--0": {
+    "messageformat": "D'fheabhsaíomar an t-eispéireas maidir le teachtaireacht léite/neamhléite le linn na hiltascála."
   },
-  "icu:WhatsNew__v7.59--0": {
-    "messageformat": "Feabhsuithe ar fheidhmíocht Linux."
+  "icu:WhatsNew__v7.65--0": {
+    "messageformat": "Réitíomar fabht sa bhosca cuardaigh emoji."
+  },
+  "icu:WhatsNew__v7.66--0": {
+    "messageformat": "Cúpla réiteach bheaga ar fhabhtanna."
+  },
+  "icu:WhatsNew__v7.67--0": {
+    "messageformat": "Réitíomar fabht a chuir cosc ar shuaitheantais deonaithe roinnt úsáideoirí a thaispeáint i gceart."
   }
 }

@@ -18,6 +18,7 @@ import type { MessageAttributesType } from '../model-types';
 import type { DonationReceipt } from '../types/Donations';
 import { createLogger } from '../logging/log';
 import { isStagingServer } from '../util/isStagingServer';
+import { getHumanDonationAmount } from '../util/currency';
 
 const log = createLogger('PreferencesInternal');
 
@@ -150,10 +151,6 @@ export function PreferencesInternal({
       currencyType: 'USD',
       paymentAmount: Math.floor(Math.random() * 10000) + 100, // Random amount between $1 and $100 (in cents)
       timestamp: Date.now(),
-      paymentType: 'CARD',
-      paymentDetail: {
-        lastFourDigits: Math.floor(1000 + Math.random() * 9000).toString(),
-      },
     };
 
     try {
@@ -402,11 +399,7 @@ export function PreferencesInternal({
                         {new Date(receipt.timestamp).toLocaleDateString()}
                       </td>
                       <td style={{ padding: '8px' }}>
-                        ${(receipt.paymentAmount / 100).toFixed(2)}{' '}
-                        {receipt.currencyType}
-                      </td>
-                      <td style={{ padding: '8px' }}>
-                        {receipt.paymentDetail?.lastFourDigits || 'N/A'}
+                        {getHumanDonationAmount(receipt)} {receipt.currencyType}
                       </td>
                       <td
                         style={{

@@ -18,9 +18,6 @@ import { parseRemoteClientExpiration } from './util/parseRemoteClientExpiration'
 const log = createLogger('RemoteConfig');
 
 export type ConfigKeyType =
-  | 'desktop.calling.ringrtcAdmFull.3'
-  | 'desktop.calling.ringrtcAdmInternal'
-  | 'desktop.calling.ringrtcAdmPreStable'
   | 'desktop.chatFolders.alpha'
   | 'desktop.chatFolders.beta'
   | 'desktop.chatFolders.prod'
@@ -43,6 +40,7 @@ export type ConfigKeyType =
   | 'desktop.funPicker' // alpha
   | 'desktop.funPicker.beta'
   | 'desktop.funPicker.prod'
+  | 'desktop.usePqRatchet'
   | 'global.attachments.maxBytes'
   | 'global.attachments.maxReceiveBytes'
   | 'global.backups.mediaTierFallbackCdnNumber'
@@ -52,8 +50,7 @@ export type ConfigKeyType =
   | 'global.messageQueueTimeInSeconds'
   | 'global.nicknames.max'
   | 'global.nicknames.min'
-  | 'global.textAttachmentLimitBytes'
-  | 'global.usePqRatchet';
+  | 'global.textAttachmentLimitBytes';
 
 type ConfigValueType = {
   name: ConfigKeyType;
@@ -185,8 +182,12 @@ export async function forceRefreshRemoteConfig(
   await _refreshRemoteConfig(server);
 }
 
-export function isEnabled(name: ConfigKeyType): boolean {
-  return get(config, [name, 'enabled'], false);
+export function isEnabled(
+  name: ConfigKeyType,
+  // when called from UI component, provide redux config (items.remoteConfig)
+  reduxConfig?: ConfigMapType
+): boolean {
+  return get(reduxConfig ?? config, [name, 'enabled'], false);
 }
 
 export function getValue(name: ConfigKeyType): string | undefined {

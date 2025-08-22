@@ -52,7 +52,11 @@ import * as Errors from '../types/errors';
 import { assertDev, strictAssert } from '../util/assert';
 import { combineNames } from '../util/combineNames';
 import { consoleLogger } from '../util/consoleLogger';
-import { dropNull, shallowConvertUndefinedToNull } from '../util/dropNull';
+import {
+  dropNull,
+  shallowConvertUndefinedToNull,
+  type ShallowUndefinedToNull,
+} from '../util/dropNull';
 import { isNormalNumber } from '../util/isNormalNumber';
 import { isNotNil } from '../util/isNotNil';
 import { parseIntOrThrow } from '../util/parseIntOrThrow';
@@ -187,6 +191,7 @@ import type {
   MessageTypeUnhydrated,
   ServerMessageSearchResultType,
   MessageCountBySchemaVersionType,
+  BackupAttachmentDownloadProgress,
 } from './Interface';
 import {
   AttachmentDownloadSource,
@@ -213,8 +218,8 @@ import {
   getCallLinkRecordByRoomId,
   insertCallLink,
   insertDefunctCallLink,
+  insertOrUpdateCallLinkFromSync,
   updateCallLink,
-  updateCallLinkAdminKeyByRoomId,
   updateCallLinkState,
   updateDefunctCallLink,
 } from './server/callLinks';
@@ -298,22 +303,37 @@ type StickerPackRow = InstalledStickerPackRow &
     stickers: string;
     title: string;
   }>;
-type AttachmentDownloadJobRow = Readonly<{
-  messageId: string;
-  attachmentType: string;
-  attachmentSignature: string;
-  receivedAt: number;
-  sentAt: number;
-  contentType: string;
-  size: number;
-  active: number;
-  attempts: number;
-  retryAfter: number;
-  lastAttemptTimestamp: number;
+
+const ATTACHMENT_DOWNLOADS_COLUMNS: ReadonlyArray<
+  | keyof Omit<AttachmentDownloadJobType, 'attachment' | 'isManualDownload'>
+  | 'attachmentJson'
+> = [
+  'messageId',
+  'attachmentType',
+  'attachmentSignature',
+  'receivedAt',
+  'sentAt',
+  'contentType',
+  'size',
+  'active',
+  'attempts',
+  'retryAfter',
+  'lastAttemptTimestamp',
+  'attachmentJson',
+  'ciphertextSize',
+  'originalSource',
+  'source',
+] as const;
+
+type AttachmentDownloadJobRow = Omit<
+  ShallowUndefinedToNull<AttachmentDownloadJobType>,
+  // TODO: DESKTOP-8995
+  'attachment' | 'contentType' | 'active' | 'isManualDownload'
+> & {
   attachmentJson: string;
-  ciphertextSize: number;
-  source: string;
-}>;
+  contentType: string;
+  active: 0 | 1;
+};
 
 // Because we can't force this module to conform to an interface, we narrow our exports
 //   to this one default export, which does conform to the interface.
@@ -445,7 +465,7 @@ export const DataReader: ServerReadableInterface = {
   getStatisticsForLogging,
 
   getBackupCdnObjectMetadata,
-  getSizeOfPendingBackupAttachmentDownloadJobs,
+  getBackupAttachmentDownloadProgress,
   getAttachmentReferencesForMessages,
   getMessageCountBySchemaVersion,
   getMessageSampleForSchemaVersion,
@@ -546,8 +566,8 @@ export const DataWriter: ServerWritableInterface = {
   saveCallHistory,
   markCallHistoryMissed,
   insertCallLink,
+  insertOrUpdateCallLinkFromSync,
   updateCallLink,
-  updateCallLinkAdminKeyByRoomId,
   updateCallLinkState,
   beginDeleteAllCallLinks,
   beginDeleteCallLink,
@@ -581,6 +601,7 @@ export const DataWriter: ServerWritableInterface = {
   removeAttachmentDownloadJob,
   removeAttachmentDownloadJobsForMessage,
   removeAllBackupAttachmentDownloadJobs,
+  resetBackupAttachmentDownloadStats,
 
   getNextAttachmentBackupJobs,
   saveAttachmentBackupJob,
@@ -1580,16 +1601,46 @@ function createOrUpdateSessions(
 function commitDecryptResult(
   db: WritableDB,
   {
+    kyberPreKeysToRemove,
+    preKeysToRemove,
     senderKeys,
     sessions,
     unprocessed,
   }: {
+    kyberPreKeysToRemove: Array<PreKeyIdType>;
+    preKeysToRemove: Array<PreKeyIdType>;
     senderKeys: Array<SenderKeyType>;
     sessions: Array<SessionType>;
     unprocessed: Array<UnprocessedType>;
   }
 ): void {
   db.transaction(() => {
+    if (kyberPreKeysToRemove.length > 0) {
+      const kyberPreKeyChanges = removeKyberPreKeyById(
+        db,
+        kyberPreKeysToRemove
+      );
+      if (kyberPreKeyChanges === kyberPreKeysToRemove.length) {
+        logger.info(
+          `commitDecryptResult: Removed ${kyberPreKeyChanges} kyberPreKeys`
+        );
+      } else {
+        logger.error(
+          `commitDecryptResult: Changed ${kyberPreKeyChanges} keys, but had ${kyberPreKeysToRemove.length} kyberPreKeys to remove`
+        );
+      }
+    }
+    if (preKeysToRemove.length > 0) {
+      const preKeyChanges = removePreKeyById(db, preKeysToRemove);
+      if (preKeyChanges === preKeysToRemove.length) {
+        logger.info(`commitDecryptResult: Removed ${preKeyChanges} preKeys`);
+      } else {
+        logger.error(
+          `commitDecryptResult: Changed ${preKeyChanges} keys, but had ${preKeysToRemove.length} preKeys to remove`
+        );
+      }
+    }
+
     for (const item of senderKeys) {
       createOrUpdateSenderKey(db, item);
     }
@@ -3113,14 +3164,14 @@ function getUnreadByConversationAndMarkRead(
   {
     conversationId,
     includeStoryReplies,
-    newestUnreadAt,
+    readMessageReceivedAt,
     storyId,
     readAt,
     now = Date.now(),
   }: {
     conversationId: string;
     includeStoryReplies: boolean;
-    newestUnreadAt: number;
+    readMessageReceivedAt: number;
     storyId?: string;
     readAt?: number;
     now?: number;
@@ -3147,7 +3198,7 @@ function getUnreadByConversationAndMarkRead(
           expirationStartTimestamp > ${expirationStartTimestamp}
         ) AND
         expireTimer > 0 AND
-        received_at <= ${newestUnreadAt};
+        received_at <= ${readMessageReceivedAt};
     `;
 
     db.prepare(updateExpirationQuery).run(updateExpirationParams);
@@ -3161,7 +3212,7 @@ function getUnreadByConversationAndMarkRead(
           seenStatus = ${SeenStatus.Unseen} AND
           isStory = 0 AND
           (${_storyIdPredicate(storyId, includeStoryReplies)}) AND
-          received_at <= ${newestUnreadAt}
+          received_at <= ${readMessageReceivedAt}
         ORDER BY received_at DESC, sent_at DESC;
     `;
 
@@ -3185,7 +3236,7 @@ function getUnreadByConversationAndMarkRead(
           seenStatus = ${SeenStatus.Unseen} AND
           isStory = 0 AND
           (${_storyIdPredicate(storyId, includeStoryReplies)}) AND
-          received_at <= ${newestUnreadAt};
+          received_at <= ${readMessageReceivedAt};
     `;
 
     db.prepare(updateStatusQuery).run(updateStatusParams);
@@ -3211,11 +3262,11 @@ function getUnreadReactionsAndMarkRead(
   db: WritableDB,
   {
     conversationId,
-    newestUnreadAt,
+    readMessageReceivedAt,
     storyId,
   }: {
     conversationId: string;
-    newestUnreadAt: number;
+    readMessageReceivedAt: number;
     storyId?: string;
   }
 ): Array<ReactionResultType> {
@@ -3230,14 +3281,14 @@ function getUnreadReactionsAndMarkRead(
         WHERE
           reactions.conversationId IS $conversationId AND
           reactions.unread > 0 AND
-          messages.received_at <= $newestUnreadAt AND
+          messages.received_at <= $readMessageReceivedAt AND
           messages.storyId IS $storyId
         ORDER BY messageReceivedAt DESC;
       `
       )
       .all({
         conversationId,
-        newestUnreadAt,
+        readMessageReceivedAt,
         storyId: storyId || null,
       });
 
@@ -3498,12 +3549,12 @@ function getAdjacentMessagesByConversation(
       }
       ${
         requireVisualMediaAttachments
-          ? sqlFragment`hasVisualMediaAttachments IS 1 AND`
+          ? sqlFragment`hasVisualMediaAttachments IS 1 AND isViewOnce IS 0 AND`
           : sqlFragment``
       }
       ${
         requireFileAttachments
-          ? sqlFragment`hasFileAttachments IS 1 AND`
+          ? sqlFragment`hasFileAttachments IS 1 AND isViewOnce IS 0 AND`
           : sqlFragment``
       }
       isStory IS 0 AND
@@ -5477,16 +5528,28 @@ function removeAllBackupAttachmentDownloadJobs(db: WritableDB): void {
   db.prepare(query).run(params);
 }
 
-function getSizeOfPendingBackupAttachmentDownloadJobs(db: ReadableDB): number {
+function resetBackupAttachmentDownloadStats(db: WritableDB): void {
   const [query, params] = sql`
-    SELECT SUM(ciphertextSize) FROM attachment_downloads
-    WHERE source = ${AttachmentDownloadSource.BACKUP_IMPORT};`;
+    INSERT OR REPLACE INTO attachment_downloads_backup_stats 
+      (id, totalBytes, completedBytes)
+    VALUES
+      (0,0,0);
+  `;
+  db.prepare(query).run(params);
+}
+
+function getBackupAttachmentDownloadProgress(
+  db: ReadableDB
+): BackupAttachmentDownloadProgress {
+  const [query, params] = sql`
+    SELECT totalBytes, completedBytes FROM attachment_downloads_backup_stats
+    WHERE id = 0;
+  `;
   return (
-    db
-      .prepare(query, {
-        pluck: true,
-      })
-      .get<number>(params) ?? 0
+    db.prepare(query).get<BackupAttachmentDownloadProgress>(params) ?? {
+      totalBytes: 0,
+      completedBytes: 0,
+    }
   );
 }
 
@@ -5597,51 +5660,88 @@ function saveAttachmentDownloadJobs(
   db: WritableDB,
   jobs: Array<AttachmentDownloadJobType>
 ): void {
+  const errors: Array<Error> = [];
   db.transaction(() => {
     for (const job of jobs) {
-      saveAttachmentDownloadJob(db, job);
+      try {
+        saveAttachmentDownloadJob(db, job);
+      } catch (e) {
+        errors.push(e);
+      }
     }
   })();
+
+  if (errors.length === 0) {
+    return;
+  }
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  throw new AggregateError(
+    errors,
+    `Multiple errors while saving attachment download jobs:\n ${errors.map(e => e.message).join('\n')}`
+  );
 }
 
 function saveAttachmentDownloadJob(
   db: WritableDB,
   job: AttachmentDownloadJobType
 ): void {
-  const [query, params] = sql`
-    INSERT OR REPLACE INTO attachment_downloads (
-      messageId,
-      attachmentType,
-      attachmentSignature,
-      receivedAt,
-      sentAt,
-      contentType,
-      size,
-      active,
-      attempts,
-      retryAfter,
-      lastAttemptTimestamp,
-      attachmentJson,
-      ciphertextSize,
-      source
-    ) VALUES (
-      ${job.messageId},
-      ${job.attachmentType},
-      ${job.attachmentSignature},
-      ${job.receivedAt},
-      ${job.sentAt},
-      ${job.contentType},
-      ${job.size},
-      ${job.active ? 1 : 0},
-      ${job.attempts},
-      ${job.retryAfter},
-      ${job.lastAttemptTimestamp},
-      ${objectToJSON(job.attachment)},
-      ${job.ciphertextSize},
-      ${job.source}
-    );
-  `;
-  db.prepare(query).run(params);
+  return db.transaction(() => {
+    const [messageExistsQuery, messageExistsParams] = sql`
+      SELECT EXISTS(
+        SELECT 1 FROM messages
+        WHERE messages.id = ${job.messageId}
+      );
+    `;
+
+    const messageExists = db
+      .prepare(messageExistsQuery, {
+        pluck: true,
+      })
+      .get<number>(messageExistsParams);
+
+    if (messageExists !== 1) {
+      logger.warn('saveAttachmentDownloadJob: message does not exist, bailing');
+      return;
+    }
+    const jobToInsert: AttachmentDownloadJobRow = {
+      messageId: job.messageId,
+      attachmentType: job.attachmentType,
+      attachmentSignature: job.attachmentSignature,
+      receivedAt: job.receivedAt,
+      sentAt: job.sentAt,
+      contentType: job.contentType,
+      size: job.size,
+      active: job.active ? 1 : 0,
+      attempts: job.attempts,
+      retryAfter: job.retryAfter,
+      lastAttemptTimestamp: job.lastAttemptTimestamp,
+      attachmentJson: objectToJSON(job.attachment),
+      ciphertextSize: job.ciphertextSize,
+      originalSource: job.originalSource,
+      source: job.source,
+    } as const satisfies Record<
+      (typeof ATTACHMENT_DOWNLOADS_COLUMNS)[number],
+      unknown
+    >;
+
+    db.prepare(
+      `
+      INSERT INTO attachment_downloads
+        (${ATTACHMENT_DOWNLOADS_COLUMNS.join(', ')}) 
+      VALUES 
+        (${ATTACHMENT_DOWNLOADS_COLUMNS.map(name => `$${name}`).join(', ')})
+      ON CONFLICT DO UPDATE SET 
+          -- preserve originalSource 
+          ${ATTACHMENT_DOWNLOADS_COLUMNS.filter(
+            name => name !== 'originalSource'
+          )
+            .map(name => `${name} = $${name}`)
+            .join(', ')}
+    `
+    ).run(jobToInsert);
+  })();
 }
 
 function resetAttachmentDownloadActive(db: WritableDB): void {
@@ -6178,26 +6278,35 @@ function addStickerPackReference(
     );
   }
 
-  db.prepare(
-    `
-    INSERT OR REPLACE INTO sticker_references (
-      messageId,
-      packId,
-      stickerId,
-      isUnresolved
-    ) values (
-      $messageId,
-      $packId,
-      $stickerId,
-      $isUnresolved
-    )
-    `
-  ).run({
-    messageId,
-    packId,
-    stickerId,
-    isUnresolved: isUnresolved ? 1 : 0,
-  });
+  db.transaction(() => {
+    const [select, selectParams] = sql`
+      SELECT EXISTS (
+        SELECT 1 FROM sticker_packs WHERE id IS ${packId}
+      )
+    `;
+    const exists =
+      db.prepare(select, { pluck: true }).get<number>(selectParams) === 1;
+    if (!exists) {
+      logger.warn('addStickerPackReference: did not find referenced pack');
+      return;
+    }
+
+    const [insert, insertParams] = sql`
+      INSERT OR REPLACE INTO sticker_references (
+        messageId,
+        packId,
+        stickerId,
+        isUnresolved
+      ) values (
+        ${messageId},
+        ${packId},
+        ${stickerId},
+        ${isUnresolved ? 1 : 0}
+      )
+    `;
+
+    db.prepare(insert).run(insertParams);
+  })();
 }
 function deleteStickerPackReference(
   db: WritableDB,
@@ -7497,6 +7606,7 @@ function removeAll(db: WritableDB): void {
 
       DELETE FROM attachment_downloads;
       DELETE FROM attachment_backup_jobs;
+      DELETE FROM attachment_downloads_backup_stats;
       DELETE FROM backup_cdn_object_metadata;
       DELETE FROM badgeImageFiles;
       DELETE FROM badges;
@@ -7513,11 +7623,13 @@ function removeAll(db: WritableDB): void {
       DELETE FROM items;
       DELETE FROM jobs;
       DELETE FROM kyberPreKeys;
+      DELETE FROM message_attachments;
       DELETE FROM messages_fts;
       DELETE FROM messages;
       DELETE FROM notificationProfiles;
       DELETE FROM preKeys;
       DELETE FROM reactions;
+      DELETE FROM recentGifs;
       DELETE FROM senderKeys;
       DELETE FROM sendLogMessageIds;
       DELETE FROM sendLogPayloads;
@@ -7533,10 +7645,10 @@ function removeAll(db: WritableDB): void {
       DELETE FROM syncTasks;
       DELETE FROM unprocessed;
       DELETE FROM uninstalled_sticker_packs;
-      DELETE FROM message_attachments;
 
       INSERT INTO messages_fts(messages_fts) VALUES('optimize');
 
+    
       --- Re-create the messages delete trigger
       --- See migration 45
       CREATE TRIGGER messages_on_delete AFTER DELETE ON messages BEGIN
@@ -7552,6 +7664,8 @@ function removeAll(db: WritableDB): void {
         DELETE FROM storyReads WHERE storyId = old.storyId;
       END;
     `);
+
+    resetBackupAttachmentDownloadStats(db);
   })();
 }
 
@@ -8255,10 +8369,10 @@ function wasGroupCallRingPreviouslyCanceled(
           bigint: true,
         }
       )
-      .get<number>({
+      .get<bigint>({
         ringId,
         ringsOlderThanThisAreIgnored: Date.now() - MAX_GROUP_CALL_RING_AGE,
-      }) === 1
+      }) === 1n
   );
 }
 
@@ -8409,10 +8523,10 @@ function getUnreadEditedMessagesAndMarkRead(
   db: WritableDB,
   {
     conversationId,
-    newestUnreadAt,
+    readMessageReceivedAt,
   }: {
     conversationId: string;
-    newestUnreadAt: number;
+    readMessageReceivedAt: number;
   }
 ): GetUnreadByConversationAndMarkReadResultType {
   return db.transaction(() => {
@@ -8431,7 +8545,7 @@ function getUnreadEditedMessagesAndMarkRead(
       WHERE
         edited_messages.readStatus = ${ReadStatus.Unread} AND
         edited_messages.conversationId = ${conversationId} AND
-        received_at <= ${newestUnreadAt}
+        received_at <= ${readMessageReceivedAt}
       ORDER BY messages.received_at DESC, messages.sent_at DESC;
     `;
 

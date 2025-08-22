@@ -29,7 +29,6 @@ import type { ExplodePromiseResultType } from '../util/explodePromise';
 import { explodePromise } from '../util/explodePromise';
 import { getUserAgent } from '../util/getUserAgent';
 import { getTimeoutStream } from '../util/getStreamWithTimeout';
-import { formatAcceptLanguageHeader } from '../util/userLanguages';
 import { toWebSafeBase64, fromWebSafeBase64 } from '../util/webSafeBase64';
 import { getBasicAuth } from '../util/getBasicAuth';
 import { createHTTPSAgent } from '../util/createHTTPSAgent';
@@ -93,7 +92,13 @@ import type { ServerAlert } from '../util/handleServerAlerts';
 import { isAbortError } from '../util/isAbortError';
 import { missingCaseError } from '../util/missingCaseError';
 import { drop } from '../util/drop';
-import type { CardDetail } from '../types/Donations';
+import type { StripeDonationAmount } from '../types/Donations';
+import {
+  subscriptionConfigurationCurrencyZod,
+  type CardDetail,
+} from '../types/Donations';
+import { badgeFromServerSchema } from '../badges/parseBadgesFromServer';
+import { ZERO_DECIMAL_CURRENCIES } from '../util/currency';
 
 const log = createLogger('WebAPI');
 
@@ -473,6 +478,8 @@ async function _promiseAjax<Type extends ResponseType, OutputShape>(
   try {
     if (DEBUG && !isSuccess(response.status)) {
       result = await response.text();
+      // eslint-disable-next-line no-console
+      console.error(result);
     } else if (
       (options.responseType === 'json' ||
         options.responseType === 'jsonwithdetails') &&
@@ -1107,6 +1114,20 @@ const linkDeviceResultZod = z.object({
 });
 export type LinkDeviceResultType = z.infer<typeof linkDeviceResultZod>;
 
+const subscriptionConfigurationResultZod = z.object({
+  currencies: z.record(z.string(), subscriptionConfigurationCurrencyZod),
+  levels: z.record(
+    z.string(),
+    z.object({
+      name: z.string(),
+      badge: badgeFromServerSchema,
+    })
+  ),
+});
+export type SubscriptionConfigurationResultType = z.infer<
+  typeof subscriptionConfigurationResultZod
+>;
+
 export type ReportMessageOptionsType = Readonly<{
   senderAci: AciString;
   serverGuid: string;
@@ -1149,7 +1170,7 @@ export type CreateAccountResultType = Readonly<{
 
 export type CreateBoostOptionsType = Readonly<{
   currency: string;
-  amount: number;
+  amount: StripeDonationAmount;
   level: number;
   paymentMethod: string;
 }>;
@@ -1190,6 +1211,9 @@ export type ConfirmIntentWithStripeOptionsType = Readonly<{
   returnUrl: string;
 }>;
 const ConfirmIntentWithStripeResultSchema = z.object({
+  // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-status
+  status: z.string(),
+  // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-next_action
   next_action: z
     .object({
       type: z.string(),
@@ -1199,6 +1223,14 @@ const ConfirmIntentWithStripeResultSchema = z.object({
           url: z.string(), // what we need to redirect to
         })
         .nullable(),
+    })
+    .nullable(),
+  // https://docs.stripe.com/api/payment_intents/object#payment_intent_object-last_payment_error
+  last_payment_error: z
+    .object({
+      type: z.string(),
+      advice_code: z.string().nullable(),
+      message: z.string().nullable(),
     })
     .nullable(),
 });
@@ -1487,24 +1519,6 @@ const backupFileHeadersSchema = z.object({
 
 type BackupFileHeadersType = z.infer<typeof backupFileHeadersSchema>;
 
-// See: https://docs.stripe.com/currencies?presentment-currency=US
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  'bif',
-  'clp',
-  'djf',
-  'gnf',
-  'jpy',
-  'kmf',
-  'krw',
-  'mga',
-  'pyg',
-  'rwf',
-  'vnd',
-  'vuv',
-  'xaf',
-  'xof',
-  'xpf',
-]);
 const secondsTimestampToDate = z.coerce
   .number()
   .transform(sec => new Date(sec * 1_000));
@@ -1581,7 +1595,7 @@ export type WebAPIType = {
   getAvatar: (path: string) => Promise<Uint8Array>;
   createBoostReceiptCredentials: (
     options: CreateBoostReceiptCredentialsOptionsType
-  ) => Promise<CreateBoostReceiptCredentialsResultType>;
+  ) => Promise<JSONWithDetailsType<CreateBoostReceiptCredentialsResultType>>;
   redeemReceipt: (options: RedeemReceiptOptionsType) => Promise<void>;
   getHasSubscription: (subscriberId: Uint8Array) => Promise<boolean>;
   getGroup: (options: GroupCredentialsType) => Promise<Proto.IGroupResponse>;
@@ -1630,9 +1644,7 @@ export type WebAPIType = {
     options: ProfileFetchUnauthRequestOptions
   ) => Promise<ProfileType>;
   getBadgeImageFile: (imageUrl: string) => Promise<Uint8Array>;
-  getSubscriptionConfiguration: (
-    userLanguages: ReadonlyArray<string>
-  ) => Promise<unknown>;
+  getSubscriptionConfiguration: () => Promise<SubscriptionConfigurationResultType>;
   getSubscription: (
     subscriberId: Uint8Array
   ) => Promise<SubscriptionResponseType>;
@@ -2096,10 +2108,10 @@ export function initialize({
     }
     function cancelInflightRequests(reason: string) {
       const logId = `cancelInflightRequests/${reason}`;
-      log.warn(`${logId}: Cancelling ${inflightRequests.size} requests`);
+      log.warn(`${logId}: Canceling ${inflightRequests.size} requests`);
       for (const request of inflightRequests) {
         try {
-          request(new Error(`${logId}: Cancelled!`));
+          request(new Error(`${logId}: Canceled!`));
         } catch (error: unknown) {
           log.error(
             `${logId}: Failed to cancel request: ${toLogFormat(error)}`
@@ -2743,17 +2755,13 @@ export function initialize({
       serviceId: ServiceIdString,
       options: ProfileFetchAuthRequestOptions
     ) {
-      const { profileKeyVersion, profileKeyCredentialRequest, userLanguages } =
-        options;
+      const { profileKeyVersion, profileKeyCredentialRequest } = options;
 
       return (await _ajax({
         host: 'chatService',
         call: 'profile',
         httpType: 'GET',
         urlParameters: getProfileUrl(serviceId, options),
-        headers: {
-          'Accept-Language': formatAcceptLanguageHeader(userLanguages),
-        },
         responseType: 'json',
         redactUrl: _createRedactor(
           serviceId,
@@ -2855,7 +2863,6 @@ export function initialize({
         groupSendToken,
         profileKeyVersion,
         profileKeyCredentialRequest,
-        userLanguages,
       } = options;
 
       if (profileKeyVersion != null || profileKeyCredentialRequest != null) {
@@ -2872,9 +2879,6 @@ export function initialize({
         call: 'profile',
         httpType: 'GET',
         urlParameters: getProfileUrl(serviceId, options),
-        headers: {
-          'Accept-Language': formatAcceptLanguageHeader(userLanguages),
-        },
         responseType: 'json',
         unauthenticated: true,
         accessKey: accessKey ?? undefined,
@@ -2939,19 +2943,13 @@ export function initialize({
       );
     }
 
-    async function getSubscriptionConfiguration(
-      userLanguages: ReadonlyArray<string>
-    ): Promise<unknown> {
+    async function getSubscriptionConfiguration(): Promise<SubscriptionConfigurationResultType> {
       return _ajax({
         host: 'chatService',
         call: 'subscriptionConfiguration',
         httpType: 'GET',
-        headers: {
-          'Accept-Language': formatAcceptLanguageHeader(userLanguages),
-        },
         responseType: 'json',
-        // TODO DESKTOP-8719
-        zodSchema: z.unknown(),
+        zodSchema: subscriptionConfigurationResultZod,
       });
     }
 
@@ -4751,14 +4749,14 @@ export function initialize({
 
     async function createBoostReceiptCredentials(
       options: CreateBoostReceiptCredentialsOptionsType
-    ): Promise<CreateBoostReceiptCredentialsResultType> {
+    ): Promise<JSONWithDetailsType<CreateBoostReceiptCredentialsResultType>> {
       return _ajax({
         unauthenticated: true,
         host: 'chatService',
         call: 'boostReceiptCredentials',
         httpType: 'POST',
         jsonData: options,
-        responseType: 'json',
+        responseType: 'jsonwithdetails',
         zodSchema: CreateBoostReceiptCredentialsResultSchema,
       });
     }

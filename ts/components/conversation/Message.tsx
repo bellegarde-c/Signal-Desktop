@@ -47,7 +47,6 @@ import type {
 import { ReactionViewer } from './ReactionViewer';
 import { LinkPreviewDate } from './LinkPreviewDate';
 import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews';
-import { toLogFormat } from '../../types/errors';
 import { shouldUseFullSizeLinkPreviewImage } from '../../linkPreviews/shouldUseFullSizeLinkPreviewImage';
 import type { WidthBreakpoint } from '../_util';
 import { OutgoingGiftBadgeModal } from '../OutgoingGiftBadgeModal';
@@ -61,7 +60,7 @@ import {
   canDisplayImage,
   getExtensionForDisplay,
   getGridDimensions,
-  getImageDimensions,
+  getImageDimensionsForTimeline,
   hasImage,
   hasVideoScreenshot,
   isAudio,
@@ -475,7 +474,7 @@ const MessageReactions = forwardRef(function MessageReactions(
   }: MessageReactionsProps,
   parentRef
 ): JSX.Element {
-  const ordered = useGroupedAndOrderedReactions(reactions);
+  const ordered = useGroupedAndOrderedReactions(reactions, 'parentKey');
 
   const reactionsContainerRefMerger = useRef(createRefMerger());
 
@@ -1108,9 +1107,7 @@ export class Message extends React.PureComponent<Props, State> {
         isInline = false;
         break;
       default:
-        log.error(toLogFormat(missingCaseError(metadataPlacement)));
-        isInline = false;
-        break;
+        throw missingCaseError(metadataPlacement);
     }
 
     const {
@@ -1408,6 +1405,9 @@ export class Message extends React.PureComponent<Props, State> {
       );
     };
 
+    const willShowMetadata =
+      expirationLength || expirationTimestamp || !shouldHideMetadata;
+
     // Note: this has to be interactive for the case where text comes along with the
     // attachment. But we don't want the user to tab here unless that text exists.
     const tabIndex = text ? 0 : -1;
@@ -1485,7 +1485,7 @@ export class Message extends React.PureComponent<Props, State> {
                 {formatFileSize(size)}
               </div>
             )}
-            {text || shouldHideMetadata ? undefined : (
+            {text || !willShowMetadata ? undefined : (
               <div className="module-message__simple-attachment__metadata-container">
                 <MessageMetadata
                   deletedForEveryone={false}
@@ -2619,7 +2619,7 @@ export class Message extends React.PureComponent<Props, State> {
       firstLinkPreview.image &&
       shouldUseFullSizeLinkPreviewImage(firstLinkPreview)
     ) {
-      const dimensions = getImageDimensions(firstLinkPreview.image);
+      const dimensions = getImageDimensionsForTimeline(firstLinkPreview.image);
       if (dimensions) {
         return dimensions.width;
       }
@@ -3266,8 +3266,8 @@ export class Message extends React.PureComponent<Props, State> {
   ) {
     return (
       attachments?.length &&
-      (!isImage(attachments) || imageBroken) &&
-      (!isVideo(attachments) || imageBroken) &&
+      (!isImage(attachments) || !canDisplayImage(attachments) || imageBroken) &&
+      (!isVideo(attachments) || !canDisplayImage(attachments) || imageBroken) &&
       !isAudio(attachments)
     );
   }

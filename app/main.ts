@@ -885,7 +885,7 @@ async function createWindow() {
       );
     }
     if (!shouldClose) {
-      updater.onRestartCancelled();
+      updater.onRestartCanceled();
       return;
     }
 
@@ -2917,6 +2917,7 @@ function handleSignalRoute(route: ParsedSignalRoute) {
     showWindow();
   } else if (route.key === 'donationValidationComplete') {
     log.info('donationValidationComplete route handled');
+    mainWindow.webContents.send('donation-validation-complete', route.args);
   } else {
     log.info('handleSignalRoute: Unknown signal route:', route.key);
     mainWindow.webContents.send('unknown-sgnl-link');

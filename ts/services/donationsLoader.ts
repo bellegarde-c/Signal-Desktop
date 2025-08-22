@@ -4,6 +4,8 @@
 import { DataReader } from '../sql/Client';
 import { strictAssert } from '../util/assert';
 
+import { _getWorkflowFromStorage } from './donations';
+
 import type { DonationReceipt } from '../types/Donations';
 import type { DonationsStateType } from '../state/ducks/donations';
 
@@ -13,13 +15,17 @@ export async function loadDonationReceipts(): Promise<void> {
   donationReceipts = await DataReader.getAllDonationReceipts();
 }
 
-export function getDonationReceiptsForRedux(): DonationsStateType {
+export function getDonationsForRedux(): DonationsStateType {
   strictAssert(
     donationReceipts != null,
     'donation receipts have not been loaded'
   );
+  const currentWorkflow = _getWorkflowFromStorage();
+
   return {
-    currentWorkflow: undefined,
+    currentWorkflow,
+    didResumeWorkflowAtStartup: Boolean(currentWorkflow),
+    lastError: undefined,
     receipts: donationReceipts,
   };
 }

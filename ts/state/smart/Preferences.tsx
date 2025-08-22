@@ -23,7 +23,7 @@ import {
 } from '../selectors/items';
 import { DEFAULT_AUTO_DOWNLOAD_ATTACHMENT } from '../../textsecure/Storage';
 import { DEFAULT_CONVERSATION_COLOR } from '../../types/Colors';
-import { isBackupFeatureEnabledForRedux } from '../../util/isBackupEnabled';
+import { isBackupFeatureEnabled } from '../../util/isBackupEnabled';
 import { format } from '../../types/PhoneNumber';
 import {
   getIntl,
@@ -55,20 +55,20 @@ import { waitForEvent } from '../../shims/events';
 import { MINUTE } from '../../util/durations';
 import { sendSyncRequests } from '../../textsecure/syncRequests';
 import { SmartUpdateDialog } from './UpdateDialog';
-import { Page, Preferences } from '../../components/Preferences';
+import { Preferences } from '../../components/Preferences';
 import { useUpdatesActions } from '../ducks/updates';
 import { getUpdateDialogType } from '../selectors/updates';
 import { getHasAnyFailedStorySends } from '../selectors/stories';
 import { getOtherTabsUnreadStats, getSelectedLocation } from '../selectors/nav';
 import { getPreferredBadgeSelector } from '../selectors/badges';
 import { SmartProfileEditor } from './ProfileEditor';
-import { NavTab, useNavActions } from '../ducks/nav';
-import { EditState } from '../../components/ProfileEditor';
+import { useNavActions } from '../ducks/nav';
+import { NavTab, ProfileEditorPage, SettingsPage } from '../../types/Nav';
 import { SmartToastManager } from './ToastManager';
 import { useToastActions } from '../ducks/toast';
 import { DataReader } from '../../sql/Client';
 import { deleteAllMyStories } from '../../util/deleteAllMyStories';
-import { isLocalBackupsEnabledForRedux } from '../../util/isLocalBackupsEnabled';
+import { isLocalBackupsEnabled } from '../../util/isLocalBackupsEnabled';
 import { SmartPreferencesDonations } from './PreferencesDonations';
 import { useDonationsActions } from '../ducks/donations';
 import { generateDonationReceiptBlob } from '../../util/generateDonationReceipt';
@@ -79,6 +79,12 @@ import type { WidthBreakpoint } from '../../components/_util';
 import { DialogType } from '../../types/Dialogs';
 import { promptOSAuth } from '../../util/promptOSAuth';
 import type { StateType } from '../reducer';
+import {
+  pauseBackupMediaDownload,
+  resumeBackupMediaDownload,
+  cancelBackupMediaDownload,
+} from '../../util/backupMediaDownload';
+import { DonationsErrorBoundary } from '../../components/DonationsErrorBoundary';
 
 const DEFAULT_NOTIFICATION_SETTING = 'message';
 
@@ -106,15 +112,17 @@ function renderDonationsPane({
   setPage,
 }: {
   contentsRef: MutableRefObject<HTMLDivElement | null>;
-  page: Page;
-  setPage: (page: Page) => void;
+  page: SettingsPage;
+  setPage: (page: SettingsPage) => void;
 }): JSX.Element {
   return (
-    <SmartPreferencesDonations
-      contentsRef={contentsRef}
-      page={page}
-      setPage={setPage}
-    />
+    <DonationsErrorBoundary>
+      <SmartPreferencesDonations
+        contentsRef={contentsRef}
+        page={page}
+        setPage={setPage}
+      />
+    </DonationsErrorBoundary>
   );
 }
 
@@ -202,7 +210,7 @@ export function SmartPreferences(): JSX.Element | null {
 
   const universalExpireTimer = universalExpireTimerUtil.getForRedux(items);
   const onUniversalExpireTimerChange = async (newValue: number) => {
-    await universalExpireTimerUtil.set(DurationInSeconds.fromMillis(newValue));
+    await universalExpireTimerUtil.set(DurationInSeconds.fromSeconds(newValue));
 
     // Update account in Storage Service
     const account = window.ConversationController.getOurConversationOrThrow();
@@ -490,8 +498,15 @@ export function SmartPreferences(): JSX.Element | null {
 
   // Simple, one-way items
 
-  const { backupSubscriptionStatus, cloudBackupStatus, localBackupFolder } =
-    items;
+  const {
+    backupSubscriptionStatus,
+    cloudBackupStatus,
+    localBackupFolder,
+    backupMediaDownloadCompletedBytes,
+    backupMediaDownloadTotalBytes,
+    attachmentDownloadManagerIdled,
+    backupMediaDownloadPaused,
+  } = items;
   const defaultConversationColor =
     items.defaultConversationColor || DEFAULT_CONVERSATION_COLOR;
   const hasLinkPreviews = items.linkPreviews ?? false;
@@ -507,12 +522,8 @@ export function SmartPreferences(): JSX.Element | null {
     Settings.isContentProtectionSupported(OS);
   const isContentProtectionNeeded = Settings.isContentProtectionNeeded(OS);
 
-  const backupFeatureEnabled = isBackupFeatureEnabledForRedux(
-    items.remoteConfig
-  );
-  const backupLocalBackupsEnabled = isLocalBackupsEnabledForRedux(
-    items.remoteConfig
-  );
+  const backupFeatureEnabled = isBackupFeatureEnabled(items.remoteConfig);
+  const backupLocalBackupsEnabled = isLocalBackupsEnabled(items.remoteConfig);
   const donationsFeatureEnabled =
     items.remoteConfig?.['desktop.internalUser']?.enabled ??
     items.remoteConfig?.['desktop.donations']?.enabled ??
@@ -552,6 +563,11 @@ export function SmartPreferences(): JSX.Element | null {
     'autoConvertEmoji',
     true
   );
+  const [hasKeepMutedChatsArchived, onKeepMutedChatsArchivedChange] =
+    createItemsAccess('keepMutedChatsArchived', false, () => {
+      const account = window.ConversationController.getOurConversationOrThrow();
+      account.captureChange('keepMutedChatsArchived');
+    });
   const [hasAutoDownloadUpdate, onAutoDownloadUpdateChange] = createItemsAccess(
     'auto-download-update',
     true
@@ -675,13 +691,13 @@ export function SmartPreferences(): JSX.Element | null {
   }
 
   const { page } = currentLocation.details;
-  const setPage = (newPage: Page, editState?: EditState) => {
-    if (newPage === Page.Profile) {
+  const setPage = (newPage: SettingsPage, editState?: ProfileEditorPage) => {
+    if (newPage === SettingsPage.Profile) {
       changeLocation({
         tab: NavTab.Settings,
         details: {
           page: newPage,
-          state: editState || EditState.None,
+          state: editState || ProfileEditorPage.None,
         },
       });
       return;
@@ -712,6 +728,12 @@ export function SmartPreferences(): JSX.Element | null {
         backupFeatureEnabled={backupFeatureEnabled}
         backupKeyViewed={backupKeyViewed}
         backupSubscriptionStatus={backupSubscriptionStatus ?? { status: 'off' }}
+        backupMediaDownloadStatus={{
+          completedBytes: backupMediaDownloadCompletedBytes ?? 0,
+          totalBytes: backupMediaDownloadTotalBytes ?? 0,
+          isPaused: Boolean(backupMediaDownloadPaused),
+          isIdle: Boolean(attachmentDownloadManagerIdled),
+        }}
         backupLocalBackupsEnabled={backupLocalBackupsEnabled}
         badge={badge}
         blockedCount={blockedCount}
@@ -737,6 +759,7 @@ export function SmartPreferences(): JSX.Element | null {
         hasAutoConvertEmoji={hasAutoConvertEmoji}
         hasAutoDownloadUpdate={hasAutoDownloadUpdate}
         hasAutoLaunch={hasAutoLaunch}
+        hasKeepMutedChatsArchived={hasKeepMutedChatsArchived}
         hasCallNotifications={hasCallNotifications}
         hasCallRingtoneNotification={hasCallRingtoneNotification}
         hasContentProtection={hasContentProtection}
@@ -793,6 +816,7 @@ export function SmartPreferences(): JSX.Element | null {
         onHasStoriesDisabledChanged={onHasStoriesDisabledChanged}
         onHideMenuBarChange={onHideMenuBarChange}
         onIncomingCallNotificationsChange={onIncomingCallNotificationsChange}
+        onKeepMutedChatsArchivedChange={onKeepMutedChatsArchivedChange}
         onLastSyncTimeChange={onLastSyncTimeChange}
         onLocaleChange={onLocaleChange}
         onMediaCameraPermissionsChange={onMediaCameraPermissionsChange}
@@ -837,6 +861,9 @@ export function SmartPreferences(): JSX.Element | null {
         resetDefaultChatColor={resetDefaultChatColor}
         resolvedLocale={resolvedLocale}
         savePreferredLeftPaneWidth={savePreferredLeftPaneWidth}
+        resumeBackupMediaDownload={resumeBackupMediaDownload}
+        pauseBackupMediaDownload={pauseBackupMediaDownload}
+        cancelBackupMediaDownload={cancelBackupMediaDownload}
         selectedCamera={selectedCamera}
         selectedMicrophone={selectedMicrophone}
         selectedSpeaker={selectedSpeaker}

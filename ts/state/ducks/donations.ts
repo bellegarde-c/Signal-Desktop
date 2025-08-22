@@ -8,16 +8,20 @@ import { useBoundActions } from '../../hooks/useBoundActions';
 import { createLogger } from '../../logging/log';
 import * as Errors from '../../types/errors';
 import { isStagingServer } from '../../util/isStagingServer';
+import { DataWriter } from '../../sql/Client';
+import * as donations from '../../services/donations';
+import { donationStateSchema } from '../../types/Donations';
+import { drop } from '../../util/drop';
 
 import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions';
 import type {
   CardDetail,
+  DonationErrorType,
   DonationReceipt,
   DonationWorkflow,
+  StripeDonationAmount,
 } from '../../types/Donations';
 import type { StateType as RootStateType } from '../reducer';
-import { DataWriter } from '../../sql/Client';
-import * as donations from '../../services/donations';
 
 const log = createLogger('donations');
 
@@ -25,6 +29,8 @@ const log = createLogger('donations');
 
 export type DonationsStateType = ReadonlyDeep<{
   currentWorkflow: DonationWorkflow | undefined;
+  didResumeWorkflowAtStartup: boolean;
+  lastError: DonationErrorType | undefined;
   receipts: Array<DonationReceipt>;
 }>;
 
@@ -33,19 +39,27 @@ export type DonationsStateType = ReadonlyDeep<{
 export const ADD_RECEIPT = 'donations/ADD_RECEIPT';
 export const SUBMIT_DONATION = 'donations/SUBMIT_DONATION';
 export const UPDATE_WORKFLOW = 'donations/UPDATE_WORKFLOW';
+export const UPDATE_LAST_ERROR = 'donations/UPDATE_LAST_ERROR';
+export const SET_DID_RESUME = 'donations/SET_DID_RESUME';
 
 export type AddReceiptAction = ReadonlyDeep<{
   type: typeof ADD_RECEIPT;
   payload: { receipt: DonationReceipt };
 }>;
 
+export type SetDidResumeAction = ReadonlyDeep<{
+  type: typeof SET_DID_RESUME;
+  payload: boolean;
+}>;
+
 export type SubmitDonationAction = ReadonlyDeep<{
   type: typeof SUBMIT_DONATION;
-  payload: {
-    currencyType: string;
-    amount: number;
-    paymentDetail: CardDetail;
-  };
+  payload: SubmitDonationType;
+}>;
+
+export type UpdateLastErrorAction = ReadonlyDeep<{
+  type: typeof UPDATE_LAST_ERROR;
+  payload: { lastError: DonationErrorType | undefined };
 }>;
 
 export type UpdateWorkflowAction = ReadonlyDeep<{
@@ -54,7 +68,11 @@ export type UpdateWorkflowAction = ReadonlyDeep<{
 }>;
 
 export type DonationsActionType = ReadonlyDeep<
-  AddReceiptAction | SubmitDonationAction | UpdateWorkflowAction
+  | AddReceiptAction
+  | SetDidResumeAction
+  | SubmitDonationAction
+  | UpdateLastErrorAction
+  | UpdateWorkflowAction
 >;
 
 // Action Creators
@@ -89,27 +107,73 @@ function internalAddDonationReceipt(
   };
 }
 
+function setDidResume(didResume: boolean): SetDidResumeAction {
+  return {
+    type: SET_DID_RESUME,
+    payload: didResume,
+  };
+}
+
+function resumeWorkflow(): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  SetDidResumeAction
+> {
+  return async dispatch => {
+    try {
+      dispatch({
+        type: SET_DID_RESUME,
+        payload: false,
+      });
+
+      await donations.resumeDonation();
+    } catch (error) {
+      log.error('Error resuming workflow', Errors.toLogFormat(error));
+      throw error;
+    }
+  };
+}
+
+export type SubmitDonationType = ReadonlyDeep<{
+  currencyType: string;
+  paymentAmount: StripeDonationAmount;
+  paymentDetail: CardDetail;
+}>;
+
 function submitDonation({
   currencyType,
   paymentAmount,
   paymentDetail,
-}: {
-  currencyType: string;
-  paymentAmount: number;
-  paymentDetail: CardDetail;
-}): ThunkAction<void, RootStateType, unknown, UpdateWorkflowAction> {
-  return async () => {
+}: SubmitDonationType): ThunkAction<
+  void,
+  RootStateType,
+  unknown,
+  UpdateWorkflowAction
+> {
+  return async (_dispatch, getState) => {
     if (!isStagingServer()) {
-      log.error('internalAddDonationReceipt: Only available on staging server');
+      log.error('submitDonation: Only available on staging server');
       return;
     }
 
     try {
-      await donations.internalDoDonation({
-        currencyType,
-        paymentAmount,
-        paymentDetail,
-      });
+      const { currentWorkflow } = getState().donations;
+      if (
+        currentWorkflow?.type === donationStateSchema.Enum.INTENT &&
+        currentWorkflow.paymentAmount === paymentAmount &&
+        currentWorkflow.currencyType === currencyType
+      ) {
+        // we can proceed without starting afresh
+      } else {
+        await donations.clearDonation();
+        await donations.startDonation({
+          currencyType,
+          paymentAmount,
+        });
+      }
+
+      await donations.finishDonationWithCard(paymentDetail);
     } catch (error) {
       log.warn('submitDonation failed', Errors.toLogFormat(error));
     }
@@ -117,9 +181,20 @@ function submitDonation({
 }
 
 function clearWorkflow(): UpdateWorkflowAction {
+  drop(donations.clearDonation());
+
   return {
     type: UPDATE_WORKFLOW,
     payload: { nextWorkflow: undefined },
+  };
+}
+
+function updateLastError(
+  lastError: DonationErrorType | undefined
+): UpdateLastErrorAction {
+  return {
+    type: UPDATE_LAST_ERROR,
+    payload: { lastError },
   };
 }
 
@@ -136,7 +211,10 @@ export const actions = {
   addReceipt,
   clearWorkflow,
   internalAddDonationReceipt,
+  setDidResume,
+  resumeWorkflow,
   submitDonation,
+  updateLastError,
   updateWorkflow,
 };
 
@@ -149,6 +227,8 @@ export const useDonationsActions = (): BoundActionCreatorsMapObject<
 export function getEmptyState(): DonationsStateType {
   return {
     currentWorkflow: undefined,
+    didResumeWorkflowAtStartup: false,
+    lastError: undefined,
     receipts: [],
   };
 }
@@ -164,10 +244,33 @@ export function reducer(
     };
   }
 
-  if (action.type === UPDATE_WORKFLOW) {
+  if (action.type === SET_DID_RESUME) {
     return {
       ...state,
-      currentWorkflow: action.payload.nextWorkflow,
+      didResumeWorkflowAtStartup: action.payload,
+    };
+  }
+
+  if (action.type === UPDATE_LAST_ERROR) {
+    return {
+      ...state,
+      lastError: action.payload.lastError,
+    };
+  }
+
+  if (action.type === UPDATE_WORKFLOW) {
+    const { nextWorkflow } = action.payload;
+
+    // If we've cleared the workflow or are starting afresh, we clear the startup flag
+    const didResumeWorkflowAtStartup =
+      !nextWorkflow || nextWorkflow.type === donationStateSchema.Enum.INTENT
+        ? false
+        : state.didResumeWorkflowAtStartup;
+
+    return {
+      ...state,
+      didResumeWorkflowAtStartup,
+      currentWorkflow: nextWorkflow,
     };
   }
 

@@ -165,6 +165,10 @@ import {
   fromAciUuidBytesOrString,
   fromPniUuidBytesOrUntaggedString,
 } from '../util/ServiceId';
+import {
+  type MessageRequestResponseInfo,
+  MessageRequestResponseSource,
+} from '../types/MessageRequestResponseEvent';
 
 const log = createLogger('MessageReceiver');
 
@@ -212,9 +216,13 @@ type CacheAddItemType = {
 };
 
 type LockedStores = {
+  readonly identityKeyStore: IdentityKeys;
+  readonly kyberPreKeyStore: KyberPreKeys;
+  readonly preKeyStore: PreKeys;
   readonly senderKeyStore: SenderKeys;
   readonly sessionStore: Sessions;
-  readonly identityKeyStore: IdentityKeys;
+  readonly signedPreKeyStore: SignedPreKeys;
+
   readonly zone?: Zone;
 };
 
@@ -409,7 +417,7 @@ export default class MessageReceiver
         const envelope: ProcessedEnvelope = {
           // Make non-private envelope IDs dashless so they don't get redacted
           //   from logs
-          id: getGuid().replace(/-/g, ''),
+          id: getGuid().replace(/-/g, '.'),
           receivedAtCounter: incrementMessageCounter(),
           receivedAtDate: Date.now(),
           // Calculate the message age (time on server).
@@ -990,6 +998,8 @@ export default class MessageReceiver
 
     try {
       const zone = new Zone('decryptAndCacheBatch', {
+        pendingKyberPreKeysToRemove: true,
+        pendingPreKeysToRemove: true,
         pendingSenderKeys: true,
         pendingSessions: true,
         pendingUnprocessed: true,
@@ -1015,19 +1025,17 @@ export default class MessageReceiver
 
               let stores = storesMap.get(destinationServiceId);
               if (!stores) {
+                const sharedParams = {
+                  ourServiceId: destinationServiceId,
+                  zone,
+                };
                 stores = {
-                  senderKeyStore: new SenderKeys({
-                    ourServiceId: destinationServiceId,
-                    zone,
-                  }),
-                  sessionStore: new Sessions({
-                    zone,
-                    ourServiceId: destinationServiceId,
-                  }),
-                  identityKeyStore: new IdentityKeys({
-                    zone,
-                    ourServiceId: destinationServiceId,
-                  }),
+                  identityKeyStore: new IdentityKeys(sharedParams),
+                  kyberPreKeyStore: new KyberPreKeys(sharedParams),
+                  preKeyStore: new PreKeys(sharedParams),
+                  senderKeyStore: new SenderKeys(sharedParams),
+                  sessionStore: new Sessions(sharedParams),
+                  signedPreKeyStore: new SignedPreKeys(sharedParams),
                   zone,
                 };
                 storesMap.set(destinationServiceId, stores);
@@ -1667,7 +1675,15 @@ export default class MessageReceiver
   }
 
   async #decryptSealedSender(
-    { senderKeyStore, sessionStore, identityKeyStore, zone }: LockedStores,
+    {
+      identityKeyStore,
+      kyberPreKeyStore,
+      preKeyStore,
+      senderKeyStore,
+      sessionStore,
+      signedPreKeyStore,
+      zone,
+    }: LockedStores,
     envelope: UnsealedEnvelope
   ): Promise<DecryptSealedSenderResult> {
     const { destinationServiceId } = envelope;
@@ -1743,14 +1759,6 @@ export default class MessageReceiver
         'unidentified message/passing to sealedSenderDecryptMessage'
     );
 
-    const preKeyStore = new PreKeys({ ourServiceId: destinationServiceId });
-    const signedPreKeyStore = new SignedPreKeys({
-      ourServiceId: destinationServiceId,
-    });
-    const kyberPreKeyStore = new KyberPreKeys({
-      ourServiceId: destinationServiceId,
-    });
-
     const sealedSenderIdentifier = envelope.sourceServiceId;
     strictAssert(
       sealedSenderIdentifier !== undefined,
@@ -1806,7 +1814,14 @@ export default class MessageReceiver
     ciphertext: Uint8Array,
     serviceIdKind: ServiceIdKind
   ): Promise<InnerDecryptResultType | undefined> {
-    const { sessionStore, identityKeyStore, zone } = stores;
+    const {
+      identityKeyStore,
+      kyberPreKeyStore,
+      preKeyStore,
+      sessionStore,
+      signedPreKeyStore,
+      zone,
+    } = stores;
 
     const logId = getEnvelopeId(envelope);
     const envelopeTypeEnum = Proto.Envelope.Type;
@@ -1815,13 +1830,6 @@ export default class MessageReceiver
     const { sourceDevice } = envelope;
 
     const { destinationServiceId } = envelope;
-    const preKeyStore = new PreKeys({ ourServiceId: destinationServiceId });
-    const signedPreKeyStore = new SignedPreKeys({
-      ourServiceId: destinationServiceId,
-    });
-    const kyberPreKeyStore = new KyberPreKeys({
-      ourServiceId: destinationServiceId,
-    });
 
     strictAssert(identifier !== undefined, 'Empty identifier');
     strictAssert(sourceDevice !== undefined, 'Empty source device');
@@ -3224,6 +3232,9 @@ export default class MessageReceiver
         ),
         messageRequestResponseType: sync.type,
         groupV2Id: groupV2IdString,
+        receivedAtCounter: envelope.receivedAtCounter,
+        receivedAtMs: envelope.receivedAtDate,
+        sentAt: envelope.timestamp,
       },
       this.#removeFromCache.bind(this, envelope)
     );
@@ -3858,6 +3869,13 @@ export default class MessageReceiver
 
     logUnexpectedUrgentValue(envelope, 'blockSync');
 
+    const responseInfo: MessageRequestResponseInfo = {
+      source: MessageRequestResponseSource.BLOCK_SYNC,
+      receivedAtCounter: envelope.receivedAtCounter,
+      receivedAtMs: envelope.receivedAtDate,
+      timestamp: envelope.timestamp,
+    };
+
     function getAndApply(
       type: Proto.SyncMessage.MessageRequestResponse.Type
     ): (value: string) => Promise<void> {
@@ -3866,9 +3884,7 @@ export default class MessageReceiver
           item,
           'private'
         );
-        await conversation.applyMessageRequestResponse(type, {
-          fromSync: true,
-        });
+        await conversation.applyMessageRequestResponse(type, responseInfo);
       };
     }
 
@@ -3958,9 +3974,7 @@ export default class MessageReceiver
             }
             await conversation.applyMessageRequestResponse(
               messageRequestEnum.BLOCK,
-              {
-                fromSync: true,
-              }
+              responseInfo
             );
           })
         );
@@ -3975,9 +3989,7 @@ export default class MessageReceiver
             }
             await conversation.applyMessageRequestResponse(
               messageRequestEnum.ACCEPT,
-              {
-                fromSync: true,
-              }
+              responseInfo
             );
           })
         );

@@ -31,6 +31,14 @@ export enum ToastType {
   DecryptionError = 'DecryptionError',
   DebugLogError = 'DebugLogError',
   DeleteForEveryoneFailed = 'DeleteForEveryoneFailed',
+  DonationCanceled = 'DonationCanceled',
+  DonationCanceledWithView = 'DonationCanceledWithView',
+  DonationCompleted = 'DonationCompleted',
+  DonationConfirmationNeeded = 'DonationConfirmationNeeded',
+  DonationError = 'DonationError',
+  DonationProcessing = 'DonationProcessing',
+  DonationVerificationNeeded = 'DonationVerificationNeeded',
+  DonationVerificationFailed = 'DonationVerificationFailed',
   Error = 'Error',
   Expired = 'Expired',
   FailedToDeleteUsername = 'FailedToDeleteUsername',
@@ -53,6 +61,8 @@ export enum ToastType {
   OriginalMessageNotFound = 'OriginalMessageNotFound',
   PinnedConversationsFull = 'PinnedConversationsFull',
   ReactionFailed = 'ReactionFailed',
+  ReceiptSaved = 'ReceiptSaved',
+  ReceiptSaveFailed = 'ReceiptSaveFailed',
   ReportedSpam = 'ReportedSpam',
   ReportedSpamAndBlocked = 'ReportedSpamAndBlocked',
   SQLError = 'SQLError',
@@ -118,6 +128,14 @@ export type AnyToast =
   | { toastType: ToastType.DangerousFileType }
   | { toastType: ToastType.DebugLogError }
   | { toastType: ToastType.DeleteForEveryoneFailed }
+  | { toastType: ToastType.DonationCanceled }
+  | { toastType: ToastType.DonationCanceledWithView }
+  | { toastType: ToastType.DonationCompleted }
+  | { toastType: ToastType.DonationConfirmationNeeded }
+  | { toastType: ToastType.DonationError }
+  | { toastType: ToastType.DonationProcessing }
+  | { toastType: ToastType.DonationVerificationFailed }
+  | { toastType: ToastType.DonationVerificationNeeded }
   | { toastType: ToastType.Error }
   | { toastType: ToastType.Expired }
   | { toastType: ToastType.FailedToDeleteUsername }
@@ -153,6 +171,11 @@ export type AnyToast =
   | { toastType: ToastType.OriginalMessageNotFound }
   | { toastType: ToastType.PinnedConversationsFull }
   | { toastType: ToastType.ReactionFailed }
+  | {
+      toastType: ToastType.ReceiptSaved;
+      parameters: { fullPath: string };
+    }
+  | { toastType: ToastType.ReceiptSaveFailed }
   | { toastType: ToastType.ReportedSpam }
   | { toastType: ToastType.ReportedSpamAndBlocked }
   | { toastType: ToastType.StickerPackInstallFailed }
