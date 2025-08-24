@@ -53,6 +53,10 @@ export function FunEmojiPickerButton(
 
   return (
     <Button className="FunButton">
+      contenteditable: {false},
+      onMouseDown={event => {
+          event.preventDefault();
+      }}
       {emojiVarant ? (
         <FunStaticEmoji
           role="img"
