@@ -2437,6 +2437,7 @@ app.on('ready', async () => {
           sandbox: true,
           contextIsolation: true,
           preload: join(rootDir, 'bundles', 'preload', 'loading.js'),
+          backgroundThrottling: false,
         },
         icon: windowIcon,
       });
