@@ -176,6 +176,7 @@ import type {
   SetQuotedMessageActionType,
   SetViewOnceActionType,
 } from './composer.preload.ts';
+import { saveDraftRecordingIfNeeded } from './composer.preload.ts';
 import {
   SET_FOCUS,
   replaceAttachments,
@@ -4786,6 +4787,7 @@ function startConversationWithSharedContact(
   };
 }
 
+export { showConversation };
 function showConversation({
   conversationId,
   messageId,
@@ -4840,6 +4842,30 @@ function showConversation({
         void dispatch(scrollToMessage(conversationId, messageId));
       }
       void dispatch(setComposerFocus(conversationId));
+
+      return;
+    }
+
+    const navtabs = document.getElementsByClassName('NavTabs') as HTMLElement;
+    if (conversationId == undefined) {
+        navtabs[0].style.display = 'block';
+    } else {
+        navtabs[0].style.display = 'none';
+    }
+
+    // notify composer in case we need to stop recording a voice note
+    if (
+      originalLocation.tab === NavTab.Chats &&
+      originalLocation.details.conversationId &&
+      originalLocation.details.conversationId !== conversationId
+    ) {
+      dispatch(saveDraftRecordingIfNeeded(originalLocation.details.conversationId));
+      dispatch(
+        onConversationClosed(
+          originalLocation.details.conversationId,
+          'showConversation'
+        )
+      );
     }
   };
 }
