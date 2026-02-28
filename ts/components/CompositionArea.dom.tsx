@@ -471,6 +471,10 @@ export const CompositionArea = memo(function CompositionArea({
     }
   }, []);
 
+  const launchRecorder = useCallback(() => {
+      startRecording(conversationId);
+  }, []);
+
   const launchMediaPicker = useCallback(
     () => launchAttachmentPicker('media'),
     [launchAttachmentPicker]
@@ -848,19 +852,6 @@ export const CompositionArea = memo(function CompositionArea({
       {mediaQualitySelectorFragment}
     </>
   );
-
-  const micButtonFragment = shouldShowMicrophone ? (
-    <div className="CompositionArea__button-cell">
-      <AudioCapture
-        conversationId={conversationId}
-        draftAttachments={draftAttachments}
-        i18n={i18n}
-        showToast={showToast}
-        warmupRecording={warmupRecording}
-        startRecording={startRecording}
-      />
-    </div>
-  ) : null;
 
   const editMessageFragment = draftEditMessage ? (
     <>
@@ -1408,7 +1399,6 @@ export const CompositionArea = memo(function CompositionArea({
         )}
         {!isViewOnceActive && !large && (
           <>
-            {!dirty ? micButtonFragment : null}
             {editMessageFragment}
             {composerAddMenuButton}
           </>
@@ -1423,7 +1413,6 @@ export const CompositionArea = memo(function CompositionArea({
         >
           {leftHandSideButtonsFragment}
           {composerAddMenuButton}
-          {!dirty ? micButtonFragment : null}
           {editMessageFragment}
           {dirty || !shouldShowMicrophone ? sendButtonFragment : null}
         </div>
