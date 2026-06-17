@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Poți fixa până la 4 conversații"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Vizualizare"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Trimis parțial, fă click pentru detalii"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Șters parțial, fă click pentru a reîncerca"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Eliminat parțial, dă clic pentru detalii"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Acest mesaj a fost șters."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Administratorul {admin} a eliminat acest mesaj"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Nici un autocolant instalat"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Adaugă Abțibilduri"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Seria artistică Signal"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Autocolante primite"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Autocolantele de la mesajele primite se vor afișa aici"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Instalează"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Instalate"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Dezinstalează"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Este posibil să nu poți reinstala acest pachet de autocolante dacă nu mai ai mesajul original."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Toate"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Adaugă"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Elimină"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Pachet autocolante"
@@ -2835,10 +2859,10 @@
     "messageformat": "Abțibild fără un emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Pachet de abțibilduri de {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Vezi pachetul"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emoji"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Extinde"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Atașare fișier"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Fotografii și videoclipuri"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Redirecționează mesajele selectate"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Ștergi {count,number} mesaj?} few {Ștergi {count,number} mesaje?} other {Ștergi {count,number} de mesaje?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Ștergi mesajul selectat?} few {Ștergi cele {count,number} mesaje selectate?} other {Ștergi cele {count,number} de mesaje selectate?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Pentru cine vrei să ștergi acest mesaj?} few {Pentru cine vrei să ștergi aceste mesaje?} other {Pentru cine vrei să ștergi aceste mesaje?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {De pe ce dispozitive ai dori să ștergi acest mesaj?} few {De pe ce dispozitive ai dori să ștergi acest mesaje?} other {De pe ce dispozitive ai dori să ștergi aceste mesaje?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Acest mesaj va fi eliminat de pe toate dispozitivele tale.} few {Acest mesaje vor fi eliminate de pe toate dispozitivele tale.} other {Aceste mesaje vor fi eliminate de pe toate dispozitivele tale.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Șterge doar pentru mine"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Șterge de pe acest dispozitiv"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Șterge pentru toată lumea"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Membrii grupurilor cu cele mai recente versiuni Signal vor vedea că ai eliminat acest mesaj.} few {Membrii grupurilor cu cele mai recente versiuni Signal vor vedea că ai eliminat aceste mesaje.} other {Membrii grupurilor cu cele mai recente versiuni Signal vor vedea că ai eliminat aceste mesaje.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Șterge de pe toate dispozitivele"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Șterge"
@@ -6425,37 +6434,40 @@
     "messageformat": "Înregistrează-ți codul de recuperare"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Codul tău de recuperare"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Codul e necesar ca să-ți recuperezi contul și datele. Păstrează codul într-un loc sigur. Dacă îl pierzi, nu îți vei putea recupera contul. <learnMoreLink>Află mai multe.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Codul e necesar ca să-ți recuperezi contul și datele. Păstrează codul de recuperare undeva în siguranță și nu îl trimite nimănui. Signal nu îți va cere niciodată codul de recuperare printr-un mesaj. <learnMoreLink>Află mai multe.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Nu transmite codul tău de recuperare"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal nu îți va cere niciodată codul de recuperare printr-un mesaj</strong>. Nu răspunde niciodată la o conversație în care persoana pretinde că e Signal. Păstrează-ți codul de recuperare undeva în siguranță și nu îl trimite nimănui. <learnMoreLink>Află mai multe.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Am înțeles"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Transmite codul"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Nu transmite codul de recuperare"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Nu transmite codul tău de recuperare nimănui. Altfel, vor putea să îți preia contul. <strong>Signal nu îți va cere niciodată codul de recuperare printr-un mesaj</strong>. Nu răspunde niciodată la o conversație în care persoana pretinde că e Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Nu transmite codul tău de recuperare nimănui. Altfel, vor putea să îți preia contul. <strong>Signal nu îți va cere niciodată codul de recuperare printr-un mesaj</strong>. Nu răspunde niciodată la o conversație în care persoana pretinde că e Signal. <learnMoreLink>Află mai multe.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Nu îl transmite altcuiva"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Copiază codul"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Confirmă-ți codul de recuperare"
@@ -6521,7 +6533,7 @@
     "messageformat": "Acțiunea nu a putut fi finalizată pentru că a eșuat autentificare în sistem. Încearcă din nou sau deschide aplicația Signal pe dispozitivul mobil și mergi la Setări ale backup-ului ca să-ți vezi codul de recuperare."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "A apărut o eroare în timpul solicitării autentificării de sistem pentru această acțiune."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Vezi codul de rezervă"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Conexiunile tale îți pot vedea numele și fotografia și pot vedea postările din „Povestea Mea” cu excepția cazului în care le ascunzi"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Eliminarea este sincronizată pe toate dispozitivele tale"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Atunci când elimini mesaje sau conversații, acestea vor fi șterse de pe toate dispozitivele tale."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Am înțeles"
   },
   "icu:Stories__title": {
     "messageformat": "Povești"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Informațiile sunt private"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal nu colectează sau stochează informațiile personale când faci o donație.</paragraph><paragraph>Folosim Stripe ca procesator de plăți ca să primim donațiile tale. Nu accesăm, stocăm sau salvăm niciuna dintre informațiile pe care le oferi către ei.</paragraph><paragraph>Signal nu conectează donația ta cu contul Signal și nici nu poate să o facă.</paragraph><paragraph>Îți mulțumim pentru sprijinul tău!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Ca organizație non-profit independentă, Signal se angajează să ofere mesaje și apeluri private. Fără reclame, fără sisteme de urmărire. Donează astăzi și susține Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "„Acest E în plus mă deranjează”, se auzeau strigătele și plângerile celor nemulțumiți că extensia lor preferată avea patru litere în loc de trei. Ne bucurăm să îi mulțumim (modificarea a fost floare la ureche) și acum vei vedea că numele de fișier implicit la salvarea unui JPEG se va termina, așa cum trebuie, cu „.jpg”."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Dacă vrei să-ți exprimi latura gotică, am adăugat și asistență pentru modul întunecat de pictograme din macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

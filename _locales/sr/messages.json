@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Можете да закачите највише 4 ћаскања"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Прикажи"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Делимично послато, кликните за детаље"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Делимично је избрисано; кликните да поновите"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Делимично обрисано, кликни за детаље"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Ова порука је избрисана."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Администратор {admin} је избрисао ову поруку"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Нема инсталираних налепница"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Додај налепнице"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Серијал „Signal уметник“"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Налепнице које сте добили"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Налепнице из долазних порука ће бити приказане овде"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Инсталирај"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Инсталирано"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Деинсталирај"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Можда више нећете моћи да поново инсталирате овај пакет налепница ако више немате изворну поруку."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Све"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Додај"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Уклони"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Пакет налепница"
@@ -2835,10 +2859,10 @@
     "messageformat": "Налепница без емоџија"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Пакет налепница од аутора: {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Прикажи пакет"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Емоџи"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Прошири"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Приложи фајл"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Фотографије и видео-снимци"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Проследи изабране поруке"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Желите ли да избришете поруке ({count,number})?} other {Желите ли да избришете поруке ({count,number})?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Желите ли да избришете изабрану поруку?} other {Желите ли да избришете изабране поруке (њих {count,number})?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {За кога желите да избришете ову поруку?} other {За кога желите да избришете ове поруке?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Са којих уређаја желите да избришете ову поруку?} other {Са којих уређаја желите да избришете ове поруке?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Ова порука ће бити избрисана са свих ваших уређаја.} other {Ове поруке ће бити избрисане са свих ваших уређаја.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Избриши мени"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Избриши са овог уређаја"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Избриши свима"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Чланови групе који користе најновију верзију Signal-а ће видети да сте обрисали ову поруку.} other {Чланови групе који користе најновију верзију Signal-а ће видети да сте обрисали ове поруке.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Избриши са свих уређаја"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Избриши"
@@ -6425,37 +6434,40 @@
     "messageformat": "Снимите кључ за опоравак"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Ваш кључ за опоравак"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Овај кључ је потребан за враћање вашег налога и података. Чувајте овај кључ негде на сигурном. Ако га изгубите, нећете моћи да повратите свој налог. <learnMoreLink>Сазнајте више.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Овај кључ је потребан за враћање вашег налога и података. Чувајте га на безбедном месту и не делите га ни са ким. Signal вам никада преко поруке неће тражити кључ за опоравак. <learnMoreLink>Сазнајте више.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Не делите кључ за опоравак"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal вам никада преко поруке</strong> неће тражити кључ за опоравак. Никада не одговарајте на поруке из ћаскања која се представљају као Signal. Чувајте кључ за опоравак на безбедном месту и не делите га ни са ким. <learnMoreLink>Сазнајте више.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Разумем"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Подели кључ"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Не дели кључ"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Не делите кључ за опоравак ни са ким. Тиме бисте им омогућили да преузму ваш налог. <strong>Signal вам никада преко поруке</strong> неће тражити кључ за опоравак. Никада не одговарајте на поруке из ћаскања која се представљају као Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Не делите кључ за опоравак ни са ким. Тиме бисте им омогућили да преузму ваш налог. <strong>Signal вам никада преко поруке</strong> неће тражити кључ за опоравак. Никада не одговарајте на поруке из ћаскања која се представљају као Signal. <learnMoreLink>Сазнајте више.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Не дели"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Налепи кључ"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Потврдите кључ за опоравак"
@@ -6521,7 +6533,7 @@
     "messageformat": "Ова радња није могла да се доврши због грешке у системској потврди идентитета. Покушајте поново или отворите апликацију Signal на мобилном телефону и идите у Подешавања резервних копија да пронађете кључ за опоравак."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Десила се грешка приликом слања захтева за системску аутентификацију за ову радњу."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Прикажи кључ"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Ваше везе могу да виде ваше име и слику, као и објаве у „Мојој причи“, осим ако је не сакријете од њих"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Брисање се синхронизује међу свим вашим уређајима"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Када избришете поруке или ћаскања, они ће бити избрисани на свим вашим уређајима."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Разумем"
   },
   "icu:Stories__title": {
     "messageformat": "Приче"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Ваши подаци су приватни"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal не прикупља, нити чува, ваше податке о личности када донирате.</paragraph><paragraph>Користимо Stripe као обрађивача плаћања за примање ваших донација. Не приступамо ниједној од информација које им пружите, нити их складиштимо или чувамо.</paragraph><paragraph>Signal не повезује, нити може да повеже, вашу донацију са вашим налогом на Signal-у.</paragraph><paragraph>Хвала вам на подршци!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Као независна непрофитна организација, Signal гарантује приватност порука и позива. Без огласа, без праћења, без надзора. Донирајте данас да подржите Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Ажурирали смо основну екстензију фајла за JPEG слике на jpg."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Подршка за тамне иконе у систему macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

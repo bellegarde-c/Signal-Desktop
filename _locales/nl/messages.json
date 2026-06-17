@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Je kunt niet meer dan 4 chats vastzetten"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Weergeven"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Gedeeltelijk verzonden, klik hier voor details"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Gedeeltelijk verwijderd, klik hier om het opnieuw te proberen"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Gedeeltelijk verwijderd, klik voor details"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Dit bericht is verwijderd."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Beheerder {admin} heeft dit bericht verwijderd"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Geen stickerpakketten geïnstalleerd"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Stickers toevoegen"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal Artist stickerpakketten"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Ontvangen stickerpakketten"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Stickerpakketten uit binnenkomende berichten zullen hier verschijnen"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Installeren"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Geïnstalleerd"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Verwijderen"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Je kunt dit stickerpakket mogelijk niet opnieuw installeren als je het bronbericht niet langer bezit."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Alle"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Toevoegen"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Verwijderen"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Stickerpakket"
@@ -2835,10 +2859,10 @@
     "messageformat": "Sticker zonder emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Stickerpakket van {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Pakket bekijken"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emoji"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Vergroten"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Bestand bijvoegen"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Foto's en video's"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Geselecteerde berichten doorsturen"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {{count,number} bericht verwijderen?} other {{count,number} berichten verwijderen?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Geselecteerd bericht verwijderen?} other {Geselecteerde {count,number} berichten verwijderen?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Voor wie wil je dit bericht verwijderen?} other {Voor wie wil je deze berichten verwijderen?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Van welk apparaat wil je dit bericht verwijderen?} other {Van welke apparaten wil je deze berichten verwijderen?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Dit bericht wordt op al je apparaten verwijderd.} other {Deze berichten worden op al je apparaten verwijderd.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Verwijderen voor mezelf"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Verwijderen van dit apparaat"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Verwijderen voor iedereen"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Groepsleden die een recente versie van Signal gebruiken, kunnen zien dat je dit bericht hebt verwijderd.} other {Groepsleden die een recente versie van Signal gebruiken, kunnen zien dat je deze berichten hebt verwijderd.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Verwijderen van alle apparaten"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Verwijderen"
@@ -6425,37 +6434,40 @@
     "messageformat": "Je herstelsleutel vastleggen"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Je herstelsleutel"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Deze sleutel is nodig om je account en gegevens te herstellen. Bewaar deze sleutel op een veilige manier. Als je hem kwijtraakt, kun je je account niet meer herstellen. <learnMoreLink>Meer informatie.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Deze sleutel is nodig om je account en gegevens te herstellen. Bewaar de sleutel op een veilige manier en deel hem niet met anderen. Signal zal je nooit een bericht sturen om je herstelsleutel te vragen. <learnMoreLink>Meer informatie.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Deel je herstelsleutel niet"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal zal je nooit een bericht sturen</strong> om je herstelsleutel te vragen. Reageer niet op chats die afkomstig zijn van Signal. Bewaar je herstelsleutel op een veilige manier en deel deze niet met anderen. <learnMoreLink>Meer informatie.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Begrepen"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Sleutel delen"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Sleutel niet delen"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Deel je herstelsleutel met niemand. Hiermee kan je account worden overgenomen. <strong>Signal zal je nooit een bericht sturen</strong> om je herstelsleutel te vragen. Reageer niet op chats die afkomstig zijn van Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Deel je herstelsleutel met niemand. Hiermee kan je account worden overgenomen. <strong>Signal zal je nooit een bericht sturen</strong> om je herstelsleutel te vragen. Reageer niet op chats die afkomstig zijn van Signal. <learnMoreLink>Meer informatie.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Niet delen"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Sleutel plakken"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Bevestig je herstelsleutel"
@@ -6521,7 +6533,7 @@
     "messageformat": "Deze actie kon niet worden voltooid omdat de systeemverificatie is mislukt. Probeer het nog eens of open de Signal-app op je mobiele apparaat en ga naar de back-upinstellingen om je herstelsleutel te bekijken."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Er is een fout opgetreden bij het aanvragen van systeemverificatie voor deze actie."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Sleutel weergeven"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Je Signal-contacten kunnen jouw profielnaam, -foto en -omschrijving zien en kunnen zien wat je deelt in ‘Mijn verhaal’ tenzij je dat voor hen verbergt."
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Verwijderen wordt gesynchroniseerd op al je apparaten"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Wanneer je berichten of chats verwijdert, worden deze verwijderd van al je apparaten."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Begrepen"
   },
   "icu:Stories__title": {
     "messageformat": "Verhalen"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Jouw informatie is privé"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal verzamelt of bewaart geen persoonlijke gegevens wanneer je een donatie doet.</paragraph><paragraph>Wij gebruiken Stripe als onze betalingsverwerker om je donaties te ontvangen. Wij hebben geen toegang tot de informatie die je aan hen verstrekt en slaan die ook niet op.</paragraph><paragraph>Signal koppelt je donatie niet aan je Signal-account en kan dat ook niet.</paragraph><paragraph>Bedankt voor je steun!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Als onafhankelijke non-profitorganisatie richt Signal zich volledig op veilige privéberichten en -oproepen. Geen advertenties, geen trackers, geen toezicht. Doneer vandaag nog om Signal te steunen."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "We hebben de standaardbestandsextensie voor JPEG-afbeeldingen gewijzigd in jpg."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Ondersteuning voor de donkere icoonstijl in macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

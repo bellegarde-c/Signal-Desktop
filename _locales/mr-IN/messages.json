@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "आपण फक्त 4 चॅट्स पिन करू शकता"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "पहा"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "अर्धवट पाठविले, तपशीलांसाठी क्लिक करा"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "अंशतः हटवले, पुन्हा प्रयत्न करा"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "अंशतः हटवले, तपशील पाहण्यासाठी क्लिक करा"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "हा संदेश हटविला गेला होता."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "ॲडमिन {admin} यांनी हा संदेश हटवला"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "कुठलेही स्थापन केलेले स्टिकर नाहीत"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "स्टिकर समाविष्ट करा"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal कलाकार सिरीझ"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "आपल्याला प्राप्त झालेले स्टिकर"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "येणाऱ्या संदेशांवरील स्टिकर येथे दिसतील."
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "स्थापना करा"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "स्थापना केली"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "अस्थापना"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "आपण हा स्टिकर पॅक पुन्हा स्थापित करू शकणार नाहीत कारण आपल्याकडे आता मूळ संदेश नाही."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "सर्व"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "जोडा"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "काढून टाका"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "स्टिकर पॅक"
@@ -2835,10 +2859,10 @@
     "messageformat": "इमोजी नसलेला स्टिकर"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "स्टिकर पॅककर्ता {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "पॅक पाहा"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "ईमोजी"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "विस्तारित करा"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "फाईल संलग्न करा"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "फोटोस आणि व्हिडिओस"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "निवडलेले संदेश अग्रेषित करा"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {संदेश {count,number} हटवायचा?} other {संदेश {count,number} हटवायचे?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {निवडलेला संदेश हटवायचा का?} other {निवडलेले {count,number} संदेश हटवायचे का?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {हा संदेश आपणाला कुणासाठी हटवणे आवडेल?} other {हे संदेश आपणाला कुणासाठी हटवणे आवडेल?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {हा संदेश आपणाला कोणत्या डिव्हाइसेस वरून हटवणे आवडेल?} other {हे संदेश आपणाला कोणत्या डिव्हाइसेस वरून हटवणे आवडेल?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {हा संदेश आपल्या सर्व डिव्हाइसेसवरून हटवला जाईल.} other {हे संदेश आपल्या सर्व डिव्हाइसेसवरून हटविले जातील.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "माझ्यासाठी हटवा"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "या डिव्हाइस वरून हटवा"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "प्रत्येकासाठी हटवा"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Signalच्या नवीन आवृत्तीवरील गट सदस्यांना तुम्ही हा संदेश हटवल्याचे दिसेल.} other {Signalच्या नवीन आवृत्तीवरील गट सदस्यांना तुम्ही हे संदेश हटवल्याचे दिसेल.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "सर्व डिव्हाइसेस वरून हटवा"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "हटवा"
@@ -6425,37 +6434,40 @@
     "messageformat": "तुमची रीकव्हरी की नोंदवा"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "तुमची रीकव्हरी की"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "ही की आपले अकाऊंट आणि डेटा पुर्नप्राप्त करण्यासाठी आवश्यक आहे. ही की कोठेतरी सुरक्षित ठेवा. आपण जी ती गहाळ केल्यास, आपण आपले अकाऊंट पुर्नप्राप्त करू शकणार नाही. <learnMoreLink>अधिक जाणा.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "ही की तुमचे खाते आणि डेटा पुन्हा मिळवण्यासाठी आवश्यक आहे. ती कुठेतरी सुरक्षित ठिकाणी साठवून ठेवा आणि कधीही कोणालाही देऊ नका. Signal कधीही तुमची रीकव्हरी की मागण्यासाठी तुम्हाला संदेश पाठवणार नाही. <learnMoreLink>अधिक जाणून घ्या.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "रीकव्हरी की कोणालाही देऊ नका"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal कधीही तुमची रीकव्हरी की मागण्यासाठी</strong> तुम्हाला संदेश पाठवणार नाही. Signal असल्याची बतावणी करणाऱ्या कोणत्याही चॅटला उत्तर देऊ नका. तुमची रीकव्हरी की कुठेतरी सुरक्षित ठिकाणी साठवून ठेवा आणि ती कधीही कोणालाही देऊ नका. <learnMoreLink>अधिक जाणून घ्या.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "कळले"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "की द्या"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "की देऊ नका"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "तुमची रीकव्हरी की कोणालाही देऊ नका. असे केल्यास त्यांना तुमच्या खात्याचा ताबा घेता येईल. <strong>Signal कधीही तुमची रीकव्हरी की मागण्यासाठी</strong> तुम्हाला संदेश पाठवणार नाही. Signal असल्याची बतावणी करणाऱ्या कोणत्याही चॅटला उत्तर देऊ नका."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "तुमची रीकव्हरी की कोणालाही देऊ नका. असे केल्यास त्यांना तुमच्या खात्याचा ताबा घेता येईल. <strong>Signal कधीही तुमची रीकव्हरी की मागण्यासाठी</strong> तुम्हाला संदेश पाठवणार नाही. Signal असल्याची बतावणी करणाऱ्या कोणत्याही चॅटला उत्तर देऊ नका. <learnMoreLink>अधिक जाणून घ्या.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "देऊ नका"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "की पेस्ट करा"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "तुमची रीकव्हरी की निश्चित करा"
@@ -6521,7 +6533,7 @@
     "messageformat": "ही क्रिया पूर्ण करता आली नाही कारण यंत्रणेकडून अधिस्वीकृती मिळाली नाही. कृपया पुन्हा प्रयत्न करा किंवा तुमच्या मोबाईल डिव्हाईसवर Signal ॲप उघडा आणि बॅकअप सेटिंग्जमध्ये जा व तुमची रीकव्हरी की पाहा."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "या कृतीसाठी यंत्रणेची अधिस्वीकृती मागविताना एक त्रुटी उद्भवली."
   },
   "icu:Preferences__view-key": {
     "messageformat": "की पहा"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "आपले कनेक्शन्स आपले नाव आणि फोटो पाहू शकतात, आपण त्यांच्यापासून लपवत नाही तोपर्यंत ते \"माझ्या स्टोरी\" वर पोस्ट्स पाहू शकतात"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "आपल्या डिव्हाइसेस वर हटवणे आता सिंक केले आहे"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "जेव्हा आपण संदेश किंवा चॅट हटवता, तेव्हा त्यांना आपल्या सर्व डिव्हाइसेसवरून हटवले जाईल."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "कळले"
   },
   "icu:Stories__title": {
     "messageformat": "स्टोरीज"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "आपली माहिती गोपनीय आहे"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>तुम्ही जेव्हा देणगी देता तेव्हा Signal तुमची कोणतीही वैयक्तिक माहिती संग्रहित किंवा संकलित करत नाही.</paragraph> <paragraph>तुमच्या देणग्या प्राप्त करण्यासाठी आम्ही आमचा पेमेंट्स प्रोसेसर म्हणून स्ट्राईपचा वापर करतो. तुम्ही त्यांना प्रदान करत असलेली कोणतीही माहिती आम्ही मिळवत नाही, किंवा ती संग्रहित किंवा जतन करत नाही.</paragraph> <paragraph>Signal तुमच्या देणग्या तुमच्या Signal खात्याशी जोडत नाही आणि जोडू शकत नाही.</paragraph><paragraph>तुमच्या सपोर्टबद्दल धन्यवाद!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "एक स्वतंत्र ना-नफा संस्था असणारी Signal खासगी संदेशवहन आणि कॉल्ससाठी कायम कटिबद्ध आहे. कोणत्याही जाहिराती नाहीत, कोणतेही ट्रॅकर्स नाहीत, कोणावरही पाळत नाही. Signal ला सपोर्ट करण्यासाठी आजच देणगी द्या."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "आम्ही JPEG प्रतिमांसाठीचे डीफॉल्ट फाईल एक्सटेन्शन अद्ययावत करून jpg केले."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "जर तुम्हाला तुमच्यातील गॉथला स्वीकारायचे असेल, तर आम्ही macOS मध्ये गडद आयकन स्टाईलसाठी सपोर्ट समाविष्ट केला आहे."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

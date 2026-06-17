@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "你最多只可以釘選 4 個聊天"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "睇吓"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "傳送咗一部分，㩒一吓了解詳情"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "刪除咗一部分，㩒一吓再試多次"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "刪除咗一部分，㩒一下了解詳情"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "呢個訊息已經刪除咗。"
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "管理員{admin}刪除咗呢個訊息"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "冇安裝任何貼圖"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "加貼圖"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal 藝術家系列"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "你收到嘅貼圖"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "嚟自傳入訊息嘅貼圖會喺呢度顯示"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "安裝"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "已安裝"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "解除安裝"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "如果你冇咗原本嗰個訊息，就可能裝唔返呢個貼圖包喇。"
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "全部"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "加入去"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "移除"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "貼圖包"
@@ -2835,10 +2859,10 @@
     "messageformat": "冇表情符號嘅貼圖"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "由{author}創作嘅貼圖包"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "睇下貼圖包"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "表情符號"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "展開"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "附加檔案"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "相片同影片"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "轉寄揀咗嘅訊息"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, other {係咪要刪除 {count,number} 個訊息呀？}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, other {係咪要刪除揀咗嘅 {count,number} 個訊息？}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, other {你想喺邊個部機度刪除呢啲訊息呀？}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, other {你想喺邊啲裝置度刪除呢啲訊息呀？}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, other {呢啲訊息會喺你所有裝置上面刪除。}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "喺我自己部機度刪除"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "喺呢部機度刪除"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "喺所有人部機度刪除"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, other {用最新版本 Signal 嘅谷友會見到你刪除咗呢啲訊息。}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "喺所有裝置度刪除"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "刪除"
@@ -6425,37 +6434,40 @@
     "messageformat": "記低你嘅恢復金鑰"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "你嘅恢復金鑰"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "系統需要用呢個金鑰嚟恢復你嘅帳戶同資料。請將金鑰儲存喺安全嘅地方。如果你整唔見咗佢，就冇辦法恢復帳戶㗎喇。 <learnMoreLink>了解詳情。</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "系統需要用呢個金鑰嚟恢復你嘅帳戶同資料。請將佢儲存喺安全嘅地方，同埋千祈唔好講俾任何人知。Signal 從來都唔會傳訊息問你攞恢復金鑰。<learnMoreLink>了解詳情。</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "唔好分享恢復金鑰"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal 從來都唔會傳訊息</strong>問你攞恢復金鑰。千祈唔好回覆任何假扮 Signal 嘅聊天訊息。請將恢復金鑰儲存喺安全嘅地方，同埋千祈唔好講俾任何人知。<learnMoreLink>了解詳情。</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "明白"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "分享金鑰"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "唔好分享金鑰"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "千祈唔好同任何人分享你嘅恢復金鑰。咁樣會令佢哋盜用你嘅帳戶。<strong>Signal 從來都唔會傳訊息</strong>問你攞恢復金鑰。千祈唔好回覆任何假扮 Signal 嘅聊天訊息。"
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "千祈唔好同任何人分享你嘅恢復金鑰。咁樣會令佢哋盜用你嘅帳戶。<strong>Signal 從來都唔會傳訊息</strong>問你攞恢復金鑰。千祈唔好回覆任何假扮 Signal 嘅聊天訊息。<learnMoreLink>了解詳情。</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "唔好分享"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "貼上金鑰"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "確認你嘅恢復金鑰"
@@ -6521,7 +6533,7 @@
     "messageformat": "呢個操作完成唔到，因為系統驗證失敗。請再試一次，或者喺你部流動裝置度打開 Signal APP，然後去「備份設定」睇下你嘅恢復金鑰。"
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "為呢個操作請求系統驗證嗰陣發生錯誤。"
   },
   "icu:Preferences__view-key": {
     "messageformat": "睇吓金鑰"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "你嘅人脈可以見到你嘅名同相。如果你冇隱藏嘅話，對方仲可以睇到你嘅限時動態添"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "喺你嘅裝置度同步刪除"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "當你刪除訊息或者聊天時，系統會同時喺所有你連結咗嘅裝置度刪除相關內容。"
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "明白"
   },
   "icu:Stories__title": {
     "messageformat": "限時動態"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "你嘅資料已經保密"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal 唔會喺你捐款嗰陣收集或者儲存任何個人資料。</paragraph><paragraph>我哋用 Stripe 作為接收捐款嘅付款處理商。我哋唔會存取、保存或者儲存你向佢哋提供嘅任何資料。</paragraph><paragraph>Signal 唔會亦冇辦法將你嘅捐款連結至你嘅 Signal 帳戶。</paragraph><paragraph>多謝你嘅支持！</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "作為一個獨立嘅非牟利機構， Signal 致力提供私密訊息同通話。冇廣告、冇追蹤、冇監控。請即刻捐款支持 Signal。"
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "潮流興簡潔，雖然「多個E」可以有更多意思，好似 E人、E先生等等，但係檔案副檔名三個字母就夠。我哋好樂意跟隨潮流（呢個改動易過借火），而家你會發現，儲存 JPEG 檔案嗰陣嘅預設檔名，會改為用 .jpg 結尾。"
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "我哋仲幫 macOS 新加咗支援深色圖示樣式，等你流露潛在喺內心嘅暗黑風格。"
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

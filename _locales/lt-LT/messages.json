@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Gali prisegti daugiausiai 4 pokalbius"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Žiūrėti"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Dalinai išsiųsta, spustelėkite išsamesnei informacijai"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Dalinai ištrinta, spustelėk, kad bandytum dar kartą"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Iš dalies ištrinta, spustelėkite, jei norite sužinoti daugiau"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Ši žinutė buvo ištrinta."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Administratorius {admin} ištrynė šią žinutę"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Nėra jokių įdiegtų lipdukų"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Pridėti lipdukų"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal menininkų serija"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Jūsų gauti lipdukai"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Čia bus rodomi lipdukai iš gaunamų žinučių"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Įdiegti"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Įdiegtas"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Pašalinti"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Jei neturite pradinės žinutės, gali būti, kad negalėsite iš naujo įdiegti šio lipdukų paketo."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Visi"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Pridėti"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Šalinti"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Lipdukų paketas"
@@ -2835,10 +2859,10 @@
     "messageformat": "Lipdukas be jaustuko"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "{author} lipdukų paketas"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Peržiūrėti paketą"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Šypsenėlės"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Išskleisti"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Pridėti failą"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Nuotraukos ir vaizdo įrašai"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Persiųsti pasirinktas žinutes"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Ištrinti žinutę?} few {Ištrinti {count,number} žinutes?} many {Ištrinti {count,number} žinutės?} other {Ištrinti {count,number} žinučių?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Ištrinti pažymėtą žinutę?} few {Ištrinti {count,number} pažymėtas žinutes?} many {Ištrinti {count,number} pažymėtos žinutės?} other {Ištrinti {count,number} pažymėtų žinučių?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Kokiam žmogui norėtum ištrinti šią žinutę?} few {Kokiam žmogui norėtum ištrinti šias žinutes?} many {Kokiam žmogui norėtum ištrinti šias žinutes?} other {Kokiam žmogui norėtum ištrinti šias žinutes?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Iš kokių įrenginių norėtum ištrinti šią žinutę?} few {Iš kokių įrenginių norėtum ištrinti šias žinutes?} many {Iš kokių įrenginių norėtum ištrinti šias žinutes?} other {Iš kokių įrenginių norėtum ištrinti šias žinutes?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Ši žinutė bus ištrinta iš visų jūsų įrenginių.} few {Šios žinutės bus ištrintos iš visų jūsų įrenginių.} many {Šios žinutės bus ištrintos iš visų jūsų įrenginių.} other {Šios žinutės bus ištrintos iš visų jūsų įrenginių.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Ištrinti man"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Ištrinti iš šio įrenginio"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Ištrinti visiems"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Naujausias „Signal“ versijas naudojantys grupės nariai matys, kad jūs ištrynėte šią žinutę.} few {Naujausias „Signal“ versijas naudojantys grupės nariai matys, kad jūs ištrynėte šias žinutes.} many {Naujausias „Signal“ versijas naudojantys grupės nariai matys, kad jūs ištrynėte šias žinutes.} other {Naujausias „Signal“ versijas naudojantys grupės nariai matys, kad jūs ištrynėte šias žinutes.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Ištrinti iš visų įrenginių"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Ištrinti"
@@ -6425,37 +6434,40 @@
     "messageformat": "Užsirašykite savo atkūrimo raktą"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Jūsų atkūrimo raktas"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Šis raktas reikalingas norint atkurti paskyrą ir duomenis. Išsaugokite jį saugioje vietoje. Pamiršę raktą savo paskyros atkurti negalėsite. <learnMoreLink>Sužinoti daugiau.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Šis raktas reikalingas norint atkurti paskyrą ir duomenis. Išsaugokite jį saugioje vietoje ir niekada nesidalykite juo su kitais. „Signal“ niekada neprašys jūsų pateikti atkūrimo raktą. <learnMoreLink>Sužinoti daugiau.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Nesidalinkite atkūrimo raktu"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>„Signal“ niekada neprašys jūsų</strong> pateikti atkūrimo raktą. Niekada neatsakykite į pokalbius, kuriuose apsimetama „Signal“. Išsaugokite atkūrimo raktą saugioje vietoje ir niekada nesidalykite juo su kitais. <learnMoreLink>Sužinoti daugiau.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Supratau"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Dalintis raktu"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Nesidalinkite raktu"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Su niekuo nesidalinkite savo atkūrimo raktu. Antraip šie asmenys galės perimti jūsų paskyrą. <strong>„Signal“ niekada neprašys jūsų</strong> pateikti atkūrimo raktą. Niekada neatsakykite į pokalbius, kuriuose apsimetama „Signal“."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Su niekuo nesidalinkite savo atkūrimo raktu. Antraip šie asmenys galės perimti jūsų paskyrą. <strong>„Signal“ niekada neprašys jūsų</strong> pateikti atkūrimo raktą. Niekada neatsakykite į pokalbius, kuriuose apsimetama „Signal“. <learnMoreLink>Sužinoti daugiau.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Nesidalinkite"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Įklijuoti raktą"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Patvirtinkite atkūrimo raktą"
@@ -6521,7 +6533,7 @@
     "messageformat": "Šio veiksmo atlikti nepavyko, nes nepavyko sistemos autentifikavimas. Bandykite dar kartą arba atverkite „Signal“ programėlę mobiliajame įrenginyje ir norėdami peržiūrėti atkūrimo raktą eikite į „Atsarginės kopijos nustatymai“."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Prašant sistemos patvirtinti šį veiksmą įvyko klaida."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Peržiūrėti raktą"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Tavo kontaktai mato tavo vardą ir nuotrauką, ir gali matyti „Mano istorijos“ įrašus, nebent nuo jų paslėpsi"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Ištrynimas sinchronizuojamas visuose jūsų įrenginiuose"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Jei ištrinate žinutes ar pokalbius, jie bus ištrinti iš visų jūsų įrenginių."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Supratau"
   },
   "icu:Stories__title": {
     "messageformat": "Istorijos"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Tavo informacija yra privati"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>„Signal“ nerenka ir nesaugo jokios jūsų asmeninės informacijos, kai skiriate paramą.</paragraph><paragraph>Jūsų paramai gauti kaip mokėjimų tvarkytoją naudojame „Stripe“. Mes nepasiekiame, nelaikome ir neišsaugome jokios jūsų jiems pateiktos informacijos.</paragraph><paragraph>„Signal“ nesusieja ir negali susieti jūsų paramos su jūsų „Signal“ paskyra.</paragraph><paragraph>Dėkojame už jūsų paramą!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Kaip nepriklausoma ne pelno organizacija „Signal“ yra įsipareigojusi užtikrinti žinučių ir skambučių privatumą. Nebrukame reklamų, nesekame ir nestebime. Skirkite paramą šiandien ir palaikykite „Signal“."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Atnaujinome numatytąjį JPEG failų plėtinį į „jpg“."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Tamsaus piktogramų stiliaus palaikymas „macOS“."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

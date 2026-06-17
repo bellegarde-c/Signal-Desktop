@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "4 சாட்ஸ் வரை மட்டுமே பின் செய்ய முடியும்"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "காண்க"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "சிலருக்கு அனுப்பப்பட்டது, விவரங்களுக்கு இங்கே தட்டவும்"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "ஓரளவு நீக்கப்பட்டது, மீண்டும் முயற்சிக்க கிளிக் செய்யவும்"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "பகுதியளவு நீக்கப்பட்டது, விவரங்களுக்குக் கிளிக் செய்யவும்"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "இந்த மெசேஜ் நீக்கப்பட்டது."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "நிர்வாகி {admin} இந்த மெசேஜை நீக்கினார்"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "ஸ்டிக்கர்கள் எதுவும் நிறுவப்படவில்லை"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "ஸ்டிக்கர்களைச் சேர்"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "சிக்னல் கலைஞர் தொடர்"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "நீங்கள் பெற்ற ஸ்டிக்கர்கள்"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "உள்வரும் செய்திகளின் ஸ்டிக்கர்கள் இங்கே தோன்றும்"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "நிறுவு"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "நிறுவப்பட்டவை"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "நீக்குதல்"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "உங்களிடம் இனி மூல செய்தி இல்லையென்றால் இந்த ஸ்டிக்கர் பேக்கை மீண்டும் நிறுவ முடியாது."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "அனைத்து"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "சேர்க்கவும்"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "அகற்று"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "ஸ்டிக்கர் பேக்"
@@ -2835,10 +2859,10 @@
     "messageformat": "எமோஜி அல்லாத ஸ்டிக்கர்"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "{author}இன் ஸ்டிக்கர் பேக்"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "பேக்கைக் காண்க"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "உணர்வு படங்கள்"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "விரிவாக்கு"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "கோப்பினை இணைக்கவும்"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "படங்கள் & காணொளிகள்"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "தேர்ந்தெடுக்கப்பட்ட மெசேஜ்களை முன்னனுப்பு"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {{count,number} மெசேஜை நீக்க வேண்டுமா?} other {{count,number} மெசேஜ்களை நீக்க வேண்டுமா?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {தேர்ந்தெடுக்கப்பட்ட மெசேஜை நீக்கவா?} other {தேர்ந்தெடுக்கப்பட்ட {count,number} மெசேஜ்களை நீக்கவா?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {இந்த மெசேஜை யாருக்காக நீக்க விரும்புகிறீர்கள்?} other {இந்த மெசேஜ்களை யாருக்காக நீக்க விரும்புகிறீர்கள்?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {எந்த டிவைஸ்களிலிருந்து இந்த மெசேஜை நீக்க விரும்புகிறீர்கள்?} other {எந்த டிவைஸ்களிலிருந்து இந்த மெசேஜ்களை நீக்க விரும்புகிறீர்கள்?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {இந்த மெசேஜ் உங்களின் அனைத்து சாதனங்களிலிருந்தும் அழிக்கப்படும்.} other {இந்த மெசேஜ்கள் உங்களின் அனைத்து சாதனத்திலிருந்தும் அழிக்கப்படும்.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "எனக்கு மட்டும் நீக்குக"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "இந்த டிவைஸிலிருந்து நீக்குக"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "அனைவருக்கும் நீக்குக"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {நீங்கள் இந்த மெசேஜை நீக்கியதை சிக்னலின் அண்மைய பதிப்புகளில் உள்ள தொகுப்பு உறுப்பினர்கள் காண்பார்கள்.} other {நீங்கள் இந்த மெசேஜ்களை நீக்கியதை சிக்னலின் அண்மைய பதிப்புகளில் உள்ள தொகுப்பு உறுப்பினர்கள் காண்பார்கள்.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "அனைத்து டிவைஸ்களிலிருந்தும் நீக்குக"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "நீக்கு"
@@ -6425,37 +6434,40 @@
     "messageformat": "உங்கள் மீட்புக் குறியீட்டைப் பதிவுசெய்க"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "உங்களின் மீட்புக் குறியீடு"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "உங்கள் கணக்கு மற்றும் தரவை மீட்டெடுக்க இந்தக் குறியீடு தேவை. இந்தக் குறியீட்டைப் பாதுகாப்பான இடத்தில் சேமித்து வைக்கவும். நீங்கள் அதை இழந்துவிட்டால், உங்கள் கணக்கை மீட்டெடுக்க முடியாது. <learnMoreLink>மேலும் அறிக.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "உங்கள் கணக்கு மற்றும் தரவை மீட்டெடுக்க இந்தக் குறியீடு தேவை. அதனைப் பாதுகாப்பான இடத்தில் சேமித்து வைக்கவும், அதை ஒருபோதும் யாருடனும் பகிராதீர்கள். உங்கள் மீட்புக் குறியீட்டைக் கேட்டு சிக்னல் ஒருபோதும் உங்களுக்குச் செய்தி அனுப்பாது. <learnMoreLink>மேலும் அறிக.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "மீட்புக் குறியீட்டைப் பகிராதீர்கள்"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "உங்கள் மீட்புக் குறியீட்டைக் கேட்டு <strong>சிக்னல் ஒருபோதும் உங்களுக்குச் செய்தி அனுப்பாது.</strong> சிக்னல் போல் ஆள்மாறாட்டம் செய்து வரும் உரையாடலுக்கு ஒருபோதும் பதிலளிக்காதீர்கள். உங்கள் மீட்புக் குறியீட்டைப் பாதுகாப்பான இடத்தில் சேமித்து வைக்கவும், அதை ஒருபோதும் யாருடனும் பகிராதீர்கள். <learnMoreLink>மேலும் அறிக.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "அறிந்துகொண்டேன்"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "குறியீட்டைப் பகிர்க"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "குறியீட்டைப் பகிராதீர்கள்"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "உங்கள் மீட்புக் குறியீட்டை யாருடனும் பகிராதீர்கள். இது அவர்கள் உங்கள் கணக்கைக் கையகப்படுத்த அனுமதிக்கும். உங்கள் மீட்புக் குறியீட்டைக் கேட்டு <strong>சிக்னல் ஒருபோதும் உங்களுக்குச் செய்தி அனுப்பாது.</strong> சிக்னல் போல் ஆள்மாறாட்டம் செய்து வரும் உரையாடலுக்கு ஒருபோதும் பதிலளிக்காதீர்கள்."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "உங்கள் மீட்புக் குறியீட்டை யாருடனும் பகிராதீர்கள். இது அவர்கள் உங்கள் கணக்கைக் கையகப்படுத்த அனுமதிக்கும். உங்கள் மீட்புக் குறியீட்டைக் கேட்டு <strong>சிக்னல் ஒருபோதும் உங்களுக்குச் செய்தி அனுப்பாது.</strong> சிக்னல் போல் ஆள்மாறாட்டம் செய்து வரும் உரையாடலுக்கு ஒருபோதும் பதிலளிக்காதீர்கள். <learnMoreLink>மேலும் அறிக.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "பகிர வேண்டாம்"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "குறியீட்டை ஒட்டு"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "உங்கள் மீட்புக் குறியீட்டை உறுதிப்படுத்துக"
@@ -6521,7 +6533,7 @@
     "messageformat": "கணினி அங்கீகரிப்பு தோல்வியடைந்ததால் இந்தச் செயலை முடிக்க முடியவில்லை. மீண்டும் முயலவும் அல்லது உங்கள் மொபைல் சாதனத்தில் சிக்னல் செயலியைத் திறந்து, உங்கள் மீட்புக் குறியீட்டைப் பார்க்க காப்புப்பிரதி அமைப்புகளுக்குச் செல்லவும்."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "இந்தச் செயலுக்கான சிஸ்டம் அங்கீகாரத்தைக் கோரும் போது பிழை ஏற்பட்டது."
   },
   "icu:Preferences__view-key": {
     "messageformat": "குறியீட்டைக் காண்க"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "உங்கள் இணைப்புகள் உங்கள் பெயரையும் புகைப்படத்தையும் பார்க்க முடியும், மேலும் \"மை ஸ்டோரி\"க்கான போஸ்டுகளை நீங்கள் அவர்களிடம் இருந்து மறைக்காதவரை பார்க்க முடியும்"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "உங்கள் சாதனங்களில் அழித்தல் அம்சம் ஒத்திசைக்கப்படுகிறது"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "நீங்கள் மெசேஜ்கள் அல்லது சாட்ஸை அழிக்கும்போது, அவை உங்கள் எல்லா சாதனங்களிலிருந்தும் அழிக்கப்படும்."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "அறிந்துகொண்டேன்"
   },
   "icu:Stories__title": {
     "messageformat": "ஸ்டோரீஸ்"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "உங்கள் தகவல் தனிப்பட்டது"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>நீங்கள் நன்கொடை அளிக்கும்போது உங்கள் தனிப்பட்ட தகவல்களைச் சிக்னல் சேகரிக்கவோ அல்லது சேமிக்கவோ செய்யாது.</paragraph><paragraph>உங்கள் நன்கொடைகளைப் பெற எங்கள் கட்டணச் செயலியாக நாங்கள் ஸ்ட்ரைபை பயன்படுத்துகிறோம். நீங்கள் அவற்றில் வழங்கும் எந்தவொரு தகவலையும் நாங்கள் அணுகவோ, சேமிக்கவோ அல்லது பத்திரப்படுத்தவோ மாட்டோம்.</paragraph><paragraph>சிக்னலால் உங்கள் நன்கொடையை சிக்னல் கணக்கில் இணைக்க முடியாது.</paragraph><paragraph>உங்கள் ஆதரவுக்கு நன்றி!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "சுதந்திரமான இலாப நோக்கற்ற அமைப்பாக, தனிப்பட்ட மெசேஜிங் மற்றும் அழைப்புச் சேவையை வழங்க சிக்னல் உறுதிபூண்டுள்ளது. விளம்பரங்கள் இல்லை, டிராக்கர்கள் இல்லை, கண்காணிப்பு இல்லை. சிக்னலை ஆதரிக்க இன்றே நன்கொடை அளியுங்கள்."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "JPEG படங்களுக்கான இயல்புநிலை கோப்பு நீட்டிப்பை jpgக்குப் புதுப்பித்துள்ளோம்."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "MacOSஇல் டார்க் ஐகான் ஸ்டைலுக்கான ஆதரவு."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

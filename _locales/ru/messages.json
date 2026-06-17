@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Вы можете прикрепить только до 4 чатов"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Просмотреть"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Частично отправлено. Подробнее…"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Частично удалено. Нажмите, чтобы попробовать ещё раз"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Частично удалено, нажмите для более подробной информации"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Это сообщение было удалено."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Администратор {admin} удалил(а) это сообщение"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Нет установленных стикеров"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Добавить стикеры"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Стикеры от художников Signal"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Полученные вами стикеры"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Стикеры из входящих сообщений появятся здесь"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Установить"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Установлено"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Удалить"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Возможно, вы не сможете установить этот набор стикеров снова, если у вас уже нет исходного сообщения."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Все"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Добавить"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Удалить"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Набор стикеров"
@@ -2835,10 +2859,10 @@
     "messageformat": "Стикер без эмодзи"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Наборы стикеров от {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Посмотреть набор"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Эмодзи"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Развернуть"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Прикрепить файл"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Фото и видео"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Переслать выбранные сообщения"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Удалить {count,number} сообщение?} few {Удалить {count,number} сообщения?} many {Удалить {count,number} сообщений?} other {Удалить {count,number} сообщения?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Удалить выбранное сообщение?} few {Удалить {count,number} выбранных сообщения?} many {Удалить {count,number} выбранных сообщений?} other {Удалить {count,number} выбранного сообщения?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Для кого вы хотите удалить это сообщение?} few {Для кого вы хотите удалить эти сообщения?} many {Для кого вы хотите удалить эти сообщения?} other {Для кого вы хотите удалить эти сообщения?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {С какого устройства вы хотели бы удалить это сообщение?} few {С каких устройств вы хотели бы удалить это сообщение?} many {С каких устройств вы хотели бы удалить это сообщение?} other {С каких устройств вы хотели бы удалить это сообщение?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Это сообщение будет удалено со всех ваших устройств.} few {Это сообщение будет удалено со всех ваших устройств.} many {Это сообщение будет удалено со всех ваших устройств.} other {Это сообщение будет удалено со всех ваших устройств.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Удалить для меня"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Удалить с этого устройства"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Удалить для всех"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Участники группы с последними версиями Signal увидят, что вы удалили это сообщение.} few {Участники группы с последними версиями Signal увидят, что вы удалили эти сообщения.} many {Участники группы с последними версиями Signal увидят, что вы удалили эти сообщения.} other {Участники группы с последними версиями Signal увидят, что вы удалили эти сообщения.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Удалить со всех устройств"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Удалить"
@@ -6425,37 +6434,40 @@
     "messageformat": "Запишите ключ восстановления"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Ваш ключ восстановления"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Этот ключ необходим для восстановления вашей учётной записи и данных. Храните этот ключ в безопасном месте. Если вы потеряете его, то не сможете восстановить свою учётную запись. <learnMoreLink>Узнать больше.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Этот ключ необходим для восстановления вашей учётной записи и данных. Храните ключ в безопасном месте и никогда и никому его не сообщайте. Signal никогда не посылает вам сообщения для получения вашего ключа восстановления. <learnMoreLink>Узнать больше.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Не делитесь ключом восстановления"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal никогда не посылает вам сообщения</strong> для получения вашего ключа восстановления. Никогда не отвечайте на чаты, притворяющиеся Signal. Храните ключ восстановления в безопасном месте и никогда и никому его не сообщайте. <learnMoreLink>Узнать больше.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Понятно"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Поделиться ключом"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Не делиться ключом"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Ни с кем не делитесь вашим ключом восстановления. Это позволит им завладеть вашей учётной записью. <strong>Signal никогда не посылает вам сообщения</strong> для получения вашего ключа восстановления. Никогда не отвечайте на чаты, притворяющиеся Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Ни с кем не делитесь вашим ключом восстановления. Это позволит им завладеть вашей учётной записью. <strong>Signal никогда не посылает вам сообщения</strong> для получения вашего ключа восстановления. Никогда не отвечайте на чаты, притворяющиеся Signal. <learnMoreLink>Узнать больше.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Не делиться"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Вставить ключ"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Подтвердите ключ восстановления"
@@ -6521,7 +6533,7 @@
     "messageformat": "Это действие не удалось выполнить из-за ошибки аутентификация системы. Пожалуйста, попробуйте ещё раз или откройте приложение Signal на своём мобильном устройстве и перейдите в Настройки резервного копирования, чтобы просмотреть ключ восстановления."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Произошла ошибка при запросе аутентификации системы для этого действия."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Просмотреть ключ"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Ваши контакты могут видеть ваше имя и фото, а также обновления в «Моей истории», если вы не скроете её от них"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Удаление происходит синхронно на ваших устройствах"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "При удалении сообщений или чатов они будут удаляться со всех ваших связанных устройств."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Понятно"
   },
   "icu:Stories__title": {
     "messageformat": "Истории"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Ваша информация конфиденциальна"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal не собирает и не хранит вашу личную информацию, когда вы делаете пожертвование.</paragraph><paragraph>Для получения ваших пожертвований мы используем компанию Stripe в качестве оператора платежей. Мы не имеем доступа ни к какой информации, которую вы ей предоставляете, не сохраняем и не храним её.</paragraph><paragraph>Signal не связывает и не может связать ваше пожертвование с вашей учётной записью Signal.</paragraph><paragraph>Спасибо за вашу поддержку!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Как независимая некоммерческая организация, Signal заботится о приватности сообщений и звонков. Без рекламы, без трекеров, без слежки. Пожертвуйте сегодня, чтобы поддержать Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "«Как меня раздражает эта лишняя \"Е\"!», — раздавались крики и мольбы недовольных тем, что их любимое расширение файла состоит из четырёх букв вместо трёх. Мы рады вас успокоить (внести изменение было несложно), и теперь вы увидите, что имя файла при сохранении JPEG будет по умолчанию заканчиваться так, как и должно, — на jpg после точки."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "А если ваш внутренний гот вдруг захочет проявить себя, мы также добавили поддержку тёмного стиля для значков в macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

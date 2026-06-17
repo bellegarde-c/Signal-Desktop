@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Μπορείς να καρφιτσώσεις μέχρι 4 συνομιλίες"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Εμφάνιση"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Στάλθηκε εν μέρει, κλικ για λεπτομέρειες"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Διαγράφηκε εν μέρει, πάτα για επανάληψη"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Διαγράφηκε μερικώς, πάτα για λεπτομέρειες"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Αυτό το μήνυμα διαγράφτηκε."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Ο διαχειριστής {admin} διέγραψε αυτό το μήνυμα"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Δεν υπάρχουν εγκατεστημένα αυτοκόλλητα"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Προσθήκη αυτοκόλλητων"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Σειρά καλλιτεχνών Signal"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Αυτοκόλλητα που έχεις λάβει"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Αυτοκόλλητα από εισερχόμενα μηνύματα θα εμφανίζονται εδώ"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Εγκατάσταση"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Έχει εγκατασταθεί"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Απεγκατάσταση"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Ίσως να μη μπορέσεις να επανεγκαταστήσεις αυτό το πακέτο αυτοκολλήτων αν δεν έχεις πια το αρχικό μήνυμα."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Όλα"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Προσθήκη"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Αφαίρεση"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Πακέτο αυτοκολλήτων"
@@ -2835,10 +2859,10 @@
     "messageformat": "Αυτοκόλλητο χωρίς emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Πακέτο αυτοκόλλητων από τον χρήστη {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Προβολή πακέτου"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emoji"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Ανάπτυξη"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Επισύναψη αρχείου"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Φωτογραφίες και βίντεο"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Προώθηση επιλεγμένων μηνυμάτων"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Διαγραφή μηνύματος;} other {Διαγραφή {count,number} μηνυμάτων;}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Διαγραφή επιλεγμένου μηνύματος;} other {Διαγραφή {count,number} επιλεγμένων μηνυμάτων;}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Για ποια άτομα θα ήθελες να διαγράψεις αυτό το μήνυμα;} other {Για ποια άτομα θα ήθελες να διαγράψεις αυτά τα μηνύματα;}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Από ποιες συσκευές θέλεις να διαγράψεις αυτό το μήνυμα;} other {Από ποιες συσκευές θέλεις να διαγράψεις αυτά τα μηνύματα;}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Αυτό το μήνυμα θα διαγραφεί από όλες τις συσκευές σου.} other {Αυτά τα μηνύματα θα διαγραφούν από όλες τις συσκευές σου.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Διαγραφή για μένα"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Διαγραφή από αυτή τη συσκευή"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Διαγραφή για όλους"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Τα μέλη της ομάδας που χρησιμοποιούν τις πιο πρόσφατες εκδόσεις του Signal θα δουν ότι διέγραψες αυτό το μήνυμα.} other {Τα μέλη της ομάδας που χρησιμοποιούν τις πιο πρόσφατες εκδόσεις του Signal θα δουν ότι διέγραψες αυτά τα μηνύματα.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Διαγραφή από όλες τις συσκευές"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Διαγραφή"
@@ -6425,37 +6434,40 @@
     "messageformat": "Κατάγραψε το κλειδί ανάκτησης"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Το κλειδί ανάκτησής σου"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Αυτό το κλειδί απαιτείται για την ανάκτηση του λογαριασμού και των δεδομένων σου. Αποθήκευσε αυτό το κλειδί με ασφάλεια. Εάν το χάσεις, δεν θα μπορείς να ανακτήσεις τον λογαριασμό σου. <learnMoreLink>Μάθε περισσότερα.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Αυτό το κλειδί απαιτείται για την ανάκτηση του λογαριασμού και των δεδομένων σου. Αποθήκευσε το με ασφάλεια και μην το κοινοποιήσεις ποτέ σε κανέναν. Το Signal δεν θα επικοινωνήσει ποτέ μαζί σου για το κλειδί ανάκτησής σου. <learnMoreLink>Μάθε περισσότερα.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Μην κοινοποιήσεις το κλειδί ανάκτησής σου"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Το Signal δεν θα επικοινωνήσει ποτέ μαζί σου</strong> για το κλειδί ανάκτησής σου. Μην απαντάς ποτέ σε μηνύματα από το Signal. Αποθήκευσε το κλειδί ανάκτησης με ασφάλεια και μην το κοινοποιήσεις ποτέ σε κανέναν. <learnMoreLink>Μάθε περισσότερα.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Εντάξει"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Κοινοποίηση κλειδιού"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Μην κοινοποιήσεις το κλειδί"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Μην κοινοποιείς το κλειδί ανάκτησής σου σε κανέναν. Αυτό θα τους επιτρέψει να αποκτήσουν πρόσβαση στον λογαριασμό σου <strong>Το Signal δεν θα επικοινωνήσει ποτέ μαζί σου</strong> για το κλειδί ανάκτησής σου. Μην απαντάς ποτέ σε μηνύματα από το Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Μην κοινοποιείς το κλειδί ανάκτησής σου σε κανέναν. Αυτό θα τους επιτρέψει να αποκτήσουν πρόσβαση στον λογαριασμό σου <strong>Το Signal δεν θα επικοινωνήσει ποτέ μαζί σου</strong> για το κλειδί ανάκτησής σου. Μην απαντάς ποτέ σε μηνύματα από το Signal. <learnMoreLink>Μάθε περισσότερα.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Μην το κοινοποιείς"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Επικόλληση κλειδιού"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Επιβεβαίωσε το κλειδί ανάκτησης"
@@ -6521,7 +6533,7 @@
     "messageformat": "Η ενέργεια αυτή δεν μπόρεσε να ολοκληρωθεί λόγω αποτυχίας της επαλήθευσης συστήματος. Δοκίμασε ξανά ή άνοιξε την εφαρμογή Signal στο κινητό σου και πήγαινε στις «Ρυθμίσεις αντιγράφων ασφαλείας» για να δεις το κλειδί ανάκτησης."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Παρουσιάστηκε σφάλμα κατά την αίτηση επαλήθευσης συστήματος για αυτήν την ενέργεια."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Προβολή κλειδιού"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Οι επαφές σου μπορούν να δουν το όνομα και τη φωτογραφία σου, και μπορούν να δουν δημοσιεύσεις στην ενότητα \"Η ιστορία μου\", εκτός αν την κρύψεις από αυτές."
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Η διαγραφή έχει συγχρονιστεί με όλες τις συσκευές σου"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Όταν διαγράφεις μηνύματα ή συνομιλίες, θα διαγραφούν από όλες τις συσκευές σου."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Εντάξει"
   },
   "icu:Stories__title": {
     "messageformat": "Ιστορίες"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Τα στοιχεία σου είναι ιδιωτικά"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Το Signal δεν συλλέγει ούτε αποθηκεύει τα προσωπικά στοιχεία σου όταν κάνεις δωρεά.</paragraph><paragraph>Χρησιμοποιούμε τη Stripe για την επεξεργασία πληρωμών, ώστε να λαμβάνουμε τις δωρεές μας. Δεν επεξεργαζόμαστε ούτε αποθηκεύουμε κανένα από τα στοιχεία που της παρέχεις.</paragraph><paragraph>Το Signal δεν μπορεί να συνδέσει τη δωρεά με τον λογαριασμό σου στο Signal.</paragraph><paragraph>Ευχαριστούμε για την υποστήριξή σου!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Ως ανεξάρτητος μη κερδοσκοπικός οργανισμός, το Signal έχει δεσμευτεί για ιδιωτικά μηνύματα και κλήσεις. Χωρίς διαφημίσεις, παρακολούθηση, επιτήρηση. Κάνε σήμερα μια δωρεά για να στηρίξεις το Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Ενημερώσαμε την προεπιλεγμένη επέκταση αρχείου για τις εικόνες JPEG σε jpg."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Υποστήριξη για το στυλ «σκοτεινά εικονίδια» στο macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

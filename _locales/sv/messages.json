@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Du kan bara nåla upp till fyra chattar"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Visa"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Delvis skickat, klicka för mer information"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Delvis borttagen, klicka för att försöka igen"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Delvis raderad, klicka för mer information"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Det här meddelandet togs bort."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Admin {admin} tog bort detta meddelande"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Inga klistermärken installerade"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Lägg till klistermärken"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal-artistserier"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Klistermärken du fått"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Klistermärken från inkommande meddelanden visas här"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Installera"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Installerad"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Avinstallera"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Du kanske inte kan installera om det här klistermärkespaketet om du inte längre har källmeddelandet."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Alla"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Lägg till"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Ta bort"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Klistermärkepaket"
@@ -2835,10 +2859,10 @@
     "messageformat": "Klistermärke utan en emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Klistermärkespaket från {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Visa paket"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emoji"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Fäll ut"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Bifoga fil"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Foton och videor"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Vidarebefordra valda meddelanden"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Ta bort meddelande?} other {Ta bort {count,number} meddelanden?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Radera valt meddelande?} other {Radera {count,number} valda meddelanden?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Vem vill du ta bort detta meddelande för?} other {Vilka vill du ta bort de här meddelandena för?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Vilka enheter vill du ta bort det här meddelandet från?} other {Vilka enheter vill du ta bort de här meddelandena från?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Detta meddelande kommer att raderas från alla dina enheter.} other {Dessa meddelanden kommer att raderas från alla dina enheter.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Ta bort för mig"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Ta bort från den här enheten"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Ta bort för alla"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Gruppmedlemmar med de senaste versionerna av Signal kommer att se att du raderade det här meddelandet.} other {Gruppmedlemmar med de senaste versionerna av Signal kommer att se att du raderade dessa meddelanden.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Ta bort från alla enheter"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Ta bort"
@@ -6425,37 +6434,40 @@
     "messageformat": "Spara din återställningsnyckel"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Din återställningsnyckel"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Denna nyckel krävs för att återställa ditt konto och dina data. Förvara den här nyckeln på ett säkert ställe. Om du förlorar den kommer du inte att kunna återställa ditt konto.<learnMoreLink>Läs mer.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Denna nyckel krävs för att återställa ditt konto och dina data. Förvara den någonstans säkert och dela den aldrig med någon. Signal kommer aldrig att skicka meddelanden till dig för att be om din återställningsnyckel. <learnMoreLink>Läs mer.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Dela inte återställningsnyckel"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal kommer aldrig att skicka meddelanden till dig</strong> för att be om din återställningsnyckel. Svara aldrig på en chatt som utger sig för att vara Signal. Förvara din återställningsnyckel någonstans säkert och dela den aldrig med någon. <learnMoreLink>Läs mer.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Uppfattat"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Dela nyckel"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Dela inte nyckel"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Dela inte din återställningsnyckel med någon. Det gör att de kan ta över ditt konto. <strong>Signal kommer aldrig att skicka meddelanden till dig</strong> för att be om din återställningsnyckel. Svara aldrig på en chatt som utger sig för att vara Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Dela inte din återställningsnyckel med någon. Det gör att de kan ta över ditt konto. <strong>Signal kommer aldrig att skicka meddelanden till dig</strong> för att be om din återställningsnyckel. Svara aldrig på en chatt som utger sig för att vara Signal. <learnMoreLink>Läs mer.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Dela inte"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Klistra in nyckel"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Bekräfta din återställningsnyckel"
@@ -6521,7 +6533,7 @@
     "messageformat": "Den här åtgärden kunde inte slutföras eftersom systemautentiseringen misslyckades. Försök igen eller öppna Signal-appen på din mobila enhet och gå till inställningarna för säkerhetskopiering för att visa din återställningsnyckel."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Ett fel uppstod vid begäran om systemautentisering för denna åtgärd."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Visa nyckel"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Dina förbindelser kan se ditt namn och foto, och kan se inlägg på \"Min Story\" om du inte döljer det från dem."
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Borttagning synkroniseras mellan dina enheter"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "När du tar bort meddelanden eller chattar tas de bort från alla dina enheter."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Uppfattat"
   },
   "icu:Stories__title": {
     "messageformat": "Stories"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Dina uppgifter är privata"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal samlar inte in eller lagrar någon av dina personuppgifter när du gör en donation.</paragraph><paragraph>Vi använder Stripe som vår betalningstjänst för att ta emot dina donationer. Vi kommer varken åt, lagrar eller sparar någon av de uppgifter du lämnar till dem.</paragraph><paragraph>Signal kopplar inte och kan inte koppla din donation till ditt Signal-konto.</paragraph><paragraph>Tack för ditt stöd!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Som en oberoende ideell organisation är Signal engagerad i privata meddelanden och samtal. Inga annonser, inga spårare, ingen övervakning. Donera idag för att stödja Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Vi uppdaterade standardfiländelsen för JPEG-bilder till jpg."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Stöd för den mörka ikonstilen i macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

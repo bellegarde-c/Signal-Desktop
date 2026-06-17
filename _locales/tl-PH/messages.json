@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Hanggang 4 chats ang pwede mong i-pin"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Tingnan"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Partially sent, i-click para sa iba pang detalye"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Hindi nabura lahat, i-click para masubukan ulit"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Hindi lahat nabura, i-click para sa detalye"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Nabura na ang mensaheng ito."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Binura ni admin {admin} ang message na ito"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Walang naka-install na sticker"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Magdagdag ng Stickers"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal Artist Series"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Mga Sticker na Natanggap Mo"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Ang mga sticker mula sa mga paparating na mensahe ay lalabas dito"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "I-install"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Incoming voice call..."
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "I-uninstall"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Hindi mo pwedeng i-reinstall ang sticker pack na ito kung wala na sa'yo ang source message."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Lahat"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Mag-add"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Tanggalin"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Sticker Pack"
@@ -2835,10 +2859,10 @@
     "messageformat": "Sticker na walang emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Sticker Pack ni {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Tignan ang Pack"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emoji"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "I-expand"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Attach file"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Photos at videos"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "I-forward ang piniling messages"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Gusto mo bang burahin ang message?} other {Gusto mo bang burahin ang {count,number} messages?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Burahin ang piniling message?} other {Burahin ang {count,number} piniling messages?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Para kanino mo gustong burahin ang message na ito?} other {Para kanino mo gustong burahin ang messages na ito?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Saang devices mo gustong burahin ang message na ito?} other {Saang devices mo gustong burahin ang messages na ito?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Ang message na ito'y buburahin sa lahat ng devices mo.} other {Ang messages na ito'y buburahin sa lahat ng devices mo.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Burahin sa 'kin"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Burahin mula sa device na ito"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Burahin sa lahat"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Makikita ng group member na may pinakabagong version ng Signal na binura mo ang message na ito.} other {Makikita ng group members na may pinakabagong versions ng Signal na binura mo ang message na ito.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Burahin sa lahat ng devices"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Burahin"
@@ -6425,37 +6434,40 @@
     "messageformat": "I-record ang iyong recovery key"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Ang iyong recovery key"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Kailangan ang key para ma-recover mo ang iyong account at data. Itago ang key na ito sa ligtas na lugar. Kapag nawala mo ito, hindi mo mare-recover ang iyong account. <learnMoreLink>Matuto pa.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Kailangan ang key na ito para ma-recover mo ang iyong account at data. Ingatan ito sa isang ligtas na lugar at huwag itong i-share sa kahit na sino. Hindi ka ime-message ng Signal para makuha ang iyong recovery key. <learnMoreLink>Matuto pa.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Huwag i-share ang recovery key"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Hindi ka ime-message ng Signal</strong> para makuha ang iyong recovery key. Huwag mag-reply sa chats na nagpapanggap na Signal o Signal Support. Ingatan ang iyong recovery key sa isang ligtas na lugar at huwag itong i-share sa kahit na sino. <learnMoreLink>Matuto pa.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "OK"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "I-share ang key"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Huwag i-share ang key"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Huwag i-share ang iyong recovery key sa kahit kanino. Aangkinin nila ang account mo. <strong>Hindi ka ime-message ng Signal</strong> para makuha ang iyong recovery key. Huwag mag-reply sa chats na nagpapanggap na Signal o Signal Support."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Huwag i-share ang iyong recovery key sa kahit kanino. Aangkinin nila ang account mo. <strong>Hindi ka ime-message ng Signal</strong> para makuha ang iyong recovery key. Huwag mag-reply sa chats na nagpapanggap na Signal o Signal Support. <learnMoreLink>Matuto pa.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Huwag i-share"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "I-paste ang key"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Kumpirmahin ang iyong recovery key"
@@ -6521,7 +6533,7 @@
     "messageformat": "Hindi magawa ang action na ito dahil failed ang system authentication. Subukan ulit o buksan ang Signal app sa mobile device mo at pumunta sa Backup Settings para makita ang iyong recovery key."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Nagkaroon ng error habang hinihingi ang system authentication para sa action na ito."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Tignan ang key"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Makikita ng connections mo ang pangalan at photo mo, pati na rin ang posts sa \"My Story\" maliban na lang kung pinili mong i-hide ito mula sa kanila"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Ang pagbubura ay naka-sync sa devices mo"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Kapag nagbura ka ng messages o chats, mabubura ang mga ito sa lahat ng devices mo."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "OK"
   },
   "icu:Stories__title": {
     "messageformat": "Stories"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Pribado ang iyong impormasyon"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Hindi kinokolekta o sine-save ng Signal ang anumang personal na impormasyon mo kapag nag-donate ka.</paragraph><paragraph>Ginagamit namin ang Stripe bilang aming tagaproseso ng pagbabayad upang matanggap ang mga donasyon mo. Hindi namin ina-access, itinatago, o sine-save ang anumang impormasyong ibinibigay mo sa kanila.</paragraph><paragraph>Hindi kinokonekta at hindi maikokonekta ng Signal ang iyong donasyon sa Signal account mo.</paragraph><paragraph>Maraming salamat sa iyong suporta!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Bilang isang independent nonprofit, ang Signal ay committed sa private messaging and calls. Walang ads, walang trackers, at walang surveillance. Mag-donate ngayon para suportahan ang Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Magiging jpg na ang default file extension para sa JPEG images."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Suporta para sa dark icon style sa macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

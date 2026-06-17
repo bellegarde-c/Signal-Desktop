@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "તમે માત્ર 4 ચેટ સુધી જ પિન કરી શકો છો"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "જુઓ"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "આંશિક રીતે મોકલાયેલ, વિગતો માટે ક્લિક કરો"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "આંશિક ડિલીટ થયું, ફરી પ્રયાસ કરવા ક્લિક કરો"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "આંશિક રીતે ડિલીટ થયું, વિગતો માટે ક્લિક કરો"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "આ મેસેજ ડિલીટ કર્યો હતો."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "એડમિન {admin}એ આ મેસેજ ડિલીટ કર્યો"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "કોઈ સ્ટીકરો ઇન્સ્ટોલ કરેલા નથી"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "સ્ટીકર ઉમેરો"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal આર્ટિસ્ટ સિરીઝ"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "તમે પ્રાપ્ત કરેલ સ્ટીકરો"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "આવતા મેસેજ ના સ્ટીકરો અહીં દેખાશે"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "ઇન્સ્ટોલ"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "ઇન્સ્ટોલ કરેલા"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "અનઇન્સ્ટોલ"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "જો તમારી પાસે સોર્સ મેસેજ ન હોય તો તમે આ સ્ટીકર પેકને ફરીથી ઇન્સ્ટોલ કરી શકશો નહીં."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "બધા"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "ઉમેરો"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "દૂર કરો"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "સ્ટીકર પેક"
@@ -2835,10 +2859,10 @@
     "messageformat": "ઇમોજી વગરનું સ્ટીકર"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "{author} દ્વારા સ્ટીકર પેક"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "પેક જુઓ"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "ઇમોજી"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "વિસ્તૃત કરો"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "અટેચ ફાઈલ"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "ફોટા અને વીડિયો"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "પસંદ કરેલા મેસેજ ફોરવર્ડ કરો"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {{count,number} મેસેજ ડિલીટ કરવો છે?} other {{count,number} મેસેજ ડિલીટ કરવા છે?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {પસંદ કરેલો મેસેજ ડિલીટ કરવો છે?} other {પસંદ કરેલા {count,number} મેસેજ ડિલીટ કરવા છે?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {તમે આ મેસેજ કોના માટે ડિલીટ કરવા માગો છો?} other {તમે આ મેસેજ કોના માટે ડિલીટ કરવા માગો છો?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {તમે આ મેસેજ કયા ડિવાઇસમાંથી ડિલીટ કરવા માગો છો?} other {તમે આ મેસેજ કયા ડિવાઇસમાંથી ડિલીટ કરવા માગો છો?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {આ મેસેજ તમારા બધા ડિવાઇસ પરથી ડિલીટ કરવામાં આવશે.} other {આ મેસેજ તમારા બધા ડિવાઇસ પરથી ડિલીટ કરવામાં આવશે.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "મારા માટે ડિલીટ કરો"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "આ ડિવાઇસમાંથી ડિલીટ કરો"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "બધા માટે ડિલીટ કરો"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Signalના લેટેસ્ટ વર્ઝન પરના ગ્રૂપના સભ્યો જોશે કે તમે આ મેસેજ ડિલીટ કર્યો છે.} other {Signalના લેટેસ્ટ વર્ઝન પરના ગ્રૂપના સભ્યો જોશે કે તમે આ મેસેજ ડિલીટ કર્યા છે.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "બધા ડિવાઇસમાંથી ડિલીટ કરો"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "ડિલીટ કરો"
@@ -6425,37 +6434,40 @@
     "messageformat": "તમારી રિકવરી કી રેકોર્ડ કરો"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "તમારી રિકવરી કી"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "તમારા એકાઉન્ટ અને ડેટાને રિકવર કરવા માટે આ કી જરૂરી છે. આ કીને કોઈ સુરક્ષિત જગ્યાએ સ્ટોર કરો. જો તમે તેને ગુમાવો છો, તો તમે તમારું એકાઉન્ટ રિકવર કરી શકશો નહીં. <learnMoreLink>વધુ જાણો.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "તમારા એકાઉન્ટ અને ડેટાને રિકવર કરવા માટે આ કી જરૂરી છે. તેને કોઈ સલામત જગ્યાએ સ્ટોર કરો અને તેને કોઈની સાથે શેર કરશો નહીં. Signal તમારી રિકવરી કી માટે તમને ક્યારેય મેસેજ કરશે નહીં. <learnMoreLink>વધુ જાણો.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "રિકવરી કી શેર કરશો નહીં"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "તમારી રિકવરી કી માટે <strong>Signal તમને ક્યારેય મેસેજ કરશે નહીં</strong>. Signal હોવાનો દાવો કરતી કોઈ ચેટનો ક્યારેય જવાબ આપશો નહીં. તમારી રિકવરી કીને કોઈ સલામત જગ્યાએ સ્ટોર કરો અને તેને કોઈની સાથે શેર કરશો નહીં. <learnMoreLink>વધુ જાણો.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "સમજાઈ ગયું"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "કી શેર કરો"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "કી શેર કરશો નહીં"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "તમારી રિકવરી કી કોઈની સાથે શેર કરશો નહીં. આ તેમને તમારા એકાઉન્ટ પર કાબૂ મેળવવા દે છે. તમારી રિકવરી કી માટે <strong>Signal તમને ક્યારેય મેસેજ કરશે નહીં</strong>. Signal હોવાનો દાવો કરતી કોઈ ચેટનો ક્યારેય જવાબ આપશો નહીં."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "તમારી રિકવરી કી કોઈની સાથે શેર કરશો નહીં. આ તેમને તમારા એકાઉન્ટ પર કાબૂ મેળવવા દે છે. તમારી રિકવરી કી માટે <strong>Signal તમને ક્યારેય મેસેજ કરશે નહીં</strong>. Signal હોવાનો દાવો કરતી કોઈ ચેટનો ક્યારેય જવાબ આપશો નહીં. <learnMoreLink>વધુ જાણો.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "શેર ન કરશો"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "કી પેસ્ટ કરો"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "તમારી રિકવરી કી કન્ફર્મ કરો"
@@ -6521,7 +6533,7 @@
     "messageformat": "સિસ્ટમ પ્રમાણીકરણ નિષ્ફળ જવાને કારણે આ ક્રિયા પૂર્ણ કરી શકાઈ નથી. કૃપા કરીને ફરી પ્રયાસ કરો અથવા તમારા મોબાઇલ ડિવાઇસ પર Signal ઍપ ખોલો અને તમારી રિકવરી કી જોવા માટે બેકઅપ સેટિંગ્સ પર જાઓ."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "આ ક્રિયા માટે સિસ્ટમ પ્રમાણીકરણની વિનંતી કરતી વખતે એક એરર આવી."
   },
   "icu:Preferences__view-key": {
     "messageformat": "કી જુઓ"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "તમારા કનેક્શન તમારું નામ અને ફોટો જોઈ શકે છે, અને તમે તેમનાથી છુપાવો નહીં ત્યાં સુધી \"મારી સ્ટોરી\" પરની પોસ્ટ જોઈ શકે છે"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "ડિલીટ કરવાનું તમારા સમગ્ર ડિવાઇસ પર સિંક કરવામાં આવ્યું છે"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "જ્યારે તમે મેસેજ અથવા ચેટ ડિલીટ કરો, ત્યારે તે તમારા બધા ડિવાઇસમાંથી ડિલીટ કરવામાં આવશે."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "સમજાઈ ગયું"
   },
   "icu:Stories__title": {
     "messageformat": "સ્ટોરી"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "તમારી માહિતી ખાનગી છે"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>તમે દાન કરો છો ત્યારે Signal તમારી કોઈ પણ અંગત માહિતી એકત્રિત કે સંગ્રહિત કરતું નથી.</paragraph><paragraph>અમે તમારા દાન મેળવવા માટે અમારા પેમેન્ટ પ્રોસેસર તરીકે Stripeનો ઉપયોગ કરીએ છીએ.તમે તેમને પ્રદાન કરો છો તે કોઈ પણ માહિતી અમે ઍક્સેસ, સ્ટોર કે સેવ કરતાં નથી.</paragraph><paragraph>Signal તમારા દાનને તમારા Signal એકાઉન્ટ સાથે કનેક્ટ કરતું નથી અને કરી શકતું નથી.</paragraph><paragraph>તમારા સપોર્ટ બદલ તમારો આભાર!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "એક સ્વતંત્ર બિનનફાકારક સંસ્થા તરીકે, Signal ખાનગી મેસેજિંગ અને કૉલ માટે પ્રતિબદ્ધ છે. કોઈ જાહેરાતો નહીં, કોઈ પગેરું નહીં, કોઈ દેખરેખ નહીં. Signalને સપોર્ટ આપવા માટે આજે જ દાન આપો."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "અમે JPEG ઇમેજ માટે ડિફોલ્ટ ફાઇલ એક્સ્ટેન્શનને jpgમાં અપડેટ કર્યું છે."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "macOSમાં ડાર્ક આઇકન સ્ટાઇલ માટેનો સપોર્ટ."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

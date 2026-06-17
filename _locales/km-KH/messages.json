@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "អ្នកអាចខ្ទាស់ការជជែកបានរហូតដល់ 4 ប៉ុណ្ណោះ"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "មើល"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "បានផ្ញើផ្នែកខ្លះ សូមចុចមើលព័ត៌មានលម្អិត"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "បានលុបខ្លះ សូមចុចព្យាយាមម្តងទៀត"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "បានលុបខ្លះ ចុចមើលព័ត៌មានលម្អិត"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "សារនេះត្រូវបានលុប។"
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "អ្នកគ្រប់គ្រង {admin} បានលុបសារនេះ"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "ពុំមានស្ទីកគ័រដំឡើងទេ"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "បញ្ចូលស្ទីកគ័រ"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "សេ៊រីសិល្បករ Signal"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "ស្ទីកគ័រដែលអ្នកបានទទួល"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "ស្ទីកគ័រពីសារដែលចូលមកនឹងបង្ហាញទីនេះ"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "ដំឡើង"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "បានដំឡើង"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "លុបចេញ"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "អ្នកប្រហែលមិនអាចដំឡើងកញ្ចប់ស្ទីកគ័រនេះឡើងវិញ ប្រសិនបើអ្នកមិនមានសារដើម។"
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "ទាំងអស់"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "បញ្ចូល"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "ដកចេញ"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "កញ្ចប់ស្ទីកគ័រ"
@@ -2835,10 +2859,10 @@
     "messageformat": "ស្ទីកគ័រដែលគ្មានរូបអារម្មណ៍"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "កញ្ចប់ស្ទីកគ័រដោយ {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "មើលកញ្ចប់"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "រូបអារម្មណ៍"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "ពង្រីក"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "ភ្ជាប់ឯកសារ"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "រូបថត និងវីដេអូ"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "បញ្ជូនបន្តសារដែលបានជ្រើសរើស"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, other {លុប {count,number} សារឬ?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, other {លុប {count,number} សារដែលបានជ្រើសរើស?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, other {តើអ្នកចង់លុបសារទាំងនេះសម្រាប់នរណាគេ?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, other {តើអ្នកចង់លុបសារទាំងនេះចេញពីឧបករណ៍ណាខ្លះ?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, other {សារទាំងនេះនឹងត្រូវបានលុបចេញពីឧបករណ៍ទាំងអស់របស់អ្នក។}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "លុបសម្រាប់ខ្ញុំ"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "លុបចេញពីឧបករណ៍នេះ"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "លុបសម្រាប់អ្នករាល់គ្នា"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, other {សមាជិកក្រុមដែលប្រើប្រាស់ Signal កំណែចុងក្រោយបំផុតនឹងឃើញថាអ្នកបានលុបសារទាំងនេះ។}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "លុបចេញពីឧបករណ៍ទាំងអស់"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "លុប"
@@ -6425,37 +6434,40 @@
     "messageformat": "កត់ត្រាសោស្តាររបស់អ្នក"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "សោស្តាររបស់អ្នក"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "តម្រូវឱ្យមានសោនេះដើម្បីស្តារគណនី និងទិន្នន័យរបស់អ្នក។ ទុកសោនេះនៅកន្លែងដែលមានសុវត្ថិភាព។ ប្រសិនបើអ្នកបាត់វា អ្នកនឹងមិនអាចស្តារគណនីរបស់អ្នកមកវិញបានទេ។ <learnMoreLink>ស្វែងយល់បន្ថែម។</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "តម្រូវឱ្យមានសោនេះដើម្បីស្តារគណនី និងទិន្នន័យរបស់អ្នក។ រក្សាទុកវានៅកន្លែងដែលមានសុវត្ថិភាព ហើយកុំចែករំលែកវាជាមួយនរណាឡើយ។ Signal នឹងមិនផ្ញើសារមកអ្នកដើម្បីសួររកសោស្តាររបស់អ្នកជាដាច់ខាត។ <learnMoreLink>ស្វែងយល់បន្ថែម។</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "កុំចែករំលែកសោស្តារ"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal នឹងមិនផ្ញើសារមកអ្នក</strong>ដើម្បីសួររកសោស្តាររបស់អ្នកជាដាច់ខាត។ កុំឆ្លើយតបទៅនឹងការជជែកដែលតាំងខ្លួនជា Signal។ រក្សាទុកសោស្តាររបស់អ្នកនៅកន្លែងដែលមានសុវត្ថិភាព ហើយកុំចែករំលែកវាជាមួយនរណាឡើយ។ <learnMoreLink>ស្វែងយល់បន្ថែម។</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "យល់ហើយ"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "ចែករំលែកសោស្តារ"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "កុំចែករំលែកសោស្តារ"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "កុំចែករំលែកសោស្តាររបស់អ្នកជាមួយនរណាម្នាក់។ ព្រោះវានឹងអាចឱ្យពួកគេគ្រប់គ្រងគណនីរបស់អ្នកបាន។ <strong>Signal នឹងមិនផ្ញើសារមកអ្នក</strong>ដើម្បីសួររកសោស្តាររបស់អ្នកជាដាច់ខាត។ កុំឆ្លើយតបទៅនឹងការជជែកដែលតាំងខ្លួនជា Signal។"
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "កុំចែករំលែកសោស្តាររបស់អ្នកជាមួយនរណាម្នាក់។ ព្រោះវានឹងអាចឱ្យពួកគេគ្រប់គ្រងគណនីរបស់អ្នកបាន។ <strong>Signal នឹងមិនផ្ញើសារមកអ្នក</strong>ដើម្បីសួររកសោស្តាររបស់អ្នកជាដាច់ខាត។ កុំឆ្លើយតបទៅនឹងការជជែកដែលតាំងខ្លួនជា Signal។ <learnMoreLink>ស្វែងយល់បន្ថែម។</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "កុំចែករំលែក"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "បិទភ្ជាប់សោស្តារ"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "បញ្ជាក់សោស្តាររបស់អ្នក"
@@ -6521,7 +6533,7 @@
     "messageformat": "សកម្មភាពនេះមិនអាចបញ្ចប់បានទេ ពីព្រោះការផ្ទៀងផ្ទាត់ប្រព័ន្ធមិនបានជោគជ័យ។ សូមព្យាយាមម្តងទៀត ឬបើកកម្មវិធី Signal នៅលើឧបករណ៍ចល័តរបស់អ្នក ហើយចូលទៅកាន់ការកំណត់ការបម្រុងទុក ដើម្បីមើលសោស្តាររបស់អ្នក។"
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "មានបញ្ហាកើតឡើង ខណៈពេលស្នើសុំការផ្ទៀងផ្ទាត់ប្រព័ន្ធសម្រាប់សកម្មភាពនេះ។"
   },
   "icu:Preferences__view-key": {
     "messageformat": "មើលសោ"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "អ្នកភ្ជាប់ទំនាក់ទំនងរបស់អ្នកអាចមើលឃើញឈ្មោះ និងរូបថតរបស់អ្នក ហើយអាចឃើញសារបង្ហោះទៅ \"រឿងរ៉ាវរបស់ខ្ញុំ\" លើកលែងតែអ្នកលាក់វាពីពួកគេ"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "ការលុបត្រូវបានធ្វើសមកាលកម្មនៅលើឧបករណ៍ទាំងឡាយរបស់អ្នក"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "នៅពេលអ្នកលុបសារ ឬការជជែក ពួកវានឹងត្រូវបានលុបចេញពីឧបករណ៍ទាំងអស់របស់អ្នក។"
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "យល់ហើយ"
   },
   "icu:Stories__title": {
     "messageformat": "រឿងរ៉ាវ"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "ព័ត៌មានរបស់អ្នកមានលក្ខណៈឯកជន"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Signal មិនប្រមូល ឬរក្សាទុកព័ត៌មានផ្ទាល់ខ្លួនណាមួយរបស់អ្នកទេ នៅពេលអ្នកធ្វើការបរិច្ចាគ។</paragraph><paragraph>យើងប្រើ Stripe ជាអ្នកដំណើរការទូទាត់របស់យើង ដើម្បីទទួលបានការបរិច្ចាគរបស់អ្នក។ យើងមិនចូលប្រើ រក្សា ឬរក្សាទុកព័ត៌មានណាមួយដែលអ្នកផ្តល់ឱ្យពួកគេទេ។</paragraph><paragraph>Signal មិនមាន និងមិនអាចភ្ជាប់ការបរិច្ចាគរបស់អ្នកជាមួយគណនី Signal របស់អ្នកបានទេ។</paragraph><paragraph>សូមអរគុណចំពោះការគាំទ្ររបស់អ្នក!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "ក្នុងនាមជាអង្គការមិនស្វែងរកប្រាក់ចំណេញឯករាជ្យមួយ Signal ប្តេជ្ញាចិត្តផ្តល់នូវការផ្ញើសារ និងការហៅទូរសព្ទឯកជន។ គ្មានការផ្សាយពាណិជ្ជកម្ម គ្មានកម្មវិធីតាមដាន គ្មានការឃ្លាំមើល។ បរិច្ចាគថ្ងៃនេះដើម្បីឧបត្ថម្ភគាំទ្រដល់ Signal។"
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "“អក្សរ E បន្ថែមនេះគួរឱ្យរំខានណាស់” នេះជាសំឡេងត្អូញត្អែរ និងអង្វររបស់អ្នកប្រើទាំងឡាយដែលមិនពេញចិត្តនឹងកន្ទុយឯកសារដែលកែប្រែទៅជាបួនអក្សរ គឺមិនមែនបីអក្សរដែលពួកគេធ្លាប់តែចូលចិត្ត។ យើងខ្ញុំរីករាយនឹងជួយបំពេញតាមបំណង (ការផ្លាស់ប្តូរនេះគឺងាយស្រួលទេ) ហើយឥឡូវនេះអ្នកនឹងឃើញថា នៅពេលរក្សាទុកឯកសារ JPEG ឈ្មោះឯកសារលំនាំដើមនឹងបញ្ចប់ដោយ ដត jpg។"
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "ប្រសិនបើអ្នកចង់យករចនាបថហ្គោធិកខាងក្នុងរបស់អ្នកមកប្រើ យើងក៏បានបន្ថែមការគាំទ្រដើម្បីឱ្យស្គាល់រចនាបថរូបងងឹតនៅក្នុង macOS ដែរ។"
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "يمكنك تثبيت فقط حتى أربع دردشات."
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "عرض"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "تمَّ الإرسال جزئيًا. انقر للمزيد من التفاصيل."
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "تمَّ الحذف جزئيًا. يُرجى الضغط لإعادة المحاولة."
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "حذف جزئي، انقر لعرض التفاصيل"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "صورة متحركة (GIF)"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "حُذِفَت هذه الرسالة."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "حذفَ المُشرِف {admin} هذه الرسالة."
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "لا توجد مُلصقَات مُثبَّتة"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "إضافة مُلصَقات"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "المُلصَقات الفنية على سيجنال"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "المُلصَقات المستلَمة"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "ستظهر هنا المُلصَقات القادمة من الرسائل الواردة"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "تثبيت"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "مُثبَّتة"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "إلغاء التثبيت"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "قد يتعذَّر عليك إعادة تثبيت هذه المجموعة من المُلصَقات إذا لم تعد لديك الرسالة الأصلية."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "الجميع"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "إضافة"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "إزالة"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "مجموعة المُلصَقات"
@@ -2835,10 +2859,10 @@
     "messageformat": "مُلصَق بدون رمز تعبيري (إيموجي)"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "حزمة المُلصَقات من طرف {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "عرض الحزمة"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "الإيموجي"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "توسيع"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "إرفاق ملف"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "الصور والفيديوهات"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "إعادة توجيه الرسائل المُحدَّدة"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, zero {هل ترغبُ بحذف {count,number} رسائل؟} one {هل ترغبُ بحذف {count,number} رسالة واحدة؟} two {هل ترغبُ بحذف {count,number} رسالتين؟} few {هل ترغبُ بحذف {count,number} رسائل؟} many {هل ترغبُ بحذف {count,number} رسالة؟} other {هل ترغبُ بحذف {count,number} رسالة؟}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, zero {هل ترغبُ بحذف الـ {count,number} رسائل المُحدَّدة؟} one {هل ترغبُ بحذف الرسالة المُحدَّدة؟} two {هل ترغبُ بحذف الـ {count,number} رسالتين المُحدَّدتين؟} few {هل ترغبُ بحذف الـ {count,number} رسائل المُحدَّدة؟} many {هل ترغبُ بحذف الـ {count,number} رسالة المُحدَّدة؟} other {هل ترغبُ بحذف الـ {count,number} رسالة المُحدَّدة؟}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, zero {من هم الأشخاص الذين تريد حذف هذه الرسائل لديهم؟} one {من هم الأشخاص الذين تريد حذف هذه الرسالة لديهم؟} two {من هم الأشخاص الذين تريد حذف هاتين الرسالتين لديهم؟} few {من هم الأشخاص الذين تريد حذف هذه الرسائل لديهم؟} many {من هم الأشخاص الذين تريد حذف هذه الرسائل لديهم؟} other {من هم الأشخاص الذين تريد حذف هذه الرسائل لديهم؟}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, zero {ما هي الأجهزة التي تريد حذف هذه الرسائل منها؟} one {ما هي الأجهزة التي تريد حذف هذه الرسالة منها؟} two {ما هي الأجهزة التي تريد حذف هاتين الرسالتين منها؟} few {ما هي الأجهزة التي تريد حذف هذه الرسائل منها؟} many {ما هي الأجهزة التي تريد حذف هذه الرسائل منها؟} other {ما هي الأجهزة التي تريد حذف هذه الرسائل منها؟}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, zero {سيتمُّ حذف هذه الرسائل من كل أجهزتك.} one {سيتمُّ حذف هذه الرسائل من جهازك.} two {سيتمُّ حذف هذه الرسائل من كلا جهازيك.} few {سيتمُّ حذف هذه الرسائل من كل أجهزتك.} many {سيتمُّ حذف هذه الرسائل من كل أجهزتك.} other {سيتمُّ حذف هذه الرسائل من كل أجهزتك.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "احذف من عندي"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "احذف من هذا الجهاز"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "احذف للجميع"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, zero {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هذه الرسائل.} one {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هذه الرسالة.} two {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هتين الرسالتين.} few {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هذه الرسائل.} many {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هذه الرسائل.} other {سيرى أعضاء المجموعة الذين يستخدمون آخر الإصدارات من سيجنال أنك حذفت هذه الرسائل.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "احذف من كل الأجهزة"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "حذف"
@@ -6425,37 +6434,40 @@
     "messageformat": "قُم بتسجيل مفتاح الاستعادة الخاص بك"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "مفتاح الاستعادة الخاص بك"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "هذا المفتاح مطلوب لاسترجاع بياناتك وحسابك. احتفِظ بهذا المفتاح في مكانٍ آمن. إذا فقدته، لن تتمكّن من استرجاع حسابك. <learnMoreLink>اعرف المزيد.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "هذا المفتاح مطلوب لاسترجاع بياناتك وحسابك. احتفِظ بمفتاح الاستعادة الخاص بك في مكانٍ آمن ولا تشارِكه مع أي أحد. لن يُرسِل لك سيجنال أبدًا رسالة يطلب فيها مفتاح الاستعادة. <learnMoreLink>اعرف المزيد.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "لا تشارِك مفتاح الاستعادة"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>لن يُرسِل لك سيجنال أبدًا رسالة</strong> يطلب فيها مفتاح الاستعادة. تجنَّب الرد نهائيًا على الدردشات التي تدعي أنها مُرسَلة من طرف سيجنال. احتفِظ بمفتاح الاستعادة الخاص بك في مكانٍ آمن ولا تشارِكه مع أي أحد. <learnMoreLink>اعرف المزيد.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "تم"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "شارِك المفتاح"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "لا تشارِك المفتاح"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "لا تشارِك مفتاح الاستعادة الخاص بك مع أي أحد. سيمكنه هذا من الاستيلاء على حسابك. <strong>لن يُرسِل لك سيجنال أبدًا رسالة</strong> يطلب فيها مفتاح الاستعادة. تجنَّب الرد نهائيًا على الدردشات التي تدعي أنها مُرسَلة من طرف سيجنال."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "لا تشارِك مفتاح الاستعادة الخاص بك مع أي أحد. سيمكنه هذا من الاستيلاء على حسابك. <strong>لن يُرسِل لك سيجنال أبدًا رسالة</strong> يطلب فيها مفتاح الاستعادة. تجنَّب الرد نهائيًا على الدردشات التي تدعي أنها مُرسَلة من طرف سيجنال. <learnMoreLink>اعرف المزيد.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "لا تشارِك"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "لصق المفتاح"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "قُم بتأكيد مفتاح الاستعادة الخاص بك"
@@ -6521,7 +6533,7 @@
     "messageformat": "تعذّر إكمال هذا الإجراء بسبب فشل المصادقة. يُرجى المحاولة من جديد أو فتح تطبيق سيجنال على جهازك المحمول والانتقال إلى إعدادات النسخ الاحتياطي لعرض مفتاح الاستعادة الخاص بك."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "حدث خطأ أثناء طلب مصادقة النظام لهذا الإجراء."
   },
   "icu:Preferences__view-key": {
     "messageformat": "عرض المفتاح"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "يُمكن لِمعارفك رؤية اسمك وصورتك، كما يُمكنهم الاطِّلاع على منشوراتك في \"قِصتي\" إلاّ إذا أخفيتها عنهم."
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "تُجرى عملية الحذف في تزامن عبر جميع أجهزتك"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "عندما تحذف رسائل أو دردشات، سيتمُّ حذفها من هاتفك وكل أجهزتك."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "تم"
   },
   "icu:Stories__title": {
     "messageformat": "القِصص"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "ستتمُّ المحافظة على خصوصية معلوماتك."
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>لا يقوم سيجنال بجمع أو تخزين معلوماتك الشخصية عند قيامك بتبرُّع.</paragraph><paragraph>نستخدم Stripe كمعالج عمليات الدفع الخاصة بنا لتلقي تبرُّعاتك. لا يُمكننا الوصول إلى أو تخزين أو حفظ أي من المعلومات التي تُقدمها.</paragraph><paragraph>لا يقوم تطبيق سيجنال ولا يمكنه ربط تبرُّعاتك بحسابك على سيجنال.</paragraph><paragraph>شكرًا لدعمك!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "بصفتها شركة غير ربحية، سيجنال مُلتزمة بدعم المراسلة والمكالمات الخاصة. بدون إعلانات، وبدون تعقُّب، وبدون مراقبة. تبرَّع اليوم لدعم سيجنال."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "\"هذا الحرف الإضافي E يثير استيائي\"، هكذا كانت صرخات وتوسلات الناس المستائين من أن امتداد الملف المفضل لديهم كان مكونًا من أربعة أحرف بدلًا من ثلاثة. يسعدنا تلبية طلبكم (كان التغيير سهلًا للغاية)، وستلاحظون الآن أن اسم الملف الافتراضي عند حفظ صورة JPEG سينتهي بامتداد .jpg كما ينبغي."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "إذا كُنتَ ترغب في إظهار دعمك للألوان الداكنة، فقد أضفنا أيضًا دعمًا لنمط الأيقونات الداكنة في نظام macOS."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

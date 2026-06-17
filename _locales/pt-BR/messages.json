@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Você só pode fixar até 4 chats"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Exibir"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Enviada parcialmente, clique para ver detalhes"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Apagada parcialmente, clique para tentar novamente"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Parcialmente apagado, clique para ver detalhes"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Essa mensagem foi apagada."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Admin {admin} apagou esta mensagem"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Nenhuma figurinha instalada"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Adicionar figurinhas"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Série Signal Artist"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Figurinhas que você recebeu"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Figurinhas de mensagens recebidas aparecerão aqui"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Instalar"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Instalado"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Desinstalar"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Você pode não ser capaz de reinstalar este pacote de figurinhas se não tiver a mensagem original."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Todos"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Adicionar"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Remover"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Pacote de figurinhas"
@@ -2835,10 +2859,10 @@
     "messageformat": "Figurinha sem um emoji"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Pacote de figurinhas de {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Ver pacote"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emojis e pessoas"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Expandir"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Anexar arquivo"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Fotos e vídeos"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Encaminhar mensagens selecionadas"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, one {Excluir {count,number} mensagem?} other {Excluir {count,number} mensagens?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, one {Apagar mensagem selecionada?} other {Apagar {count,number} mensagens selecionadas?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, one {Para quem você quer excluir essa mensagem?} other {Para quem você quer excluir essas mensagens?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, one {Em quais dispositivos você quer excluir essa mensagem?} other {Em quais dispositivos você quer excluir essas mensagens?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, one {Esta mensagem será apagada de todos os seus dispositivos.} other {Estas mensagens serão apagadas de todos os seus dispositivos.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Excluir para mim"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Excluir deste dispositivo"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Excluir para todos"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, one {Membros do grupo nas versões mais recentes do Signal verão que você apagou essa mensagem. } other {Membros do grupo nas versões mais recentes do Signal verão que você apagou essas mensagens. }}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Excluir de todos dispositivos"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Apagar"
@@ -6425,37 +6434,40 @@
     "messageformat": "Grave sua chave de recuperação"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Sua chave de recuperação"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Essa chave é necessária para restaurar sua conta e seus dados. Certifique-se de guardá-la em um local seguro. Sem essa chave, não será possível recuperar sua conta. <learnMoreLink>Saiba mais.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Essa chave é necessária para restaurar sua conta e seus dados. Guarde sua chave de recuperação em algum lugar seguro e não a compartilhe com ninguém. O Signal nunca enviará mensagens para você solicitando a chave de recuperação. <learnMoreLink>Saiba mais.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Não compartilhar chave de recuperação"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>O Signal nunca enviará mensagens para você</strong> solicitando a chave de recuperação. Nunca responda a uma conversa de alguém tentando se passar pelo Signal. Guarde sua chave de recuperação em algum lugar seguro e não a compartilhe com ninguém. <learnMoreLink>Saiba mais.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Entendi"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Compartilhar chave"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Não compartilhar chave"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Não compartilhe sua chave de recuperação com ninguém. Sua conta pode ser hackeada. <strong>O Signal nunca enviará uma mensagem</strong> para você solicitando a chave de recuperação. Nunca responda a uma conversa de alguém tentando se passar pelo Signal."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Não compartilhe sua chave de recuperação com ninguém. Sua conta pode ser hackeada. <strong>O Signal nunca enviará uma mensagem</strong> para você solicitando a chave de recuperação. Nunca responda a uma conversa de alguém tentando se passar pelo Signal. <learnMoreLink>Saiba mais.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Não compartilhar"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Colar chave"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Confirme sua chave de recuperação"
@@ -6521,7 +6533,7 @@
     "messageformat": "Não foi possível concluir esta ação porque a autenticação do sistema falhou. Tente novamente ou abra o aplicativo do Signal no seu celular e vá em Configurações de backup para ver sua chave de recuperação."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Ocorreu um erro ao solicitar autenticação do sistema para esta ação."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Ver chave"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Seus contatos conseguem ver seu nome, foto e publicações nos seus stories, a menos que você oculte esse conteúdo"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "A exclusão foi sincronizada em todos os seus dispositivos"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Quando você deletar mensagens ou conversas, elas serão excluídas de todos os seus dispositivos."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Entendi"
   },
   "icu:Stories__title": {
     "messageformat": "Stories"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Suas informações são privadas"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>O Signal não coleta ou armazena suas informações pessoais quando você faz uma doação.</paragraph><paragraph>Usamos o Stripe para processar pagamentos e receber suas doações. Não acessamos, armazenamos ou salvamos informações fornecidas por você.</paragraph><paragraph>O Signal não conecta e não pode conectar sua doação à sua conta do Signal.</paragraph><paragraph>Agradecemos o seu apoio!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Como uma organização independente sem fins lucrativos, o Signal está comprometido com mensagens e chamadas privadas. Sem anúncios, sem rastreamento, sem vigilância. Faça uma doação agora para apoiar o Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "Atualizamos a extensão de arquivo padrão das imagens JPEG para .jpg. "
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Se você curte um visual mais sombrio, também adicionamos suporte ao ícone escuro no macOS. "
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }

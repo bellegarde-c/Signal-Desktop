@@ -452,6 +452,9 @@
   "icu:pinnedConversationsFull": {
     "messageformat": "Var piespraust 4 sarunas"
   },
+  "icu:pinnedConversations--max": {
+    "messageformat": "{maxPinnedConversations, plural, one {You can only pin up to {maxPinnedConversations,number} chat} other {You can only pin up to {maxPinnedConversations,number} chats}}"
+  },
   "icu:view": {
     "messageformat": "Skatīt"
   },
@@ -2261,9 +2264,6 @@
   "icu:partiallySent": {
     "messageformat": "Daļēji nosūtīts; noklikšķiniet, lai skatītu datus"
   },
-  "icu:partiallyDeleted": {
-    "messageformat": "Daļēji dzēsta, noklikšķiniet, lai mēģinātu vēlreiz"
-  },
   "icu:partiallyDeleted--clickForDetails": {
     "messageformat": "Daļēji dzēsts, klikšķiniet, lai skatītu sīkāku informāciju"
   },
@@ -2687,9 +2687,6 @@
   "icu:message--getDescription--gif": {
     "messageformat": "GIF"
   },
-  "icu:message--deletedForEveryone": {
-    "messageformat": "Ziņojums ir izdzēsts."
-  },
   "icu:message--deletedByAdmin": {
     "messageformat": "Administrators {admin} izdzēsa šo ziņu"
   },
@@ -2789,6 +2786,12 @@
   "icu:stickers--StickerManager--InstalledPacks--Empty": {
     "messageformat": "Nav instalētu uzlīmju"
   },
+  "icu:stickers--StickerManager--MyStickers--None": {
+    "messageformat": "No sticker packs, add stickers to send to your friends."
+  },
+  "icu:stickers--StickerManager--AddStickers": {
+    "messageformat": "Pievienot uzlīmes"
+  },
   "icu:stickers--StickerManager--BlessedPacks": {
     "messageformat": "Signal Mākslas Sērija"
   },
@@ -2798,17 +2801,38 @@
   "icu:stickers--StickerManager--ReceivedPacks": {
     "messageformat": "Jūsu saņemtās Uzlīmes"
   },
+  "icu:stickers--StickerManager--ReceivedPacks2": {
+    "messageformat": "Shared With You"
+  },
+  "icu:stickers--StickerManager--ReceivedPacksDescription": {
+    "messageformat": "When you receive a sticker from someone, the sticker pack will appear here."
+  },
   "icu:stickers--StickerManager--ReceivedPacks--Empty": {
     "messageformat": "Šeit parādīsies uzlīmes no ienākošajām ziņām"
   },
   "icu:stickers--StickerManager--Install": {
     "messageformat": "Instalēt"
   },
+  "icu:stickers--StickerManager--Installed": {
+    "messageformat": "Instalēts(-i)"
+  },
   "icu:stickers--StickerManager--Uninstall": {
     "messageformat": "Atinstalēt"
   },
   "icu:stickers--StickerManager--UninstallWarning": {
     "messageformat": "Iespējams, nevarēsiet atkārtoti instalēt šo uzlīmju komplektu, ja jums vairs nebūs avota ziņojuma."
+  },
+  "icu:stickers--StickerManagerHeader--All": {
+    "messageformat": "Visas"
+  },
+  "icu:stickers--StickerManagerHeader--MyStickers": {
+    "messageformat": "My Stickers"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Add": {
+    "messageformat": "Pievienot"
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Remove": {
+    "messageformat": "Noņemt"
   },
   "icu:stickers--StickerPreview--Title": {
     "messageformat": "Uzlīmju komplekts"
@@ -2835,10 +2859,10 @@
     "messageformat": "Uzlīme bez emocijzīmes"
   },
   "icu:stickers--StickerPackLinkPreviewDescription": {
-    "messageformat": "Sticker Pack by {author}"
+    "messageformat": "Uzlīmju komplekts, ko izstrādājis {author}"
   },
   "icu:stickers--ViewPack": {
-    "messageformat": "View Pack"
+    "messageformat": "Skatīt komplektu"
   },
   "icu:FunPicker__Tab--Emojis": {
     "messageformat": "Emocijzīme"
@@ -4724,9 +4748,6 @@
   "icu:CompositionArea--expand": {
     "messageformat": "Izvērst"
   },
-  "icu:CompositionArea--attach-file": {
-    "messageformat": "Pievienot failu"
-  },
   "icu:CompositionArea__AttachMenu__PhotosAndVideos": {
     "messageformat": "Fotoattēli un video"
   },
@@ -5177,26 +5198,17 @@
   "icu:SelectModeActions--forwardSelectedMessages": {
     "messageformat": "Pārsūtīt atlasītās ziņas"
   },
-  "icu:DeleteMessagesModal--title": {
-    "messageformat": "{count, plural, zero {Vai izdzēst {count,number} ziņas?} one {Vai izdzēst ziņu?} other {Vai izdzēst {count,number} ziņas?}}"
-  },
   "icu:DeleteMessagesModal--title-2": {
     "messageformat": "{count, plural, zero {Vai dzēst atlasītās {count,number} ziņas?} one {Vai dzēst atlasīto ziņu?} other {Vai dzēst atlasītās {count,number} ziņas?}}"
   },
   "icu:DeleteMessagesModal--description": {
     "messageformat": "{count, plural, zero {Kuram šīs ziņas izdzēst?} one {Kuram šo ziņu izdzēst?} other {Kuram šīs ziņas izdzēst?}}"
   },
-  "icu:DeleteMessagesModal--description--noteToSelf": {
-    "messageformat": "{count, plural, zero {No kurām ierīcēm vēlaties dzēst šīs ziņas?} one {No kurām ierīcēm vēlaties dzēst šo ziņu?} other {No kurām ierīcēm vēlaties dzēst šīs ziņas?}}"
-  },
   "icu:DeleteMessagesModal--description--noteToSelf--deleteSync": {
     "messageformat": "{count, plural, zero {Šīs ziņas tiks dzēstas no visām jūsu ierīcēm.} one {Šī ziņa tiks dzēsta no visām jūsu ierīcēm.} other {Šīs ziņas tiks dzēstas no visām jūsu ierīcēm.}}"
   },
   "icu:DeleteMessagesModal--deleteForMe": {
     "messageformat": "Dzēst man"
-  },
-  "icu:DeleteMessagesModal--deleteFromThisDevice": {
-    "messageformat": "Dzēst no šīs ierīces"
   },
   "icu:DeleteMessagesModal--deleteForEveryone": {
     "messageformat": "Dzēst visiem"
@@ -5210,9 +5222,6 @@
   },
   "icu:DeleteMessagesModal--adminDeleteConfirmation--description__rollout": {
     "messageformat": "{count, plural, zero {Grupas biedri, kuri izmanto jaunāko Signal versiju, redzēs, ka izdzēsāt šīs ziņas.} one {Grupas biedri, kuri izmanto jaunāko Signal versiju, redzēs, ka izdzēsāt šo ziņu.} other {Grupas biedri, kuri izmanto jaunāko Signal versiju, redzēs, ka izdzēsāt šīs ziņas.}}"
-  },
-  "icu:DeleteMessagesModal--deleteFromAllDevices": {
-    "messageformat": "Dzēst no visām ierīcēm"
   },
   "icu:DeleteMessagesModal--noteToSelf--deleteSync": {
     "messageformat": "Dzēst"
@@ -6425,37 +6434,40 @@
     "messageformat": "Saglabājiet savu atkopšanas atslēgu"
   },
   "icu:Preferences--local-backups-recovery-key--title": {
-    "messageformat": "Your recovery key"
+    "messageformat": "Jūsu atkopšanas atslēga"
   },
   "icu:Preferences--local-backups-record-backup-key-description": {
     "messageformat": "Šī atslēga ir nepieciešama, lai atgūtu jūsu kontu un datus. Noglabājiet šo atslēgu drošā vietā. Ja to pazaudēsiet, nevarēsiet atgūt savu kontu. <learnMoreLink>Uzziniet vairāk.</learnMoreLink>"
   },
   "icu:Preferences--local-backups-recovery-key--description": {
-    "messageformat": "This key is required to recover your account and data. Store it somewhere safe and never share it with anyone. Signal will never message you for your recovery key. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "Šī atslēga ir nepieciešama jūsu konta un datu atgūšanai. Glabājiet atslēgu drošā vietā un nevienam neizpaudiet. Signal darbinieki jums nekad nerakstīs un neprasīs atkopšanas atslēgu. <learnMoreLink>Uzzināt vairāk.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-title": {
-    "messageformat": "Do not share recovery key"
+    "messageformat": "Neizpaudiet savu atkopšanas atslēgu"
   },
   "icu:Preferences__recovery-key__do-not-share-description": {
-    "messageformat": "<strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal. Store your recovery key somewhere safe and never share it with anyone. <learnMoreLink>Learn more.</learnMoreLink>"
+    "messageformat": "<strong>Signal darbinieki jums nekad nerakstīs</strong> un neprasīs atkopšanas atslēgu. Nekad neatbildiet uz sarunu, kurā lietotājs uzdodas par Signal darbinieku. Glabājiet savu atkopšanas atslēgu drošā vietā un nevienam neizpaudiet. <learnMoreLink>Uzzināt vairāk.</learnMoreLink>"
   },
   "icu:Preferences__recovery-key__do-not-share-confirm": {
-    "messageformat": "Got it"
+    "messageformat": "Skaidrs"
   },
   "icu:CompositionInput__recovery-key-paste__share-key": {
-    "messageformat": "Share key"
+    "messageformat": "Norādīt atslēgu"
   },
   "icu:CompositionInput__recovery-key-paste__do-not-share-key": {
-    "messageformat": "Do not share key"
+    "messageformat": "Nenorādīt atslēgu"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-description": {
-    "messageformat": "Do not share your recovery key with anyone. This will let them take over your account. <strong>Signal will never message you</strong> for your recovery key. Never respond to a chat pretending to be Signal."
+    "messageformat": "Nevienam neizpaudiet savu atkopšanas atslēgu. Tādējādi jūsu konts var tikt pārņemts. <strong>Signal darbinieki nekad jums nerakstīs</strong> un neprasīs jūsu atkopšanas atslēgu. Nekad neatbildiet uz sarunu, kurā lietotājs uzdodas par Signal darbinieku."
+  },
+  "icu:CompositionInput__recovery-key-warning--description": {
+    "messageformat": "Nevienam neizpaudiet savu atkopšanas atslēgu. Tādējādi jūsu konts var tikt pārņemts. <strong>Signal darbinieki jums nekad nerakstīs</strong> un neprasīs atkopšanas atslēgu. Nekad neatbildiet uz sarunu, kurā lietotājs uzdodas par Signal darbinieku. <learnMoreLink>Uzzināt vairāk.</learnMoreLink>"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-dont-share": {
-    "messageformat": "Don't share"
+    "messageformat": "Nenorādīt"
   },
   "icu:CompositionInput__recovery-key-paste__confirm-paste": {
-    "messageformat": "Paste key"
+    "messageformat": "Ielīmēt atslēgu"
   },
   "icu:Preferences--local-backups-confirm-recovery-key": {
     "messageformat": "Apstipriniet atkopšanas atslēgu"
@@ -6521,7 +6533,7 @@
     "messageformat": "Šo darbību nevarēja pabeigt, jo sistēmas autentifikācija neizdevās. Lūdzu, mēģini vēlreiz vai atver Signal lietotni savā mobilajā ierīcē un dodies uz rezerves kopiju iestatījumiem, lai skatītu savu atkopšanas atslēgu."
   },
   "icu:Preferences__local-backups-auth-error--unknown-error": {
-    "messageformat": "An error occurred while requesting system authentication for this action."
+    "messageformat": "Pieprasot sistēmas autentifikāciju šai darbībai, radās kļūda."
   },
   "icu:Preferences__view-key": {
     "messageformat": "Skatīt atslēgu"
@@ -6972,15 +6984,6 @@
   },
   "icu:SignalConnectionsModal__footer": {
     "messageformat": "Jūsu kontakti var redzēt jūsu vārdu un attēlu, kā arī sadaļā \"Mani stāsti\" publicēto, ja šis saturs nav paslēpts no viņiem"
-  },
-  "icu:LocalDeleteWarningModal__header": {
-    "messageformat": "Dzēšana tiek sinhronizēta visās jūsu ierīcēs"
-  },
-  "icu:LocalDeleteWarningModal__description": {
-    "messageformat": "Dzēšot ziņas vai sarunas, tās tiks dzēstas no visām jūsu ierīcēm."
-  },
-  "icu:LocalDeleteWarningModal__confirm": {
-    "messageformat": "Skaidrs"
   },
   "icu:Stories__title": {
     "messageformat": "Stāsti"
@@ -7814,9 +7817,6 @@
   "icu:PreferencesDonations__privacy-modal-title": {
     "messageformat": "Jūsu informācija ir konfidenciāla"
   },
-  "icu:PreferencesDonations__privacy-modal-content": {
-    "messageformat": "<paragraph>Veicot ziedojumu, Signal nevāc un neuzglabā jūsu personas informāciju.</paragraph><paragraph>Mēs izmantojam Stripe kā maksājumu apstrādātāju ziedojumu saņemšanai. Mēs nepiekļūstam, neuzglabājam un nesaglabājam nekādu informāciju, ko jūs tam sniedzat.</paragraph><paragraph>Signal nesaista un nevar sasaistīt jūsu ziedojumu ar jūsu Signal kontu.</paragraph><paragraph>Paldies par jūsu atbalstu!</paragraph>"
-  },
   "icu:PreferencesDonations__privacy-modal-intro": {
     "messageformat": "Signal ir neatkarīga bezpeļņas organizācija, kas ir apņēmusies nodrošināt privātu ziņojumapmaiņu un zvanu pakalpojumu. Bez reklāmām, bez izsekotājiem, bez novērošanas. Ziedojiet šodien, lai atbalstītu Signal."
   },
@@ -8260,9 +8260,12 @@
     "ignoreUnused": true
   },
   "icu:WhatsNew__8.15--0": {
-    "messageformat": "\"This extra E is vexing me,\" said the cries and pleas of the people displeased that their favorite file extension was four letters instead of three. We're happy to appease (the change was a breeze) and now you will see that the default filename when saving a JPEG will end as it should in dot jpg."
+    "messageformat": "“Šis liekais E burts mūs kaitina,” pikti sauca ļaudis, jo viņu iecienītākais faila paplašinājums sastāvēja no četriem burtiem, nevis trim. Mēs ar prieku to labojām (tas nebija sarežģīti), tāpēc tagad redzēsiet, ka noklusējuma faila nosaukums, saglabājot JPEG failu, beigsies tā, kā tam jābūt, proti, kā jpg."
   },
   "icu:WhatsNew__8.15--1": {
-    "messageformat": "If you want to embrace your inner goth, we also added support for the dark icon style in macOS."
+    "messageformat": "Ja vēlaties atbrīvot savu iekšējo gotu, operētājsistēmā macOS tagad atbalstām arī tumšo ikonu stilu."
+  },
+  "icu:WhatsNew__8.16--0": {
+    "messageformat": "We fixed a bug in the sticker creator that displayed the interface in the wrong language. Even though stickers are pictures (and therefore worth a thousand words) it's still important to get the words right too."
   }
 }
