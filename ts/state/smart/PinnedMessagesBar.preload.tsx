@@ -1,25 +1,19 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { createSelector } from 'reselect';
 import { orderBy } from 'lodash';
-import { getIntl } from '../selectors/user.std.js';
+import { getIntl } from '../selectors/user.std.ts';
 import {
   getConversationSelector,
-  getSelectedConversationId,
   getPinnedMessages,
   getMessages,
-} from '../selectors/conversations.dom.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { useConversationsActions } from '../ducks/conversations.preload.js';
+  getConversationIsReady,
+} from '../selectors/conversations.dom.ts';
+import { getSelectedConversationId } from '../selectors/nav.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { useConversationsActions } from '../ducks/conversations.preload.ts';
 import type {
   Pin,
   PinMessage,
@@ -28,19 +22,20 @@ import type {
   PinMessagePoll,
   PinMessageText,
   PinSender,
-} from '../../components/conversation/pinned-messages/PinnedMessagesBar.dom.js';
-import { PinnedMessagesBar } from '../../components/conversation/pinned-messages/PinnedMessagesBar.dom.js';
-import { PanelType } from '../../types/Panels.std.js';
-import type { PinnedMessageId } from '../../types/PinnedMessage.std.js';
+} from '../../components/conversation/pinned-messages/PinnedMessagesBar.dom.tsx';
+import { PinnedMessagesBar } from '../../components/conversation/pinned-messages/PinnedMessagesBar.dom.tsx';
+import { PanelType } from '../../types/Panels.std.ts';
+import type { PinnedMessageId } from '../../types/PinnedMessage.std.ts';
 import {
   canPinMessages as getCanPinMessages,
   getMessagePropsSelector,
   type MessagePropsType,
-} from '../selectors/message.preload.js';
-import * as Attachment from '../../util/Attachment.std.js';
-import * as MIME from '../../types/MIME.std.js';
-import * as EmbeddedContact from '../../types/EmbeddedContact.std.js';
-import type { StateSelector } from '../types.std.js';
+} from '../selectors/message.preload.ts';
+import * as Attachment from '../../util/Attachment.std.ts';
+import * as MIME from '../../types/MIME.std.ts';
+import * as EmbeddedContact from '../../types/EmbeddedContact.std.ts';
+import type { StateSelector } from '../types.std.ts';
+import { useNavActions } from '../ducks/nav.std.ts';
 
 function getPinMessageAttachment(
   props: MessagePropsType
@@ -101,6 +96,10 @@ function isPinMessageSticker(props: MessagePropsType): boolean {
   return props.isSticker ?? false;
 }
 
+function isPinMessageViewOnceMedia(props: MessagePropsType): boolean {
+  return props.isTapToView ?? false;
+}
+
 function getPinMessage(
   props: MessagePropsType,
   sentAtTimestamp: number,
@@ -116,6 +115,7 @@ function getPinMessage(
     payment: isPinMessagePayment(props),
     poll: getPinMessagePoll(props),
     sticker: isPinMessageSticker(props),
+    viewOnceMedia: isPinMessageViewOnceMedia(props),
   };
 }
 
@@ -125,6 +125,10 @@ function getPinSender(props: MessagePropsType): PinSender {
     title: props.author.title,
     isMe: props.author.isMe,
   };
+}
+
+function getLastPinId(pins: ReadonlyArray<Pin>): PinnedMessageId | null {
+  return pins.at(-1)?.id ?? null;
 }
 
 function getPrevPinId(
@@ -363,33 +367,53 @@ export const SmartPinnedMessagesBar = memo(function SmartPinnedMessagesBar() {
   const conversation = conversationSelector(conversationId);
   strictAssert(conversation != null, 'Missing conversation');
 
+  const conversationIsReady = useSelector(getConversationIsReady);
   const pins = useSelector(selectPins);
   const canPinMessages = getCanPinMessages(conversation);
 
-  const { onPinnedMessageRemove, pushPanelForConversation, scrollToMessage } =
-    useConversationsActions();
+  const { onPinnedMessageRemove, scrollToMessage } = useConversationsActions();
+  const { pushPanelForConversation } = useNavActions();
 
   const [current, setCurrent] = useState(() => {
-    return pins.at(0)?.id ?? null;
+    return getLastPinId(pins);
   });
 
-  const isCurrentOutOfDate = useMemo(() => {
+  const [prevPins, setPrevPins] = useState(pins);
+  if (pins !== prevPins) {
+    // Needed for `expectedCurrent` which might update `current` in the same render
+    setPrevPins(pins);
+  }
+
+  const expectedCurrent = useMemo(() => {
+    const latestPinId = getLastPinId(pins);
+
+    // If `current` is null, use the latest pin id if we have one.
     if (current == null) {
-      if (pins.length > 0) {
-        return true;
-      }
-      return false;
+      return latestPinId;
     }
 
-    const hasMatch = pins.some(pin => {
-      return pin.id === current;
-    });
+    // If `current` is already the latest pin id, leave it.
+    if (current === latestPinId) {
+      return current;
+    }
 
-    return !hasMatch;
-  }, [current, pins]);
+    // Update `current` if it no longer exists.
+    const hasCurrent = pins.some(pin => pin.id === current);
+    if (!hasCurrent) {
+      return latestPinId;
+    }
 
-  if (isCurrentOutOfDate) {
-    setCurrent(pins.at(0)?.id ?? null);
+    // Update `current` if it was previously the latest and there's a new latest.
+    const prevLatestPinId = getLastPinId(prevPins);
+    if (prevLatestPinId === current && latestPinId != null) {
+      return latestPinId;
+    }
+
+    return current;
+  }, [current, pins, prevPins]);
+
+  if (current !== expectedCurrent) {
+    setCurrent(expectedCurrent);
   }
 
   const handleCurrentChange = useCallback(
@@ -405,9 +429,10 @@ export const SmartPinnedMessagesBar = memo(function SmartPinnedMessagesBar() {
       if (current == null) {
         return;
       }
-      const prevPinId = getPrevPinId(pins, current);
-      if (prevPinId != null) {
-        setCurrent(prevPinId);
+
+      const updatedCurrent = getPrevPinId(pins, current) ?? getLastPinId(pins);
+      if (updatedCurrent != null) {
+        setCurrent(updatedCurrent);
       }
     },
     [scrollToMessage, conversationId, pins, current]
@@ -430,8 +455,8 @@ export const SmartPinnedMessagesBar = memo(function SmartPinnedMessagesBar() {
     setCurrent(nextCurrent);
   });
 
-  if (current == null) {
-    return;
+  if (!conversationIsReady) {
+    return null;
   }
 
   return (

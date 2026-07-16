@@ -6,16 +6,16 @@ import type {
   PinnedMessageId,
   PinnedMessageParams,
   PinnedMessagePreloadData,
-} from '../../types/PinnedMessage.std.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { hydrateMessage } from '../hydration.std.js';
+} from '../../types/PinnedMessage.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { hydrateMessage } from '../hydration.std.ts';
 import type {
   MessageTypeUnhydrated,
   MessageType,
   ReadableDB,
   WritableDB,
-} from '../Interface.std.js';
-import { sql } from '../util.std.js';
+} from '../Interface.std.ts';
+import { sql } from '../util.std.ts';
 
 function _getMessageById(
   db: ReadableDB,
@@ -46,6 +46,16 @@ function _getPinnedMessagePreloadData(
   return { pinnedMessage, message };
 }
 
+export function getAllPinnedMessages(
+  db: ReadableDB
+): ReadonlyArray<PinnedMessage> {
+  const [query, params] = sql`
+    SELECT * FROM pinnedMessages;
+  `;
+
+  return db.prepare(query).all<PinnedMessage>(params);
+}
+
 export function getPinnedMessagesPreloadDataForConversation(
   db: ReadableDB,
   conversationId: string
@@ -54,7 +64,7 @@ export function getPinnedMessagesPreloadDataForConversation(
     const [query, params] = sql`
       SELECT * FROM pinnedMessages
       WHERE conversationId = ${conversationId}
-      ORDER BY pinnedAt DESC
+      ORDER BY pinnedAt ASC
     `;
 
     return db
@@ -222,11 +232,11 @@ export function getNextExpiringPinnedMessageAcrossConversations(
 export function deleteAllExpiredPinnedMessagesBefore(
   db: WritableDB,
   beforeTimestamp: number
-): ReadonlyArray<PinnedMessageId> {
+): ReadonlyArray<PinnedMessage> {
   const [query, params] = sql`
     DELETE FROM pinnedMessages
     WHERE expiresAt <= ${beforeTimestamp}
-    RETURNING id
+    RETURNING *
   `;
-  return db.prepare(query, { pluck: true }).all<PinnedMessageId>(params);
+  return db.prepare(query).all<PinnedMessage>(params);
 }

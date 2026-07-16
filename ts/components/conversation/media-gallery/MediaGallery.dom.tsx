@@ -1,33 +1,41 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, {
+import {
   Fragment,
   useEffect,
   useRef,
   useCallback,
   useState,
+  useMemo,
+  type JSX,
 } from 'react';
 
 import moment from 'moment';
 
-import type { ItemClickEvent } from './types/ItemClickEvent.std.js';
-import type { LocalizerType } from '../../../types/Util.std.js';
+import type { ItemClickEvent } from './types/ItemClickEvent.std.ts';
+import type { LocalizerType } from '../../../types/Util.std.ts';
 import type {
   MediaTabType,
+  MediaSortOrderType,
   LinkPreviewMediaItemType,
+  ContactMediaItemType,
   MediaItemType,
   GenericMediaItemType,
-} from '../../../types/MediaItem.std.js';
-import type { SaveAttachmentActionCreatorType } from '../../../state/ducks/conversations.preload.js';
-import { AttachmentSection } from './AttachmentSection.dom.js';
-import { EmptyState } from './EmptyState.dom.js';
-import { groupMediaItemsByDate } from './groupMediaItemsByDate.std.js';
-import { missingCaseError } from '../../../util/missingCaseError.std.js';
-import { openLinkInWebBrowser } from '../../../util/openLinkInWebBrowser.dom.js';
-import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver.std.js';
-import type { AttachmentForUIType } from '../../../types/Attachment.std.js';
-import { tw } from '../../../axo/tw.dom.js';
+} from '../../../types/MediaItem.std.ts';
+import type {
+  SaveAttachmentActionCreatorType,
+  PushPanelForConversationActionType,
+} from '../../../state/ducks/conversations.preload.ts';
+import { AttachmentSection } from './AttachmentSection.dom.tsx';
+import { EmptyState } from './EmptyState.dom.tsx';
+import { groupMediaItemsByDate } from './groupMediaItemsByDate.std.ts';
+import { missingCaseError } from '../../../util/missingCaseError.std.ts';
+import { openLinkInWebBrowser } from '../../../util/openLinkInWebBrowser.dom.ts';
+import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver.std.ts';
+import type { AttachmentForUIType } from '../../../types/Attachment.std.ts';
+import { PanelType } from '../../../types/Panels.std.ts';
+import { tw } from '../../../axo/tw.dom.tsx';
 
 export type Props = {
   conversationId: string;
@@ -42,9 +50,11 @@ export type Props = {
   media: ReadonlyArray<MediaItemType>;
   audio: ReadonlyArray<MediaItemType>;
   links: ReadonlyArray<LinkPreviewMediaItemType>;
-  documents: ReadonlyArray<MediaItemType>;
+  documents: ReadonlyArray<MediaItemType | ContactMediaItemType>;
   tab: MediaTabType;
+  sortOrder: MediaSortOrderType;
   saveAttachment: SaveAttachmentActionCreatorType;
+  pushPanelForConversation: PushPanelForConversationActionType;
   kickOffAttachmentDownload: (options: { messageId: string }) => void;
   cancelAttachmentDownload: (options: { messageId: string }) => void;
   playAudio: (attachment: MediaItemType) => void;
@@ -56,7 +66,7 @@ export type Props = {
   renderMediaItem: (props: {
     onItemClick: (event: ItemClickEvent) => unknown;
     mediaItem: GenericMediaItemType;
-  }) => React.JSX.Element;
+  }) => JSX.Element;
 };
 
 const MONTH_FORMAT = 'MMMM YYYY';
@@ -65,8 +75,10 @@ function MediaSection({
   i18n,
   loading,
   tab,
+  sortOrder,
   mediaItems,
   saveAttachment,
+  pushPanelForConversation,
   kickOffAttachmentDownload,
   cancelAttachmentDownload,
   showLightbox,
@@ -77,6 +89,7 @@ function MediaSection({
   | 'i18n'
   | 'loading'
   | 'saveAttachment'
+  | 'pushPanelForConversation'
   | 'kickOffAttachmentDownload'
   | 'cancelAttachmentDownload'
   | 'showLightbox'
@@ -84,8 +97,9 @@ function MediaSection({
   | 'renderMediaItem'
 > & {
   tab: MediaTabType;
+  sortOrder: MediaSortOrderType;
   mediaItems: ReadonlyArray<GenericMediaItemType>;
-}): React.JSX.Element {
+}): JSX.Element {
   const onItemClick = useCallback(
     (event: ItemClickEvent) => {
       const { state, mediaItem } = event;
@@ -113,11 +127,19 @@ function MediaSection({
         openLinkInWebBrowser(mediaItem.preview.url);
       } else if (mediaItem.type === 'audio') {
         playAudio(mediaItem);
+      } else if (mediaItem.type === 'contact') {
+        pushPanelForConversation({
+          type: PanelType.ContactDetails,
+          args: {
+            messageId: message.id,
+          },
+        });
       } else {
         throw missingCaseError(mediaItem.type);
       }
     },
     [
+      pushPanelForConversation,
       saveAttachment,
       showLightbox,
       cancelAttachmentDownload,
@@ -125,6 +147,10 @@ function MediaSection({
       playAudio,
     ]
   );
+
+  const reversedMediaItems = useMemo(() => {
+    return mediaItems.toReversed();
+  }, [mediaItems]);
 
   if (mediaItems.length === 0) {
     if (loading) {
@@ -139,9 +165,24 @@ function MediaSection({
 
   const isGrid = mediaItems.at(0)?.type === 'media';
 
+  if (sortOrder === 'size') {
+    return (
+      <div className={tw('grow', 'mx-auto', 'max-w-[660px] min-w-[360px]')}>
+        <div className={tw('flex flex-col')}>
+          <AttachmentSection
+            mediaItems={reversedMediaItems}
+            onItemClick={onItemClick}
+            renderMediaItem={renderMediaItem}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const sections = groupedItems.map((section, index) => {
     const isLast = index === groupedItems.length - 1;
-    const first = section.mediaItems[0];
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const first = section.mediaItems[0]!;
     const { message } = first;
     const date = moment(message.receivedAtMs || message.receivedAt);
 
@@ -203,19 +244,21 @@ export function MediaGallery({
   links,
   documents,
   tab,
+  sortOrder,
   saveAttachment,
+  pushPanelForConversation,
   kickOffAttachmentDownload,
   cancelAttachmentDownload,
   playAudio,
   showLightbox,
   renderMediaItem,
-}: Props): React.JSX.Element {
+}: Props): JSX.Element {
   const focusRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(reduxLoading);
 
   // Reset local state when redux finishes loading
   useEffect(() => {
-    if (reduxLoading === false) {
+    if (!reduxLoading) {
       setLoading(false);
     }
   }, [reduxLoading]);
@@ -249,6 +292,7 @@ export function MediaGallery({
     audio.length,
     links.length,
     documents.length,
+    sortOrder,
   ]);
 
   const [setObserverRef, observerEntry] = useIntersectionObserver();
@@ -322,8 +366,10 @@ export function MediaGallery({
           i18n={i18n}
           loading={loading}
           tab={tab}
+          sortOrder={sortOrder}
           mediaItems={mediaItems}
           saveAttachment={saveAttachment}
+          pushPanelForConversation={pushPanelForConversation}
           showLightbox={showLightbox}
           kickOffAttachmentDownload={kickOffAttachmentDownload}
           cancelAttachmentDownload={cancelAttachmentDownload}

@@ -1,40 +1,45 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
 import type {
   CallQualitySurveyPropsType,
-  ContactModalStateType,
   DeleteMessagesPropsType,
+  DiscardDraftDialogPropsType,
   EditHistoryMessagesType,
   EditNicknameAndNoteModalPropsType,
   ForwardMessagesPropsType,
+  GroupMemberLabelInfoPropsType,
   MessageRequestActionsConfirmationPropsType,
   SafetyNumberChangedBlockingDataType,
   UserNotFoundModalStateType,
-} from '../state/ducks/globalModals.preload.js';
-import type { LocalizerType, ThemeType } from '../types/Util.std.js';
-import { UsernameOnboardingState } from '../types/globalModals.std.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-
-import { ButtonVariant } from './Button.dom.js';
-import { ConfirmationDialog } from './ConfirmationDialog.dom.js';
-import { SignalConnectionsModal } from './SignalConnectionsModal.dom.js';
-import { WhatsNewModal } from './WhatsNewModal.dom.js';
-import { MediaPermissionsModal } from './MediaPermissionsModal.dom.js';
-import type { StartCallData } from './ConfirmLeaveCallModal.dom.js';
+} from '../state/ducks/globalModals.preload.ts';
+import type { LocalizerType, ThemeType } from '../types/Util.std.ts';
+import {
+  type ContactModalStateType,
+  UsernameOnboardingState,
+} from '../types/globalModals.std.ts';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { SignalConnectionsModal } from './SignalConnectionsModal.dom.tsx';
+import { WhatsNewModal } from './WhatsNewModal.dom.tsx';
+import { MediaPermissionsModal } from './MediaPermissionsModal.dom.tsx';
+import type { StartCallData } from './ConfirmLeaveCallModal.dom.tsx';
 import {
   TapToViewNotAvailableModal,
-  type DataPropsType as TapToViewNotAvailablePropsType,
-} from './TapToViewNotAvailableModal.dom.js';
+  type TapToViewNotAvailableModalData,
+} from './TapToViewNotAvailableModal.dom.tsx';
 import {
   BackfillFailureModal,
-  type DataPropsType as BackfillFailureModalPropsType,
-} from './BackfillFailureModal.dom.js';
-import type { SmartDraftGifMessageSendModalProps } from '../state/smart/DraftGifMessageSendModal.preload.js';
-import { CriticalIdlePrimaryDeviceModal } from './CriticalIdlePrimaryDeviceModal.dom.js';
-import { LowDiskSpaceBackupImportModal } from './LowDiskSpaceBackupImportModal.dom.js';
-import { isUsernameValid } from '../util/Username.dom.js';
+  type BackfillFailureModalKind,
+} from './BackfillFailureModal.dom.tsx';
+import type { SmartDraftGifMessageSendModalProps } from '../state/smart/DraftGifMessageSendModal.preload.tsx';
+import { CriticalIdlePrimaryDeviceModal } from './CriticalIdlePrimaryDeviceModal.dom.tsx';
+import { LowDiskSpaceBackupImportModal } from './LowDiskSpaceBackupImportModal.dom.tsx';
+import { KeyTransparencyOnboardingDialog } from './KeyTransparencyOnboardingDialog.dom.tsx';
+import { isUsernameValid } from '../util/Username.dom.ts';
+import type { PinMessageDialogData } from '../state/smart/PinMessageDialog.preload.tsx';
+import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import type { ErrorModalDataProps } from './ErrorModal.dom.tsx';
 
 // NOTE: All types should be required for this component so that the smart
 // component gives you type errors when adding/removing props.
@@ -43,62 +48,56 @@ export type PropsType = {
   theme: ThemeType;
   // AddUserToAnotherGroupModal
   addUserToAnotherGroupModalContactId: string | undefined;
-  renderAddUserToAnotherGroup: () => React.JSX.Element;
+  renderAddUserToAnotherGroup: () => JSX.Element;
   // CallLinkAddNameModal
   callLinkAddNameModalRoomId: string | null;
-  renderCallLinkAddNameModal: () => React.JSX.Element;
+  renderCallLinkAddNameModal: () => JSX.Element;
   // CallLinkEditModal
   callLinkEditModalRoomId: string | null;
-  renderCallLinkEditModal: () => React.JSX.Element;
+  renderCallLinkEditModal: () => JSX.Element;
   // CallQualitySurvey
   callQualitySurveyProps: CallQualitySurveyPropsType | null;
-  renderCallQualitySurvey: () => React.JSX.Element;
+  renderCallQualitySurvey: () => JSX.Element;
   // CallLinkPendingParticipantModal
   callLinkPendingParticipantContactId: string | undefined;
-  renderCallLinkPendingParticipantModal: () => React.JSX.Element;
+  renderCallLinkPendingParticipantModal: () => JSX.Element;
   // ConfirmLeaveCallModal
   confirmLeaveCallModalState: StartCallData | null;
-  renderConfirmLeaveCallModal: () => React.JSX.Element;
+  renderConfirmLeaveCallModal: () => JSX.Element;
   // ContactModal
   contactModalState: ContactModalStateType | undefined;
-  renderContactModal: () => React.JSX.Element;
+  renderContactModal: () => JSX.Element;
   // EditHistoryMessagesModal
   editHistoryMessages: EditHistoryMessagesType | undefined;
-  renderEditHistoryMessagesModal: () => React.JSX.Element;
+  renderEditHistoryMessagesModal: () => JSX.Element;
   // EditNicknameAndNoteModal
   editNicknameAndNoteModalProps: EditNicknameAndNoteModalPropsType | null;
-  renderEditNicknameAndNoteModal: () => React.JSX.Element;
+  renderEditNicknameAndNoteModal: () => JSX.Element;
   // ErrorModal
-  errorModalProps:
-    | {
-        buttonVariant?: ButtonVariant;
-        description?: string;
-        title?: string | null;
-      }
-    | undefined;
-  renderErrorModal: (opts: {
-    buttonVariant?: ButtonVariant;
-    description?: string;
-    title?: string | null;
-  }) => React.JSX.Element;
+  errorModalProps: ErrorModalDataProps | null;
+  renderErrorModal: (props: ErrorModalDataProps) => JSX.Element;
   // DebugLogErrorModal
   debugLogErrorModalProps:
     | {
         description?: string;
       }
     | undefined;
-  renderDebugLogErrorModal: (opts: {
-    description?: string;
-  }) => React.JSX.Element;
+  renderDebugLogErrorModal: (opts: { description?: string }) => JSX.Element;
   // DeleteMessageModal
   deleteMessagesProps: DeleteMessagesPropsType | undefined;
-  renderDeleteMessagesModal: () => React.JSX.Element;
+  renderDeleteMessagesModal: () => JSX.Element;
+  // DiscardDraftDialog
+  discardDraftDialogProps: DiscardDraftDialogPropsType | null;
+  renderDiscardDraftDialog: () => JSX.Element;
   // DraftGifMessageSendModal
   draftGifMessageSendModalProps: SmartDraftGifMessageSendModalProps | null;
-  renderDraftGifMessageSendModal: () => React.JSX.Element;
+  renderDraftGifMessageSendModal: () => JSX.Element;
   // ForwardMessageModal
   forwardMessagesProps: ForwardMessagesPropsType | undefined;
-  renderForwardMessagesModal: () => React.JSX.Element;
+  renderForwardMessagesModal: () => JSX.Element;
+  // GroupMemberLabelInfoModal
+  groupMemberLabelInfoModalState: GroupMemberLabelInfoPropsType | undefined;
+  renderGroupMemberLabelInfoModal: () => JSX.Element;
   // MediaPermissionsModal
   mediaPermissionsModalProps:
     | {
@@ -110,39 +109,49 @@ export type PropsType = {
   openSystemMediaPermissions: (mediaType: 'camera' | 'microphone') => void;
   // MessageRequestActionsConfirmation
   messageRequestActionsConfirmationProps: MessageRequestActionsConfirmationPropsType | null;
-  renderMessageRequestActionsConfirmation: () => React.JSX.Element;
+  renderMessageRequestActionsConfirmation: () => JSX.Element;
+  // PinMessageDialog
+  pinMessageDialogData: PinMessageDialogData | null;
+  renderPinMessageDialog: () => JSX.Element;
   // NotePreviewModal
   notePreviewModalProps: { conversationId: string } | null;
-  renderNotePreviewModal: () => React.JSX.Element;
+  renderNotePreviewModal: () => JSX.Element;
   // SafetyNumberModal
   safetyNumberModalContactId: string | undefined;
-  renderSafetyNumber: () => React.JSX.Element;
+  renderSafetyNumber: () => JSX.Element;
   // ShortcutGuideModal
   isShortcutGuideModalVisible: boolean;
-  renderShortcutGuideModal: () => React.JSX.Element;
+  renderShortcutGuideModal: () => JSX.Element;
   // SignalConnectionsModal
   isSignalConnectionsVisible: boolean;
   toggleSignalConnectionsModal: () => unknown;
   // AboutContactModal
   isAboutContactModalVisible: boolean;
-  renderAboutContactModal: () => React.JSX.Element | null;
+  renderAboutContactModal: () => JSX.Element | null;
   // StickerPackPreviewModal
   stickerPackPreviewId: string | undefined;
-  renderStickerPreviewModal: () => React.JSX.Element | null;
+  renderStickerPreviewModal: () => JSX.Element | null;
   // StoriesSettings
   isStoriesSettingsVisible: boolean;
-  renderStoriesSettings: () => React.JSX.Element;
+  renderStoriesSettings: () => JSX.Element;
+  // KeyTransparencyErrorDialog
+  isKeyTransparencyErrorVisible: boolean;
+  renderKeyTransparencyErrorDialog: () => JSX.Element;
+  // KeyTransparencyOnboardingDialog
+  isKeyTransparencyOnboardingVisible: boolean;
+  hideKeyTransparencyOnboardingDialog: () => void;
+  finishKeyTransparencyOnboarding: () => void;
   // SendAnywayDialog
   hasSafetyNumberChangeModal: boolean;
   safetyNumberChangedBlockingData:
     | SafetyNumberChangedBlockingDataType
     | undefined;
-  renderSendAnywayDialog: () => React.JSX.Element;
+  renderSendAnywayDialog: () => JSX.Element;
   // TapToViewNotAvailableModal
-  tapToViewNotAvailableModalProps: TapToViewNotAvailablePropsType | undefined;
+  tapToViewNotAvailableModalData: TapToViewNotAvailableModalData | null;
   hideTapToViewNotAvailableModal: () => void;
   // BackfillFailureModal
-  backfillFailureModalProps: BackfillFailureModalPropsType | undefined;
+  backfillFailureModalKind: BackfillFailureModalKind | null;
   hideBackfillFailureModal: () => void;
   // UserNotFoundModal
   hideUserNotFoundModal: () => unknown;
@@ -152,10 +161,10 @@ export type PropsType = {
   hideWhatsNewModal: () => unknown;
   // UsernameOnboarding
   usernameOnboardingState: UsernameOnboardingState;
-  renderUsernameOnboarding: () => React.JSX.Element;
+  renderUsernameOnboarding: () => JSX.Element;
   isProfileNameWarningModalVisible: boolean;
   profileNameWarningModalConversationType?: string;
-  renderProfileNameWarningModal: () => React.JSX.Element;
+  renderProfileNameWarningModal: () => JSX.Element;
   // CriticalIdlePrimaryDeviceModal,
   criticalIdlePrimaryDeviceModal: boolean;
   hideCriticalIdlePrimaryDeviceModal: () => void;
@@ -164,7 +173,13 @@ export type PropsType = {
   hideLowDiskSpaceBackupImportModal: () => void;
   // PlaintextExportWorkflow
   shouldShowPlaintextExportWorkflow: boolean;
-  renderPlaintextExportWorkflow: () => React.JSX.Element;
+  renderPlaintextExportWorkflow: () => JSX.Element;
+  // LocalBackupExportWorkflow
+  shouldShowLocalBackupExportWorkflow: boolean;
+  renderLocalBackupExportWorkflow: () => JSX.Element;
+  // TerminateGroupFailedModal
+  terminateGroupFailedModal: { conversationId: string } | null;
+  renderTerminateGroupFailedModal: () => JSX.Element | null;
 };
 
 export function GlobalModalContainer({
@@ -205,12 +220,18 @@ export function GlobalModalContainer({
   // DeleteMessageModal
   deleteMessagesProps,
   renderDeleteMessagesModal,
+  // DiscardDraftDialog
+  discardDraftDialogProps,
+  renderDiscardDraftDialog,
   // DraftGifMessageSendModal
   draftGifMessageSendModalProps,
   renderDraftGifMessageSendModal,
   // ForwardMessageModal
   forwardMessagesProps,
   renderForwardMessagesModal,
+  // GroupMemberLabelInfoModal
+  groupMemberLabelInfoModalState,
+  renderGroupMemberLabelInfoModal,
   // MediaPermissionsModal
   mediaPermissionsModalProps,
   closeMediaPermissionsModal,
@@ -221,6 +242,9 @@ export function GlobalModalContainer({
   // NotePreviewModal
   notePreviewModalProps,
   renderNotePreviewModal,
+  // PinMessageDialog
+  pinMessageDialogData,
+  renderPinMessageDialog,
   // SafetyNumberModal
   safetyNumberModalContactId,
   renderSafetyNumber,
@@ -239,15 +263,22 @@ export function GlobalModalContainer({
   // StoriesSettings
   isStoriesSettingsVisible,
   renderStoriesSettings,
+  // KeyTransparencyErrorDialog
+  isKeyTransparencyErrorVisible,
+  renderKeyTransparencyErrorDialog,
+  // KeyTransparencyOnboardingDialog
+  isKeyTransparencyOnboardingVisible,
+  hideKeyTransparencyOnboardingDialog,
+  finishKeyTransparencyOnboarding,
   // SendAnywayDialog
   hasSafetyNumberChangeModal,
   safetyNumberChangedBlockingData,
   renderSendAnywayDialog,
   // TapToViewNotAvailableModal
-  tapToViewNotAvailableModalProps,
+  tapToViewNotAvailableModalData,
   hideTapToViewNotAvailableModal,
   // BackfillFailureModal
-  backfillFailureModalProps,
+  backfillFailureModalKind,
   hideBackfillFailureModal,
   // UserNotFoundModal
   hideUserNotFoundModal,
@@ -270,7 +301,13 @@ export function GlobalModalContainer({
   // PlaintextExportWorkflow
   shouldShowPlaintextExportWorkflow,
   renderPlaintextExportWorkflow,
-}: PropsType): React.JSX.Element | null {
+  // LocalBackupExportWorkflow
+  shouldShowLocalBackupExportWorkflow,
+  renderLocalBackupExportWorkflow,
+  // TerminateGroupFailedModal
+  terminateGroupFailedModal,
+  renderTerminateGroupFailedModal,
+}: PropsType): JSX.Element | null {
   // We want the following dialogs to show in this order:
   // 0. Stateful multi-modal workflows
   // 1. Errors
@@ -282,6 +319,10 @@ export function GlobalModalContainer({
     return renderPlaintextExportWorkflow();
   }
 
+  if (shouldShowLocalBackupExportWorkflow) {
+    return renderLocalBackupExportWorkflow();
+  }
+
   // Errors
   if (errorModalProps) {
     return renderErrorModal(errorModalProps);
@@ -290,6 +331,10 @@ export function GlobalModalContainer({
   // Errors where we want them to submit a debug log
   if (debugLogErrorModalProps) {
     return renderDebugLogErrorModal(debugLogErrorModalProps);
+  }
+
+  if (isKeyTransparencyErrorVisible) {
+    return renderKeyTransparencyErrorDialog();
   }
 
   // Safety Number
@@ -348,6 +393,10 @@ export function GlobalModalContainer({
     return renderDeleteMessagesModal();
   }
 
+  if (discardDraftDialogProps) {
+    return renderDiscardDraftDialog();
+  }
+
   if (draftGifMessageSendModalProps) {
     return renderDraftGifMessageSendModal();
   }
@@ -358,6 +407,10 @@ export function GlobalModalContainer({
 
   if (notePreviewModalProps) {
     return renderNotePreviewModal();
+  }
+
+  if (pinMessageDialogData) {
+    return renderPinMessageDialog();
   }
 
   if (isProfileNameWarningModalVisible) {
@@ -377,12 +430,33 @@ export function GlobalModalContainer({
     );
   }
 
+  // Intentionally above safety number since that causes onboarding flow
+  if (isKeyTransparencyOnboardingVisible) {
+    return (
+      <KeyTransparencyOnboardingDialog
+        i18n={i18n}
+        open
+        onOpenChange={open => {
+          if (!open) {
+            hideKeyTransparencyOnboardingDialog();
+          }
+        }}
+        onContinue={finishKeyTransparencyOnboarding}
+      />
+    );
+  }
+
   if (safetyNumberModalContactId) {
     return renderSafetyNumber();
   }
 
   if (isAboutContactModalVisible) {
     return renderAboutContactModal();
+  }
+
+  // This needs to be before the contact modal, which opens it
+  if (groupMemberLabelInfoModalState) {
+    return renderGroupMemberLabelInfoModal();
   }
 
   if (contactModalState) {
@@ -433,34 +507,34 @@ export function GlobalModalContainer({
     }
 
     return (
-      <ConfirmationDialog
-        dialogName="GlobalModalContainer.userNotFound"
-        cancelText={i18n('icu:ok')}
-        cancelButtonVariant={ButtonVariant.Secondary}
-        i18n={i18n}
-        onClose={hideUserNotFoundModal}
+      <AxoConfirmDialog.Root
+        open
+        onOpenChange={hideUserNotFoundModal}
+        // @ts-expect-error ConfirmationDialog migration: Needs title
+        title={null}
+        description={content}
       >
-        {content}
-      </ConfirmationDialog>
+        <AxoConfirmDialog.Cancel>{i18n('icu:ok')}</AxoConfirmDialog.Cancel>
+      </AxoConfirmDialog.Root>
     );
   }
 
-  if (tapToViewNotAvailableModalProps) {
+  if (tapToViewNotAvailableModalData) {
     return (
       <TapToViewNotAvailableModal
         i18n={i18n}
         onClose={hideTapToViewNotAvailableModal}
-        {...tapToViewNotAvailableModalProps}
+        {...tapToViewNotAvailableModalData}
       />
     );
   }
 
-  if (backfillFailureModalProps != null) {
+  if (backfillFailureModalKind != null) {
     return (
       <BackfillFailureModal
         i18n={i18n}
         onClose={hideBackfillFailureModal}
-        {...backfillFailureModalProps}
+        kind={backfillFailureModalKind}
       />
     );
   }
@@ -482,6 +556,10 @@ export function GlobalModalContainer({
         onClose={hideLowDiskSpaceBackupImportModal}
       />
     );
+  }
+
+  if (terminateGroupFailedModal) {
+    return renderTerminateGroupFailedModal();
   }
 
   return null;

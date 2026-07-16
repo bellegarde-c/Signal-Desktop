@@ -1,23 +1,23 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import { useState, type JSX } from 'react';
 
 import {
-  PlaintextExportErrors,
+  LocalExportErrors,
   PlaintextExportSteps,
-} from '../types/Backups.std.js';
-import { AxoDialog } from '../axo/AxoDialog.dom.js';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.js';
+} from '../types/LocalExport.std.ts';
+import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
 
-import type { PlaintextExportWorkflowType } from '../types/Backups.std.js';
-import type { LocalizerType } from '../types/I18N.std.js';
-import { AxoCheckbox } from '../axo/AxoCheckbox.dom.js';
-import { formatFileSize } from '../util/formatFileSize.std.js';
-import { ProgressBar } from './ProgressBar.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { tw } from '../axo/tw.dom.js';
-import { I18n } from './I18n.dom.js';
+import type { PlaintextExportWorkflowType } from '../types/LocalExport.std.ts';
+import type { LocalizerType } from '../types/I18N.std.ts';
+import { AxoCheckbox } from '../axo/AxoCheckbox.dom.tsx';
+import { formatFileSize } from '../util/formatFileSize.std.ts';
+import { ProgressBar } from './ProgressBar.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { tw } from '../axo/tw.dom.tsx';
+import { I18n } from './I18n.dom.tsx';
 
 export type PropsType = {
   cancelWorkflow: () => unknown;
@@ -29,10 +29,10 @@ export type PropsType = {
   workflow: PlaintextExportWorkflowType;
 };
 
-function Bold(parts: Array<string | React.JSX.Element>) {
+function Bold(parts: Array<string | JSX.Element>) {
   return <b>{parts}</b>;
 }
-function Secondary(parts: Array<string | React.JSX.Element>) {
+function Secondary(parts: Array<string | JSX.Element>) {
   return <span className={tw('text-label-secondary')}>{parts}</span>;
 }
 
@@ -44,8 +44,8 @@ export function PlaintextExportWorkflow({
   osName,
   verifyWithOSForExport,
   workflow,
-}: PropsType): React.JSX.Element {
-  const [includeMedia, setIncludeMedia] = React.useState(true);
+}: PropsType): JSX.Element {
+  const [includeMedia, setIncludeMedia] = useState(true);
   const { step } = workflow;
 
   if (
@@ -106,15 +106,7 @@ export function PlaintextExportWorkflow({
               </AxoDialog.Action>
               <AxoDialog.Action
                 variant="primary"
-                experimentalSpinner={
-                  shouldShowSpinner
-                    ? {
-                        'aria-label': i18n(
-                          'icu:PlaintextExport--Confirmation--WaitingLabel'
-                        ),
-                      }
-                    : null
-                }
+                pending={shouldShowSpinner}
                 onClick={() => verifyWithOSForExport(includeMedia)}
               >
                 {i18n('icu:PlaintextExport--Confirmation--ContinueButton')}
@@ -149,7 +141,9 @@ export function PlaintextExportWorkflow({
               isRTL={i18n.getLocaleDirection() === 'rtl'}
             />
           </div>
-          <div className={tw('mb-1.5 text-center type-body-small font-[600]')}>
+          <div
+            className={tw('mb-1.5 text-center type-body-small font-semibold')}
+          >
             {i18n('icu:PlaintextExport--ProgressDialog--Progress', {
               currentBytes: formatFileSize(progress.currentBytes),
               totalBytes: formatFileSize(progress.totalBytes),
@@ -265,20 +259,20 @@ export function PlaintextExportWorkflow({
     let title;
     let detail;
 
-    if (type === PlaintextExportErrors.General) {
+    if (type === LocalExportErrors.General) {
       title = i18n('icu:PlaintextExport--Error--General--Title');
       detail = i18n('icu:PlaintextExport--Error--General--Description');
-    } else if (type === PlaintextExportErrors.NotEnoughStorage) {
+    } else if (type === LocalExportErrors.NotEnoughStorage) {
       title = i18n('icu:PlaintextExport--Error--NotEnoughStorage--Title');
       detail = i18n('icu:PlaintextExport--Error--NotEnoughStorage--Detail', {
         bytes: formatFileSize(workflow.errorDetails.bytesNeeded),
       });
-    } else if (type === PlaintextExportErrors.RanOutOfStorage) {
+    } else if (type === LocalExportErrors.RanOutOfStorage) {
       title = i18n('icu:PlaintextExport--Error--RanOutOfStorage--Title');
       detail = i18n('icu:PlaintextExport--Error--RanOutOfStorage--Detail', {
         bytes: formatFileSize(workflow.errorDetails.bytesNeeded),
       });
-    } else if (type === PlaintextExportErrors.StoragePermissions) {
+    } else if (type === LocalExportErrors.StoragePermissions) {
       title = i18n('icu:PlaintextExport--Error--DiskPermssions--Title');
       detail = i18n('icu:PlaintextExport--Error--DiskPermssions--Detail');
     } else {

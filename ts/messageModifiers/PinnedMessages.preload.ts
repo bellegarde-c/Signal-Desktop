@@ -1,21 +1,27 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import { DataWriter } from '../sql/Client.preload.js';
-import type { AciString } from '../types/ServiceId.std.js';
-import type { DurationInSeconds } from '../util/durations/duration-in-seconds.std.js';
-import { createLogger } from '../logging/log.std.js';
-import type { MessageModifierTarget } from './helpers/findMessageModifierTarget.preload.js';
-import { findMessageModifierTarget } from './helpers/findMessageModifierTarget.preload.js';
-import { isValidSenderAciForConversation } from './helpers/isValidSenderAciForConversation.preload.js';
-import { isGroupV2 } from '../util/whatTypeOfConversation.dom.js';
-import { SignalService as Proto } from '../protobuf/index.std.js';
-import type { ConversationModel } from '../models/conversations.preload.js';
-import { getPinnedMessagesLimit } from '../util/pinnedMessages.dom.js';
-import { getPinnedMessageExpiresAt } from '../util/pinnedMessages.std.js';
-import { pinnedMessagesCleanupService } from '../services/expiring/pinnedMessagesCleanupService.preload.js';
-import { drop } from '../util/drop.std.js';
-import type { AppendPinnedMessageResult } from '../sql/server/pinnedMessages.std.js';
-import * as Errors from '../types/errors.std.js';
+import { DataWriter } from '../sql/Client.preload.ts';
+import type { AciString } from '../types/ServiceId.std.ts';
+import type { DurationInSeconds } from '../util/durations/duration-in-seconds.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import type { MessageModifierTarget } from './helpers/findMessageModifierTarget.preload.ts';
+import { findMessageModifierTarget } from './helpers/findMessageModifierTarget.preload.ts';
+import { isValidSenderAciForConversation } from './helpers/isValidSenderAciForConversation.preload.ts';
+import { isGroupV2 } from '../util/whatTypeOfConversation.dom.ts';
+import { SignalService as Proto } from '../protobuf/index.std.ts';
+import type { ConversationModel } from '../models/conversations.preload.ts';
+import { getPinnedMessagesLimit } from '../util/pinnedMessages.dom.ts';
+import { getPinnedMessageExpiresAt } from '../util/pinnedMessages.std.ts';
+import { pinnedMessagesCleanupService } from '../services/expiring/pinnedMessagesCleanupService.preload.ts';
+import { drop } from '../util/drop.std.ts';
+import type { AppendPinnedMessageResult } from '../sql/server/pinnedMessages.std.ts';
+import * as Errors from '../types/errors.std.ts';
+import { isGiftBadge } from '../state/selectors/message.preload.ts';
+import type {
+  DurationSecs,
+  ReceivedTimestampMs,
+  SentTimestampMs,
+} from '@signalapp/types';
 
 const { AccessRequired } = Proto.AccessControl;
 const { Role } = Proto.Member;
@@ -25,9 +31,12 @@ const parentLog = createLogger('PinnedMessages');
 export type PinnedMessageAddProps = Readonly<{
   targetSentTimestamp: number;
   targetAuthorAci: AciString;
-  pinDuration: DurationInSeconds | null;
+  pinDuration: DurationSecs | null;
   pinnedByAci: AciString;
-  receivedAtTimestamp: number;
+  sentAtTimestamp: SentTimestampMs;
+  receivedAtTimestamp: ReceivedTimestampMs;
+  expireTimer: DurationInSeconds | null;
+  expirationStartTimestamp: number | null;
 }>;
 
 export type PinnedMessageRemoveProps = Readonly<{
@@ -115,9 +124,16 @@ export async function onPinnedMessageAdd(
   drop(pinnedMessagesCleanupService.trigger('onPinnedMessageAdd'));
 
   if (result.change?.inserted) {
-    await targetConversation.addNotification('pinned-message-notification', {
-      pinnedMessageId: targetMessage.id,
-      sourceServiceId: props.pinnedByAci,
+    await targetConversation.addPinnedMessageNotification({
+      pinMessage: {
+        targetSentTimestamp: props.targetSentTimestamp,
+        targetAuthorAci: props.targetAuthorAci,
+      },
+      senderAci: props.pinnedByAci,
+      sentAtTimestamp: props.sentAtTimestamp,
+      receivedAtTimestamp: props.receivedAtTimestamp,
+      expireTimer: props.expireTimer,
+      expirationStartTimestamp: props.expirationStartTimestamp,
     });
   }
 
@@ -203,12 +219,22 @@ function validatePinnedMessageTarget(
   target: MessageModifierTarget,
   sourceAci: AciString
 ): { error: string } | null {
+  const message = target.targetMessage.attributes;
+
   if (!isValidSenderAciForConversation(target.targetConversation, sourceAci)) {
     return { error: 'Sender cannot send to target conversation' };
   }
 
   if (!canSenderEditGroupAttributes(target.targetConversation, sourceAci)) {
     return { error: 'Sender does not have access to edit group attributes' };
+  }
+
+  if (message.deletedForEveryone) {
+    return { error: 'Cannot pin deleted message' };
+  }
+
+  if (isGiftBadge(message)) {
+    return { error: 'Cannot pin gift badge messages' };
   }
 
   return null;

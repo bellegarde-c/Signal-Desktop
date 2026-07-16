@@ -2,27 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ConversationAttributesType } from '../model-types.d.ts';
-import { SignalService as Proto } from '../protobuf/index.std.js';
-import { isGroupV2 } from './whatTypeOfConversation.dom.js';
-import { areWeAdmin } from './areWeAdmin.preload.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
-
-function getConversationAccessControlAttributes(
-  conversation: ConversationAttributesType | ConversationType
-): number | null {
-  if ('accessControl' in conversation) {
-    return conversation.accessControl?.attributes ?? null;
-  }
-
-  if ('accessControlAttributes' in conversation) {
-    return conversation.accessControlAttributes ?? null;
-  }
-
-  return null;
-}
+import { SignalService as Proto } from '../protobuf/index.std.ts';
+import { isGroupV2 } from './whatTypeOfConversation.dom.ts';
+import { areWeAdmin } from './areWeAdmin.preload.ts';
 
 export function canEditGroupInfo(
-  conversationAttrs: ConversationAttributesType | ConversationType
+  conversationAttrs: ConversationAttributesType
 ): boolean {
   if (!isGroupV2(conversationAttrs)) {
     return false;
@@ -32,11 +17,16 @@ export function canEditGroupInfo(
     return false;
   }
 
+  if (conversationAttrs.terminated) {
+    return false;
+  }
+
   if (areWeAdmin(conversationAttrs)) {
     return true;
   }
 
-  const accessControlAttributes =
-    getConversationAccessControlAttributes(conversationAttrs);
-  return accessControlAttributes === Proto.AccessControl.AccessRequired.MEMBER;
+  return (
+    conversationAttrs.accessControl?.attributes ===
+    Proto.AccessControl.AccessRequired.MEMBER
+  );
 }

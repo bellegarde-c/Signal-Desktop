@@ -1,18 +1,37 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import React, { useCallback, useId, useMemo, useState } from 'react';
-import type { LocalizerType } from '../types/I18N.std.js';
-import { AxoSymbol } from '../axo/AxoSymbol.dom.js';
-import { AxoButton } from '../axo/AxoButton.dom.js';
-import { AxoDialog } from '../axo/AxoDialog.dom.js';
-import { CallQualitySurvey } from '../types/CallQualitySurvey.std.js';
-import { tw } from '../axo/tw.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { AxoCheckbox } from '../axo/AxoCheckbox.dom.js';
-import { strictAssert } from '../util/assert.std.js';
-import { Tooltip, TooltipPlacement } from './Tooltip.dom.js';
+import { useCallback, useId, useMemo, useState, type JSX } from 'react';
+import type { LocalizerType } from '../types/I18N.std.ts';
+import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
+import { AxoButton } from '../axo/AxoButton.dom.tsx';
+import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { CallQualitySurvey } from '../types/CallQualitySurvey.std.ts';
+import { tw } from '../axo/tw.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { AxoCheckbox } from '../axo/AxoCheckbox.dom.tsx';
+import { strictAssert } from '../util/assert.std.ts';
+import { Tooltip, TooltipPlacement } from './Tooltip.dom.tsx';
+import { I18n } from './I18n.dom.tsx';
 
 import Issue = CallQualitySurvey.Issue;
+
+function DiagnosticInfoLink({
+  parts,
+  onClick,
+}: {
+  parts: Array<string | JSX.Element>;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={tw('text-color-label-primary hover:underline')}
+      onClick={onClick}
+    >
+      {parts}
+    </button>
+  );
+}
 
 enum Page {
   HOW_WAS_YOUR_CALL,
@@ -25,14 +44,16 @@ export type CallQualitySurveyDialogProps = Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (form: CallQualitySurvey.Form) => void;
-  onViewDebugLog?: () => void;
+  onViewDebugLog: () => void;
+  onViewDiagnosticInfo: () => void;
   isSubmitting?: boolean;
 }>;
 
 export function CallQualitySurveyDialog(
   props: CallQualitySurveyDialogProps
-): React.JSX.Element {
-  const { i18n, onSubmit, onViewDebugLog, isSubmitting } = props;
+): JSX.Element {
+  const { i18n, onSubmit, onViewDebugLog, onViewDiagnosticInfo, isSubmitting } =
+    props;
 
   const [page, setPage] = useState(Page.HOW_WAS_YOUR_CALL);
   const [userSatisfied, setUserSatisfied] = useState<boolean | null>(null);
@@ -79,6 +100,20 @@ export function CallQualitySurveyDialog(
     shareDebugLog,
   ]);
 
+  const renderDiagnosticInfoLink = useCallback(
+    (parts: Array<string | JSX.Element>) => (
+      <DiagnosticInfoLink parts={parts} onClick={onViewDiagnosticInfo} />
+    ),
+    [onViewDiagnosticInfo]
+  );
+
+  const diagnosticInfoLinkComponents = useMemo(
+    () => ({
+      diagnosticInfoLink: renderDiagnosticInfoLink,
+    }),
+    [renderDiagnosticInfoLink]
+  );
+
   return (
     <AxoDialog.Root open={props.open} onOpenChange={props.onOpenChange}>
       <AxoDialog.Content escape="cancel-is-destructive" size="md">
@@ -88,11 +123,7 @@ export function CallQualitySurveyDialog(
               <AxoDialog.Title>
                 {i18n('icu:CallQualitySurvey__HowWasYourCall__PageTitle')}
               </AxoDialog.Title>
-              <AxoDialog.Close
-                aria-label={i18n(
-                  'icu:CallQualitySurvey__CloseButton__AccessibilityLabel'
-                )}
-              />
+              <AxoDialog.Close />
             </AxoDialog.Header>
             <AxoDialog.Body>
               <p className={tw('mb-3 type-body-medium text-label-primary')}>
@@ -106,7 +137,7 @@ export function CallQualitySurveyDialog(
                 <BigCircleButton
                   symbol="thumbsdown"
                   className={tw(
-                    'bg-color-fill-destructive/10 text-color-fill-destructive group-hovered:bg-color-fill-destructive/15'
+                    'bg-color-fill-destructive/10 text-color-fill-destructive group-enabled:group-active:bg-color-fill-destructive/15'
                   )}
                   onClick={() => {
                     setUserSatisfied(false);
@@ -120,7 +151,7 @@ export function CallQualitySurveyDialog(
                 <BigCircleButton
                   symbol="thumbsup"
                   className={tw(
-                    'bg-color-fill-primary/10 text-color-fill-primary group-hovered:bg-color-fill-primary/15'
+                    'bg-color-fill-primary/10 text-color-fill-primary group-enabled:group-active:bg-color-fill-primary/15'
                   )}
                   onClick={() => {
                     setUserSatisfied(true);
@@ -138,9 +169,6 @@ export function CallQualitySurveyDialog(
           <>
             <AxoDialog.Header>
               <AxoDialog.Back
-                aria-label={i18n(
-                  'icu:CallQualitySurvey__BackButton__AccessibilityLabel'
-                )}
                 onClick={() => {
                   setPage(Page.HOW_WAS_YOUR_CALL);
                 }}
@@ -148,11 +176,7 @@ export function CallQualitySurveyDialog(
               <AxoDialog.Title>
                 {i18n('icu:CallQualitySurvey__WhatIssuesDidYouHave__PageTitle')}
               </AxoDialog.Title>
-              <AxoDialog.Close
-                aria-label={i18n(
-                  'icu:CallQualitySurvey__CloseButton__AccessibilityLabel'
-                )}
-              />
+              <AxoDialog.Close />
             </AxoDialog.Header>
             <AxoDialog.Body>
               <p className={tw('mb-3 type-body-medium text-label-primary')}>
@@ -196,10 +220,10 @@ export function CallQualitySurveyDialog(
                       'field-sizing-content max-h-50 min-h-20 w-full resize-none',
                       'rounded-lg border-[0.5px] px-3 py-2 shadow-elevation-1',
                       'text-label-primary placeholder:text-label-placeholder disabled:text-label-disabled',
-                      'outline-offset-[-2.5px] not-forced-colors:outline-0 not-forced-colors:focused:outline-[2.5px]',
+                      'outline-focus-ring-inset not-forced-colors:outline-none not-forced-colors:focus:outline-focus-ring',
                       showOtherInputError
-                        ? 'border-border-error outline-[2.5px] outline-border-error'
-                        : 'border-border-primary outline-border-focused'
+                        ? 'border-border-error outline-focus-ring-error'
+                        : 'border-border-primary'
                     )}
                   />
                   {showOtherInputError && (
@@ -268,9 +292,6 @@ export function CallQualitySurveyDialog(
           <>
             <AxoDialog.Header>
               <AxoDialog.Back
-                aria-label={i18n(
-                  'icu:CallQualitySurvey__BackButton__AccessibilityLabel'
-                )}
                 onClick={() => {
                   if (!userSatisfied) {
                     setPage(Page.WHAT_ISSUES_DID_YOU_HAVE);
@@ -282,18 +303,16 @@ export function CallQualitySurveyDialog(
               <AxoDialog.Title>
                 {i18n('icu:CallQualitySurvey__ConfirmSubmission__PageTitle')}
               </AxoDialog.Title>
-              <AxoDialog.Close
-                aria-label={i18n(
-                  'icu:CallQualitySurvey__CloseButton__AccessibilityLabel'
-                )}
-              />
+              <AxoDialog.Close />
             </AxoDialog.Header>
             <AxoDialog.Body>
               <p className={tw('mb-3 type-body-medium text-label-primary')}>
                 <AxoDialog.Description>
-                  {i18n(
-                    'icu:CallQualitySurvey__ConfirmSubmission__PageDescription'
-                  )}
+                  <I18n
+                    i18n={i18n}
+                    id="icu:CallQualitySurvey__ConfirmSubmission__PageDescriptionWithDiagnosticLink"
+                    components={diagnosticInfoLinkComponents}
+                  />
                 </AxoDialog.Description>
               </p>
               <div className={tw('my-1.5 flex items-center gap-3')}>
@@ -314,9 +333,7 @@ export function CallQualitySurveyDialog(
                 <AxoButton.Root
                   variant="subtle-primary"
                   size="sm"
-                  onClick={() => {
-                    onViewDebugLog?.();
-                  }}
+                  onClick={onViewDebugLog}
                 >
                   {i18n(
                     'icu:CallQualitySurvey__ConfirmSubmission__ShareDebugLog__ViewButton'
@@ -324,9 +341,7 @@ export function CallQualitySurveyDialog(
                 </AxoButton.Root>
               </div>
               <p className={tw('mt-3 type-body-small text-label-secondary')}>
-                {i18n(
-                  'icu:CallQualitySurvey__ConfirmSubmission__ShareDebugLog__HelpText'
-                )}
+                {i18n('icu:CallQualitySurvey__ConfirmSubmission__PrivacyNote')}
               </p>
             </AxoDialog.Body>
             <AxoDialog.Footer>
@@ -334,15 +349,7 @@ export function CallQualitySurveyDialog(
                 <AxoDialog.Action
                   variant="primary"
                   onClick={handleSubmit}
-                  experimentalSpinner={
-                    isSubmitting
-                      ? {
-                          'aria-label': i18n(
-                            'icu:CallQualitySurvey__ConfirmSubmission__Submitting'
-                          ),
-                        }
-                      : null
-                  }
+                  pending={isSubmitting}
                 >
                   {i18n(
                     'icu:CallQualitySurvey__ConfirmSubmission__SubmitButton'
@@ -368,7 +375,7 @@ function BigCircleButton(props: {
       type="button"
       className={tw(
         'group flex w-24 flex-col items-center gap-3 rounded-lg p-3',
-        'outline-border-focused not-forced-colors:outline-0 not-forced-colors:focused:outline-[2.5px]'
+        'not-forced-colors:outline-none not-forced-colors:keyboard-mode:focus:outline-focus-ring'
       )}
       onClick={props.onClick}
     >
@@ -467,7 +474,7 @@ function IssueSelector(props: {
   i18n: LocalizerType;
   issues: ReadonlySet<Issue>;
   onIssuesChange: (issues: ReadonlySet<Issue>) => void;
-}): React.JSX.Element {
+}): JSX.Element {
   const { i18n, issues, onIssuesChange } = props;
 
   return (
@@ -582,7 +589,7 @@ function IssueToggle(props: {
       variant={props.isSelected ? 'primary' : 'secondary'}
       size="md"
       symbol={isSelected ? 'check' : ISSUE_ICONS[issue]}
-      aria-pressed={props.isSelected}
+      pressed={props.isSelected}
       onClick={handleClick}
     >
       {getIssueLabel(i18n, issue)}

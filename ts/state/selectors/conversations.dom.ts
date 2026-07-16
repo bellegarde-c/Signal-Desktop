@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import memoizee from 'memoizee';
+import { memoize } from '@indutny/sneequals';
 import lodash from 'lodash';
 import { createSelector } from 'reselect';
-import type { StateType } from '../reducer.preload.js';
-import type { StateSelector } from '../types.std.js';
+import type { StateType } from '../reducer.preload.ts';
+import type { StateSelector } from '../types.std.ts';
 import type {
   ConversationLookupType,
   ConversationMessageType,
@@ -16,80 +17,85 @@ import type {
   MessagesByConversationType,
   MessageTimestamps,
   PreJoinConversationType,
-} from '../ducks/conversations.preload.js';
+} from '../ducks/conversations.preload.ts';
 import type {
   StoriesStateType,
   StoryDataType,
-} from '../ducks/stories.preload.js';
+} from '../ducks/stories.preload.ts';
 import {
   ComposerStep,
   OneTimeModalState,
   ConversationVerificationState,
   type TargetedMessageSource,
-} from '../ducks/conversationsEnums.std.js';
-import { getOwn } from '../../util/getOwn.std.js';
-import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.js';
-import { deconstructLookup } from '../../util/deconstructLookup.std.js';
-import type { PropsDataType as TimelinePropsType } from '../../components/conversation/Timeline.dom.js';
-import { assertDev } from '../../util/assert.std.js';
-import { isConversationUnregistered } from '../../util/isConversationUnregistered.dom.js';
-import { filterAndSortConversations } from '../../util/filterAndSortConversations.std.js';
-import type { ContactNameColorType } from '../../types/Colors.std.js';
-import { ContactNameColors } from '../../types/Colors.std.js';
-import type { AvatarDataType } from '../../types/Avatar.std.js';
-import type { AciString, ServiceIdString } from '../../types/ServiceId.std.js';
-import { normalizeServiceId } from '../../types/ServiceId.std.js';
-import { isInSystemContacts } from '../../util/isInSystemContacts.std.js';
-import { sortByTitle } from '../../util/sortByTitle.std.js';
-import { DurationInSeconds } from '../../util/durations/index.std.js';
+} from '../ducks/conversationsEnums.std.ts';
+import { getOwn } from '../../util/getOwn.std.ts';
+import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.ts';
+import { deconstructLookup } from '../../util/deconstructLookup.std.ts';
+import type { PropsDataType as TimelinePropsType } from '../../components/conversation/Timeline.dom.tsx';
+import { assertDev } from '../../util/assert.std.ts';
+import { isConversationUnregistered } from '../../util/isConversationUnregistered.dom.ts';
+import { filterAndSortConversations } from '../../util/filterAndSortConversations.std.ts';
+import type { ContactNameColorType } from '../../types/Colors.std.ts';
+import { ContactNameColors } from '../../types/Colors.std.ts';
+import type { AvatarDataType } from '../../types/Avatar.std.ts';
+import type { AciString, ServiceIdString } from '../../types/ServiceId.std.ts';
+import { normalizeServiceId } from '../../types/ServiceId.std.ts';
+import { isInSystemContacts } from '../../util/isInSystemContacts.std.ts';
+import { sortByTitle } from '../../util/sortByTitle.std.ts';
+import { DurationInSeconds } from '../../util/durations/index.std.ts';
 import {
   isDirectConversation,
   isGroupV1,
   isGroupV2,
-} from '../../util/whatTypeOfConversation.dom.js';
-import { isGroupInStoryMode } from '../../util/isGroupInStoryMode.std.js';
+} from '../../util/whatTypeOfConversation.dom.ts';
+import { isGroupInStoryMode } from '../../util/isGroupInStoryMode.std.ts';
 
 import {
   getIntl,
   getRegionCode,
   getUserConversationId,
   getUserNumber,
-} from './user.std.js';
+} from './user.std.ts';
 import {
   getBadgeCountMutedConversations,
   getPinnedConversationIds,
-} from './items.dom.js';
-import { createLogger } from '../../logging/log.std.js';
-import { TimelineMessageLoadingState } from '../../util/timelineUtil.std.js';
-import { isSignalConversation } from '../../util/isSignalConversation.dom.js';
-import { reduce } from '../../util/iterables.std.js';
-import type { PanelRenderType } from '../../types/Panels.std.js';
-import type { HasStories } from '../../types/Stories.std.js';
-import { getHasStoriesSelector } from './stories2.dom.js';
-import { canEditMessage } from '../../util/canEditMessage.dom.js';
-import { isOutgoing } from '../../messages/helpers.std.js';
+  getStoriesEnabled,
+} from './items.dom.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { TimelineMessageLoadingState } from '../../util/timelineUtil.std.ts';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
+import { reduce } from '../../util/iterables.std.ts';
+import type { HasStories } from '../../types/Stories.std.ts';
+import { getHasStoriesSelector } from './stories2.dom.ts';
+import { canEditMessage } from '../../util/canEditMessage.dom.ts';
+import { isOutgoing } from '../../messages/helpers.std.ts';
 import type {
   AllChatFoldersUnreadStats,
   UnreadStats,
-} from '../../util/countUnreadStats.std.js';
+} from '../../util/countUnreadStats.std.ts';
 import {
   type ChatFolder,
   isConversationInChatFolder,
-} from '../../types/ChatFolder.std.js';
-import { isChatFoldersEnabled } from '../../util/isChatFoldersEnabled.dom.js';
+} from '../../types/ChatFolder.std.ts';
 import {
   getSelectedChatFolder,
   getCurrentChatFolders,
   getStableSelectedConversationIdInChatFolder,
-} from './chatFolders.std.js';
+} from './chatFolders.std.ts';
 import {
   countAllChatFoldersUnreadStats,
   countAllConversationsUnreadStats,
-} from '../../util/countUnreadStats.std.js';
-import type { AllChatFoldersMutedStats } from '../../util/countMutedStats.std.js';
-import { countAllChatFoldersMutedStats } from '../../util/countMutedStats.std.js';
-import { getActiveProfile } from './notificationProfiles.dom.js';
-import type { PinnedMessage } from '../../types/PinnedMessage.std.js';
+} from '../../util/countUnreadStats.std.ts';
+import type { AllChatFoldersMutedStats } from '../../util/countMutedStats.std.ts';
+import { countAllChatFoldersMutedStats } from '../../util/countMutedStats.std.ts';
+import { getActiveProfile } from './notificationProfiles.dom.ts';
+import type { PinnedMessage } from '../../types/PinnedMessage.std.ts';
+import { getPinnedMessagesLimit } from '../../util/pinnedMessages.dom.ts';
+import { getSelectedConversationId, getSelectedNavTab } from './nav.std.ts';
+import { getCallHistoryUnreadCount } from './callHistory.std.ts';
+import { NavTab } from '../../types/Nav.std.ts';
+import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
+import type { Emoji } from '../../axo/emoji.std.ts';
 
 const { isNumber, pick } = lodash;
 
@@ -113,7 +119,6 @@ export const getPlaceholderContact = (): ConversationType => {
     type: 'direct',
     title: window.SignalContext.i18n('icu:unknownContact'),
     isMe: false,
-    sharedGroupNames: [],
   };
   return placeholderContact;
 };
@@ -134,36 +139,24 @@ export const getConversationLookup = createSelector(
   }
 );
 
-export const getConversationsByServiceId = createSelector(
+const getConversationsByServiceId = createSelector(
   getConversations,
   (state: ConversationsStateType): ConversationLookupType => {
     return state.conversationsByServiceId;
   }
 );
 
-export const getConversationsByE164 = createSelector(
+const getConversationsByE164 = createSelector(
   getConversations,
   (state: ConversationsStateType): ConversationLookupType => {
     return state.conversationsByE164;
   }
 );
 
-export const getConversationsByGroupId = createSelector(
+const getConversationsByGroupId = createSelector(
   getConversations,
   (state: ConversationsStateType): ConversationLookupType => {
     return state.conversationsByGroupId;
-  }
-);
-export const getHasPanelOpen = createSelector(
-  getConversations,
-  (state: ConversationsStateType): boolean => {
-    return state.targetedConversationPanels.watermark > 0;
-  }
-);
-export const getConversationsByUsername = createSelector(
-  getConversations,
-  (state: ConversationsStateType): ConversationLookupType => {
-    return state.conversationsByUsername;
   }
 );
 
@@ -202,14 +195,7 @@ export const getSafeConversationWithSameTitle = createSelector(
   }
 );
 
-export const getSelectedConversationId = createSelector(
-  getConversations,
-  (state: ConversationsStateType): string | undefined => {
-    return state.selectedConversationId;
-  }
-);
-
-type TargetedMessageType = {
+export type TargetedMessageType = {
   id: string;
   counter: number;
 };
@@ -249,7 +235,7 @@ export const getLastSelectedMessage = createSelector(
 export const getShowArchived = createSelector(
   getConversations,
   (state: ConversationsStateType): boolean => {
-    return Boolean(state.showArchived);
+    return state.showArchived;
   }
 );
 
@@ -308,7 +294,7 @@ export const getMessagesByConversation = createSelector(
   }
 );
 
-export const getConversationMessages = createSelector(
+const getConversationMessages = createSelector(
   getSelectedConversationId,
   getMessagesByConversation,
   (
@@ -316,6 +302,13 @@ export const getConversationMessages = createSelector(
     messagesByConversation
   ): ConversationMessageType | undefined => {
     return conversationId ? messagesByConversation[conversationId] : undefined;
+  }
+);
+
+export const getConversationIsReady: StateSelector<boolean> = createSelector(
+  getConversationMessages,
+  conversationMessages => {
+    return conversationMessages != null;
   }
 );
 
@@ -330,6 +323,15 @@ export const getPinnedMessagesMessageIds: StateSelector<ReadonlyArray<string>> =
       return pinnedMessage.messageId;
     });
   });
+
+export const getHasMaxPinnedMessages: StateSelector<boolean> = createSelector(
+  getPinnedMessages,
+  pinnedMessages => {
+    const pinnedMessagesLimit = getPinnedMessagesLimit();
+    const pinnedMessagesCount = pinnedMessages.length;
+    return pinnedMessagesCount >= pinnedMessagesLimit;
+  }
+);
 
 const collator = new Intl.Collator();
 
@@ -386,7 +388,7 @@ export const _getConversationComparator = () => {
     return collator.compare(left.title, right.title);
   };
 };
-export const getConversationComparator = createSelector(
+const getConversationComparator = createSelector(
   getIntl,
   getRegionCode,
   _getConversationComparator
@@ -446,14 +448,10 @@ export const _getLeftPaneLists = ({
   const conversations: Array<ConversationType> = [];
   const archivedConversations: Array<ConversationType> = [];
   const pinnedConversations: Array<ConversationType> = [];
+  const pinnedConversationIdsSet = new Set(pinnedConversationIds);
 
-  const values = Object.values(conversationLookup);
-  const max = values.length;
-  for (let i = 0; i < max; i += 1) {
-    let conversation = values[i];
-
+  for (let conversation of Object.values(conversationLookup)) {
     if (
-      isChatFoldersEnabled(window.SignalContext.getVersion()) &&
       !_shouldIncludeInChatFolder(
         conversation,
         selectedChatFolder,
@@ -471,7 +469,10 @@ export const _getLeftPaneLists = ({
     }
 
     // We always show pinned conversations
-    if (conversation.isPinned) {
+    if (
+      conversation.isPinned &&
+      pinnedConversationIdsSet.has(conversation.id)
+    ) {
       pinnedConversations.push(conversation);
       continue;
     }
@@ -641,14 +642,44 @@ export const getHasContactSpoofingReview = createSelector(
   }
 );
 
-function isTrusted(conversation: ConversationType): boolean {
+/**
+ * Builds a Set of service IDs that appear in any group's memberships.
+ * Used to efficiently check if a contact shares groups with us.
+ * Memoized with sneequals to only recompute when group memberships change.
+ */
+const getServiceIdsInGroups = memoize(
+  (conversationLookup: ConversationLookupType): Set<string> => {
+    const serviceIds = new Set<string>();
+    for (const conversation of Object.values(conversationLookup)) {
+      if (
+        conversation.type === 'group' &&
+        !conversation.left &&
+        conversation.memberships
+      ) {
+        for (const membership of conversation.memberships) {
+          serviceIds.add(membership.aci);
+        }
+      }
+    }
+    return serviceIds;
+  }
+);
+
+function isTrusted(
+  conversation: ConversationType,
+  serviceIdsInGroups: Set<string>
+): boolean {
   if (conversation.type === 'group') {
     return true;
   }
 
-  return Boolean(
+  const hasSharedGroups =
+    conversation.serviceId != null &&
+    serviceIdsInGroups.has(conversation.serviceId);
+
+  return (
     isInSystemContacts(conversation) ||
-    conversation.sharedGroupNames.length > 0 ||
+    hasSharedGroups ||
     conversation.profileSharing ||
     conversation.isMe
   );
@@ -667,15 +698,19 @@ function hasDisplayInfo(conversation: ConversationType): boolean {
   );
 }
 
-function canComposeConversation(conversation: ConversationType): boolean {
-  return Boolean(
+function canComposeConversation(
+  conversation: ConversationType,
+  serviceIdsInGroups: Set<string>
+): boolean {
+  return (
     !isSignalConversation(conversation) &&
     !conversation.isBlocked &&
     !conversation.removalStage &&
+    !conversation.terminated &&
     ((isGroupV2(conversation) && !conversation.left) ||
       !isConversationUnregistered(conversation)) &&
     hasDisplayInfo(conversation) &&
-    isTrusted(conversation)
+    isTrusted(conversation, serviceIdsInGroups)
   );
 }
 
@@ -687,6 +722,7 @@ export const getAllComposableConversations = createSelector(
         !isSignalConversation(conversation) &&
         !conversation.isBlocked &&
         !conversation.removalStage &&
+        !conversation.terminated &&
         !conversation.isGroupV1AndDisabled &&
         ((isGroupV2(conversation) && !conversation.left) ||
           !isConversationUnregistered(conversation)) &&
@@ -773,34 +809,43 @@ export const getAllChatFoldersMutedStats: StateSelector<AllChatFoldersMutedStats
  * Because they filter unregistered contacts and that's (partially) determined by the
  * current time, it's possible for them to return stale contacts that have unregistered
  * if no other conversations change. This should be a rare false positive.
+ * @testexport
  */
 export const getComposableContacts = createSelector(
   getConversationLookup,
-  (conversationLookup: ConversationLookupType): Array<ConversationType> =>
-    Object.values(conversationLookup).filter(
+  (conversationLookup: ConversationLookupType): Array<ConversationType> => {
+    const serviceIdsInGroups = getServiceIdsInGroups(conversationLookup);
+    return Object.values(conversationLookup).filter(
       conversation =>
-        conversation.type === 'direct' && canComposeConversation(conversation)
-    )
+        conversation.type === 'direct' &&
+        canComposeConversation(conversation, serviceIdsInGroups)
+    );
+  }
 );
 
 export const getCandidateContactsForNewGroup = createSelector(
   getConversationLookup,
-  (conversationLookup: ConversationLookupType): Array<ConversationType> =>
-    Object.values(conversationLookup).filter(
+  (conversationLookup: ConversationLookupType): Array<ConversationType> => {
+    const serviceIdsInGroups = getServiceIdsInGroups(conversationLookup);
+    return Object.values(conversationLookup).filter(
       conversation =>
         conversation.type === 'direct' &&
         !conversation.isMe &&
-        canComposeConversation(conversation)
-    )
+        canComposeConversation(conversation, serviceIdsInGroups)
+    );
+  }
 );
 
 export const getComposableGroups = createSelector(
   getConversationLookup,
-  (conversationLookup: ConversationLookupType): Array<ConversationType> =>
-    Object.values(conversationLookup).filter(
+  (conversationLookup: ConversationLookupType): Array<ConversationType> => {
+    const serviceIdsInGroups = getServiceIdsInGroups(conversationLookup);
+    return Object.values(conversationLookup).filter(
       conversation =>
-        conversation.type === 'group' && canComposeConversation(conversation)
-    )
+        conversation.type === 'group' &&
+        canComposeConversation(conversation, serviceIdsInGroups)
+    );
+  }
 );
 
 const getConversationIdsWithStories = createSelector(
@@ -932,7 +977,7 @@ const getGroupCreationComposerState = createSelector(
     composerState
   ): {
     groupName: string;
-    groupAvatar: undefined | Uint8Array;
+    groupAvatar: undefined | Uint8Array<ArrayBuffer>;
     groupExpireTimer: DurationInSeconds;
     selectedConversationIds: ReadonlyArray<string>;
   } => {
@@ -957,7 +1002,8 @@ const getGroupCreationComposerState = createSelector(
 
 export const getComposeGroupAvatar = createSelector(
   getGroupCreationComposerState,
-  (composerState): undefined | Uint8Array => composerState.groupAvatar
+  (composerState): undefined | Uint8Array<ArrayBuffer> =>
+    composerState.groupAvatar
 );
 
 export const getComposeGroupName = createSelector(
@@ -984,7 +1030,7 @@ export const getComposeSelectedContacts = createSelector(
 //   2) all of the message selectors need to be reselect-based; today those
 //      model-based prop-generation functions expect to get Conversation information
 //      directly via ConversationController
-export function _conversationSelector(
+function _conversationSelector(
   conversation?: ConversationType
   // regionCode: string,
   // userNumber: string
@@ -1001,7 +1047,7 @@ export function _conversationSelector(
 type CachedConversationSelectorType = (
   conversation?: ConversationType
 ) => ConversationType;
-export const getCachedSelectorForConversation = createSelector(
+const getCachedSelectorForConversation = createSelector(
   getRegionCode,
   getUserNumber,
   (): CachedConversationSelectorType => {
@@ -1014,7 +1060,7 @@ export const getCachedSelectorForConversation = createSelector(
 export type GetConversationByAnyIdSelectorType = (
   id?: string
 ) => ConversationType | undefined;
-export const getConversationByAnyIdSelector = createSelector(
+const getConversationByAnyIdSelector = createSelector(
   getConversationLookup,
   getConversationsByServiceId,
   getConversationsByE164,
@@ -1103,9 +1149,9 @@ export const getCachedConversationMemberColorsSelector = createSelector(
   ) => {
     return memoizee(
       (conversationId: string | undefined) => {
-        const contactNameColors: Map<string, ContactNameColorType> = new Map();
+        const contactNameColors = new Map<string, ContactNameColorType>();
         const {
-          sortedGroupMembers = [],
+          membersV2 = [],
           type,
           id: theirId,
         } = conversationSelector(conversationId);
@@ -1118,14 +1164,20 @@ export const getCachedConversationMemberColorsSelector = createSelector(
           return contactNameColors;
         }
 
-        [...sortedGroupMembers]
+        [...membersV2]
           .sort((left, right) =>
-            String(left.serviceId) > String(right.serviceId) ? 1 : -1
+            String(left.aci) > String(right.aci) ? 1 : -1
           )
           .forEach((member, i) => {
+            const conversation = conversationSelector(member.aci);
+            if (conversation.id === PLACEHOLDER_CONTACT_ID) {
+              return;
+            }
+
             contactNameColors.set(
-              member.id,
-              ContactNameColors[i % ContactNameColors.length]
+              conversation.id,
+              // oxlint-disable-next-line typescript/no-non-null-assertion
+              ContactNameColors[i % ContactNameColors.length]!
             );
           });
 
@@ -1156,9 +1208,9 @@ export const getContactNameColorSelector = createSelector(
 );
 
 export const getContactNameColor = (
-  contactNameColors: Map<string, string>,
+  contactNameColors: Map<string, ContactNameColorType>,
   contactId: string | undefined
-): string => {
+): ContactNameColorType => {
   if (!contactId) {
     log.warn('No color generated for missing contactId');
     return ContactNameColors[0];
@@ -1172,9 +1224,12 @@ export const getContactNameColor = (
   return color;
 };
 
-export function _conversationMessagesSelector(
+type TimelinePropsWithRawItems = Omit<TimelinePropsType, 'items'> & {
+  items: ReadonlyArray<string>;
+};
+function _conversationMessagesSelector(
   conversation: ConversationMessageType
-): TimelinePropsType {
+): TimelinePropsWithRawItems {
   const {
     isNearBottom = null,
     messageChangeCounter,
@@ -1225,8 +1280,8 @@ export function _conversationMessagesSelector(
 
 type CachedConversationMessagesSelectorType = (
   conversation: ConversationMessageType
-) => TimelinePropsType;
-export const getCachedSelectorForConversationMessages = createSelector(
+) => TimelinePropsWithRawItems;
+const getCachedSelectorForConversationMessages = createSelector(
   getRegionCode,
   getUserNumber,
   (): CachedConversationMessagesSelectorType => {
@@ -1243,7 +1298,7 @@ export const getConversationMessagesSelector = createSelector(
     conversationMessagesSelector: CachedConversationMessagesSelectorType,
     messagesByConversation: MessagesByConversationType
   ) => {
-    return (id: string): TimelinePropsType => {
+    return (id: string): TimelinePropsWithRawItems => {
       const conversation = messagesByConversation[id];
       if (!conversation) {
         // TODO: DESKTOP-2340
@@ -1294,6 +1349,7 @@ export function isMissingRequiredProfileSharing(
     !conversation.isMe &&
     !conversation.left &&
     !conversation.removalStage &&
+    !isInSystemContacts(conversation) &&
     (isGroupV1(conversation) || isDirectConversation(conversation));
 
   return Boolean(
@@ -1303,10 +1359,15 @@ export function isMissingRequiredProfileSharing(
   );
 }
 
+export type AdminMembershipType = {
+  member: ConversationType;
+  labelEmoji: Emoji.Variant | undefined;
+  labelString: string | undefined;
+};
 export const getGroupAdminsSelector = createSelector(
   getConversationSelector,
   (conversationSelector: GetConversationByIdType) => {
-    return (conversationId: string): Array<ConversationType> => {
+    return (conversationId: string): Array<AdminMembershipType> => {
       const {
         groupId,
         groupVersion,
@@ -1322,11 +1383,15 @@ export const getGroupAdminsSelector = createSelector(
         return [];
       }
 
-      const admins: Array<ConversationType> = [];
+      const admins: Array<AdminMembershipType> = [];
       memberships.forEach(membership => {
         if (membership.isAdmin) {
           const admin = conversationSelector(membership.aci);
-          admins.push(admin);
+          admins.push({
+            member: admin,
+            labelEmoji: membership.labelEmoji,
+            labelString: membership.labelString,
+          });
         }
       });
       return admins;
@@ -1395,60 +1460,87 @@ export const getConversationsStoppingSend = createSelector(
 
 export const getHideStoryConversationIds = createSelector(
   getConversationLookup,
-  (conversationLookup): Array<string> =>
-    Object.keys(conversationLookup).filter(
-      conversationId => conversationLookup[conversationId].hideStory
-    )
+  (conversationLookup): Array<string> => {
+    const result: Array<string> = [];
+    for (const [conversationId, conversation] of Object.entries(
+      conversationLookup
+    )) {
+      if (conversation.hideStory) {
+        result.push(conversationId);
+      }
+    }
+    return result;
+  }
 );
 
-export const getActivePanel = createSelector(
-  getConversations,
-  (conversations): PanelRenderType | undefined =>
-    conversations.targetedConversationPanels.stack[
-      conversations.targetedConversationPanels.watermark
-    ]
-);
+export const getStoriesState = (state: StateType): StoriesStateType =>
+  state.stories;
 
-type PanelInformationType = {
-  currPanel: PanelRenderType | undefined;
-  direction: 'push' | 'pop';
-  prevPanel: PanelRenderType | undefined;
-};
-
-export const getPanelInformation = createSelector(
-  getConversations,
-  getActivePanel,
-  (conversations, currPanel): PanelInformationType | undefined => {
-    const { direction, watermark } = conversations.targetedConversationPanels;
-
-    if (!direction) {
-      return;
+const getStoriesNotificationCount = createSelector(
+  getStoriesEnabled,
+  getHideStoryConversationIds,
+  getStoriesState,
+  (
+    storiesEnabled,
+    hideStoryConversationIds,
+    { lastOpenedAtTimestamp, stories }
+  ): number => {
+    if (!storiesEnabled) {
+      return 0;
     }
 
-    const watermarkDirection =
-      direction === 'push' ? watermark - 1 : watermark + 1;
-    const prevPanel =
-      conversations.targetedConversationPanels.stack[watermarkDirection];
+    const hiddenConversationIds = new Set(hideStoryConversationIds);
+
+    return new Set(
+      stories
+        .filter(
+          story =>
+            story.readStatus === ReadStatus.Unread &&
+            !story.deletedForEveryone &&
+            story.timestamp > (lastOpenedAtTimestamp || 0) &&
+            !hiddenConversationIds.has(story.conversationId)
+        )
+        .map(story => story.conversationId)
+    ).size;
+  }
+);
+
+export const getOtherTabsUnreadStats = createSelector(
+  getSelectedNavTab,
+  getAllConversationsUnreadStats,
+  getCallHistoryUnreadCount,
+  getStoriesNotificationCount,
+  (
+    selectedNavTab,
+    conversationsUnreadStats,
+    callHistoryUnreadCount,
+    storiesNotificationCount
+  ): UnreadStats => {
+    let unreadCount = 0;
+    let unreadMentionsCount = 0;
+    let readChatsMarkedUnreadCount = 0;
+
+    if (selectedNavTab !== NavTab.Chats) {
+      unreadCount += conversationsUnreadStats.unreadCount;
+      unreadMentionsCount += conversationsUnreadStats.unreadMentionsCount;
+      readChatsMarkedUnreadCount +=
+        conversationsUnreadStats.readChatsMarkedUnreadCount;
+    }
+
+    // Note: Conversation unread stats includes the call history unread count.
+    if (selectedNavTab !== NavTab.Calls) {
+      unreadCount += callHistoryUnreadCount;
+    }
+
+    if (selectedNavTab !== NavTab.Stories) {
+      unreadCount += storiesNotificationCount;
+    }
 
     return {
-      currPanel,
-      direction,
-      prevPanel,
+      unreadCount,
+      unreadMentionsCount,
+      readChatsMarkedUnreadCount,
     };
-  }
-);
-
-export const getIsPanelAnimating = createSelector(
-  getConversations,
-  (conversations): boolean => {
-    return conversations.targetedConversationPanels.isAnimating;
-  }
-);
-
-export const getWasPanelAnimated = createSelector(
-  getConversations,
-  (conversations): boolean => {
-    return conversations.targetedConversationPanels.wasAnimated;
   }
 );
 
@@ -1461,20 +1553,10 @@ export const getLastEditableMessageId = createSelector(
       return;
     }
 
-    for (let i = conversationMessages.messageIds.length - 1; i >= 0; i -= 1) {
-      const messageId = conversationMessages.messageIds[i];
+    return conversationMessages.messageIds.findLast(messageId => {
       const message = messagesLookup[messageId];
-
-      if (!message) {
-        continue;
-      }
-
-      if (isOutgoing(message)) {
-        return canEditMessage(message) ? message.id : undefined;
-      }
-    }
-
-    return undefined;
+      return message != null && isOutgoing(message) && canEditMessage(message);
+    });
   }
 );
 

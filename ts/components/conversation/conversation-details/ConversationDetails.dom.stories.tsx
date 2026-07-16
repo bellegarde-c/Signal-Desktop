@@ -1,23 +1,28 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
 
 import { action } from '@storybook/addon-actions';
 import lodash from 'lodash';
 
 import type { Meta } from '@storybook/react';
-import type { Props } from './ConversationDetails.dom.js';
-import { ConversationDetails } from './ConversationDetails.dom.js';
-import { ChooseGroupMembersModal } from './AddGroupMembersModal/ChooseGroupMembersModal.dom.js';
-import { ConfirmAdditionsModal } from './AddGroupMembersModal/ConfirmAdditionsModal.dom.js';
-import type { ConversationType } from '../../../state/ducks/conversations.preload.js';
-import { getDefaultConversation } from '../../../test-helpers/getDefaultConversation.std.js';
-import { makeFakeLookupConversationWithoutServiceId } from '../../../test-helpers/fakeLookupConversationWithoutServiceId.std.js';
-import { ThemeType } from '../../../types/Util.std.js';
-import { DurationInSeconds } from '../../../util/durations/index.std.js';
-import { NavTab } from '../../../types/Nav.std.js';
-import { getFakeCallHistoryGroup } from '../../../test-helpers/getFakeCallHistoryGroup.std.js';
+import type { Props } from './ConversationDetails.dom.tsx';
+import { ConversationDetails } from './ConversationDetails.dom.tsx';
+import { ChooseGroupMembersModal } from './AddGroupMembersModal/ChooseGroupMembersModal.dom.tsx';
+import { ConfirmAdditionsModal } from './AddGroupMembersModal/ConfirmAdditionsModal.dom.tsx';
+import type { ConversationType } from '../../../state/ducks/conversations.preload.ts';
+import { getDefaultConversation } from '../../../test-helpers/getDefaultConversation.std.ts';
+import { makeFakeLookupConversationWithoutServiceId } from '../../../test-helpers/fakeLookupConversationWithoutServiceId.std.ts';
+import { ThemeType } from '../../../types/Util.std.ts';
+import { DurationInSeconds } from '../../../util/durations/index.std.ts';
+import { NavTab } from '../../../types/Nav.std.ts';
+import { getFakeCallHistoryGroup } from '../../../test-helpers/getFakeCallHistoryGroup.std.ts';
+import type { ContactNameColorType } from '../../../types/Colors.std.ts';
+import { ContactNameColors } from '../../../types/Colors.std.ts';
+import { isNotNil } from '../../../util/isNotNil.std.ts';
+import { strictAssert } from '../../../util/assert.std.ts';
+import { Emoji } from '../../../axo/emoji.std.ts';
 
 const { times } = lodash;
 
@@ -33,7 +38,6 @@ const conversation: ConversationType = getDefaultConversation({
   title: 'Some Conversation',
   groupDescription: 'Hello World!',
   type: 'group',
-  sharedGroupNames: [],
   conversationColor: 'ultramarine' as const,
 });
 
@@ -42,105 +46,151 @@ const allCandidateContacts = times(10, () => getDefaultConversation());
 const createProps = (
   hasGroupLink = false,
   expireTimer?: DurationInSeconds
-): Props => ({
-  acceptConversation: action('acceptConversation'),
-  addMembersToGroup: async () => {
-    action('addMembersToGroup');
-  },
-  areWeASubscriber: false,
-  blockConversation: action('blockConversation'),
-  canEditGroupInfo: false,
-  canAddNewMembers: false,
-  conversation: expireTimer
-    ? {
-        ...conversation,
-        expireTimer,
-      }
-    : conversation,
-  hasActiveCall: false,
-  hasGroupLink,
-  getPreferredBadge: () => undefined,
-  getProfilesForConversation: action('getProfilesForConversation'),
-  groupsInCommon: [],
-  i18n,
-  isAdmin: false,
-  isGroup: true,
-  isSignalConversation: false,
-  leaveGroup: action('leaveGroup'),
-  hasMedia: true,
-  memberships: times(32, i => ({
+): Props => {
+  const memberships = times(32, i => ({
     isAdmin: i === 1,
+    labelEmoji: i % 6 === 0 ? Emoji.GREEN_CIRCLE : undefined,
+    labelString: i % 3 === 0 ? `Task Wrangler ${i}` : undefined,
     member: getDefaultConversation({
       isMe: i === 2,
     }),
-  })),
-  maxGroupSize: 1001,
-  maxRecommendedGroupSize: 151,
-  pendingApprovalMemberships: times(8, () => ({
-    member: getDefaultConversation(),
-  })),
-  pendingMemberships: times(5, () => ({
-    metadata: {},
-    member: getDefaultConversation(),
-  })),
-  selectedNavTab: NavTab.Chats,
-  setDisappearingMessages: action('setDisappearingMessages'),
-  showContactModal: action('showContactModal'),
-  pushPanelForConversation: action('pushPanelForConversation'),
-  showConversation: action('showConversation'),
-  startAvatarDownload: action('startAvatarDownload'),
-  updateGroupAttributes: async () => {
-    action('updateGroupAttributes')();
-  },
-  deleteAvatarFromDisk: action('deleteAvatarFromDisk'),
-  replaceAvatar: action('replaceAvatar'),
-  saveAvatarToDisk: action('saveAvatarToDisk'),
-  setMuteExpiration: action('setMuteExpiration'),
-  userAvatarData: [],
-  toggleSafetyNumberModal: action('toggleSafetyNumberModal'),
-  toggleAboutContactModal: action('toggleAboutContactModal'),
-  toggleAddUserToAnotherGroupModal: action('toggleAddUserToAnotherGroup'),
-  onDeleteNicknameAndNote: action('onDeleteNicknameAndNote'),
-  onOpenEditNicknameAndNoteModal: action('onOpenEditNicknameAndNoteModal'),
-  onOutgoingAudioCallInConversation: action(
-    'onOutgoingAudioCallInConversation'
-  ),
-  onOutgoingVideoCallInConversation: action(
-    'onOutgoingVideoCallInConversation'
-  ),
-  searchInConversation: action('searchInConversation'),
-  theme: ThemeType.light,
-  renderChooseGroupMembersModal: props => {
-    return (
-      <ChooseGroupMembersModal
-        {...props}
-        candidateContacts={allCandidateContacts}
-        selectedContacts={[]}
-        regionCode="US"
-        theme={ThemeType.light}
-        i18n={i18n}
-        lookupConversationWithoutServiceId={makeFakeLookupConversationWithoutServiceId()}
-        ourE164={undefined}
-        ourUsername={undefined}
-        showUserNotFoundModal={action('showUserNotFoundModal')}
-        username={undefined}
-      />
-    );
-  },
-  renderConfirmAdditionsModal: props => {
-    return (
-      <ConfirmAdditionsModal {...props} selectedContacts={[]} i18n={i18n} />
-    );
-  },
-});
+  }));
+  const memberColors = new Map<string, ContactNameColorType>(
+    memberships
+      .map((membership, i): [string, ContactNameColorType] | null => {
+        const { serviceId } = membership.member;
 
-export function Basic(): React.JSX.Element {
+        if (!serviceId) {
+          return null;
+        }
+
+        return [
+          serviceId.toString(),
+          // oxlint-disable-next-line typescript/no-non-null-assertion
+          ContactNameColors[i % ContactNameColors.length]!,
+        ];
+      })
+      .filter(isNotNil)
+  );
+
+  return {
+    acceptConversation: action('acceptConversation'),
+    addMembersToGroup: async () => {
+      action('addMembersToGroup');
+    },
+    areWeASubscriber: false,
+    blockConversation: action('blockConversation'),
+    canEditGroupInfo: false,
+    canAddLabel: true,
+    canAddNewMembers: false,
+    conversation: expireTimer
+      ? {
+          ...conversation,
+          expireTimer,
+        }
+      : conversation,
+    hasActiveCall: false,
+    hasGroupLink,
+    getPreferredBadge: () => undefined,
+    getProfilesForConversation: action('getProfilesForConversation'),
+    groupsInCommon: [],
+    i18n,
+    isAdmin: false,
+    isEditMemberLabelEnabled: true,
+    isGroup: true,
+    isSignalConversation: false,
+    isTerminateGroupEnabled: true,
+    leaveGroup: action('leaveGroup'),
+    hasMedia: true,
+    memberships,
+    memberColors,
+    maxGroupSize: 1001,
+    maxRecommendedGroupSize: 151,
+    onNavigateToDonate: action('onNavigateToDonate'),
+    pendingApprovalMemberships: times(8, () => ({
+      member: getDefaultConversation(),
+    })),
+    pendingMemberships: times(5, () => ({
+      metadata: {},
+      member: getDefaultConversation(),
+    })),
+    selectedNavTab: NavTab.Chats,
+    setDisappearingMessages: action('setDisappearingMessages'),
+    showContactModal: action('showContactModal'),
+    pushPanelForConversation: action('pushPanelForConversation'),
+    showConversation: action('showConversation'),
+    startAvatarDownload: action('startAvatarDownload'),
+    updateGroupAttributes: async () => {
+      action('updateGroupAttributes')();
+    },
+    deleteAvatarFromDisk: action('deleteAvatarFromDisk'),
+    replaceAvatar: action('replaceAvatar'),
+    saveAvatarToDisk: action('saveAvatarToDisk'),
+    setMuteDuration: action('setMuteDuration'),
+    showToast: action('showToast'),
+    userAvatarData: [],
+    reportSpam: action('reportSpam'),
+    terminateGroup: action('terminateGroup'),
+    toggleSafetyNumberModal: action('toggleSafetyNumberModal'),
+    toggleAboutContactModal: action('toggleAboutContactModal'),
+    toggleAddUserToAnotherGroupModal: action('toggleAddUserToAnotherGroup'),
+    onConversationArchive: action('onConversationArchive'),
+    onConversationDeleteMessages: action('onConversationDeleteMessages'),
+    onConversationUnarchive: action('onConversationUnarchive'),
+    onDeleteNicknameAndNote: action('onDeleteNicknameAndNote'),
+    onOpenEditNicknameAndNoteModal: action('onOpenEditNicknameAndNoteModal'),
+    onOutgoingAudioCallInConversation: action(
+      'onOutgoingAudioCallInConversation'
+    ),
+    onOutgoingVideoCallInConversation: action(
+      'onOutgoingVideoCallInConversation'
+    ),
+    searchInConversation: action('searchInConversation'),
+    theme: ThemeType.light,
+    renderChooseGroupMembersModal: props => {
+      return (
+        <ChooseGroupMembersModal
+          {...props}
+          candidateContacts={allCandidateContacts}
+          selectedContacts={[]}
+          regionCode="US"
+          theme={ThemeType.light}
+          i18n={i18n}
+          lookupConversationWithoutServiceId={makeFakeLookupConversationWithoutServiceId()}
+          ourE164={undefined}
+          ourUsername={undefined}
+          showUserNotFoundModal={action('showUserNotFoundModal')}
+          username={undefined}
+        />
+      );
+    },
+    renderConfirmAdditionsModal: props => {
+      return (
+        <ConfirmAdditionsModal {...props} selectedContacts={[]} i18n={i18n} />
+      );
+    },
+  };
+};
+
+export function Basic(): JSX.Element {
   const props = createProps();
 
   return <ConversationDetails {...props} />;
 }
 
-export function SystemContact(): React.JSX.Element {
+export function MemberLabelsEditDisabled(): JSX.Element {
+  const props = createProps();
+
+  return <ConversationDetails {...props} isEditMemberLabelEnabled={false} />;
+}
+
+export function MemberLabelsCannotBeAdded(): JSX.Element {
+  const props = createProps();
+
+  return <ConversationDetails {...props} canAddLabel={false} />;
+}
+
+export function SystemContact(): JSX.Element {
   const props = createProps();
   const contact = getDefaultConversation();
 
@@ -156,13 +206,13 @@ export function SystemContact(): React.JSX.Element {
   );
 }
 
-export function AsAdmin(): React.JSX.Element {
+export function AsAdmin(): JSX.Element {
   const props = createProps();
 
   return <ConversationDetails {...props} isAdmin />;
 }
 
-export function AsLastAdmin(): React.JSX.Element {
+export function AsLastAdmin(): JSX.Element {
   const props = createProps();
 
   return (
@@ -171,6 +221,8 @@ export function AsLastAdmin(): React.JSX.Element {
       isAdmin
       memberships={times(32, i => ({
         isAdmin: i === 2,
+        labelEmoji: i % 6 === 0 ? Emoji.GREEN_CIRCLE : undefined,
+        labelString: i % 3 === 0 ? `Last Admin ${i}` : undefined,
         member: getDefaultConversation({
           isMe: i === 2,
         }),
@@ -179,7 +231,7 @@ export function AsLastAdmin(): React.JSX.Element {
   );
 }
 
-export function AsOnlyAdmin(): React.JSX.Element {
+export function AsOnlyAdmin(): JSX.Element {
   const props = createProps();
 
   return (
@@ -189,6 +241,8 @@ export function AsOnlyAdmin(): React.JSX.Element {
       memberships={[
         {
           isAdmin: true,
+          labelEmoji: undefined,
+          labelString: undefined,
           member: getDefaultConversation({
             isMe: true,
           }),
@@ -198,29 +252,41 @@ export function AsOnlyAdmin(): React.JSX.Element {
   );
 }
 
-export function GroupEditable(): React.JSX.Element {
+export function GroupEditable(): JSX.Element {
   const props = createProps();
 
   return <ConversationDetails {...props} canEditGroupInfo />;
 }
 
-export function GroupEditableWithCustomDisappearingTimeout(): React.JSX.Element {
+export function GroupEditableEditLabelDisabled(): JSX.Element {
+  const props = createProps();
+
+  return (
+    <ConversationDetails
+      {...props}
+      canEditGroupInfo
+      isEditMemberLabelEnabled={false}
+    />
+  );
+}
+
+export function GroupEditableWithCustomDisappearingTimeout(): JSX.Element {
   const props = createProps(false, DurationInSeconds.fromDays(3));
 
   return <ConversationDetails {...props} canEditGroupInfo />;
 }
 
-export function GroupLinksOn(): React.JSX.Element {
+export function GroupLinksOn(): JSX.Element {
   const props = createProps(true);
 
   return <ConversationDetails {...props} isAdmin />;
 }
 
-export const _11 = (): React.JSX.Element => (
+export const _11 = (): JSX.Element => (
   <ConversationDetails {...createProps()} isGroup={false} />
 );
 
-export function WithCallHistoryGroup(): React.JSX.Element {
+export function WithCallHistoryGroup(): JSX.Element {
   const props = createProps();
 
   return (
@@ -234,22 +300,69 @@ export function WithCallHistoryGroup(): React.JSX.Element {
   );
 }
 
-export function InAnotherCallGroup(): React.JSX.Element {
+export function InAnotherCallGroup(): JSX.Element {
   const props = createProps();
 
   return <ConversationDetails {...props} hasActiveCall />;
 }
 
-export function InAnotherCallIndividual(): React.JSX.Element {
+export function InAnotherCallIndividual(): JSX.Element {
   const props = createProps();
 
   return <ConversationDetails {...props} hasActiveCall isGroup={false} />;
 }
 
-export function SignalConversation(): React.JSX.Element {
+export function SignalConversation(): JSX.Element {
   const props = createProps();
 
   return (
     <ConversationDetails {...props} isSignalConversation isGroup={false} />
+  );
+}
+
+export function TerminatedGroup(): JSX.Element {
+  const props = createProps();
+  strictAssert(props.conversation, 'conversation must exist');
+
+  return (
+    <ConversationDetails
+      {...props}
+      canAddLabel={false}
+      canAddNewMembers={false}
+      canEditGroupInfo={false}
+      conversation={{
+        ...props.conversation,
+        terminated: true,
+      }}
+    />
+  );
+}
+
+export function TerminatedGroupAsAdmin(): JSX.Element {
+  const props = createProps();
+  strictAssert(props.conversation, 'conversation must exist');
+
+  return (
+    <ConversationDetails
+      {...props}
+      conversation={{
+        ...props.conversation,
+        terminated: true,
+      }}
+      canAddLabel={false}
+      canAddNewMembers={false}
+      canEditGroupInfo={false}
+      isAdmin
+      memberships={[
+        {
+          isAdmin: true,
+          labelEmoji: undefined,
+          labelString: undefined,
+          member: getDefaultConversation({
+            isMe: true,
+          }),
+        },
+      ]}
+    />
   );
 }

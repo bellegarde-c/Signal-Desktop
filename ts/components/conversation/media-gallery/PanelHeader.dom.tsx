@@ -1,22 +1,35 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 
-import { tw } from '../../../axo/tw.dom.js';
-import { ExperimentalAxoSegmentedControl } from '../../../axo/AxoSegmentedControl.dom.js';
-import { AxoSelect } from '../../../axo/AxoSelect.dom.js';
-import type { LocalizerType } from '../../../types/Util.std.js';
-import type { MediaTabType } from '../../../types/MediaItem.std.js';
+import { tw } from '../../../axo/tw.dom.tsx';
+import { ExperimentalAxoSegmentedControl } from '../../../axo/AxoSegmentedControl.dom.tsx';
+import { AxoSelect } from '../../../axo/AxoSelect.dom.tsx';
+import { AxoDropdownMenu } from '../../../axo/AxoDropdownMenu.dom.tsx';
+import { AxoIconButton } from '../../../axo/AxoIconButton.dom.tsx';
+import type { LocalizerType } from '../../../types/Util.std.ts';
+import type {
+  MediaTabType,
+  MediaSortOrderType,
+} from '../../../types/MediaItem.std.ts';
 
 // Provided by smart layer
 export type Props = Readonly<{
   i18n: LocalizerType;
   tab: MediaTabType;
   setTab: (newTab: MediaTabType) => void;
+  sortOrder: MediaSortOrderType;
+  setSortOrder: (newOrder: MediaSortOrderType) => void;
 }>;
 
-export function PanelHeader({ i18n, tab, setTab }: Props): React.JSX.Element {
+export function PanelHeader({
+  i18n,
+  tab,
+  setTab,
+  sortOrder,
+  setSortOrder,
+}: Props): JSX.Element {
   const setSelectedTabWithDefault = useCallback(
     (value: string | null) => {
       switch (value) {
@@ -36,16 +49,14 @@ export function PanelHeader({ i18n, tab, setTab }: Props): React.JSX.Element {
     [setTab]
   );
 
+  const isNonDefaultSorting = sortOrder !== 'date';
+
   return (
     <div
-      className={tw(
-        '@container',
-        'grow',
-        'flex flex-row justify-center-safe',
-        // This matches the width of back button so that tabs are centered
-        'pe-[50px]'
-      )}
+      className={tw('@container', 'grow', 'flex flex-row justify-center-safe')}
     >
+      <div className={tw('grow')} />
+
       <div className={tw('hidden max-w-[320px] grow @min-[260px]:block')}>
         <ExperimentalAxoSegmentedControl.Root
           variant="no-track"
@@ -107,6 +118,38 @@ export function PanelHeader({ i18n, tab, setTab }: Props): React.JSX.Element {
           </AxoSelect.Content>
         </AxoSelect.Root>
       </div>
+
+      <div className={tw('grow')} />
+
+      <AxoDropdownMenu.Root>
+        <AxoDropdownMenu.Trigger>
+          <AxoIconButton.Root
+            variant={isNonDefaultSorting ? 'primary' : 'borderless-secondary'}
+            size="md"
+            symbol="sort-vertical"
+            label={i18n('icu:MediaGallery__sort')}
+          />
+        </AxoDropdownMenu.Trigger>
+        <AxoDropdownMenu.Content>
+          <AxoDropdownMenu.Label>
+            {i18n('icu:MediaGallery__sort--header')}
+          </AxoDropdownMenu.Label>
+          <AxoDropdownMenu.CheckboxItem
+            checked={sortOrder === 'date'}
+            onCheckedChange={() => setSortOrder('date')}
+          >
+            {i18n('icu:MediaGallery__sort__date')}
+          </AxoDropdownMenu.CheckboxItem>
+          <AxoDropdownMenu.CheckboxItem
+            checked={sortOrder === 'size'}
+            onCheckedChange={() => setSortOrder('size')}
+          >
+            {i18n('icu:MediaGallery__sort__size')}
+          </AxoDropdownMenu.CheckboxItem>
+        </AxoDropdownMenu.Content>
+      </AxoDropdownMenu.Root>
+
+      <div className={tw('min-w-4.5')} />
     </div>
   );
 }

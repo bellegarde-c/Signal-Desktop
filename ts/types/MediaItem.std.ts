@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { MessageAttributesType, CustomError } from '../model-types.d.ts';
-import type { SendStateByConversationId } from '../messages/MessageSendState.std.js';
-import type { ReadStatus } from '../messages/MessageReadStatus.std.js';
-import type { AttachmentForUIType } from './Attachment.std.js';
-import type { LinkPreviewForUIType } from './message/LinkPreviews.std.js';
-import type { ServiceIdString } from './ServiceId.std.js';
+import type { SendStateByConversationId } from '../messages/MessageSendState.std.ts';
+import type { ReadStatus } from '../messages/MessageReadStatus.std.ts';
+import type { AttachmentForUIType } from './Attachment.std.ts';
+import type { LinkPreviewForUIType } from './message/LinkPreviews.std.ts';
+import type { ServiceIdString } from './ServiceId.std.ts';
+import type { EmbeddedContactForUIType } from './EmbeddedContact.std.ts';
 
 export type MediaTabType = 'media' | 'audio' | 'links' | 'documents';
+
+export type MediaSortOrderType = 'date' | 'size';
 
 export type MediaItemMessageType = Readonly<{
   id: string;
@@ -38,4 +41,13 @@ export type LinkPreviewMediaItemType = Readonly<{
   message: MediaItemMessageType;
 }>;
 
-export type GenericMediaItemType = MediaItemType | LinkPreviewMediaItemType;
+export type ContactMediaItemType = Readonly<{
+  type: 'contact';
+  contact: EmbeddedContactForUIType;
+  message: MediaItemMessageType;
+}>;
+
+export type GenericMediaItemType =
+  | MediaItemType
+  | LinkPreviewMediaItemType
+  | ContactMediaItemType;

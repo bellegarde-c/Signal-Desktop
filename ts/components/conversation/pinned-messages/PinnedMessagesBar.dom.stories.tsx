@@ -1,20 +1,40 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReactNode } from 'react';
-import React, { useState } from 'react';
+import type { ReactNode, JSX } from 'react';
+import { useState } from 'react';
 import type { Meta } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
-import type { Pin, PinMessage } from './PinnedMessagesBar.dom.js';
-import { PinnedMessagesBar } from './PinnedMessagesBar.dom.js';
-import { tw } from '../../../axo/tw.dom.js';
-import type { PinnedMessageId } from '../../../types/PinnedMessage.std.js';
-import { BodyRange } from '../../../types/BodyRange.std.js';
+import type { Pin, PinMessage } from './PinnedMessagesBar.dom.tsx';
+import { PinnedMessagesBar } from './PinnedMessagesBar.dom.tsx';
+import { tw } from '../../../axo/tw.dom.tsx';
+import type { PinnedMessageId } from '../../../types/PinnedMessage.std.ts';
+import { BodyRange } from '../../../types/BodyRange.std.ts';
 
 const { i18n } = window.SignalContext;
 
 export default {
   title: 'Components/PinnedMessages/PinnedMessagesBar',
 } satisfies Meta;
+
+type MockPinMessageProps = Partial<
+  Omit<PinMessage, 'id' | 'sentAtTimestamp' | 'receivedAtCounter'>
+>;
+
+function mockPinMessage(id: number, props: MockPinMessageProps): PinMessage {
+  return {
+    id: `message-${id}`,
+    sentAtTimestamp: id,
+    receivedAtCounter: id,
+    text: null,
+    attachment: null,
+    contact: null,
+    payment: false,
+    poll: null,
+    sticker: false,
+    viewOnceMedia: false,
+    ...props,
+  };
+}
 
 const PIN_1: Pin = {
   id: 1 as PinnedMessageId,
@@ -23,14 +43,11 @@ const PIN_1: Pin = {
     title: 'Jamie',
     isMe: true,
   },
-  message: {
-    id: 'message-1',
-    sentAtTimestamp: 1,
-    receivedAtCounter: 1,
+  message: mockPinMessage(1, {
     poll: {
       question: 'What should we get for lunch?',
     },
-  },
+  }),
 };
 
 const PIN_2: Pin = {
@@ -40,10 +57,7 @@ const PIN_2: Pin = {
     title: 'Tyler',
     isMe: false,
   },
-  message: {
-    id: 'message-2',
-    sentAtTimestamp: 2,
-    receivedAtCounter: 2,
+  message: mockPinMessage(2, {
     text: {
       body: 'We found a cute pottery store close to Inokashira Park that we’re going to check out on Saturday. Anyone want to meet at the south exit at Kichijoji station at 1pm? Too early?',
       bodyRanges: [
@@ -51,7 +65,7 @@ const PIN_2: Pin = {
         { start: 39, length: 15, style: BodyRange.Style.SPOILER },
       ],
     },
-  },
+  }),
 };
 
 const PIN_3: Pin = {
@@ -61,10 +75,7 @@ const PIN_3: Pin = {
     title: 'Adrian',
     isMe: false,
   },
-  message: {
-    id: 'message-3',
-    sentAtTimestamp: 3,
-    receivedAtCounter: 3,
+  message: mockPinMessage(3, {
     text: {
       body: 'Photo',
       bodyRanges: [],
@@ -73,7 +84,7 @@ const PIN_3: Pin = {
       type: 'image',
       url: '/fixtures/tina-rolf-269345-unsplash.jpg',
     },
-  },
+  }),
 };
 
 function Template(props: {
@@ -103,7 +114,7 @@ function Stack(props: { children: ReactNode }) {
   );
 }
 
-export function Default(): React.JSX.Element {
+export function Default(): JSX.Element {
   return (
     <Stack>
       <Template defaultCurrent={PIN_1.id} pins={[PIN_1]} />
@@ -113,10 +124,7 @@ export function Default(): React.JSX.Element {
   );
 }
 
-function Variant(props: {
-  title: string;
-  message: Omit<PinMessage, 'id' | 'sentAtTimestamp' | 'receivedAtCounter'>;
-}) {
+function Variant(props: { title: string; message: MockPinMessageProps }) {
   const pin: Pin = {
     id: 1 as PinnedMessageId,
     sender: {
@@ -124,12 +132,7 @@ function Variant(props: {
       title: props.title,
       isMe: true,
     },
-    message: {
-      id: 'message-1',
-      sentAtTimestamp: 1,
-      receivedAtCounter: 1,
-      ...props.message,
-    },
+    message: mockPinMessage(1, props.message),
   };
   return <Template defaultCurrent={pin.id} pins={[pin]} />;
 }
@@ -137,7 +140,7 @@ function Variant(props: {
 const SHORT_TEXT = 'Lorem, ipsum dolor sit amet';
 const IMAGE_URL = '/fixtures/tina-rolf-269345-unsplash.jpg';
 
-export function Variants(): React.JSX.Element {
+export function Variants(): JSX.Element {
   return (
     <Stack>
       <Variant
@@ -179,9 +182,28 @@ export function Variants(): React.JSX.Element {
         title="Poll"
         message={{ poll: { question: `${SHORT_TEXT}?` } }}
       />
-      <Variant title="Sticker" message={{ sticker: true }} />
-      <Variant title="Contact" message={{ contact: { name: 'Tyler' } }} />
+      <Variant
+        title="Sticker"
+        message={{
+          sticker: true,
+          attachment: { type: 'image', url: IMAGE_URL },
+        }}
+      />
+      <Variant
+        title="Contact"
+        message={{
+          contact: { name: 'Tyler' },
+          attachment: { type: 'file', name: '' },
+        }}
+      />
       <Variant title="Payment" message={{ payment: true }} />
+      <Variant
+        title="View-Once Media"
+        message={{
+          viewOnceMedia: true,
+          attachment: { type: 'image', url: IMAGE_URL },
+        }}
+      />
     </Stack>
   );
 }

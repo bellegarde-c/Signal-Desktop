@@ -1,9 +1,9 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { LocalizerType } from '../types/Util.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { PanelType } from '../types/Panels.std.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { PanelType } from '../types/Panels.std.ts';
 
 const log = createLogger('getConversationTitleForPanelType');
 
@@ -33,6 +33,10 @@ export function getConversationTitleForPanelType(
 
   if (panelType === PanelType.GroupInvites) {
     return i18n('icu:ConversationDetails--requests-and-invites');
+  }
+
+  if (panelType === PanelType.GroupMemberLabelEditor) {
+    return i18n('icu:ConversationDetails--member-label');
   }
 
   if (panelType === PanelType.GroupLinkManagement) {

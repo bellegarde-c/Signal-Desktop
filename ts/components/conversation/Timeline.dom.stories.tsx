@@ -1,44 +1,33 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
-import lodash from 'lodash';
+import { useContext, type JSX } from 'react';
 import { v4 as uuid } from 'uuid';
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import { DurationInSeconds } from '../../util/durations/index.std.js';
-import type { PropsType } from './Timeline.dom.js';
-import { Timeline } from './Timeline.dom.js';
-import type { TimelineItemType } from './TimelineItem.dom.js';
-import { TimelineItem } from './TimelineItem.dom.js';
-import { StorybookThemeContext } from '../../../.storybook/StorybookThemeContext.std.js';
-import { ConversationHero } from './ConversationHero.dom.js';
-import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.js';
-import { TypingBubble } from './TypingBubble.dom.js';
-import { ContactSpoofingType } from '../../util/contactSpoofing.std.js';
-import { ReadStatus } from '../../messages/MessageReadStatus.std.js';
-import type { WidthBreakpoint } from '../_util.std.js';
-import { ThemeType } from '../../types/Util.std.js';
-import { MessageInteractivity, TextDirection } from './Message.dom.js';
-import { PaymentEventKind } from '../../types/Payment.std.js';
-import type { PropsData as TimelineMessageProps } from './TimelineMessage.dom.js';
-import { CollidingAvatars } from '../CollidingAvatars.dom.js';
-
-const { times } = lodash;
+import { DurationInSeconds } from '../../util/durations/index.std.ts';
+import type { PropsType } from './Timeline.dom.tsx';
+import { Timeline } from './Timeline.dom.tsx';
+import type { TimelineItemType } from './TimelineItem.dom.tsx';
+import { TimelineItem } from './TimelineItem.dom.tsx';
+import { StorybookThemeContext } from '../../../.storybook/StorybookThemeContext.std.ts';
+import { ConversationHero } from './ConversationHero.dom.tsx';
+import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.ts';
+import { TypingBubble } from './TypingBubble.dom.tsx';
+import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
+import { ThemeType } from '../../types/Util.std.ts';
+import { MessageInteractivity, TextDirection } from './Message.dom.tsx';
+import { PaymentEventKind } from '../../types/Payment.std.ts';
+import type { PropsData as TimelineMessageProps } from './TimelineMessage.dom.tsx';
+import type { RenderItemProps } from '../../state/smart/TimelineItem.preload.tsx';
 
 const { i18n } = window.SignalContext;
-
-const alice = getDefaultConversation();
-const bob = getDefaultConversation();
 
 export default {
   title: 'Components/Conversation/Timeline',
   argTypes: {},
   args: {},
 } satisfies Meta<PropsType>;
-
-// eslint-disable-next-line
-const noop = () => {};
 
 function mockMessageTimelineItem(
   id: string,
@@ -55,10 +44,11 @@ function mockMessageTimelineItem(
       canEditMessage: true,
       canEndPoll: false,
       canForward: true,
-      canPinMessages: true,
+      canPinMessage: true,
       canReact: true,
       canReply: true,
       canRetry: true,
+      canSendPollVote: true,
       conversationId: 'conversation-id',
       conversationTitle: 'Conversation Title',
       conversationType: 'group',
@@ -66,12 +56,12 @@ function mockMessageTimelineItem(
       direction: 'incoming',
       status: 'sent',
       text: 'Hello there from the new world!',
-      hasMaxPinnedMessages: false,
       isBlocked: false,
       isMessageRequestAccepted: true,
       isPinned: false,
       isSelected: false,
       isSelectMode: false,
+      isSignalConversation: false,
       isSMS: false,
       isSpoilerExpanded: {},
       isVoiceMessagePlayed: false,
@@ -289,7 +279,6 @@ const actions = () => ({
   targetMessage: action('targetMessage'),
   scrollToOldestUnreadMention: action('scrollToOldestUnreadMention'),
   clearTargetedMessage: action('clearTargetedMessage'),
-  updateSharedGroups: action('updateSharedGroups'),
 
   endPoll: action('endPoll'),
   reactToMessage: action('reactToMessage'),
@@ -315,7 +304,7 @@ const actions = () => ({
   doubleCheckMissingQuoteReference: action('doubleCheckMissingQuoteReference'),
 
   openGiftBadge: action('openGiftBadge'),
-  onPinnedMessageAdd: action('onPinnedMessageAdd'),
+  showPinMessageDialog: action('showPinMessageDialog'),
   onPinnedMessageRemove: action('onPinnedMessageRemove'),
   scrollToPinnedMessage: action('scrollToPinnedMessage'),
   scrollToPollMessage: action('scrollToPollMessage'),
@@ -362,20 +351,20 @@ const actions = () => ({
 });
 
 const renderItem = ({
-  messageId,
+  item,
   containerElementRef,
   containerWidthBreakpoint,
-}: {
-  messageId: string;
-  containerElementRef: React.RefObject<HTMLElement>;
-  containerWidthBreakpoint: WidthBreakpoint;
-}) => (
+}: RenderItemProps) => (
   <TimelineItem
     getPreferredBadge={() => undefined}
+    getSharedGroupNames={() => []}
     id=""
     isTargeted={false}
     isBlocked={false}
     isGroup={false}
+    isSelectMode={false}
+    isSelected={false}
+    isSignalConversation={false}
     i18n={i18n}
     interactivity={MessageInteractivity.Normal}
     interactionMode="keyboard"
@@ -385,9 +374,11 @@ const renderItem = ({
     containerElementRef={containerElementRef}
     containerWidthBreakpoint={containerWidthBreakpoint}
     conversationId=""
-    item={items[messageId]}
+    item={items[item.id]}
+    handleDebugMessage={action('handleDebugMessage')}
     renderAudioAttachment={() => <div>*AudioAttachment*</div>}
     renderContact={() => <div>*ContactName*</div>}
+    renderItem={renderItem}
     renderReactionPicker={() => <div />}
     renderUniversalTimerNotification={() => (
       <div>*UniversalTimerNotification*</div>
@@ -396,6 +387,7 @@ const renderItem = ({
     shouldCollapseBelow={false}
     shouldHideMetadata={false}
     shouldRenderDateHeader={false}
+    targetedMessage={undefined}
     {...actions()}
   />
 );
@@ -413,7 +405,7 @@ const getPhoneNumber = () => '+1 (808) 555-1234';
 
 const renderHeroRow = () => {
   function Wrapper() {
-    const theme = React.useContext(StorybookThemeContext);
+    const theme = useContext(StorybookThemeContext);
     return (
       <ConversationHero
         about={getAbout()}
@@ -421,8 +413,12 @@ const renderHeroRow = () => {
         avatarUrl={getAvatarPath()}
         badge={undefined}
         conversationType="direct"
-        id={getDefaultConversation().id}
+        hasNickname={false}
+        hasProfileName
         i18n={i18n}
+        id={getDefaultConversation().id}
+        isGroupNameVerified={false}
+        isInSystemContacts={false}
         isMe={false}
         phoneNumber={getPhoneNumber()}
         profileName={getProfileName()}
@@ -432,7 +428,6 @@ const renderHeroRow = () => {
         title={getTitle()}
         startAvatarDownload={action('startAvatarDownload')}
         pendingAvatarDownload={false}
-        updateSharedGroups={noop}
         viewUserStories={action('viewUserStories')}
         toggleAboutContactModal={action('toggleAboutContactModal')}
         toggleProfileNameWarningModal={action('toggleProfileNameWarningModal')}
@@ -455,66 +450,61 @@ const renderTypingBubble = () => (
     theme={ThemeType.light}
   />
 );
-const renderCollidingAvatars = () => (
-  <CollidingAvatars i18n={i18n} conversations={[alice, bob]} />
-);
-const renderMiniPlayer = () => (
-  <div>If active, this is where smart mini player would be</div>
-);
-
-const renderPinnedMessagesBar = () => (
-  <div>If active, this is where the smart pinned messages bar would be</div>
-);
 
 const useProps = (overrideProps: Partial<PropsType> = {}): PropsType => ({
   discardMessages: action('discardMessages'),
   getPreferredBadge: () => undefined,
   i18n,
-  theme: React.useContext(StorybookThemeContext),
+  theme: useContext(StorybookThemeContext),
 
   getTimestampForMessage: Date.now,
   haveNewest: overrideProps.haveNewest ?? false,
   haveOldest: overrideProps.haveOldest ?? false,
   isBlocked: false,
   isConversationSelected: true,
+  isGroupTerminated: false,
   isIncomingMessageRequest: overrideProps.isIncomingMessageRequest ?? false,
   isInFullScreenCall: false,
-  items: overrideProps.items ?? Object.keys(items),
+  isSignalConversation: false,
+  items:
+    overrideProps.items ??
+    Object.keys(items).map(id => ({
+      type: 'none' as const,
+      id,
+      messages: undefined,
+    })),
   messageChangeCounter: 0,
   messageLoadingState: null,
   isNearBottom: null,
   scrollToIndex: overrideProps.scrollToIndex ?? null,
   scrollToIndexCounter: 0,
-  shouldShowMiniPlayer: Boolean(overrideProps.shouldShowMiniPlayer),
-  shouldShowPinnedMessagesBar: false,
   totalUnseen: overrideProps.totalUnseen ?? 0,
   oldestUnseenIndex: overrideProps.oldestUnseenIndex ?? 0,
   invitedContactsForNewlyCreatedGroup:
     overrideProps.invitedContactsForNewlyCreatedGroup || [],
-  warning: overrideProps.warning,
   hasContactSpoofingReview: false,
   conversationType: 'direct',
 
   id: uuid(),
   renderItem,
   renderHeroRow,
-  renderMiniPlayer,
-  renderPinnedMessagesBar,
   renderTypingBubble,
-  renderCollidingAvatars,
   renderContactSpoofingReviewDialog,
   isSomeoneTyping: overrideProps.isSomeoneTyping || false,
 
   ...actions(),
 });
 
-export function OldestAndNewest(): React.JSX.Element {
-  const props = useProps();
+export function OldestAndNewest(): JSX.Element {
+  const props = useProps({
+    haveOldest: true,
+    haveNewest: true,
+  });
 
   return <Timeline {...props} />;
 }
 
-export function WithActiveMessageRequest(): React.JSX.Element {
+export function WithActiveMessageRequest(): JSX.Element {
   const props = useProps({
     isIncomingMessageRequest: true,
   });
@@ -522,7 +512,7 @@ export function WithActiveMessageRequest(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function WithoutNewestMessage(): React.JSX.Element {
+export function WithoutNewestMessage(): JSX.Element {
   const props = useProps({
     haveNewest: false,
   });
@@ -530,7 +520,7 @@ export function WithoutNewestMessage(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function WithoutNewestMessageActiveMessageRequest(): React.JSX.Element {
+export function WithoutNewestMessageActiveMessageRequest(): JSX.Element {
   const props = useProps({
     haveOldest: false,
     isIncomingMessageRequest: true,
@@ -539,7 +529,7 @@ export function WithoutNewestMessageActiveMessageRequest(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function WithoutOldestMessage(): React.JSX.Element {
+export function WithoutOldestMessage(): JSX.Element {
   const props = useProps({
     haveOldest: false,
     scrollToIndex: -1,
@@ -548,7 +538,7 @@ export function WithoutOldestMessage(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function EmptyJustHero(): React.JSX.Element {
+export function EmptyJustHero(): JSX.Element {
   const props = useProps({
     items: [],
   });
@@ -556,7 +546,7 @@ export function EmptyJustHero(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function LastSeen(): React.JSX.Element {
+export function LastSeen(): JSX.Element {
   const props = useProps({
     oldestUnseenIndex: 13,
     totalUnseen: 2,
@@ -565,7 +555,7 @@ export function LastSeen(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function TargetIndexToTop(): React.JSX.Element {
+export function TargetIndexToTop(): JSX.Element {
   const props = useProps({
     scrollToIndex: 0,
   });
@@ -573,13 +563,7 @@ export function TargetIndexToTop(): React.JSX.Element {
   return <Timeline {...props} />;
 }
 
-export function TypingIndicator(): React.JSX.Element {
-  const props = useProps({ isSomeoneTyping: true });
-
-  return <Timeline {...props} />;
-}
-
-export function WithInvitedContactsForANewlyCreatedGroup(): React.JSX.Element {
+export function WithInvitedContactsForANewlyCreatedGroup(): JSX.Element {
   const props = useProps({
     invitedContactsForNewlyCreatedGroup: [
       getDefaultConversation({
@@ -591,60 +575,6 @@ export function WithInvitedContactsForANewlyCreatedGroup(): React.JSX.Element {
         title: 'Bon John Bon Jovi',
       }),
     ],
-  });
-
-  return <Timeline {...props} />;
-}
-
-export function WithSameNameInDirectConversationWarning(): React.JSX.Element {
-  const props = useProps({
-    warning: {
-      type: ContactSpoofingType.DirectConversationWithSameTitle,
-
-      // Just to pacify type-script
-      safeConversationId: '123',
-    },
-    items: [],
-  });
-
-  return <Timeline {...props} />;
-}
-
-export function WithSameNameInGroupConversationWarning(): React.JSX.Element {
-  const props = useProps({
-    warning: {
-      type: ContactSpoofingType.MultipleGroupMembersWithSameTitle,
-      acknowledgedGroupNameCollisions: {},
-      groupNameCollisions: {
-        Alice: times(2, () => uuid()),
-      },
-    },
-    items: [],
-  });
-
-  return <Timeline {...props} />;
-}
-
-export function WithSameNamesInGroupConversationWarning(): React.JSX.Element {
-  const props = useProps({
-    warning: {
-      type: ContactSpoofingType.MultipleGroupMembersWithSameTitle,
-      acknowledgedGroupNameCollisions: {},
-      groupNameCollisions: {
-        Alice: times(2, () => uuid()),
-        Bob: times(3, () => uuid()),
-      },
-    },
-    items: [],
-  });
-
-  return <Timeline {...props} />;
-}
-
-export function WithJustMiniPlayer(): React.JSX.Element {
-  const props = useProps({
-    shouldShowMiniPlayer: true,
-    items: [],
   });
 
   return <Timeline {...props} />;
