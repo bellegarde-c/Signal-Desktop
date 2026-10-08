@@ -9,5 +9,9 @@ export const LINK_SIGNAL_DESKTOP =
   'https://support.signal.org/hc/articles/360007320451#desktop_multiple_device';
 export const SAFETY_NUMBER_URL =
   'https://support.signal.org/hc/articles/360007060632';
+export const KEY_TRANSPARENCY_URL =
+  'https://support.signal.org/hc/articles/10223569377562';
 export const SYNCING_MESSAGES_SECURITY_URL =
   'https://support.signal.org/hc/articles/360007320391';
+export const RESTORE_ACCOUNT_URL =
+  'https://support.signal.org/hc/articles/11197884108826/';

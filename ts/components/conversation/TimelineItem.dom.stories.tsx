@@ -1,21 +1,22 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import { Fragment, createRef, type JSX } from 'react';
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import { DurationInSeconds } from '../../util/durations/index.std.js';
-import type { PropsType as TimelineItemProps } from './TimelineItem.dom.js';
-import { TimelineItem } from './TimelineItem.dom.js';
-import { UniversalTimerNotification } from './UniversalTimerNotification.dom.js';
-import { CallMode } from '../../types/CallDisposition.std.js';
-import { AvatarColors } from '../../types/Colors.std.js';
-import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.js';
-import { WidthBreakpoint } from '../_util.std.js';
-import { ThemeType } from '../../types/Util.std.js';
-import { PaymentEventKind } from '../../types/Payment.std.js';
-import { ErrorBoundary } from './ErrorBoundary.dom.js';
-import { MessageInteractivity } from './Message.dom.js';
+import { DurationInSeconds } from '../../util/durations/index.std.ts';
+import type { PropsType as TimelineItemProps } from './TimelineItem.dom.tsx';
+import { TimelineItem } from './TimelineItem.dom.tsx';
+import { UniversalTimerNotification } from './UniversalTimerNotification.dom.tsx';
+import { CallMode } from '../../types/CallDisposition.std.ts';
+import { AvatarColors } from '../../types/Colors.std.ts';
+import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.ts';
+import { WidthBreakpoint } from '../_util.std.ts';
+import { ThemeType } from '../../types/Util.std.ts';
+import { PaymentEventKind } from '../../types/Payment.std.ts';
+import { ErrorBoundary } from './ErrorBoundary.dom.tsx';
+import { MessageInteractivity } from './Message.dom.tsx';
+import { MessageRequestResponseEvent } from '../../types/MessageRequestResponseEvent.std.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -24,7 +25,7 @@ const renderReactionPicker: TimelineItemProps['renderReactionPicker'] = () => (
 );
 
 const renderContact = (conversationId: string) => (
-  <React.Fragment key={conversationId}>{conversationId}</React.Fragment>
+  <Fragment key={conversationId}>Contact name</Fragment>
 );
 
 const renderUniversalTimerNotification = () => (
@@ -35,19 +36,26 @@ const renderUniversalTimerNotification = () => (
 );
 
 const getDefaultProps = () => ({
-  containerElementRef: React.createRef<HTMLElement>(),
+  containerElementRef: createRef<HTMLElement>(),
   containerWidthBreakpoint: WidthBreakpoint.Wide,
   conversationId: 'conversation-id',
   getPreferredBadge: () => undefined,
+  getSharedGroupNames: () => [],
   id: 'asdf',
   isNextItemCallingNotification: false,
+  isPinned: false,
+  isSelectMode: false,
+  isSelected: false,
+  isSignalConversation: false,
   isTargeted: false,
   isBlocked: false,
   isGroup: false,
   interactivity: MessageInteractivity.Normal,
   interactionMode: 'keyboard' as const,
+  targetedMessage: null,
   theme: ThemeType.light,
   platform: 'darwin',
+  handleDebugMessage: action('handleDebugMessage'),
   targetMessage: action('targetMessage'),
   toggleSelectMessage: action('toggleSelectMessage'),
   endPoll: action('endPoll'),
@@ -69,6 +77,8 @@ const getDefaultProps = () => ({
   openGiftBadge: action('openGiftBadge'),
   saveAttachment: action('saveAttachment'),
   saveAttachments: action('saveAttachments'),
+  showPinMessageDialog: action('showPinMessageDialog'),
+  onPinnedMessageRemove: action('onPinnedMessageRemove'),
   onOpenEditNicknameAndNoteModal: action('onOpenEditNicknameAndNoteModal'),
   onOutgoingAudioCallInConversation: action(
     'onOutgoingAudioCallInConversation'
@@ -99,6 +109,9 @@ const getDefaultProps = () => ({
   scrollToQuotedMessage: action('scrollToQuotedMessage'),
   showSpoiler: action('showSpoiler'),
   startConversation: action('startConversation'),
+  renderItem: () => {
+    throw new Error('not implemented');
+  },
   returnToActiveCall: action('returnToActiveCall'),
   shouldCollapseAbove: false,
   shouldCollapseBelow: false,
@@ -130,6 +143,7 @@ export function PlainMessage(): JSX.Element {
     data: {
       id: 'id-1',
       direction: 'incoming',
+      // oxlint-disable-next-line react/purity
       timestamp: Date.now(),
       author: {
         phoneNumber: '(202) 555-2001',
@@ -144,6 +158,12 @@ export function PlainMessage(): JSX.Element {
 
 export function Notification(): JSX.Element {
   const items = [
+    {
+      type: 'messageRequestResponse',
+      data: {
+        messageRequestResponseEvent: MessageRequestResponseEvent.ACCEPT,
+      },
+    },
     {
       type: 'timerNotification',
       data: {
@@ -190,6 +210,7 @@ export function Notification(): JSX.Element {
       type: 'changeNumberNotification',
       data: {
         sender: getDefaultConversation(),
+        // oxlint-disable-next-line react/purity
         timestamp: Date.now(),
       },
     },
@@ -207,6 +228,7 @@ export function Notification(): JSX.Element {
         wasDeclined: true,
         wasIncoming: true,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -218,6 +240,7 @@ export function Notification(): JSX.Element {
         wasDeclined: true,
         wasIncoming: true,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -226,10 +249,12 @@ export function Notification(): JSX.Element {
       data: {
         // accepted incoming audio
         callMode: CallMode.Direct,
+        // oxlint-disable-next-line react/purity
         acceptedTime: Date.now() - 300,
         wasDeclined: false,
         wasIncoming: true,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -238,10 +263,12 @@ export function Notification(): JSX.Element {
       data: {
         // accepted incoming video
         callMode: CallMode.Direct,
+        // oxlint-disable-next-line react/purity
         acceptedTime: Date.now() - 400,
         wasDeclined: false,
         wasIncoming: true,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -253,6 +280,7 @@ export function Notification(): JSX.Element {
         wasDeclined: false,
         wasIncoming: true,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -264,6 +292,7 @@ export function Notification(): JSX.Element {
         wasDeclined: false,
         wasIncoming: true,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -272,10 +301,12 @@ export function Notification(): JSX.Element {
       data: {
         // accepted outgoing audio
         callMode: CallMode.Direct,
+        // oxlint-disable-next-line react/purity
         acceptedTime: Date.now() - 200,
         wasDeclined: false,
         wasIncoming: false,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -284,10 +315,12 @@ export function Notification(): JSX.Element {
       data: {
         // accepted outgoing video
         callMode: CallMode.Direct,
+        // oxlint-disable-next-line react/purity
         acceptedTime: Date.now() - 200,
         wasDeclined: false,
         wasIncoming: false,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -299,6 +332,7 @@ export function Notification(): JSX.Element {
         wasDeclined: true,
         wasIncoming: false,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -310,6 +344,7 @@ export function Notification(): JSX.Element {
         wasDeclined: true,
         wasIncoming: false,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -321,6 +356,7 @@ export function Notification(): JSX.Element {
         wasDeclined: false,
         wasIncoming: false,
         wasVideoCall: false,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -332,6 +368,7 @@ export function Notification(): JSX.Element {
         wasDeclined: false,
         wasIncoming: false,
         wasVideoCall: true,
+        // oxlint-disable-next-line react/purity
         endedTime: Date.now(),
       },
     },
@@ -349,6 +386,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 1,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -366,6 +404,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 1,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -378,6 +417,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 1,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -396,6 +436,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 1,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -414,6 +455,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 1,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -431,6 +473,7 @@ export function Notification(): JSX.Element {
         ended: false,
         deviceCount: 16,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -448,6 +491,7 @@ export function Notification(): JSX.Element {
         ended: true,
         deviceCount: 0,
         maxDevices: 16,
+        // oxlint-disable-next-line react/purity
         startedTime: Date.now(),
       },
     },
@@ -583,13 +627,13 @@ export function Notification(): JSX.Element {
   return (
     <>
       {items.map((item, index) => (
-        <React.Fragment key={index}>
+        <Fragment key={index}>
           <TimelineItem
             {...getDefaultProps()}
             item={item as TimelineItemProps['item']}
             i18n={i18n}
           />
-        </React.Fragment>
+        </Fragment>
       ))}
     </>
   );
@@ -601,7 +645,7 @@ export function UnknownType(): JSX.Element {
     data: {
       somethin: 'somethin',
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
   } as any as TimelineItemProps['item'];
 
   return (
@@ -612,7 +656,7 @@ export function UnknownType(): JSX.Element {
 }
 
 export function MissingItem(): JSX.Element {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const item = null as any as TimelineItemProps['item'];
 
   return <TimelineItem {...getDefaultProps()} item={item} i18n={i18n} />;

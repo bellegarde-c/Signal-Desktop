@@ -1,13 +1,14 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import type { AttachmentType } from '../../types/Attachment.std.js';
-import { stringToMIMEType } from '../../types/MIME.std.js';
-import type { Props } from './StagedGenericAttachment.dom.js';
-import { StagedGenericAttachment } from './StagedGenericAttachment.dom.js';
+import type { AttachmentForUIType } from '../../types/Attachment.std.ts';
+import { stringToMIMEType } from '../../types/MIME.std.ts';
+import type { Props } from './StagedGenericAttachment.dom.tsx';
+import { StagedGenericAttachment } from './StagedGenericAttachment.dom.tsx';
 
 const { i18n } = window.SignalContext;
 
@@ -16,6 +17,7 @@ export default {
   argTypes: {},
   args: {
     attachment: {
+      isPermanentlyUndownloadable: false,
       contentType: stringToMIMEType(''),
       fileName: '',
       url: '',
@@ -27,8 +29,9 @@ export default {
 } satisfies Meta<Props>;
 
 const createAttachment = (
-  props: Partial<AttachmentType> = {}
-): AttachmentType => ({
+  props: Partial<AttachmentForUIType> = {}
+): AttachmentForUIType => ({
+  isPermanentlyUndownloadable: false,
   contentType: stringToMIMEType(props.contentType ?? ''),
   fileName: props.fileName ?? '',
   url: '',

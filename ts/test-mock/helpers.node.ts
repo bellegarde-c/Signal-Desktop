@@ -1,24 +1,26 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
+import pTimeout from 'p-timeout';
 import createDebug from 'debug';
 import {
   type Device,
   type Group,
   PrimaryDevice,
-  type Proto,
+  Proto,
   StorageState,
+  EMPTY_DATA_MESSAGE,
 } from '@signalapp/mock-server';
 import { assert } from 'chai';
-import Long from 'long';
 import type { Locator, Page } from 'playwright';
 import { expect } from 'playwright/test';
-import type { SignalService } from '../protobuf/index.std.js';
-import { strictAssert } from '../util/assert.std.js';
+import { strictAssert } from '../util/assert.std.ts';
+import { SECOND } from '../util/durations/constants.std.ts';
+import { toNumber } from '../util/toNumber.std.ts';
+import type { Emoji } from '../axo/emoji.std.ts';
 
 const debug = createDebug('mock:test:helpers');
 
-export function bufferToUuid(buffer: Buffer): string {
+export function bufferToUuid(buffer: Buffer<ArrayBuffer>): string {
   const hex = buffer.toString('hex');
 
   return [
@@ -28,6 +30,30 @@ export function bufferToUuid(buffer: Buffer): string {
     hex.substring(16, 20),
     hex.substring(20),
   ].join('-');
+}
+
+function isProfileKeyUpdate(flags: number | null | undefined): boolean {
+  if (flags == null) {
+    return false;
+  }
+  // oxlint-disable-next-line no-bitwise
+  return (flags & Proto.DataMessage.Flags.PROFILE_KEY_UPDATE) !== 0;
+}
+
+export async function waitForNonProfileKeyUpdateMessage(
+  device: PrimaryDevice,
+  { maxAttempts = 5 }: { maxAttempts?: number } = {}
+): Promise<Awaited<ReturnType<PrimaryDevice['waitForMessage']>>> {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    const message = await device.waitForMessage();
+    if (isProfileKeyUpdate(message.dataMessage.flags)) {
+      debug('Skipping profile key update');
+      continue;
+    }
+    return message;
+  }
+  throw new Error(`No message with body after ${maxAttempts} attempts`);
 }
 
 export async function typeIntoInput(
@@ -63,6 +89,54 @@ export async function typeIntoInput(
   }
 }
 
+const VERIFICATION_CODE_LENGTH = 6;
+
+function verificationCodeInput(window: Page, index: number): Locator {
+  return window.getByLabel(
+    `Character ${index + 1} of ${VERIFICATION_CODE_LENGTH}`
+  );
+}
+
+export async function typeVerificationCode(
+  window: Page,
+  code: string
+): Promise<void> {
+  for (let i = 0; i < VERIFICATION_CODE_LENGTH; i += 1) {
+    const char = code[i] ?? '';
+
+    // oxlint-disable-next-line no-await-in-loop
+    await verificationCodeInput(window, i).pressSequentially(char);
+
+    // oxlint-disable-next-line no-await-in-loop
+    await expect(verificationCodeInput(window, i)).toHaveValue(char);
+
+    if (i + 1 < code.length) {
+      // Wait for radix to focus the next input
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(verificationCodeInput(window, i + 1)).toBeFocused();
+    }
+  }
+}
+
+export async function clearVerificationCode(window: Page): Promise<void> {
+  for (let i = VERIFICATION_CODE_LENGTH - 1; i >= 0; i -= 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    await verificationCodeInput(window, i).selectText();
+    // oxlint-disable-next-line no-await-in-loop
+    await verificationCodeInput(window, i).press('Backspace');
+    if (i > 0) {
+      // Wait for radix to focus the next input
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(verificationCodeInput(window, i - 1)).toBeFocused();
+    }
+  }
+
+  for (let i = 0; i < VERIFICATION_CODE_LENGTH; i += 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    await expect(verificationCodeInput(window, i)).toHaveValue('');
+  }
+}
+
 export async function expectItemsWithText(
   items: Locator,
   expected: ReadonlyArray<string | RegExp>
@@ -70,9 +144,9 @@ export async function expectItemsWithText(
   // Wait for each message to appear in case they're not all there yet
   for (const [index, message] of expected.entries()) {
     const nth = items.nth(index);
-    // eslint-disable-next-line no-await-in-loop
+    // oxlint-disable-next-line no-await-in-loop
     await nth.waitFor();
-    // eslint-disable-next-line no-await-in-loop
+    // oxlint-disable-next-line no-await-in-loop
     const text = await nth.innerText();
     const log = `Expect item at index ${index} to match`;
     if (typeof message === 'string') {
@@ -122,23 +196,49 @@ function maybeWrapInSyncMessage({
   isSync: boolean;
   to: PrimaryDevice | Device;
   sentTo?: Array<PrimaryDevice | Device>;
-  dataMessage: Proto.IDataMessage;
-}): Proto.IContent {
+  dataMessage: Proto.DataMessage.Params;
+}): Proto.Content.Params {
   return isSync
     ? {
-        syncMessage: {
-          sent: {
-            destinationServiceIdBinary: getDevice(to).aciBinary,
-            message: dataMessage,
-            timestamp: dataMessage.timestamp,
-            unidentifiedStatus: (sentTo ?? [to]).map(contact => ({
-              destinationServiceIdBinary: getDevice(contact).aciBinary,
-              destination: getDevice(contact).number,
-            })),
+        content: {
+          syncMessage: {
+            content: {
+              sent: {
+                destinationServiceIdBinary: getDevice(to).aciBinary,
+                message: dataMessage,
+                timestamp: dataMessage.timestamp,
+                unidentifiedStatus: (sentTo ?? [to]).map(contact => ({
+                  destinationServiceIdBinary: getDevice(contact).aciBinary,
+                  destination: getDevice(contact).number,
+                  unidentified: null,
+                  destinationPniIdentityKey: null,
+                  destinationServiceId: null,
+                })),
+                destinationE164: null,
+                expirationStartTimestamp: null,
+                isRecipientUpdate: null,
+                storyMessage: null,
+                storyMessageRecipients: null,
+                editMessage: null,
+                destinationServiceId: null,
+              },
+            },
+            read: null,
+            stickerPackOperation: null,
+            viewed: null,
+            padding: null,
           },
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       }
-    : { dataMessage };
+    : {
+        content: {
+          dataMessage,
+        },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
+      };
 }
 
 function isToGroup(to: Device | PrimaryDevice | GroupInfo): to is GroupInfo {
@@ -159,10 +259,10 @@ export function sendTextMessage({
   from: PrimaryDevice;
   to: PrimaryDevice | Device | GroupInfo;
   text: string | undefined;
-  attachments?: Array<Proto.IAttachmentPointer>;
-  sticker?: Proto.DataMessage.ISticker;
-  preview?: Proto.IPreview;
-  quote?: Proto.DataMessage.IQuote;
+  attachments?: Array<Proto.AttachmentPointer.Params>;
+  sticker?: Proto.DataMessage.Sticker.Params;
+  preview?: Proto.Preview.Params;
+  quote?: Proto.DataMessage.Quote.Params;
   desktop: Device;
   timestamp?: number;
 }): Promise<void> {
@@ -175,18 +275,20 @@ export function sendTextMessage({
       isSync,
       to: to as PrimaryDevice,
       dataMessage: {
-        body: text,
-        attachments,
-        sticker,
+        ...EMPTY_DATA_MESSAGE,
+        body: text ?? null,
+        attachments: attachments ?? null,
+        sticker: sticker ?? null,
         preview: preview == null ? null : [preview],
-        quote,
-        timestamp: Long.fromNumber(timestamp),
+        quote: quote ?? null,
+        timestamp: BigInt(timestamp),
         groupV2: groupInfo
           ? {
               masterKey: groupInfo.group.masterKey,
               revision: groupInfo.group.revision,
+              groupChange: null,
             }
-          : undefined,
+          : null,
       },
       sentTo: groupInfo ? groupInfo.members : [to as PrimaryDevice | Device],
     }),
@@ -199,7 +301,7 @@ export function sendReaction({
   to,
   targetAuthor,
   targetMessageTimestamp,
-  emoji = '👍',
+  emoji,
   reactionTimestamp = Date.now(),
   desktop,
 }: {
@@ -207,7 +309,7 @@ export function sendReaction({
   to: PrimaryDevice | Device;
   targetAuthor: PrimaryDevice | Device;
   targetMessageTimestamp: number;
-  emoji: string;
+  emoji: Emoji.Variant;
   reactionTimestamp?: number;
   desktop: Device;
 }): Promise<void> {
@@ -218,11 +320,14 @@ export function sendReaction({
       isSync,
       to,
       dataMessage: {
-        timestamp: Long.fromNumber(reactionTimestamp),
+        ...EMPTY_DATA_MESSAGE,
+        timestamp: BigInt(reactionTimestamp),
         reaction: {
           emoji,
           targetAuthorAciBinary: getDevice(targetAuthor).aciRawUuid,
-          targetSentTimestamp: Long.fromNumber(targetMessageTimestamp),
+          targetSentTimestamp: BigInt(targetMessageTimestamp),
+          remove: null,
+          targetAuthorAci: null,
         },
       },
     }),
@@ -296,11 +401,12 @@ export async function pinContact(
 
 export async function acceptConversation(page: Page): Promise<void> {
   await page
-    .locator('.module-message-request-actions button >> "Accept"')
+    .getByTestId('message-request-actions')
+    .getByRole('button', { name: 'Accept' })
     .click();
 
   const confirmationButton = page
-    .locator('.MessageRequestActionsConfirmation')
+    .getByRole('alertdialog', { name: 'Accept request?' })
     .getByRole('button', { name: 'Accept' });
 
   await confirmationButton.waitFor({
@@ -327,7 +433,7 @@ export function getTimelineMessageWithText(page: Page, text: string): Locator {
   return getTimeline(page).locator('.module-message').filter({ hasText: text });
 }
 
-export async function composerAttachImages(
+export async function composerAttachFiles(
   page: Page,
   filePaths: ReadonlyArray<string>
 ): Promise<void> {
@@ -339,6 +445,12 @@ export async function composerAttachImages(
   );
 
   debug('setting input files');
+  await page
+    .getByRole('button', {
+      name: 'Add attachment or poll',
+    })
+    .click();
+  await page.getByRole('menuitem', { name: 'File' }).click();
   await AttachmentInput.setInputFiles(filePaths);
 
   debug(`waiting for ${filePaths.length} items`);
@@ -354,13 +466,20 @@ export async function composerAttachImages(
   );
 }
 
+export function getLoadedImagesInside(parent: Locator): Locator {
+  return parent.locator('img.module-image__image[data-loaded="true"]');
+}
+
 export async function sendMessageWithAttachments(
   page: Page,
   receiver: PrimaryDevice,
   text: string,
   filePaths: Array<string>
-): Promise<Array<SignalService.IAttachmentPointer>> {
-  await composerAttachImages(page, filePaths);
+): Promise<{
+  attachments: Array<Proto.AttachmentPointer.Params>;
+  timestamp: number;
+}> {
+  await composerAttachFiles(page, filePaths);
 
   debug('sending message');
   const input = await waitForEnabledComposer(page);
@@ -368,28 +487,47 @@ export async function sendMessageWithAttachments(
   await input.press('Enter');
 
   const Message = getTimelineMessageWithText(page, text);
-  const MessageImageLoaded = Message.locator('.module-image__image');
 
   await Message.waitFor();
 
   await Promise.all(
     filePaths.map(async (_, index) => {
       debug(`waiting for ${index} image to render in timeline`);
-      await MessageImageLoaded.nth(index).waitFor({
+      await getLoadedImagesInside(Message).nth(index).waitFor({
         state: 'visible',
       });
     })
   );
 
   debug('get received message data');
-  const receivedMessage = await receiver.waitForMessage();
-  const attachments = receivedMessage.dataMessage.attachments ?? [];
-  strictAssert(
-    attachments.length === filePaths.length,
-    'attachments must exist'
-  );
 
-  return attachments;
+  return pTimeout(
+    (async () => {
+      // oxlint-disable-next-line no-constant-condition
+      while (true) {
+        // oxlint-disable-next-line no-await-in-loop
+        const receivedMessage = await receiver.waitForMessage();
+        const attachments = receivedMessage.dataMessage.attachments ?? [];
+        if (
+          attachments.length === filePaths.length &&
+          receivedMessage.body === text
+        ) {
+          strictAssert(
+            receivedMessage.dataMessage.timestamp,
+            'timestamp exists'
+          );
+          return {
+            attachments,
+            timestamp: toNumber(receivedMessage.dataMessage.timestamp),
+          };
+        }
+      }
+    })(),
+    {
+      milliseconds: 10 * SECOND,
+      message: 'Timed out waiting to detect message send with attached files',
+    }
+  );
 }
 
 export async function waitForEnabledComposer(page: Page): Promise<Locator> {
@@ -408,7 +546,7 @@ export async function createCallLink(
   page: Page,
   {
     name,
-    isAdminApprovalRequired = undefined,
+    isAdminApprovalRequired,
   }: { name: string; isAdminApprovalRequired?: boolean | undefined }
 ): Promise<string | undefined> {
   await page.locator('[data-testid="NavTabsItem--Calls"]').click();
@@ -419,23 +557,25 @@ export async function createCallLink(
     .getByText('Create a Call Link')
     .click();
 
-  const editModal = page.locator('.CallLinkEditModal');
+  const editModal = page.getByRole('dialog', { name: 'Call link details' });
   await editModal.waitFor();
 
   if (isAdminApprovalRequired !== undefined) {
-    const restrictionsInput = editModal.getByLabel('Require admin approval');
+    const restrictions = editModal.getByRole('switch', {
+      name: 'Require admin approval',
+    });
     if (isAdminApprovalRequired) {
-      await expect(restrictionsInput).toHaveJSProperty('value', '0');
-      await restrictionsInput.selectOption({ label: 'On' });
-      await expect(restrictionsInput).toHaveJSProperty('value', '1');
+      await expect(restrictions).toBeChecked({ checked: false });
+      await restrictions.click();
+      await expect(restrictions).toBeChecked();
     } else {
-      await expect(restrictionsInput).toHaveJSProperty('value', '0');
+      await expect(restrictions).toBeChecked({ checked: false });
     }
   }
 
-  await editModal.locator('button', { hasText: 'Add call name' }).click();
+  await editModal.getByRole('button', { name: 'Add call name' }).click();
 
-  const addNameModal = page.locator('.CallLinkAddNameModal');
+  const addNameModal = page.getByRole('dialog', { name: 'Add call name' });
   await addNameModal.waitFor();
 
   const nameInput = addNameModal.getByLabel('Call name');
@@ -449,11 +589,9 @@ export async function createCallLink(
   const doneBtn = editModal.getByText('Done');
   await doneBtn.click();
 
-  const callLinkTitle = await page
-    .locator('.CallsList__ItemTile')
-    .getByText(name);
+  const callLinkTitle = page.locator('.CallsList__ItemTile').getByText(name);
 
-  const callLinkItem = await page.locator('.CallsList__Item', {
+  const callLinkItem = page.locator('.CallsList__Item', {
     has: callLinkTitle,
   });
   const testId = await callLinkItem.getAttribute('data-testid');

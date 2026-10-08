@@ -11,28 +11,35 @@
 @mixin localized-fonts {
   /* Japanese */
   &:lang(ja) {
-    font-family: Inter, 'SF Pro', 'SF Pro JP', 'BIZ UDGothic',
-      'Hiragino Kaku Gothic Pro', 'ヒラギノ角ゴ Pro W3', メイリオ, Meiryo,
-      'ＭＳ Ｐゴシック', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family:
+      Inter, 'SF Pro', 'SF Pro JP', 'BIZ UDGothic', 'Hiragino Kaku Gothic Pro',
+      'ヒラギノ角ゴ Pro W3', メイリオ, Meiryo, 'ＭＳ Ｐゴシック',
+      'Helvetica Neue', Helvetica, Arial, 'Signal Emoji Large',
+      'Signal Emoji Small', sans-serif;
   }
   /* Farsi (Persian) */
   &:lang(fa) {
     font-family:
       'Vazirmatn',
+      Inter,
+      'Noto Sans Arabic',
+      'Signal Emoji Large',
+      'Signal Emoji Small',
       -apple-system,
       system-ui,
       BlinkMacSystemFont,
       'Segoe UI',
       Tahoma,
-      'Noto Sans Arabic',
       Helvetica,
       Arial,
       sans-serif;
   }
   /* Urdu */
   &:lang(ur) {
-    font-family: 'Noto Nastaliq Urdu', Gulzar, 'Jameel Noori Nastaleeq',
-      'Faiz Lahori Nastaleeq', 'Urdu Typesetting', Helvetica, Arial, sans-serif;
+    font-family:
+      'Noto Nastaliq Urdu', Gulzar, 'Jameel Noori Nastaleeq',
+      'Faiz Lahori Nastaleeq', 'Urdu Typesetting', Helvetica, Arial,
+      'Signal Emoji Large', 'Signal Emoji Small', sans-serif;
   }
 }
 
@@ -113,6 +120,10 @@
   font-size: 12px;
   line-height: 16px;
   letter-spacing: 0px;
+}
+@mixin font-body-small-bold {
+  @include font-body-small;
+  font-weight: 600;
 }
 
 @mixin font-subtitle {
@@ -282,10 +293,10 @@ $rtl-icon-map: (
   $stretch: true,
   $mask-origin: null
 ) {
-  @include light-theme() {
+  @include light-theme {
     @include color-svg($svg, $light-theme-color, $stretch, $mask-origin);
   }
-  @include dark-theme() {
+  @include dark-theme {
     @include color-svg($svg, $dark-theme-color, $stretch, $mask-origin);
   }
 }
@@ -302,7 +313,7 @@ $rtl-icon-map: (
     background-color: $color;
   }
   @media (forced-colors: active) {
-    background-color: WindowText;
+    background-color: CanvasText;
   }
   $rtl-svg: get-rtl-svg($svg);
   @if $rtl-svg {
@@ -312,28 +323,8 @@ $rtl-icon-map: (
   }
 }
 
-// Keyboard
-
-@mixin keyboard-mode() {
-  .keyboard-mode & {
-    @content;
-  }
-}
-
-@mixin mouse-mode() {
-  .mouse-mode & {
-    @content;
-  }
-}
-
-@mixin dark-keyboard-mode() {
-  .dark-theme.keyboard-mode & {
-    @content;
-  }
-}
-
-@mixin dark-mouse-mode() {
-  .dark-theme.mouse-mode & {
+@mixin focus-visible-within {
+  &:is(:focus-visible, :has(:focus-visible)) {
     @content;
   }
 }
@@ -361,7 +352,6 @@ $rtl-icon-map: (
     margin: 0;
     font: inherit;
     cursor: pointer;
-    outline: inherit;
     text-align: inherit;
   }
 
@@ -400,13 +390,8 @@ $rtl-icon-map: (
 // Individual traits
 
 @mixin button-focus-outline {
-  &:focus {
-    @include keyboard-mode {
-      box-shadow: 0px 0px 0px 3px variables.$color-ultramarine;
-    }
-    @include dark-keyboard-mode {
-      box-shadow: 0px 0px 0px 3px variables.$color-ultramarine-light;
-    }
+  &:focus-visible {
+    @include axo-focus-ring;
   }
 }
 
@@ -435,7 +420,7 @@ $rtl-icon-map: (
   }
 
   &:hover {
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-ultramarine,
@@ -443,7 +428,7 @@ $rtl-icon-map: (
       );
     }
 
-    @include dark-mouse-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-ultramarine,
@@ -453,33 +438,16 @@ $rtl-icon-map: (
   }
 
   &:active {
-    // We need to include all four here for specificity precedence
-
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-ultramarine,
         25%
       );
     }
-    @include dark-mouse-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
-        variables.$color-ultramarine,
-        25%
-      );
-    }
-
-    @include keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
-        variables.$color-ultramarine,
-        25%
-      );
-    }
-    @include dark-keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
         variables.$color-ultramarine,
         25%
       );
@@ -500,7 +468,7 @@ $rtl-icon-map: (
   }
 
   &:hover {
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-gray-05,
@@ -508,7 +476,7 @@ $rtl-icon-map: (
       );
     }
 
-    @include dark-mouse-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-gray-65,
@@ -518,31 +486,14 @@ $rtl-icon-map: (
   }
 
   &:active {
-    // We need to include all four here for specificity precedence
-
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-gray-05,
         25%
       );
     }
-    @include dark-mouse-mode {
-      background-color: color.mix(
-        variables.$color-white,
-        variables.$color-gray-65,
-        25%
-      );
-    }
-
-    @include keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
-        variables.$color-gray-05,
-        25%
-      );
-    }
-    @include dark-keyboard-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-gray-65,
@@ -570,7 +521,7 @@ $rtl-icon-map: (
   }
 
   &:hover {
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-gray-02,
@@ -578,7 +529,7 @@ $rtl-icon-map: (
       );
     }
 
-    @include dark-mouse-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-gray-75,
@@ -588,31 +539,14 @@ $rtl-icon-map: (
   }
 
   &:active {
-    // We need to include all four here for specificity precedence
-
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-gray-02,
         20%
       );
     }
-    @include dark-mouse-mode {
-      background-color: color.mix(
-        variables.$color-white,
-        variables.$color-gray-75,
-        20%
-      );
-    }
-
-    @include keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
-        variables.$color-gray-02,
-        20%
-      );
-    }
-    @include dark-keyboard-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-gray-75,
@@ -640,7 +574,7 @@ $rtl-icon-map: (
   }
 
   &:hover {
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-accent-red,
@@ -648,7 +582,7 @@ $rtl-icon-map: (
       );
     }
 
-    @include dark-mouse-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-accent-red,
@@ -660,29 +594,14 @@ $rtl-icon-map: (
   &:active {
     // We need to include all four here for specificity precedence
 
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         variables.$color-accent-red,
         25%
       );
     }
-    @include dark-mouse-mode {
-      background-color: color.mix(
-        variables.$color-white,
-        variables.$color-accent-red,
-        25%
-      );
-    }
-
-    @include keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
-        variables.$color-accent-red,
-        25%
-      );
-    }
-    @include dark-keyboard-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         variables.$color-accent-red,
@@ -703,29 +622,14 @@ $rtl-icon-map: (
   &:active {
     // We need to include all four here for specificity precedence
 
-    @include mouse-mode {
+    @include light-theme {
       background-color: color.mix(
         variables.$color-black,
         $background-color,
         25%
       );
     }
-    @include dark-mouse-mode {
-      background-color: color.mix(
-        variables.$color-white,
-        $background-color,
-        25%
-      );
-    }
-
-    @include keyboard-mode {
-      background-color: color.mix(
-        variables.$color-black,
-        $background-color,
-        25%
-      );
-    }
-    @include dark-keyboard-mode {
+    @include dark-theme {
       background-color: color.mix(
         variables.$color-white,
         $background-color,
@@ -763,16 +667,10 @@ $rtl-icon-map: (
     width: 95%;
     display: flex;
     flex-direction: column;
-  }
 
-  @include light-theme() {
-    background: variables.$color-white;
-    color: variables.$color-gray-90;
-  }
-
-  @include dark-theme() {
-    background: variables.$color-gray-95;
-    color: variables.$color-gray-05;
+    color: var(--axo-color-label-primary);
+    background: var(--axo-color-material-dialog);
+    backdrop-filter: blur(24px);
   }
 }
 
@@ -796,11 +694,11 @@ $rtl-icon-map: (
     @include color-svg('../images/icons/v3/x/x.svg', variables.$color-gray-15);
   }
 
-  &:focus {
-    @include keyboard-mode {
+  &:focus-visible {
+    @include light-theme {
       background-color: variables.$color-ultramarine;
     }
-    @include dark-keyboard-mode {
+    @include dark-theme {
       background-color: variables.$color-ultramarine-light;
     }
   }
@@ -887,8 +785,6 @@ $rtl-icon-map: (
   }
 
   &:focus {
-    outline: none;
-
     @include light-theme {
       border-color: variables.$color-ultramarine;
     }
@@ -905,7 +801,6 @@ $rtl-icon-map: (
   height: 100vh;
   justify-content: center;
   line-height: 30px;
-  user-select: none;
 
   @include light-theme {
     background: variables.$color-gray-02;
@@ -946,7 +841,7 @@ $rtl-icon-map: (
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
 }
@@ -992,13 +887,6 @@ $rtl-icon-map: (
   }
 }
 
-@mixin draggable-region {
-  -webkit-app-region: drag;
-  body.context-menu-open & {
-    -webkit-app-region: no-drag;
-  }
-}
-
 @mixin tooltip {
   & {
     @include font-body-2;
@@ -1029,6 +917,10 @@ $rtl-icon-map: (
     content: '';
     border-style: solid;
     border-width: 7px;
+    border-color: light-dark(
+      variables.$color-gray-04,
+      variables.$color-gray-80
+    );
   }
 
   &[data-placement='bottom'] .module-tooltip-arrow::before {
@@ -1044,16 +936,6 @@ $rtl-icon-map: (
       margin-top: -14px;
       /* stylelint-disable-next-line liberty/use-logical-spec */
       margin-left: -7px;
-    }
-  }
-
-  &[data-placement='bottom'] .module-tooltip-arrow::after {
-    @include light-theme {
-      border-bottom-color: variables.$color-gray-04;
-    }
-
-    @include dark-theme {
-      border-bottom-color: variables.$color-gray-80;
     }
   }
 
@@ -1073,13 +955,35 @@ $rtl-icon-map: (
     }
   }
 
-  &[data-placement='top'] .module-tooltip-arrow::after {
+  &[data-placement='left'] .module-tooltip-arrow::before {
     @include light-theme {
-      border-top-color: variables.$color-gray-04;
+      border-color: transparent transparent transparent variables.$color-gray-20;
     }
 
     @include dark-theme {
-      border-top-color: variables.$color-gray-80;
+      border-color: transparent transparent transparent variables.$color-gray-62;
+    }
+
+    & {
+      margin-top: -7px;
+      /* stylelint-disable-next-line liberty/use-logical-spec */
+      margin-left: 0px;
+    }
+  }
+
+  &[data-placement='right'] .module-tooltip-arrow::before {
+    @include light-theme {
+      border-color: transparent variables.$color-gray-20 transparent transparent;
+    }
+
+    @include dark-theme {
+      border-color: transparent variables.$color-gray-62 transparent transparent;
+    }
+
+    & {
+      margin-top: -7px;
+      /* stylelint-disable-next-line liberty/use-logical-spec */
+      margin-left: -14px;
     }
   }
 }
@@ -1095,11 +999,9 @@ $rtl-icon-map: (
   align-items: center;
   background-color: $background;
   color: variables.$color-white;
-  outline: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  user-select: none;
 
   &:before {
     $icon-size: 16px;
@@ -1125,10 +1027,9 @@ $rtl-icon-map: (
       }
     }
 
-    &:focus {
-      @include keyboard-mode {
-        background-color: color.adjust($background, $lightness: -16%);
-      }
+    &:focus-visible {
+      outline: none;
+      background-color: color.adjust($background, $lightness: -16%);
     }
   }
 }
@@ -1138,8 +1039,6 @@ $rtl-icon-map: (
   border-radius: 4px;
   margin-bottom: 6px;
   z-index: variables.$z-index-context-menu;
-  user-select: none;
-  overflow: hidden;
 
   @include popper-shadow();
 
@@ -1152,4 +1051,18 @@ $rtl-icon-map: (
       background: variables.$color-gray-75;
     }
   }
+}
+
+@mixin axo-focus-ring {
+  outline: none;
+  box-shadow:
+    0 0 0 1.5px var(--axo-color-border-focused-inner),
+    0 0 0 4px var(--axo-color-border-focused-outer);
+}
+
+@mixin axo-focus-ring-inset {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 2.5px var(--axo-color-border-focused-outer),
+    inset 0 0 0 4px var(--axo-color-border-focused-inner);
 }

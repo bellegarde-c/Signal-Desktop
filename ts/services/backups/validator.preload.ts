@@ -1,18 +1,14 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Readable } from 'node:stream';
-import { once } from 'node:events';
 import * as libsignal from '@signalapp/libsignal-client/dist/MessageBackup.js';
 import type { InputStream } from '@signalapp/libsignal-client/dist/io.js';
-import protobufjs from 'protobufjs';
 
-import { strictAssert } from '../../util/assert.std.js';
-import { toAciObject } from '../../util/ServiceId.node.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
-
-const { Reader } = protobufjs;
+import { strictAssert } from '../../util/assert.std.ts';
+import { toAciObject } from '../../util/ServiceId.node.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { Backups } from '../../protobuf/index.std.ts';
 
 export enum ValidationType {
   Export = 'Export',
@@ -55,36 +51,40 @@ export async function validateBackup(
   }
 }
 
-export async function validateBackupStream(
-  readable: Readable
+export async function validateBackupIterator(
+  info: Backups.BackupInfo.Params,
+  iterable: AsyncIterable<NonNullable<Backups.Frame.Params['item']>>
 ): Promise<number> {
-  let validator: libsignal.OnlineBackupValidator | undefined;
+  const infoBuf = Backups.BackupInfo.encode(info);
+  let totalBytes = infoBuf.byteLength;
 
-  let totalBytes = 0;
+  const validator = new libsignal.OnlineBackupValidator(
+    infoBuf,
+    libsignal.Purpose.RemoteBackup
+  );
+
+  const allErrorMessages: Array<string> = [];
   let frameCount = 0;
-  readable.on('data', delimitedFrame => {
-    totalBytes += delimitedFrame.byteLength;
-    frameCount += 1;
+  for await (const item of iterable) {
+    const frameBuf = Backups.Frame.encode({ item });
 
-    const reader = new Reader(delimitedFrame);
-    const frame = reader.bytes();
-
-    // Info frame
-    if (frameCount === 1) {
-      validator = new libsignal.OnlineBackupValidator(
-        frame,
-        libsignal.Purpose.RemoteBackup
-      );
-      return;
+    try {
+      totalBytes += frameBuf.byteLength;
+      frameCount += 1;
+      validator.addFrame(frameBuf);
+    } catch (error) {
+      allErrorMessages.push(error.message);
     }
+  }
 
-    strictAssert(validator != null, 'validator must be already created');
-    validator.addFrame(frame);
-  });
+  try {
+    validator.finalize();
+  } catch (error) {
+    allErrorMessages.push(error.message);
+  }
 
-  await once(readable, 'end');
-  strictAssert(validator != null, 'no frames');
-  validator.finalize();
-
+  if (allErrorMessages.length) {
+    throw new Error(allErrorMessages.join('\n'));
+  }
   return totalBytes;
 }

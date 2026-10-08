@@ -1,10 +1,11 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
-import { type ComponentMeta } from '../storybook/types.std.js';
-import type { PropsType } from './MediaPermissionsModal.dom.js';
-import { MediaPermissionsModal } from './MediaPermissionsModal.dom.js';
+import { type ComponentMeta } from '../storybook/types.std.ts';
+import type { PropsType } from './MediaPermissionsModal.dom.tsx';
+import { MediaPermissionsModal } from './MediaPermissionsModal.dom.tsx';
 
 const { i18n } = window.SignalContext;
 
@@ -20,6 +21,7 @@ export default {
   args: {
     mediaType: 'camera',
     requestor: 'call',
+    osName: 'macos',
     openSystemMediaPermissions: action('onOpenSystemMediaPermissions'),
     onClose: action('onClose'),
   },
@@ -35,4 +37,12 @@ export function Microphone(props: TemplateProps): JSX.Element {
 
 export function VoiceNote(props: TemplateProps): JSX.Element {
   return <Template {...props} requestor="voiceNote" mediaType="microphone" />;
+}
+
+export function WindowsCamera(props: TemplateProps): JSX.Element {
+  return <Template {...props} osName="windows" mediaType="camera" />;
+}
+
+export function WindowsMicrophone(props: TemplateProps): JSX.Element {
+  return <Template {...props} osName="windows" mediaType="microphone" />;
 }

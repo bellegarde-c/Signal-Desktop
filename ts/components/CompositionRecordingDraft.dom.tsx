@@ -1,15 +1,16 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useState, useCallback, useRef } from 'react';
-import { useComputePeaks } from '../hooks/useComputePeaks.dom.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { WaveformScrubber } from './conversation/WaveformScrubber.dom.js';
-import { PlaybackButton } from './PlaybackButton.dom.js';
-import { RecordingComposer } from './RecordingComposer.dom.js';
-import { createLogger } from '../logging/log.std.js';
-import type { Size } from '../hooks/useSizeObserver.dom.js';
-import { SizeObserver } from '../hooks/useSizeObserver.dom.js';
+import { useState, useCallback, useRef, type JSX } from 'react';
+import { useComputePeaks } from '../hooks/useComputePeaks.dom.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { WaveformScrubber } from './conversation/WaveformScrubber.dom.tsx';
+import { PlaybackButton } from './PlaybackButton.dom.tsx';
+import { RecordingComposer } from './RecordingComposer.dom.tsx';
+import { createLogger } from '../logging/log.std.ts';
+import type { Size } from '../hooks/useSizeObserver.dom.tsx';
+import { SizeObserver } from '../hooks/useSizeObserver.dom.tsx';
+import type { DurationInSeconds } from '../util/durations/index.std.ts';
 
 const log = createLogger('CompositionRecordingDraft');
 
@@ -23,6 +24,8 @@ export type Props = {
         currentTime: number;
       }
     | undefined;
+  waveform: ReadonlyArray<number> | undefined;
+  duration: DurationInSeconds | undefined;
   onCancel: () => void;
   onSend: () => void;
   onPlay: (positionAsRatio?: number) => void;
@@ -34,6 +37,8 @@ export function CompositionRecordingDraft({
   i18n,
   audioUrl,
   active,
+  waveform,
+  duration,
   onCancel,
   onSend,
   onPlay,
@@ -45,10 +50,13 @@ export function CompositionRecordingDraft({
     width: undefined | number;
   }>({ calculatingWidth: false, width: undefined });
 
-  const timeout = useRef<undefined | NodeJS.Timeout>(undefined);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleResize = useCallback(
     (size: Size) => {
+      if (size.hidden) {
+        return;
+      }
       if (size.width === state.width) {
         return;
       }
@@ -57,8 +65,9 @@ export function CompositionRecordingDraft({
         setState({ ...state, calculatingWidth: true });
       }
 
-      if (timeout.current) {
-        clearTimeout(timeout.current);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
 
       const newWidth = size.width;
@@ -68,7 +77,8 @@ export function CompositionRecordingDraft({
       if (state.width === undefined) {
         setState({ calculatingWidth: false, width: newWidth });
       } else {
-        timeout.current = setTimeout(() => {
+        timeoutRef.current = setTimeout(() => {
+          timeoutRef.current = null;
           setState({ calculatingWidth: false, width: newWidth });
         }, 500);
       }
@@ -91,6 +101,8 @@ export function CompositionRecordingDraft({
       activeDuration={active?.duration}
       currentTime={active?.currentTime ?? 0}
       width={state.width}
+      waveform={waveform}
+      duration={duration}
       onClick={onScrub}
       onScrub={onScrub}
     />
@@ -126,6 +138,8 @@ type SizedWaveformScrubberProps = {
   width: number | undefined;
   // defined if we are playing
   activeDuration: number | undefined;
+  waveform: ReadonlyArray<number> | undefined;
+  duration: DurationInSeconds | undefined;
   currentTime: number;
   onScrub: (progressAsRatio: number) => void;
   onClick: (progressAsRatio: number) => void;
@@ -134,6 +148,8 @@ function SizedWaveformScrubber({
   i18n,
   audioUrl,
   activeDuration,
+  waveform,
+  duration: givenDuration,
   currentTime,
   onClick,
   onScrub,
@@ -147,7 +163,9 @@ function SizedWaveformScrubber({
     audioUrl,
     activeDuration,
     onCorrupted: handleCorrupted,
-    barCount: Math.floor((width ?? 800) / 4),
+    barCount: Math.floor((width ?? 4) / 4),
+    waveform,
+    duration: givenDuration,
   });
 
   return (

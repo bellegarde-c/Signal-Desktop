@@ -1,18 +1,26 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { type ReactNode, useCallback, useEffect, useMemo } from 'react';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
-import type { LocalizerType } from '../../types/Util.std.js';
-import { isInSystemContacts } from '../../util/isInSystemContacts.std.js';
-import { Avatar, AvatarBlur, AvatarSize } from '../Avatar.dom.js';
-import { Modal } from '../Modal.dom.js';
-import { UserText } from '../UserText.dom.js';
-import { SharedGroupNames } from '../SharedGroupNames.dom.js';
-import { About } from './About.dom.js';
-import { I18n } from '../I18n.dom.js';
-import { canHaveNicknameAndNote } from '../../util/nicknames.dom.js';
-import { Tooltip, TooltipPlacement } from '../Tooltip.dom.js';
+import { type ReactNode, useCallback, useMemo, type JSX } from 'react';
+import { isInSystemContacts } from '../../util/isInSystemContacts.std.ts';
+import { Avatar, AvatarBlur, AvatarSize } from '../Avatar.dom.tsx';
+import { UserText } from '../UserText.dom.tsx';
+import { SharedGroupNames } from '../SharedGroupNames.dom.tsx';
+import { About } from './About.dom.tsx';
+import { I18n } from '../I18n.dom.tsx';
+import { canHaveNicknameAndNote } from '../../util/nicknames.dom.ts';
+import { Tooltip, TooltipPlacement } from '../Tooltip.dom.tsx';
+import { FunStaticEmoji } from '../fun/FunEmoji.dom.tsx';
+import { missingEmojiPlaceholder } from '../../types/GroupMemberLabels.std.ts';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import { Emoji } from '../../axo/emoji.std.ts';
+import { AxoDialog } from '../../axo/AxoDialog.dom.tsx';
+import { tw } from '../../axo/tw.dom.tsx';
+import { AxoList } from '../../axo/items/AxoList.dom.tsx';
+import { AxoItem } from '../../axo/items/AxoItem.dom.tsx';
+import { AxoTextItem } from '../../axo/items/AxoTextItem.dom.tsx';
+import { AxoClickableItem } from '../../axo/items/AxoClickableItem.dom.tsx';
 
 function muted(parts: Array<string | JSX.Element>) {
   return (
@@ -22,39 +30,50 @@ function muted(parts: Array<string | JSX.Element>) {
 
 export type PropsType = Readonly<{
   i18n: LocalizerType;
+  canAddLabel: boolean;
+  contact: ConversationType;
+  contactLabelEmoji: Emoji.Variant | undefined;
+  contactLabelString: string | undefined;
+  contactNameColor: string | undefined;
+  fromOrAddedByTrustedContact?: boolean;
+  isEditMemberLabelEnabled: boolean;
+  isSignalConnection: boolean;
   onClose: () => void;
   onOpenNotePreviewModal: () => void;
-  conversation: ConversationType;
-  fromOrAddedByTrustedContact?: boolean;
-  isSignalConnection: boolean;
   pendingAvatarDownload?: boolean;
+  sharedGroupNames: ReadonlyArray<string>;
+  showEditMemberLabelScreen: () => unknown;
+  showProfileEditor: () => unknown;
+  showQRCodeScreen: () => unknown;
   startAvatarDownload?: (id: string) => unknown;
   toggleSignalConnectionsModal: () => void;
   toggleSafetyNumberModal: (id: string) => void;
   toggleProfileNameWarningModal: () => void;
-  updateSharedGroups: (id: string) => void;
 }>;
 
 export function AboutContactModal({
   i18n,
-  conversation,
+  canAddLabel,
+  contact,
+  contactLabelEmoji,
+  contactLabelString,
+  contactNameColor,
   fromOrAddedByTrustedContact,
+  isEditMemberLabelEnabled,
   isSignalConnection,
   pendingAvatarDownload,
+  sharedGroupNames,
+  showEditMemberLabelScreen,
+  showProfileEditor,
+  showQRCodeScreen,
   startAvatarDownload,
   toggleSignalConnectionsModal,
   toggleSafetyNumberModal,
   toggleProfileNameWarningModal,
-  updateSharedGroups,
   onClose,
   onOpenNotePreviewModal,
 }: PropsType): JSX.Element {
-  const { avatarUrl, hasAvatar, isMe } = conversation;
-
-  useEffect(() => {
-    // Kick off the expensive hydration of the current sharedGroupNames
-    updateSharedGroups(conversation.id);
-  }, [conversation.id, updateSharedGroups]);
+  const { avatarUrl, hasAvatar, isMe } = contact;
 
   // If hasAvatar is true, we show the download button instead of blur
   const enableClickToLoad = !avatarUrl && !isMe && hasAvatar;
@@ -69,257 +88,294 @@ export function AboutContactModal({
     }
     return () => {
       if (!pendingAvatarDownload && startAvatarDownload) {
-        startAvatarDownload(conversation.id);
+        startAvatarDownload(contact.id);
       }
     };
   }, [
-    conversation.id,
+    contact.id,
     startAvatarDownload,
     enableClickToLoad,
     pendingAvatarDownload,
   ]);
 
-  const onSignalConnectionClick = useCallback(
-    (ev: React.MouseEvent) => {
-      ev.preventDefault();
-      toggleSignalConnectionsModal();
-    },
-    [toggleSignalConnectionsModal]
-  );
+  const onVerifiedClick = useCallback(() => {
+    toggleSafetyNumberModal(contact.id);
+  }, [toggleSafetyNumberModal, contact.id]);
 
-  const onVerifiedClick = useCallback(
-    (ev: React.MouseEvent) => {
-      ev.preventDefault();
-      toggleSafetyNumberModal(conversation.id);
-    },
-    [toggleSafetyNumberModal, conversation.id]
-  );
-
-  const onProfileNameWarningClick = useCallback(
-    (ev: React.MouseEvent) => {
-      ev.preventDefault();
-      toggleProfileNameWarningModal();
-    },
-    [toggleProfileNameWarningModal]
-  );
+  const onProfileNameWarningClick = useCallback(() => {
+    toggleProfileNameWarningModal();
+  }, [toggleProfileNameWarningModal]);
 
   let statusRow: JSX.Element | undefined;
+  const hasLabel = contactNameColor && contactLabelString;
+  const shouldShowLabel = isMe && hasLabel;
+  const shouldShowAddLabel =
+    isMe && !hasLabel && canAddLabel && isEditMemberLabelEnabled;
 
   if (isMe) {
     // No status for ourselves
-  } else if (conversation.isBlocked) {
+  } else if (contact.isBlocked) {
     statusRow = (
-      <div className="AboutContactModal__row">
-        <i className="AboutContactModal__row__icon AboutContactModal__row__icon--blocked" />
-        {i18n('icu:AboutContactModal__blocked', {
-          name: conversation.title,
+      <AxoTextItem.Root
+        symbol="block"
+        label={i18n('icu:AboutContactModal__blocked', {
+          name: contact.title,
         })}
-      </div>
+      />
     );
-  } else if (!conversation.acceptedMessageRequest) {
+  } else if (!contact.acceptedMessageRequest) {
     statusRow = (
-      <div className="AboutContactModal__row">
-        <i className="AboutContactModal__row__icon AboutContactModal__row__icon--message-request" />
-        {i18n('icu:AboutContactModal__message-request')}
-      </div>
+      <AxoTextItem.Root
+        symbol="message-badge"
+        label={i18n('icu:AboutContactModal__message-request')}
+      />
     );
-  } else if (!conversation.hasMessages && !conversation.profileSharing) {
+  } else if (!contact.hasMessages && !contact.profileSharing) {
     statusRow = (
-      <div className="AboutContactModal__row">
-        <i className="AboutContactModal__row__icon AboutContactModal__row__icon--no-dms" />
-        {i18n('icu:AboutContactModal__no-dms', {
-          name: conversation.title,
+      <AxoTextItem.Root
+        symbol="message-x"
+        label={i18n('icu:AboutContactModal__no-dms', {
+          name: contact.title,
         })}
-      </div>
+      />
     );
   }
 
-  return (
-    <Modal
-      key="main"
-      modalName="AboutContactModal"
-      moduleClassName="AboutContactModal"
-      hasXButton
-      i18n={i18n}
-      onClose={onClose}
-    >
-      <div className="AboutContactModal__row AboutContactModal__row--centered">
-        <Avatar
-          avatarPlaceholderGradient={conversation.avatarPlaceholderGradient}
-          avatarUrl={conversation.avatarUrl}
-          blur={avatarBlur}
-          onClick={avatarOnClick}
-          badge={undefined}
-          color={conversation.color}
-          conversationType="direct"
-          hasAvatar={conversation.hasAvatar}
+  const nameElement =
+    canHaveNicknameAndNote(contact) &&
+    contact.titleNoNickname !== contact.title &&
+    contact.titleNoNickname ? (
+      <span>
+        <I18n
           i18n={i18n}
-          loading={pendingAvatarDownload && !conversation.avatarUrl}
-          profileName={conversation.profileName}
-          sharedGroupNames={[]}
-          size={AvatarSize.TWO_HUNDRED_SIXTEEN}
-          title={conversation.title}
+          id="icu:AboutContactModal__TitleAndTitleWithoutNickname"
+          components={{
+            nickname: <UserText text={contact.title} />,
+            titleNoNickname: (
+              <Tooltip
+                className="AboutContactModal__TitleWithoutNickname__Tooltip"
+                direction={TooltipPlacement.Top}
+                content={
+                  <I18n
+                    i18n={i18n}
+                    id="icu:AboutContactModal__TitleWithoutNickname__Tooltip"
+                    components={{
+                      title: <UserText text={contact.titleNoNickname} />,
+                    }}
+                  />
+                }
+                delay={0}
+              >
+                <UserText text={contact.titleNoNickname} />
+              </Tooltip>
+            ),
+            muted,
+          }}
         />
-      </div>
+      </span>
+    ) : (
+      <UserText text={contact.title} />
+    );
 
-      <div className="AboutContactModal__row">
-        <h3 className="AboutContactModal__title">
-          {isMe
-            ? i18n('icu:AboutContactModal__title--myself')
-            : i18n('icu:AboutContactModal__title')}
-        </h3>
-      </div>
-
-      <div className="AboutContactModal__row">
-        <i className="AboutContactModal__row__icon AboutContactModal__row__icon--profile" />
-
-        {canHaveNicknameAndNote(conversation) &&
-        (conversation.nicknameGivenName || conversation.nicknameFamilyName) &&
-        conversation.titleNoNickname ? (
-          <span>
-            <I18n
+  return (
+    <AxoDialog.Root open onOpenChange={onClose}>
+      <AxoDialog.Content size="sm" escape="cancel-is-noop">
+        <AxoDialog.Header>
+          <AxoDialog.Title screenReaderOnly>
+            {isMe
+              ? i18n('icu:AboutContactModal__title--myself')
+              : i18n('icu:AboutContactModal__title')}
+          </AxoDialog.Title>
+          <AxoDialog.Close />
+        </AxoDialog.Header>
+        <AxoDialog.Body padding="md">
+          <div className={tw('mb-3.5 flex flex-col items-center')}>
+            <Avatar
+              avatarPlaceholderGradient={contact.avatarPlaceholderGradient}
+              avatarUrl={contact.avatarUrl}
+              blur={avatarBlur}
+              onClick={avatarOnClick}
+              badge={undefined}
+              color={contact.color}
+              conversationType="direct"
+              hasAvatar={contact.hasAvatar}
               i18n={i18n}
-              id="icu:AboutContactModal__TitleAndTitleWithoutNickname"
-              components={{
-                nickname: <UserText text={conversation.title} />,
-                titleNoNickname: (
-                  <Tooltip
-                    className="AboutContactModal__TitleWithoutNickname__Tooltip"
-                    direction={TooltipPlacement.Top}
-                    content={
-                      <I18n
-                        i18n={i18n}
-                        id="icu:AboutContactModal__TitleWithoutNickname__Tooltip"
-                        components={{
-                          title: (
-                            <UserText text={conversation.titleNoNickname} />
-                          ),
-                        }}
-                      />
-                    }
-                    delay={0}
-                  >
-                    <UserText text={conversation.titleNoNickname} />
-                  </Tooltip>
-                ),
-                muted,
-              }}
-            />
-          </span>
-        ) : (
-          <UserText text={conversation.title} />
-        )}
-      </div>
-
-      {!isMe && !fromOrAddedByTrustedContact ? (
-        <div className="AboutContactModal__row">
-          <i
-            className={`AboutContactModal__row__icon AboutContactModal__row__icon--${conversation.type === 'group' ? 'group' : 'direct'}-question`}
-          />
-          <button
-            type="button"
-            className="AboutContactModal__button"
-            onClick={onProfileNameWarningClick}
-          >
-            <I18n
-              components={{
-                // eslint-disable-next-line react/no-unstable-nested-components
-                clickable: (parts: ReactNode) => <>{parts}</>,
-              }}
-              i18n={i18n}
-              id={
-                conversation.type === 'group'
-                  ? 'icu:ConversationHero--group-names'
-                  : 'icu:ConversationHero--profile-names'
-              }
-            />
-          </button>
-        </div>
-      ) : null}
-
-      {!isMe && conversation.isVerified ? (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--verified" />
-          <button
-            type="button"
-            className="AboutContactModal__verified"
-            onClick={onVerifiedClick}
-          >
-            {i18n('icu:AboutContactModal__verified')}
-          </button>
-        </div>
-      ) : null}
-
-      {!isMe && conversation.about ? (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--about" />
-          <About
-            className="AboutContactModal__about"
-            text={conversation.about}
-          />
-        </div>
-      ) : null}
-
-      {!isMe && isSignalConnection ? (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--connections" />
-          <button
-            type="button"
-            className="AboutContactModal__button"
-            onClick={onSignalConnectionClick}
-          >
-            {i18n('icu:AboutContactModal__signal-connection')}
-          </button>
-        </div>
-      ) : null}
-
-      {!isMe && isInSystemContacts(conversation) ? (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--person" />
-          {i18n('icu:AboutContactModal__system-contact', {
-            name:
-              conversation.systemGivenName ||
-              conversation.firstName ||
-              conversation.title,
-          })}
-        </div>
-      ) : null}
-
-      {conversation.phoneNumber ? (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--phone" />
-          <UserText text={conversation.phoneNumber} />
-        </div>
-      ) : null}
-
-      {!isMe && (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--group" />
-          <div>
-            <SharedGroupNames
-              i18n={i18n}
-              sharedGroupNames={conversation.sharedGroupNames || []}
+              loading={pendingAvatarDownload && !contact.avatarUrl}
+              profileName={contact.profileName}
+              size={AvatarSize.TWO_HUNDRED_SIXTEEN}
+              title={contact.title}
             />
           </div>
-        </div>
-      )}
 
-      {conversation.note && (
-        <div className="AboutContactModal__row">
-          <i className="AboutContactModal__row__icon AboutContactModal__row__icon--note" />
-          <button
-            type="button"
-            className="AboutContactModal__button"
-            onClick={onOpenNotePreviewModal}
-          >
-            <div className="AboutContactModal__OneLineEllipsis">
-              <UserText text={conversation.note} />
-            </div>
-          </button>
-        </div>
-      )}
+          <AxoList.Group>
+            <AxoList.Root>
+              <AxoList.Body>
+                <AxoItem.Group spacing="sm">
+                  {isMe ? (
+                    <AxoClickableItem.Root
+                      symbol="person"
+                      label={nameElement}
+                      onClick={showProfileEditor}
+                      arrow="next"
+                    />
+                  ) : (
+                    <AxoTextItem.Root symbol="person" label={nameElement} />
+                  )}
+                  {!isMe && contact.about && (
+                    <AxoTextItem.Root
+                      symbol="pencil"
+                      label={
+                        <About
+                          className="AboutContactModal__about"
+                          text={contact.about}
+                        />
+                      }
+                    />
+                  )}
+                  {!isMe && contact.isVerified && (
+                    <AxoClickableItem.Root
+                      symbol="shield-check"
+                      label={i18n('icu:AboutContactModal__verified')}
+                      onClick={onVerifiedClick}
+                    />
+                  )}
+                  {!isMe && isSignalConnection && (
+                    <AxoClickableItem.Root
+                      symbol="connections"
+                      label={i18n('icu:AboutContactModal__signal-connection')}
+                      onClick={toggleSignalConnectionsModal}
+                      arrow="next"
+                    />
+                  )}
 
-      {statusRow}
-    </Modal>
+                  {!isMe && isInSystemContacts(contact) && (
+                    <AxoTextItem.Root
+                      symbol="person-circle"
+                      label={i18n('icu:AboutContactModal__system-contact', {
+                        name:
+                          contact.systemGivenName ||
+                          contact.firstName ||
+                          contact.title,
+                      })}
+                    />
+                  )}
+
+                  {!isMe && !fromOrAddedByTrustedContact && (
+                    <AxoClickableItem.Root
+                      symbol={
+                        contact.type === 'group'
+                          ? 'group-question'
+                          : 'person-question'
+                      }
+                      label={
+                        <I18n
+                          components={{
+                            clickable: (parts: ReactNode) => <>{parts}</>,
+                          }}
+                          i18n={i18n}
+                          id={
+                            contact.type === 'group'
+                              ? 'icu:ConversationHero--group-names'
+                              : 'icu:ConversationHero--profile-names'
+                          }
+                        />
+                      }
+                      onClick={onProfileNameWarningClick}
+                      arrow="next"
+                    />
+                  )}
+
+                  {shouldShowLabel && (
+                    <AxoClickableItem.Root
+                      symbol="label"
+                      label={
+                        <div className={tw('truncate')}>
+                          {contactLabelEmoji != null && (
+                            <>
+                              <MemberLabelEmoji emoji={contactLabelEmoji} />
+                              &nbsp;
+                            </>
+                          )}
+                          <UserText
+                            fontSizeOverride={14}
+                            style={{
+                              verticalAlign: 'top',
+                              marginTop: '3px',
+                            }}
+                            text={contactLabelString}
+                          />
+                        </div>
+                      }
+                      disabled={!canAddLabel}
+                      onClick={showEditMemberLabelScreen}
+                    />
+                  )}
+
+                  {shouldShowAddLabel && (
+                    <AxoClickableItem.Root
+                      symbol="label"
+                      label={i18n('icu:AboutContactModal__add-member-label')}
+                      onClick={showEditMemberLabelScreen}
+                      arrow="next"
+                    />
+                  )}
+
+                  {isMe && contact.username && (
+                    <AxoClickableItem.Root
+                      symbol="qrcode"
+                      label={i18n('icu:AboutContactModal__your-qr-code')}
+                      onClick={showQRCodeScreen}
+                    />
+                  )}
+
+                  {!isMe && contact.phoneNumber && (
+                    <AxoTextItem.Root
+                      symbol="phone"
+                      label={<UserText text={contact.phoneNumber} />}
+                    />
+                  )}
+
+                  {!isMe && (
+                    <AxoTextItem.Root
+                      symbol="group"
+                      label={
+                        <SharedGroupNames
+                          i18n={i18n}
+                          sharedGroupNames={sharedGroupNames}
+                        />
+                      }
+                    />
+                  )}
+
+                  {contact.note && (
+                    <AxoClickableItem.Root
+                      symbol="note"
+                      label={<UserText text={contact.note} />}
+                      onClick={onOpenNotePreviewModal}
+                    />
+                  )}
+
+                  {statusRow}
+                </AxoItem.Group>
+              </AxoList.Body>
+            </AxoList.Root>
+          </AxoList.Group>
+        </AxoDialog.Body>
+      </AxoDialog.Content>
+    </AxoDialog.Root>
+  );
+}
+
+function MemberLabelEmoji(props: { emoji: Emoji.Variant }): ReactNode {
+  if (!Emoji.isEmoji(props.emoji)) {
+    return missingEmojiPlaceholder;
+  }
+  return (
+    <FunStaticEmoji
+      role="img"
+      aria-label={props.emoji}
+      size={14}
+      emoji={props.emoji}
+    />
   );
 }

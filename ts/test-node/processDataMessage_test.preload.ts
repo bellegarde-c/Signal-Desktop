@@ -2,19 +2,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
-import Long from 'long';
 import { v4 as generateUuid } from 'uuid';
 
 import {
-  processDataMessage,
   ATTACHMENT_MAX,
-} from '../textsecure/processDataMessage.preload.js';
+  processDataMessage,
+} from '../textsecure/processDataMessage.preload.ts';
 import type { ProcessedAttachment } from '../textsecure/Types.d.ts';
-import { SignalService as Proto } from '../protobuf/index.std.js';
-import { IMAGE_GIF, IMAGE_JPEG, LONG_MESSAGE } from '../types/MIME.std.js';
-import { generateAci } from '../types/ServiceId.std.js';
-import { toAciObject } from '../util/ServiceId.node.js';
-import { uuidToBytes } from '../util/uuidToBytes.std.js';
+import { SignalService as Proto } from '../protobuf/index.std.ts';
+import {
+  APPLICATION_OCTET_STREAM,
+  AUDIO_MP3,
+  IMAGE_GIF,
+  IMAGE_JPEG,
+  LONG_MESSAGE,
+  VIDEO_MP4,
+} from '../types/MIME.std.ts';
+import { toAciObject } from '../util/ServiceId.node.ts';
+import { uuidToBytes } from '../util/uuidToBytes.std.ts';
+import { generateAci } from '../test-helpers/serviceIdUtils.std.ts';
+import { Emoji } from '../axo/emoji.std.ts';
 
 const ACI_1 = generateAci();
 const ACI_BINARY_1 = toAciObject(ACI_1).getRawUuidBytes();
@@ -23,9 +30,40 @@ const FLAGS = Proto.DataMessage.Flags;
 const TIMESTAMP = Date.now();
 const CLIENT_UUID = generateUuid();
 
-const UNPROCESSED_ATTACHMENT: Proto.IAttachmentPointer = {
-  cdnId: Long.fromNumber(123),
-  cdnKey: 'cdnKey',
+const EMPTY_DATA_MESSAGE: Proto.DataMessage.Params = {
+  body: null,
+  attachments: null,
+  groupV2: null,
+  flags: null,
+  expireTimer: null,
+  expireTimerVersion: null,
+  profileKey: null,
+  timestamp: null,
+  quote: null,
+  contact: null,
+  preview: null,
+  sticker: null,
+  requiredProtocolVersion: null,
+  isViewOnce: null,
+  reaction: null,
+  delete: null,
+  bodyRanges: null,
+  groupCallUpdate: null,
+  payment: null,
+  storyContext: null,
+  giftBadge: null,
+  pollCreate: null,
+  pollTerminate: null,
+  pollVote: null,
+  pinMessage: null,
+  unpinMessage: null,
+  adminDelete: null,
+};
+
+const UNPROCESSED_ATTACHMENT: Proto.AttachmentPointer.Params = {
+  attachmentIdentifier: {
+    cdnKey: 'cdnKey',
+  },
   cdnNumber: 2,
   blurHash: 'blurHash',
   caption: 'caption',
@@ -35,16 +73,19 @@ const UNPROCESSED_ATTACHMENT: Proto.IAttachmentPointer = {
   contentType: IMAGE_GIF,
   incrementalMac: new Uint8Array([12, 12, 12]),
   chunkSize: 24,
-  uploadTimestamp: Long.fromNumber(456),
+  uploadTimestamp: 456n,
   size: 34,
   height: 64,
   width: 128,
-  flags: 1,
+  flags: 0,
   fileName: 'fileName',
+  thumbnail: null,
+  audioWaveform: null,
+  audioDurationSeconds: null,
 };
 
 const PROCESSED_ATTACHMENT: ProcessedAttachment = {
-  cdnId: '123',
+  cdnId: undefined,
   cdnKey: 'cdnKey',
   cdnNumber: 2,
   blurHash: 'blurHash',
@@ -59,111 +100,253 @@ const PROCESSED_ATTACHMENT: ProcessedAttachment = {
   uploadTimestamp: 456,
   height: 64,
   width: 128,
-  flags: 1,
+  flags: 0,
   fileName: 'fileName',
+  audioWaveform: undefined,
+  duration: undefined,
+};
+
+const IMAGE = { contentType: IMAGE_JPEG };
+const VIDEO = { contentType: VIDEO_MP4 };
+const FILE = { contentType: APPLICATION_OCTET_STREAM };
+const AUDIO = {
+  contentType: AUDIO_MP3,
+  audioWaveform: new Uint8Array([1, 2, 3]),
+  audioDurationSeconds: 1.25,
+};
+const PROCESSED_AUDIO = {
+  contentType: AUDIO_MP3,
+  audioWaveform: [1, 2, 3],
+  duration: 1.25,
+};
+const LONG_TEXT = { contentType: LONG_MESSAGE };
+const VOICE = {
+  contentType: AUDIO_MP3,
+  flags: Proto.AttachmentPointer.Flags.VOICE_MESSAGE,
+};
+const GIF = {
+  contentType: VIDEO_MP4,
+  flags: Proto.AttachmentPointer.Flags.GIF,
 };
 
 describe('processDataMessage', () => {
-  const check = (message: Proto.IDataMessage) =>
+  const check = (
+    message: Partial<Omit<Proto.DataMessage.Params, 'timestamp'>>
+  ) =>
     processDataMessage(
-      {
-        timestamp: Long.fromNumber(TIMESTAMP),
-        ...message,
-      },
+      Proto.DataMessage.decode(
+        Proto.DataMessage.encode({
+          ...EMPTY_DATA_MESSAGE,
+          timestamp: BigInt(TIMESTAMP),
+          ...message,
+        })
+      ),
       TIMESTAMP,
       {
         _createName: () => 'random-path',
       }
     );
 
+  const unprocessed = (
+    overrides?: Partial<Proto.AttachmentPointer.Params>
+  ): Proto.AttachmentPointer.Params => ({
+    ...UNPROCESSED_ATTACHMENT,
+    flags: 0,
+    ...overrides,
+  });
+
+  const processed = (
+    overrides?: Partial<ProcessedAttachment>
+  ): ProcessedAttachment => ({
+    ...PROCESSED_ATTACHMENT,
+    flags: 0,
+    downloadPath: 'random-path',
+    ...overrides,
+  });
+
   it('should process attachments', () => {
     const out = check({
-      attachments: [UNPROCESSED_ATTACHMENT],
+      attachments: [unprocessed()],
+    });
+
+    assert.deepStrictEqual(out.attachments, [processed()]);
+  });
+
+  it('should process attachments with null fileName', () => {
+    const out = check({
+      attachments: [unprocessed({ fileName: null })],
     });
 
     assert.deepStrictEqual(out.attachments, [
-      {
-        ...PROCESSED_ATTACHMENT,
-        downloadPath: 'random-path',
-      },
+      processed({ fileName: undefined }),
     ]);
   });
 
   it('should process attachments with 0 cdnId', () => {
     const out = check({
       attachments: [
-        {
-          ...UNPROCESSED_ATTACHMENT,
-          cdnId: new Long(0),
-        },
+        unprocessed({
+          attachmentIdentifier: {
+            cdnId: 0n,
+          },
+        }),
       ],
     });
 
     assert.deepStrictEqual(out.attachments, [
-      {
-        ...PROCESSED_ATTACHMENT,
+      processed({
         cdnId: undefined,
-        downloadPath: 'random-path',
-      },
+        cdnKey: undefined,
+      }),
     ]);
   });
 
   it('should move long text attachments to bodyAttachment', () => {
     const out = check({
-      attachments: [
-        UNPROCESSED_ATTACHMENT,
-        {
-          ...UNPROCESSED_ATTACHMENT,
-          contentType: LONG_MESSAGE,
-        },
-      ],
+      attachments: [unprocessed(), unprocessed(LONG_TEXT)],
     });
 
-    assert.deepStrictEqual(out.attachments, [
-      {
-        ...PROCESSED_ATTACHMENT,
-        downloadPath: 'random-path',
-      },
-    ]);
-    assert.deepStrictEqual(out.bodyAttachment, {
-      ...PROCESSED_ATTACHMENT,
-      downloadPath: 'random-path',
-      contentType: LONG_MESSAGE,
-    });
+    assert.deepStrictEqual(out.attachments, [processed()]);
+    assert.deepStrictEqual(out.bodyAttachment, processed(LONG_TEXT));
+  });
+
+  it('caps the number of attachments at ATTACHMENT_MAX', () => {
+    const attachments: Array<Proto.AttachmentPointer.Params> = [];
+    for (let i = 0; i < ATTACHMENT_MAX + 5; i += 1) {
+      attachments.push(unprocessed(IMAGE));
+    }
+
+    const out = check({ attachments });
+
+    assert.equal(out.attachments.length, ATTACHMENT_MAX);
+    assert.deepStrictEqual(
+      out.attachments,
+      Array.from({ length: ATTACHMENT_MAX }, () => processed(IMAGE))
+    );
+  });
+
+  it('allows long text + ATTACHMENT_MAX attachments', () => {
+    const attachments: Array<Proto.AttachmentPointer.Params> = [
+      unprocessed(LONG_TEXT),
+    ];
+    for (let i = 0; i < ATTACHMENT_MAX; i += 1) {
+      attachments.push(unprocessed(IMAGE));
+    }
+
+    const out = check({ attachments });
+
+    assert.deepStrictEqual(out.bodyAttachment, processed(LONG_TEXT));
+    assert.deepStrictEqual(
+      out.attachments,
+      Array.from({ length: ATTACHMENT_MAX }, () => processed(IMAGE))
+    );
   });
 
   it('should process attachments with incrementalMac/chunkSize', () => {
     const out = check({
       attachments: [
-        {
-          ...UNPROCESSED_ATTACHMENT,
+        unprocessed({
           incrementalMac: new Uint8Array([0, 0, 0]),
           chunkSize: 2,
-        },
+        }),
       ],
     });
 
     assert.deepStrictEqual(out.attachments, [
-      {
-        ...PROCESSED_ATTACHMENT,
-        downloadPath: 'random-path',
+      processed({
         incrementalMac: 'AAAA',
         chunkSize: 2,
-      },
+      }),
     ]);
   });
 
-  it('should throw on too many attachments', () => {
-    const attachments: Array<Proto.IAttachmentPointer> = [];
-    for (let i = 0; i < ATTACHMENT_MAX + 1; i += 1) {
-      attachments.push(UNPROCESSED_ATTACHMENT);
-    }
+  describe('drops attachments the UI would never render', () => {
+    it('keeps only the voice message', () => {
+      const out = check({
+        attachments: [unprocessed(VOICE), unprocessed(FILE)],
+      });
 
-    assert.throws(
-      () => check({ attachments }),
-      `Too many attachments: ${ATTACHMENT_MAX + 1} included in one message` +
-        `, max is ${ATTACHMENT_MAX}`
-    );
+      assert.deepStrictEqual(out.attachments, [processed(VOICE)]);
+    });
+
+    it('keeps only the first audio attachment', () => {
+      const out = check({
+        attachments: [
+          unprocessed(AUDIO),
+          unprocessed(AUDIO),
+          unprocessed(IMAGE),
+        ],
+      });
+
+      assert.deepStrictEqual(out.attachments, [processed(PROCESSED_AUDIO)]);
+    });
+
+    it('keeps only GIF (rendered alone)', () => {
+      const out = check({
+        attachments: [unprocessed(GIF), unprocessed(IMAGE)],
+      });
+
+      assert.deepStrictEqual(out.attachments, [processed(GIF)]);
+    });
+
+    it('keeps only the first file attachment', () => {
+      const out = check({
+        attachments: [unprocessed(FILE), unprocessed(FILE)],
+      });
+
+      assert.deepStrictEqual(out.attachments, [processed(FILE)]);
+    });
+
+    it('keeps only the file when it leads visual media', () => {
+      const out = check({
+        attachments: [unprocessed(FILE), unprocessed(IMAGE)],
+      });
+
+      assert.deepStrictEqual(out.attachments, [processed(FILE)]);
+    });
+
+    it('keeps the leading run of visual media', () => {
+      const out = check({
+        attachments: [
+          unprocessed(IMAGE),
+          unprocessed(VIDEO),
+          unprocessed(FILE),
+        ],
+      });
+
+      assert.deepStrictEqual(out.attachments, [
+        processed(IMAGE),
+        processed(VIDEO),
+      ]);
+    });
+
+    it('stops at the first non-visual attachment', () => {
+      const out = check({
+        attachments: [
+          unprocessed(IMAGE),
+          unprocessed(FILE),
+          unprocessed(IMAGE),
+        ],
+      });
+
+      assert.deepStrictEqual(out.attachments, [processed(IMAGE)]);
+    });
+
+    it('keeps every attachment when they are all visual', () => {
+      const out = check({
+        attachments: [
+          unprocessed(IMAGE),
+          unprocessed(VIDEO),
+          unprocessed(IMAGE),
+        ],
+      });
+
+      assert.deepStrictEqual(out.attachments, [
+        processed(IMAGE),
+        processed(VIDEO),
+        processed(IMAGE),
+      ]);
+    });
   });
 
   it('should process groupv2 context', () => {
@@ -206,9 +389,12 @@ describe('processDataMessage', () => {
   it('should process quote, dropping second attachment', () => {
     const out = check({
       quote: {
-        id: Long.fromNumber(1),
+        id: 1n,
+        authorAci: null,
         authorAciBinary: ACI_BINARY_1,
         text: 'text',
+        bodyRanges: null,
+        type: null,
         attachments: [
           {
             contentType: 'image/jpeg',
@@ -235,20 +421,31 @@ describe('processDataMessage', () => {
           thumbnail: PROCESSED_ATTACHMENT,
         },
       ],
-      bodyRanges: undefined,
+      bodyRanges: [],
       type: 0,
     });
   });
 
   it('should process contact, dropping second contact', () => {
+    const EMPTY_CONTACT = {
+      $unknown: [],
+      number: [],
+      name: null,
+      email: [],
+      address: [],
+      organization: '',
+    };
     const out = check({
       contact: [
         {
+          ...EMPTY_CONTACT,
           avatar: {
             avatar: UNPROCESSED_ATTACHMENT,
+            isProfile: false,
           },
         },
         {
+          ...EMPTY_CONTACT,
           avatar: {
             avatar: UNPROCESSED_ATTACHMENT,
             isProfile: true,
@@ -259,7 +456,11 @@ describe('processDataMessage', () => {
 
     assert.deepStrictEqual(out.contact, [
       {
-        avatar: { avatar: PROCESSED_ATTACHMENT, isProfile: false },
+        ...EMPTY_CONTACT,
+        avatar: {
+          avatar: PROCESSED_ATTACHMENT,
+          isProfile: false,
+        },
       },
     ]);
   });
@@ -273,12 +474,14 @@ describe('processDataMessage', () => {
           image: UNPROCESSED_ATTACHMENT,
           title: 'Signal Private Messenger #1',
           url: 'https://signal.org',
+          date: null,
         },
         {
           description: 'Say "hello" again',
           image: UNPROCESSED_ATTACHMENT,
           title: 'Signal Private Messenger #2',
           url: 'https://signal.org',
+          date: null,
         },
       ],
     });
@@ -299,13 +502,15 @@ describe('processDataMessage', () => {
     assert.deepStrictEqual(
       check({
         reaction: {
-          emoji: '😎',
+          emoji: Emoji.COOL,
+          remove: null,
+          targetAuthorAci: null,
           targetAuthorAciBinary: ACI_BINARY_1,
-          targetSentTimestamp: Long.fromNumber(TIMESTAMP),
+          targetSentTimestamp: BigInt(TIMESTAMP),
         },
       }).reaction,
       {
-        emoji: '😎',
+        emoji: Emoji.COOL,
         remove: false,
         targetAuthorAci: ACI_1,
         targetTimestamp: TIMESTAMP,
@@ -315,14 +520,15 @@ describe('processDataMessage', () => {
     assert.deepStrictEqual(
       check({
         reaction: {
-          emoji: '😎',
+          emoji: Emoji.COOL,
           remove: true,
+          targetAuthorAci: null,
           targetAuthorAciBinary: ACI_BINARY_1,
-          targetSentTimestamp: Long.fromNumber(TIMESTAMP),
+          targetSentTimestamp: BigInt(TIMESTAMP),
         },
       }).reaction,
       {
-        emoji: '😎',
+        emoji: Emoji.COOL,
         remove: true,
         targetAuthorAci: ACI_1,
         targetTimestamp: TIMESTAMP,
@@ -334,8 +540,11 @@ describe('processDataMessage', () => {
     const out = check({
       preview: [
         {
-          date: Long.fromNumber(TIMESTAMP),
+          date: BigInt(TIMESTAMP),
           image: UNPROCESSED_ATTACHMENT,
+          url: null,
+          title: null,
+          description: null,
         },
       ],
     });
@@ -343,9 +552,9 @@ describe('processDataMessage', () => {
     assert.deepStrictEqual(out.preview, [
       {
         date: TIMESTAMP,
-        description: undefined,
-        title: undefined,
-        url: undefined,
+        description: '',
+        title: '',
+        url: '',
         image: PROCESSED_ATTACHMENT,
       },
     ]);
@@ -366,7 +575,7 @@ describe('processDataMessage', () => {
       packId: '010203',
       packKey: 'BAUG',
       stickerId: 1,
-      emoji: '💯',
+      emoji: Emoji.ONE_HUNDRED,
       data: PROCESSED_ATTACHMENT,
     });
   });
@@ -406,5 +615,43 @@ describe('processDataMessage', () => {
     assert.isFalse(check({ isViewOnce: null }).isViewOnce);
     assert.isFalse(check({ isViewOnce: false }).isViewOnce);
     assert.isTrue(check({ isViewOnce: true }).isViewOnce);
+  });
+
+  it('should process poll votes', () => {
+    assert.deepStrictEqual(
+      check({
+        pollVote: {
+          targetAuthorAciBinary: ACI_BINARY_1,
+          targetSentTimestamp: BigInt(TIMESTAMP),
+          optionIndexes: [0],
+          voteCount: 1,
+        },
+      }).pollVote,
+      {
+        targetAuthorAci: ACI_1,
+        targetTimestamp: TIMESTAMP,
+        optionIndexes: [0],
+        voteCount: 1,
+      }
+    );
+  });
+
+  it('should drop duplicate poll vote indexes', () => {
+    assert.deepStrictEqual(
+      check({
+        pollVote: {
+          targetAuthorAciBinary: ACI_BINARY_1,
+          targetSentTimestamp: BigInt(TIMESTAMP),
+          optionIndexes: [0, 0, 1, 1],
+          voteCount: 1,
+        },
+      }).pollVote,
+      {
+        targetAuthorAci: ACI_1,
+        targetTimestamp: TIMESTAMP,
+        optionIndexes: [0, 1],
+        voteCount: 1,
+      }
+    );
   });
 });

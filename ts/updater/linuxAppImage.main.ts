@@ -6,10 +6,15 @@ import { chmod } from 'fs-extra';
 
 import config from 'config';
 import { app } from 'electron';
+import { coerce, lt } from 'semver';
 
-import { Updater } from './common.main.js';
-import { appRelaunch } from '../util/relaunch.main.js';
-import { hexToBinary } from './signature.node.js';
+import { Updater } from './common.main.ts';
+import { appRelaunch } from '../util/relaunch.main.ts';
+import { hexToBinary } from './signature.node.ts';
+import { DialogType } from '../types/Dialogs.std.ts';
+
+import type { JSONVendorSchema } from './common.main.ts';
+import type { CheckType } from './common.main.ts';
 
 export class LinuxAppImageUpdater extends Updater {
   #installing = false;
@@ -19,7 +24,9 @@ export class LinuxAppImageUpdater extends Updater {
   }
 
   protected async installUpdate(
-    updateFilePath: string
+    updateFilePath: string,
+    _isSilent: boolean,
+    checkType: CheckType
   ): Promise<() => Promise<void>> {
     const { logger } = this;
 
@@ -29,7 +36,7 @@ export class LinuxAppImageUpdater extends Updater {
         await this.#install(updateFilePath);
         this.#installing = true;
       } catch (error) {
-        this.markCannotUpdate(error);
+        this.markCannotUpdate(error, checkType);
 
         throw error;
       }
@@ -48,7 +55,11 @@ export class LinuxAppImageUpdater extends Updater {
     app.quit();
   }
 
-  override getUpdatesPublicKey(): Buffer {
+  protected handleUpdateFromThirdParty(): boolean {
+    return false;
+  }
+
+  override getUpdatesPublicKey(): Buffer<ArrayBuffer> {
     return hexToBinary(config.get('appImageUpdatesPublicKey'));
   }
 
@@ -70,5 +81,55 @@ export class LinuxAppImageUpdater extends Updater {
     await unlink(appImageFile);
     await copyFile(updateFilePath, appImageFile);
     await chmod(appImageFile, 0o700);
+  }
+
+  override checkSystemRequirements(
+    vendor: JSONVendorSchema,
+    checkType: CheckType
+  ): boolean {
+    const { minGlibcVersion } = vendor;
+    if (minGlibcVersion) {
+      const parsedMinGlibcVersion = coerce(minGlibcVersion);
+      if (!parsedMinGlibcVersion) {
+        this.logger.warn(
+          'checkSystemRequirements: yaml had unparseable minGlibcVersion, ignoring. ' +
+            `yaml value: ${minGlibcVersion}`
+        );
+        return true;
+      }
+
+      // oxlint-disable-next-line typescript/no-explicit-any
+      const sysReport = process.report.getReport() as any;
+      const glibcVersion = sysReport?.header?.glibcVersionRuntime;
+      const parsedGlibcVersion = glibcVersion ? coerce(glibcVersion) : null;
+      if (!parsedGlibcVersion) {
+        this.logger.warn(
+          'checkSystemRequirements: yaml had minGlibcVersion but unable to' +
+            'get OS glibc version from system report, blocking update. ' +
+            `system value: ${glibcVersion}`
+        );
+        this.markCannotUpdate(
+          new Error('system glibc version missing or unparseable'),
+          checkType,
+          DialogType.UnsupportedOS
+        );
+        return false;
+      }
+
+      if (lt(parsedGlibcVersion, parsedMinGlibcVersion)) {
+        this.logger.warn(
+          `checkSystemRequirements: OS glibc ${glibcVersion} is less than the ` +
+            `minimum supported version ${minGlibcVersion}`
+        );
+        this.markCannotUpdate(
+          new Error('yaml file has unsatisfied minGlibcVersion value'),
+          checkType,
+          DialogType.UnsupportedOS
+        );
+        return false;
+      }
+    }
+
+    return true;
   }
 }

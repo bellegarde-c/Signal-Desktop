@@ -1,16 +1,16 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import type { ReactNode, JSX } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { Blurhash } from 'react-blurhash';
 
-import type { AttachmentType } from '../types/Attachment.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { Spinner } from './Spinner.dom.js';
-import { TextAttachment } from './TextAttachment.dom.js';
-import { ThemeType } from '../types/Util.std.js';
+import type { AttachmentType } from '../types/Attachment.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { Spinner } from './Spinner.dom.tsx';
+import { TextAttachment } from './TextAttachment.dom.tsx';
+import { ThemeType } from '../types/Util.std.ts';
 import {
   defaultBlurHash,
   hasFailed,
@@ -18,12 +18,12 @@ import {
   isDownloaded,
   isDownloading,
   isGIF,
-} from '../util/Attachment.std.js';
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
-import { isVideoTypeSupported } from '../util/GoogleChrome.std.js';
-import { createLogger } from '../logging/log.std.js';
-import * as Errors from '../types/errors.std.js';
-import { isAbortError } from '../util/isAbortError.std.js';
+} from '../util/Attachment.std.ts';
+import { getClassNamesFor } from '../util/getClassNamesFor.std.ts';
+import { isVideoTypeSupported } from '../util/GoogleChrome.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import * as Errors from '../types/errors.std.ts';
+import { isAbortError } from '../util/isAbortError.std.ts';
 
 const log = createLogger('StoryImage');
 
@@ -80,6 +80,7 @@ export function StoryImage({
       videoRef.current.pause();
     } else {
       onMediaPlaybackStart();
+      // oxlint-disable-next-line promise/prefer-await-to-then
       void videoRef.current.play().catch(error => {
         if (!isAbortError(error)) {
           log.error('Failed to play video', Errors.toLogFormat(error));
@@ -89,8 +90,13 @@ export function StoryImage({
   }, [isPaused, onMediaPlaybackStart]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     setHasImgError(false);
-  }, [attachment?.url, attachment?.thumbnail?.url]);
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    attachment?.url,
+    attachment?.thumbnail?.url,
+  ]);
 
   if (!attachment) {
     return null;
@@ -122,7 +128,7 @@ export function StoryImage({
       />
     );
   } else if (!isThumbnail && isSupportedVideo) {
-    const shouldLoop = isGIF(attachment ? [attachment] : undefined);
+    const shouldLoop = isGIF(attachment);
 
     storyElement = (
       <video

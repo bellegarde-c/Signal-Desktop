@@ -5,13 +5,14 @@ import { blobToArrayBuffer } from 'blob-util';
 import { sanitize } from '@signalapp/libsignal-client/dist/Mp4Sanitizer.js';
 import { v4 as generateUuid } from 'uuid';
 
-import { makeVideoScreenshot } from '../types/VisualAttachment.dom.js';
-import { IMAGE_PNG, stringToMIMEType } from '../types/MIME.std.js';
-import { toLogFormat } from '../types/errors.std.js';
-import type { InMemoryAttachmentDraftType } from '../types/Attachment.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { MemoryStream } from './MemoryStream.node.js';
-import { fileToBytes } from './fileToBytes.std.js';
+import { makeVideoScreenshot } from '../types/VisualAttachment.dom.ts';
+import { IMAGE_PNG, stringToMIMEType } from '../types/MIME.std.ts';
+import { toLogFormat } from '../types/errors.std.ts';
+import type { InMemoryAttachmentDraftType } from '../types/Attachment.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { MemoryStream } from './MemoryStream.node.ts';
+import { fileToBytes } from './fileToBytes.std.ts';
+import { DurationInSeconds } from './/durations/index.std.ts';
 
 const log = createLogger('handleVideoAttachment');
 
@@ -59,7 +60,8 @@ export async function handleVideoAttachment(
       contentType: stringToMIMEType(file.type),
       clientUuid: generateUuid(),
       data,
-      fileName: file.name,
+      // We strip fileNames from visual attachments
+      fileName: undefined,
       path: file.name,
       pending: false,
       size: data.byteLength,
@@ -72,7 +74,8 @@ export async function handleVideoAttachment(
         objectUrl,
         contentType: screenshotContentType,
       });
-      attachment.duration = duration;
+      attachment.duration =
+        duration == null ? undefined : DurationInSeconds.fromSeconds(duration);
       attachment.screenshotData = new Uint8Array(
         await blobToArrayBuffer(screenshotBlob)
       );

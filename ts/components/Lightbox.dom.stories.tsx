@@ -1,13 +1,13 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { action } from '@storybook/addon-actions';
 import lodash from 'lodash';
 import type { Meta } from '@storybook/react';
-import type { PropsType } from './Lightbox.dom.js';
-import { Lightbox } from './Lightbox.dom.js';
-import type { MediaItemType } from '../types/MediaItem.std.js';
+import type { PropsType } from './Lightbox.dom.tsx';
+import { Lightbox } from './Lightbox.dom.tsx';
+import type { MediaItemType } from '../types/MediaItem.std.ts';
 import {
   AUDIO_MP3,
   IMAGE_JPEG,
@@ -15,9 +15,9 @@ import {
   VIDEO_QUICKTIME,
   stringToMIMEType,
   type MIMEType,
-} from '../types/MIME.std.js';
+} from '../types/MIME.std.ts';
 
-import { fakeAttachment } from '../test-helpers/fakeAttachment.std.js';
+import { fakeAttachment } from '../test-helpers/fakeAttachment.std.ts';
 
 const { noop } = lodash;
 
@@ -68,7 +68,7 @@ function createMediaItem(
 }
 
 const createProps = (overrideProps: Partial<PropsType> = {}): PropsType => {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // oxlint-disable-next-line react-hooks/rules-of-hooks
   const [selectedIndex, setSelectedIndex] = useState(0);
   const media = overrideProps.media || [];
   return {
@@ -109,7 +109,9 @@ export function Multimedia(): JSX.Element {
           type: 'incoming',
           id: 'image-msg',
           receivedAt: 1,
+          // oxlint-disable-next-line react/purity
           receivedAtMs: Date.now(),
+          // oxlint-disable-next-line react/purity
           sentAt: Date.now(),
           // Unused for now
           source: undefined,
@@ -133,7 +135,9 @@ export function Multimedia(): JSX.Element {
           type: 'incoming',
           id: 'video-msg',
           receivedAt: 2,
+          // oxlint-disable-next-line react/purity
           receivedAtMs: Date.now(),
+          // oxlint-disable-next-line react/purity
           sentAt: Date.now(),
           // Unused for now
           source: undefined,
@@ -176,7 +180,9 @@ export function MissingMedia(): JSX.Element {
           type: 'incoming',
           id: 'image-msg',
           receivedAt: 3,
+          // oxlint-disable-next-line react/purity
           receivedAtMs: Date.now(),
+          // oxlint-disable-next-line react/purity
           sentAt: Date.now(),
 
           // Unused for now

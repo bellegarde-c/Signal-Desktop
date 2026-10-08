@@ -1,14 +1,15 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import { MessageRequestActions } from './MessageRequestActions.dom.js';
+import { MessageRequestActions } from './MessageRequestActions.dom.tsx';
 import {
   getDefaultConversation,
   getDefaultGroup,
-} from '../../test-helpers/getDefaultConversation.std.js';
+} from '../../test-helpers/getDefaultConversation.std.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -32,15 +33,6 @@ export default {
   args: {
     conversationType: 'direct',
   },
-  decorators: [
-    (Story: React.ComponentType): JSX.Element => {
-      return (
-        <div style={{ width: '480px' }}>
-          <Story />
-        </div>
-      );
-    },
-  ],
 } satisfies Meta<Args>;
 
 function Example(args: Args): JSX.Element {
@@ -60,6 +52,7 @@ function Example(args: Args): JSX.Element {
       isBlocked={args.isBlocked}
       isHidden={args.isHidden}
       isReported={args.isReported}
+      getSharedGroupNames={() => []}
       acceptConversation={action('acceptConversation')}
       blockAndReportSpam={action('blockAndReportSpam')}
       blockConversation={action('blockConversation')}

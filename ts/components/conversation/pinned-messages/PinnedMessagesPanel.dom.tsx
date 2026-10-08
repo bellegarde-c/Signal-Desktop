@@ -1,36 +1,40 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ForwardedRef, ReactNode } from 'react';
-import React, {
+import type { ForwardedRef, ReactNode, JSX } from 'react';
+import {
   forwardRef,
   Fragment,
   memo,
+  useCallback,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useLayoutEffect } from '@react-aria/utils';
-import type { LocalizerType } from '../../../types/I18N.std.js';
-import type { ConversationType } from '../../../state/ducks/conversations.preload.js';
-import type { PinnedMessage } from '../../../types/PinnedMessage.std.js';
-import type { SmartTimelineItemProps } from '../../../state/smart/TimelineItem.preload.js';
-import { WidthBreakpoint } from '../../_util.std.js';
-import { AxoScrollArea } from '../../../axo/AxoScrollArea.dom.js';
+import type { LocalizerType } from '../../../types/I18N.std.ts';
+import type { ConversationType } from '../../../state/ducks/conversations.preload.ts';
+import type { PinnedMessage } from '../../../types/PinnedMessage.std.ts';
+import type { SmartTimelineItemProps } from '../../../state/smart/TimelineItem.preload.tsx';
+import { WidthBreakpoint } from '../../_util.std.ts';
+import { AxoScrollArea } from '../../../axo/AxoScrollArea.dom.tsx';
 import {
   createScrollerLock,
   ScrollerLockContext,
-} from '../../../hooks/useScrollLock.dom.js';
-import { getWidthBreakpoint } from '../../../util/timelineUtil.std.js';
-import { strictAssert } from '../../../util/assert.std.js';
-import { useSizeObserver } from '../../../hooks/useSizeObserver.dom.js';
-import { MessageInteractivity } from '../Message.dom.js';
-import { tw } from '../../../axo/tw.dom.js';
-import { AxoButton } from '../../../axo/AxoButton.dom.js';
+} from '../../../hooks/useScrollLock.dom.tsx';
+import { getWidthBreakpoint } from '../../../util/timelineUtil.std.ts';
+import { strictAssert } from '../../../util/assert.std.ts';
+import { useSizeObserver } from '../../../hooks/useSizeObserver.dom.tsx';
+import { MessageInteractivity } from '../Message.dom.tsx';
+import { tw } from '../../../axo/tw.dom.tsx';
+import { AxoButton } from '../../../axo/AxoButton.dom.tsx';
+import { AxoAlertDialog } from '../../../axo/AxoAlertDialog.dom.tsx';
 
 export type PinnedMessagesPanelProps = Readonly<{
   i18n: LocalizerType;
   conversation: ConversationType;
   pinnedMessages: ReadonlyArray<PinnedMessage>;
+  canPinMessages: boolean;
+  onPinnedMessageRemoveAll: () => void;
   renderTimelineItem: (props: SmartTimelineItemProps) => JSX.Element;
 }>;
 
@@ -43,6 +47,13 @@ export const PinnedMessagesPanel = memo(function PinnedMessagesPanel(
     WidthBreakpoint.Wide
   );
 
+  const [confirmUnpinAllDialogOpen, setConfirmUnpinAllDialogOpen] =
+    useState(false);
+
+  const handleClickUnpinAll = useCallback(() => {
+    setConfirmUnpinAllDialogOpen(true);
+  }, []);
+
   useLayoutEffect(() => {
     strictAssert(containerElementRef.current, 'Missing container ref');
     const container = containerElementRef.current;
@@ -50,6 +61,9 @@ export const PinnedMessagesPanel = memo(function PinnedMessagesPanel(
   }, []);
 
   useSizeObserver(containerElementRef, size => {
+    if (size.hidden) {
+      return;
+    }
     setContainerWidthBreakpoint(getWidthBreakpoint(size.width));
   });
 
@@ -69,20 +83,63 @@ export const PinnedMessagesPanel = memo(function PinnedMessagesPanel(
                 isBlocked: props.conversation.isBlocked ?? false,
                 isGroup: props.conversation.type === 'group',
                 isOldestTimelineItem: pinnedMessageIndex === 0,
-                messageId: pinnedMessage.messageId,
+                item: {
+                  type: 'none' as const,
+                  id: pinnedMessage.messageId,
+                  messages: undefined,
+                },
                 nextMessageId: next?.messageId,
                 previousMessageId: prev?.messageId,
+                renderItem: () => {
+                  throw new Error('not implemented');
+                },
                 unreadIndicatorPlacement: undefined,
               })}
             </Fragment>
           );
         })}
       </ScrollArea>
-      <div className={tw('flex items-center justify-center p-2.5')}>
-        <AxoButton.Root variant="borderless-primary" size="lg">
-          {i18n('icu:PinnedMessagesPanel__UnpinAllMessages')}
-        </AxoButton.Root>
-      </div>
+      {props.canPinMessages && (
+        <div className={tw('flex items-center justify-center p-2.5')}>
+          <AxoButton.Root
+            variant="implied-primary"
+            size="lg"
+            onClick={handleClickUnpinAll}
+          >
+            {i18n('icu:PinnedMessagesPanel__UnpinAllMessages')}
+          </AxoButton.Root>
+        </div>
+      )}
+      <AxoAlertDialog.Root
+        open={confirmUnpinAllDialogOpen}
+        onOpenChange={setConfirmUnpinAllDialogOpen}
+      >
+        <AxoAlertDialog.Content escape="cancel-is-noop">
+          <AxoAlertDialog.Body>
+            <AxoAlertDialog.Title>
+              {i18n(
+                'icu:PinnedMessagesPanel__UnpinAllMessages__ConfirmDialog__Title'
+              )}
+            </AxoAlertDialog.Title>
+            <AxoAlertDialog.Description>
+              {i18n(
+                'icu:PinnedMessagesPanel__UnpinAllMessages__ConfirmDialog__Description'
+              )}
+            </AxoAlertDialog.Description>
+          </AxoAlertDialog.Body>
+          <AxoAlertDialog.Footer>
+            <AxoAlertDialog.Cancel />
+            <AxoAlertDialog.Action
+              variant="strong-primary"
+              onClick={props.onPinnedMessageRemoveAll}
+            >
+              {i18n(
+                'icu:PinnedMessagesPanel__UnpinAllMessages__ConfirmDialog__Unpin'
+              )}
+            </AxoAlertDialog.Action>
+          </AxoAlertDialog.Footer>
+        </AxoAlertDialog.Content>
+      </AxoAlertDialog.Root>
     </div>
   );
 });
