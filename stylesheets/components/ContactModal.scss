@@ -1,29 +1,33 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use '../mixins';
+@use '../variables';
+
 .ContactModal {
   align-items: center;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  margin-top: 4px;
-  margin-bottom: 24px;
-  padding-inline: 24px;
+  color: var(--axo-color-label-primary);
 
   &__name {
-    @include button-reset();
-    @include font-title-1;
-    font-weight: 400;
-    display: flex;
-    flex-direction: row;
-    align-items: baseline;
-    max-width: 100%;
+    @include mixins.button-reset();
+    & {
+      @include mixins.font-title-1;
+      font-weight: 400;
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      max-width: 100%;
 
-    margin-top: 12px;
-    cursor: pointer;
+      margin-top: 12px;
+      cursor: pointer;
+    }
   }
 
   &__name__text {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -32,7 +36,7 @@
   &__name__contact-icon {
     height: 22px;
     width: 22px;
-    @include any-theme {
+    @include mixins.any-theme {
       background-color: currentColor;
     }
   }
@@ -48,24 +52,33 @@
     position: relative;
     inset-block-start: 2px;
 
-    @include light-theme {
-      @include color-svg(
+    @include mixins.light-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/chevron/chevron-right-bold.svg',
-        $color-gray-90
+        variables.$color-gray-90
       );
     }
-    @include dark-theme {
-      @include color-svg(
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/chevron/chevron-right-bold.svg',
-        $color-gray-05
+        variables.$color-gray-05
       );
     }
   }
 
-  &__info {
-    text-align: center;
-    max-width: 248px;
-    margin-top: 8px;
+  &__member-label {
+    @include mixins.button-reset;
+    @include mixins.button-focus-outline;
+
+    & {
+      // Note: matches the border radius in ContactName.scss, for --label-pill
+      border-radius: 9px;
+
+      margin-top: 6px;
+      margin-bottom: 4px;
+
+      max-width: 100%;
+    }
   }
 
   &__button-container {
@@ -77,33 +90,38 @@
   }
 
   &__button {
-    @include button-reset;
-
-    display: flex;
-    align-items: center;
-    padding-block: 6px;
-    width: 100%;
+    @include mixins.button-reset;
+    & {
+      display: flex;
+      align-items: center;
+      padding-block: 6px;
+      width: 100%;
+    }
 
     &:last-child {
       margin-bottom: 0;
     }
 
     &:hover {
-      background-color: $color-gray-02;
+      background-color: variables.$color-gray-02;
 
-      @include dark-theme {
-        background-color: $color-gray-80;
+      @include mixins.dark-theme {
+        background-color: variables.$color-gray-80;
       }
     }
 
-    &:focus {
-      @include keyboard-mode {
-        background-color: $color-gray-02;
+    &:focus-visible {
+      @include mixins.light-theme {
+        background-color: variables.$color-gray-02;
       }
 
-      @include dark-keyboard-mode {
-        background-color: $color-gray-80;
+      @include mixins.dark-theme {
+        background-color: variables.$color-gray-80;
       }
+    }
+
+    &[disabled] {
+      opacity: 0.5;
     }
   }
 
@@ -116,179 +134,126 @@
   }
 
   &__nickname__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg('../images/icons/v3/edit/edit.svg', $color-gray-75);
+    @include mixins.light-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/edit/edit.svg',
+        variables.$color-gray-75
+      );
     }
 
-    @include dark-theme {
-      @include color-svg('../images/icons/v3/edit/edit.svg', $color-gray-15);
-    }
-  }
-
-  &__send-message__bubble-icon {
-    height: 20px;
-    width: 20px;
-
-    @include light-theme {
-      @include color-svg('../images/icons/v3/chat/chat.svg', $color-gray-75);
-    }
-
-    @include dark-theme {
-      @include color-svg('../images/icons/v3/chat/chat.svg', $color-gray-15);
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/edit/edit.svg',
+        variables.$color-gray-15
+      );
     }
   }
 
   &__safety-number__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg(
+    @include mixins.light-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/safety_number/safety_number.svg',
-        $color-gray-75
+        variables.$color-gray-75
       );
     }
 
-    @include dark-theme {
-      @include color-svg(
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/safety_number/safety_number.svg',
-        $color-gray-15
+        variables.$color-gray-15
       );
     }
   }
 
   &__block__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg('../images/icons/v3/block/block.svg', $color-gray-75);
+    @include mixins.light-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/block/block.svg',
+        variables.$color-gray-75
+      );
     }
 
-    @include dark-theme {
-      @include color-svg('../images/icons/v3/block/block.svg', $color-gray-15);
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/block/block.svg',
+        variables.$color-gray-15
+      );
     }
   }
 
   &__make-admin__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg('../images/icons/v3/key/key.svg', $color-gray-75);
+    @include mixins.light-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/key/key.svg',
+        variables.$color-gray-75
+      );
     }
 
-    @include dark-theme {
-      @include color-svg('../images/icons/v3/key/key.svg', $color-gray-15);
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/key/key.svg',
+        variables.$color-gray-15
+      );
     }
   }
 
   &__add-to-another-group__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg(
+    @include mixins.light-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/plus/plus-circle.svg',
-        $color-gray-75
+        variables.$color-gray-75
       );
     }
 
-    @include dark-theme {
-      @include color-svg(
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
         '../images/icons/v3/plus/plus-circle.svg',
-        $color-gray-15
+        variables.$color-gray-15
       );
     }
   }
 
   &__remove-from-group__bubble-icon {
+    display: block;
     height: 20px;
     width: 20px;
 
-    @include light-theme {
-      @include color-svg('../images/icons/v3/leave/leave.svg', $color-gray-75);
-    }
-
-    @include dark-theme {
-      @include color-svg('../images/icons/v3/leave/leave.svg', $color-gray-15);
-    }
-  }
-
-  &__official-badge,
-  &__official-badge__large {
-    display: inline-block;
-    position: relative;
-
-    &::before,
-    &::after {
-      content: '';
-      display: block;
-      position: absolute;
-    }
-
-    // white background behind the icon
-    &::before {
-      top: 2px;
-      inset-inline-start: 2px;
-      width: 10px;
-      height: 10px;
-      border-radius: 5px;
-      background: $color-white;
-    }
-  }
-
-  &__official-badge {
-    height: 14px;
-    margin-inline-start: 4px;
-    width: 14px;
-
-    &::after {
-      top: 0;
-      inset-inline-start: 0;
-      width: 100%;
-      height: 100%;
-      @include color-svg(
-        '../images/icons/v3/official/official-compact.svg',
-        $color-ultramarine
+    @include mixins.light-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/leave/leave.svg',
+        variables.$color-gray-75
       );
     }
-  }
 
-  &__official-badge__large {
-    height: 24px;
-    margin-inline-start: 9px;
-    width: 24px;
-
-    &::before {
-      top: 4px;
-      inset-inline-start: 4px;
-      width: 16px;
-      height: 16px;
-      border-radius: 8px;
-    }
-
-    &::after {
-      top: 0;
-      inset-inline-start: 0;
-      width: 100%;
-      height: 100%;
-      @include color-svg(
-        '../images/icons/v3/official/official.svg',
-        $color-ultramarine
+    @include mixins.dark-theme {
+      @include mixins.color-svg(
+        '../images/icons/v3/leave/leave.svg',
+        variables.$color-gray-15
       );
     }
   }
 
   &__quick-actions {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    gap: 16px;
-
     margin-block: 16px;
   }
 
@@ -299,18 +264,16 @@
     border-bottom: none;
     border-width: 1px;
 
-    @include light-theme {
-      border-color: $color-gray-15;
+    @include mixins.light-theme {
+      border-color: variables.$color-gray-15;
     }
 
-    @include dark-theme {
-      border-color: $color-gray-75;
+    @include mixins.dark-theme {
+      border-color: variables.$color-gray-75;
     }
 
-    margin-block: 8px 5px;
-  }
-
-  &__tooltip {
-    @include tooltip;
+    & {
+      margin-block: 8px 5px;
+    }
   }
 }

@@ -1,16 +1,19 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use '../mixins';
+@use '../variables';
+
 .CallingAdhocCallInfo {
   flex-shrink: 0;
-  width: 360px;
+  width: 320px;
   height: auto;
   margin-block-end: auto;
   padding-block-end: 16px;
   pointer-events: auto;
 }
 
-.CallingAdhocCallInfo__width-container {
+.CallingAdhocCallInfo__modal .module-modal-host__width-container {
   display: flex;
   flex-direction: row;
   width: 100%;
@@ -23,34 +26,42 @@
   pointer-events: none;
 }
 
-.CallingAdhocCallInfo__width-container::after {
+.CallingAdhocCallInfo__modal .module-modal-host__width-container::after {
   content: '';
   display: flex;
   flex-shrink: 1;
   flex-basis: 480px;
 }
 
-.CallingAdhocCallInfo__overlay {
+.CallingAdhocCallInfo__modal .module-modal-host__overlay {
   background: transparent;
 }
 
-.CallingAdhocCallInfo__overlay-container {
+.CallingAdhocCallInfo__modal .module-modal-host__overlay-container {
   flex-direction: column;
   padding: 0;
   justify-content: flex-end;
 }
 
 .CallingAdhocCallInfo__MenuItem {
-  @include button-reset;
-  @include font-body-2;
-  display: flex;
-  padding-block: 8px;
-  padding-inline: 10px 2px;
-  align-items: center;
+  @include mixins.button-reset;
+  & {
+    @include mixins.font-body-2;
+    display: flex;
+    width: 100%;
+    padding-block: 8px;
+    padding-inline: 10px 2px;
+    align-items: center;
+    border-radius: 6px;
+  }
+}
+
+.CallingAdhocCallInfo__MenuItem:hover {
+  background-color: variables.$color-gray-62;
 }
 
 .CallingAdhocCallInfo__MenuItemIcon {
-  background: $color-gray-65;
+  background: variables.$color-gray-65;
   display: flex;
   width: 36px;
   height: 36px;
@@ -58,6 +69,12 @@
   border-radius: 36px;
   align-items: center;
   justify-content: center;
+}
+
+.CallingAdhocCallInfo__MenuItem {
+  &:focus-visible {
+    @include mixins.axo-focus-ring;
+  }
 }
 
 .CallingAdhocCallInfo__MenuItemIcon:before {
@@ -68,11 +85,17 @@
 }
 
 .CallingAdhocCallInfo__MenuItemIcon--copy-link:before {
-  @include color-svg('../images/icons/v3/copy/copy.svg', $color-gray-15);
+  @include mixins.color-svg(
+    '../images/icons/v3/copy/copy.svg',
+    variables.$color-gray-15
+  );
 }
 
 .CallingAdhocCallInfo__MenuItemIcon--share-via-signal:before {
-  @include color-svg('../images/icons/v3/forward/forward.svg', $color-gray-15);
+  @include mixins.color-svg(
+    '../images/icons/v3/forward/forward.svg',
+    variables.$color-gray-15
+  );
 }
 
 .CallingAdhocCallInfo__MenuItemText {
@@ -83,36 +106,35 @@
   display: flex;
   margin-block: 16px;
   margin-inline: 10px;
-  border: 1px solid $color-gray-65;
-}
-
-.CallingAdhocCallInfo__RemoveClient {
-  @include button-reset;
-  width: 16px;
-  height: 16px;
-  margin-inline: 8px;
-  background: $color-white;
+  border: 1px solid variables.$color-gray-65;
 }
 
 .CallingAdhocCallInfo__UnknownContactInfoButton {
-  @include button-reset;
-  @include color-svg('../images/icons/v3/info/info.svg', $color-white);
-  display: flex;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-inline: 8px;
-}
+  @include mixins.button-reset;
 
-.CallingAdhocCallInfo__UnknownContactInfoButton:focus {
-  @include keyboard-mode {
-    background: $color-ultramarine;
+  & {
+    display: flex;
+    flex: none;
+    margin-inline: 8px;
+    border-radius: 9999px;
+  }
+
+  &::before {
+    content: '';
+    display: block;
+    width: 16px;
+    height: 16px;
+    @include mixins.color-svg(
+      '../images/icons/v3/info/info.svg',
+      variables.$color-white
+    );
   }
 }
 
-.CallingAdhocCallInfo__UnknownContactInfoDialog__body {
-  padding-block-start: 22px;
-  padding-block-end: 8px;
+.CallingAdhocCallInfo__UnknownContactInfoButton {
+  &:focus-visible {
+    @include mixins.axo-focus-ring;
+  }
 }
 
 .CallingAdhocCallInfo__UnknownContactAvatarSet {
@@ -126,7 +148,7 @@
 
   .module-Avatar__contents {
     outline: 2px solid;
-    outline-color: $color-gray-80;
+    outline-color: variables.$color-gray-80;
   }
 }
 
@@ -135,9 +157,5 @@
   .CallingAdhocCallInfo__UnknownContactAvatar
   .module-Avatar__contents {
   // Should match background of .module-calling-participants-list__contact:hover
-  outline-color: $color-gray-62;
-}
-
-.CallingAdhocCallInfo__RemoveClientDialog {
-  width: 440px;
+  outline-color: variables.$color-gray-62;
 }

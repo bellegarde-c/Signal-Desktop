@@ -1,14 +1,20 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use '../mixins';
+@use '../variables';
+
 .StoryCreator {
   $tools-height: 44px;
 
   @mixin svg($icon) {
-    @include color-svg('../images/icons/#{$icon}', $color-white);
+    @include mixins.color-svg(
+      '../images/icons/#{$icon}',
+      variables.$color-white
+    );
   }
 
-  background: $color-gray-95;
+  background: variables.$color-gray-95;
   display: flex;
   flex-direction: column;
   width: 100vw;
@@ -16,8 +22,7 @@
   inset-inline-start: 0;
   position: absolute;
   top: 0;
-  user-select: none;
-  z-index: $z-index-popup-overlay;
+  z-index: variables.$z-index-popup-overlay;
 
   &__container {
     display: flex;
@@ -30,20 +35,6 @@
     position: relative;
   }
 
-  &__input {
-    background: transparent;
-    border: none;
-    color: transparent;
-    position: absolute;
-    text-align: center;
-    top: 50%;
-    user-select: none;
-
-    &:focus {
-      outline: none;
-    }
-  }
-
   &__controls {
     align-items: center;
     display: flex;
@@ -54,16 +45,18 @@
   }
 
   &__control {
-    @include button-reset;
-    align-items: center;
-    border-radius: 32px;
-    display: inline-flex;
-    height: 32px;
-    justify-content: center;
-    margin-block: 0;
-    margin-inline: 15px;
-    opacity: 1;
-    width: 32px;
+    @include mixins.button-reset;
+    & {
+      align-items: center;
+      border-radius: 32px;
+      display: inline-flex;
+      height: 32px;
+      justify-content: center;
+      margin-block: 0;
+      margin-inline: 15px;
+      opacity: 1;
+      width: 32px;
+    }
 
     &::after {
       content: ' ';
@@ -72,16 +65,22 @@
     }
 
     &--link::after {
-      @include color-svg('../images/icons/v3/link/link.svg', $color-white);
+      @include mixins.color-svg(
+        '../images/icons/v3/link/link.svg',
+        variables.$color-white
+      );
     }
 
     &--text::after {
-      @include color-svg('../images/icons/v2/text-24.svg', $color-white);
+      @include mixins.color-svg(
+        '../images/icons/v2/text-24.svg',
+        variables.$color-white
+      );
     }
 
     &--bg {
-      @include rounded-corners;
-      border: 1.5px solid $color-white;
+      @include mixins.rounded-corners;
+      border: 1.5px solid variables.$color-white;
       display: block;
       height: 24px;
       padding: 2.5px;
@@ -97,18 +96,18 @@
     }
 
     &--selected {
-      background-color: $color-white;
+      background-color: variables.$color-white;
 
       &::after {
-        background-color: $color-black;
+        background-color: variables.$color-black;
       }
     }
 
     &:hover {
-      background-color: $color-gray-80;
+      background-color: variables.$color-gray-80;
 
       &::after {
-        background-color: $color-white;
+        background-color: variables.$color-white;
       }
     }
   }
@@ -136,9 +135,9 @@
 
   &__tools {
     align-items: center;
-    background-color: $color-gray-90;
+    background-color: variables.$color-gray-90;
     border-radius: 10px;
-    color: $color-white;
+    color: variables.$color-white;
     display: flex;
     height: $tools-height;
     justify-content: center;
@@ -146,23 +145,43 @@
     padding-block: 14px;
     padding-inline: 12px;
 
-    &__tool,
-    &__tool__button {
+    &__tool {
       margin-inline-end: 14px;
+    }
+
+    &__icon-button {
+      @include mixins.button-reset;
+
+      & {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        margin-block: -6px;
+        margin-inline: -6px 8px;
+        border-radius: 4px;
+      }
+
+      &:focus-visible {
+        @include mixins.axo-focus-ring;
+      }
+    }
+
+    // Separate from the button so the icon's mask doesn't clip the focus ring
+    &__icon-button-icon {
+      display: block;
     }
 
     &__button {
       @mixin icon($icon) {
         @include svg($icon);
-        height: 20px;
-        width: 20px;
-        border-radius: 0;
+        & {
+          height: 20px;
+          width: 20px;
+          border-radius: 0;
+        }
       }
-
-      @include button-reset;
-      margin-block: 0;
-      margin-inline: 8px;
-      padding: 8px;
 
       &--bg {
         @include icon('v2/text-effect-on-24.svg');
@@ -173,58 +192,42 @@
       &--bg-none {
         @include icon('v2/text-effect-off-24.svg');
       }
-      &--font-regular__button {
+      &--font-regular {
         @include icon('v3/font/font-regular-compact.svg');
       }
-      &--font-bold__button {
+      &--font-bold {
         @include icon('v3/font/font-bold-compact.svg');
       }
-      &--font-serif__button {
+      &--font-serif {
         @include icon('v3/font/font-serif-compact.svg');
       }
-      &--font-script__button {
+      &--font-script {
         @include icon('v3/font/font-script-compact.svg');
       }
-      &--font-condensed__button {
+      &--font-condensed {
         @include icon('v3/font/font-condensed-compact.svg');
       }
     }
   }
 
-  &__icon {
-    &--font-regular {
-      @include svg('v3/font/font-regular-compact.svg');
-    }
-    &--font-bold {
-      @include svg('v3/font/font-bold-compact.svg');
-    }
-    &--font-serif {
-      @include svg('v3/font/font-serif-compact.svg');
-    }
-    &--font-script {
-      @include svg('v3/font/font-script-compact.svg');
-    }
-    &--font-condensed {
-      @include svg('v3/font/font-condensed-compact.svg');
-    }
-  }
-
   &__bg {
-    @include button-reset;
-    @include rounded-corners;
+    @include mixins.button-reset;
+    & {
+      @include mixins.rounded-corners;
 
-    border: 2px solid transparent;
-    height: 24px;
-    margin: 4px;
-    width: 24px;
+      border: 2px solid transparent;
+      height: 24px;
+      margin: 4px;
+      width: 24px;
+    }
 
     &--selected {
-      border: 2px solid $color-white;
+      border: 2px solid variables.$color-white;
     }
   }
 
   &__popper {
-    background: $color-gray-80;
+    background: variables.$color-gray-80;
     border-radius: 10px;
     margin-bottom: 18px;
     padding: 8px;
@@ -233,8 +236,8 @@
     &__arrow {
       border-inline-start: 14px solid transparent;
       border-inline-end: 14px solid transparent;
-      border-top: 14px solid $color-gray-80;
-      @include position-absolute-center-x;
+      border-top: 14px solid variables.$color-gray-80;
+      @include mixins.position-absolute-center-x;
       bottom: -14px;
       height: 0;
       width: 0;
@@ -249,7 +252,7 @@
     width: 360px;
   }
 
-  &__link-preview-input__container {
+  &__link-preview-input.Input__container {
     margin-top: 0;
   }
 
@@ -270,58 +273,21 @@
     margin-bottom: 8px;
   }
 
-  &__link-preview {
-    background: $color-black-alpha-40;
-    border-radius: 16px;
-    display: flex;
-    padding: 14px;
-    width: 100%;
-
-    &__image {
-      border-radius: 8px;
-      height: 76px;
-      width: 76px;
-    }
-
-    &__meta {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      margin-inline-start: 14px;
-    }
-
-    &__title {
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      @include font-body-1-bold;
-      color: $color-white;
-      display: -webkit-box;
-      overflow: hidden;
-      user-select: none;
-    }
-
-    &__location {
-      @include font-subtitle;
-      color: $color-white-alpha-60;
-    }
-  }
-
   &__link-preview-empty {
     align-items: center;
-    color: $color-gray-45;
+    color: variables.$color-gray-45;
     display: flex;
     flex-direction: column;
 
     &__icon {
-      @include color-svg('../images/icons/v3/link/link.svg', $color-gray-45);
-      height: 20px;
-      width: 20px;
+      @include mixins.color-svg(
+        '../images/icons/v3/link/link.svg',
+        variables.$color-gray-45
+      );
+      & {
+        height: 20px;
+        width: 20px;
+      }
     }
-  }
-
-  &__emoji-button,
-  &__emoji-button::after {
-    height: 20px;
-    width: 20px;
   }
 }

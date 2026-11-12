@@ -3,13 +3,14 @@
 
 import b64 from 'base64-js';
 
-import type { ArtImageData, FileWithRequiredPath } from '../types.d';
+import type { ArtImageData } from '../types.d';
 import {
   MIN_IMAGE_SIZE,
   STICKER_SIZE,
   MAX_STICKER_BYTE_SIZE,
   ArtType,
 } from '../constants';
+import { getFilePath, sanitizeWebp } from './api';
 import { getAnimatedPngDataIfExists } from './apng';
 import { assert } from './assert';
 import { loadImage } from './loadImage';
@@ -37,7 +38,7 @@ export class ProcessImageError extends Error {
 }
 
 export async function processImage(
-  file: FileWithRequiredPath,
+  file: File,
   artType: ArtType
 ): Promise<ArtImageData> {
   const imageData = new Uint8Array(await file.arrayBuffer());
@@ -121,10 +122,19 @@ export async function processImage(
         'StickerCreator--Toasts--tooLarge'
       );
     }
+
+    try {
+      await sanitizeWebp(processedBuffer);
+    } catch (e) {
+      throw new ProcessImageError(
+        `Sticker failed WebP validation: ${String(e)}`,
+        'StickerCreator--Toasts--invalidSticker'
+      );
+    }
   }
 
   return {
-    path: file.path || file.name,
+    path: getFilePath(file) || file.name,
     buffer: processedBuffer,
     src: `data:${contentType};base64,${b64.fromByteArray(processedBuffer)}`,
     contentType,

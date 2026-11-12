@@ -1,208 +1,10 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use '../mixins';
+@use '../variables';
+
 .ProfileEditor {
-  &__icon {
-    &--container {
-      align-items: center;
-      display: flex;
-      font-size: 24px;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-    }
-
-    &::after {
-      -webkit-mask-size: 100%;
-      content: '';
-      display: block;
-      height: 20px;
-      width: 20px;
-
-      @include light-theme {
-        background-color: $color-gray-75;
-      }
-
-      @include dark-theme {
-        background-color: $color-gray-15;
-      }
-    }
-
-    &--name {
-      &::after {
-        @include light-theme {
-          @include color-svg(
-            '../images/icons/v3/person/person.svg',
-            $color-gray-75
-          );
-        }
-
-        @include dark-theme {
-          @include color-svg(
-            '../images/icons/v3/person/person.svg',
-            $color-gray-15
-          );
-        }
-      }
-    }
-
-    &--username {
-      &::after {
-        @include light-theme {
-          @include color-svg('../images/icons/v3/at/at.svg', $color-gray-75);
-        }
-
-        @include dark-theme {
-          @include color-svg('../images/icons/v3/at/at.svg', $color-gray-15);
-        }
-      }
-    }
-
-    &--username-link {
-      &::after {
-        @include light-theme {
-          @include color-svg(
-            '../images/icons/v3/qr_code/qr_code.svg',
-            $color-gray-75
-          );
-        }
-
-        @include dark-theme {
-          @include color-svg(
-            '../images/icons/v3/qr_code/qr_code.svg',
-            $color-gray-15
-          );
-        }
-      }
-    }
-
-    &--bio {
-      &::after {
-        @include light-theme {
-          @include color-svg(
-            '../images/icons/v3/edit/edit.svg',
-            $color-gray-75
-          );
-        }
-
-        @include dark-theme {
-          @include color-svg(
-            '../images/icons/v3/edit/edit.svg',
-            $color-gray-15
-          );
-        }
-      }
-    }
-  }
-
-  &__row {
-    padding-inline: 8px;
-    padding-block: 12px;
-  }
-
-  &__divider {
-    border-style: solid;
-    border-bottom: none;
-
-    @include light-theme {
-      border-color: $color-gray-15;
-    }
-
-    @include dark-theme {
-      border-color: $color-gray-75;
-    }
-  }
-
-  hr {
-    margin-block: 24px 12px;
-  }
-
-  &__info {
-    @include font-body-2;
-    margin-block: 12px;
-    margin-inline: 8px;
-
-    @include light-theme {
-      color: $color-gray-60;
-    }
-    @include dark-theme {
-      color: $color-gray-25;
-    }
-
-    a {
-      font-weight: 600;
-      text-decoration: none;
-    }
-  }
-
-  &__username-menu {
-    &__button {
-      width: 20px;
-      height: 20px;
-
-      @include dark-theme {
-        @include color-svg(
-          '../images/icons/v3/chevron/chevron-down.svg',
-          $color-white
-        );
-      }
-      @include light-theme {
-        @include color-svg(
-          '../images/icons/v3/chevron/chevron-down.svg',
-          $color-black
-        );
-      }
-    }
-
-    &__copy-icon {
-      @include dark-theme {
-        @include color-svg('../images/icons/v3/copy/copy.svg', $color-white);
-      }
-      @include light-theme {
-        @include color-svg('../images/icons/v3/copy/copy.svg', $color-black);
-      }
-    }
-
-    &__copy-link-icon {
-      @include dark-theme {
-        @include color-svg('../images/icons/v3/link/link.svg', $color-white);
-      }
-      @include light-theme {
-        @include color-svg('../images/icons/v3/link/link.svg', $color-black);
-      }
-    }
-
-    &__trash-icon {
-      @include dark-theme {
-        @include color-svg('../images/icons/v3/trash/trash.svg', $color-white);
-      }
-      @include light-theme {
-        @include color-svg('../images/icons/v3/trash/trash.svg', $color-black);
-      }
-    }
-  }
-
-  &__error-icon {
-    -webkit-mask-size: 100%;
-    display: block;
-    height: 20px;
-    width: 20px;
-
-    @include light-theme {
-      @include color-svg(
-        '../images/icons/v3/error/error-circle.svg',
-        $color-accent-red
-      );
-    }
-
-    @include dark-theme {
-      @include color-svg(
-        '../images/icons/v3/error/error-circle.svg',
-        $color-accent-red
-      );
-    }
-  }
-
   &__username-link {
     &__tooltip {
       padding: 0;
@@ -215,17 +17,19 @@
         flex-direction: row;
         padding: var(--container-padding);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
-        border: 1px solid $color-gray-20;
+        border: 1px solid variables.$color-gray-20;
         border-radius: inherit;
-        background-color: $color-gray-02;
+        background-color: variables.$color-gray-02;
         transform-origin: 0 0; // needed for react-spring scale animation
-        @include dark-theme {
-          background-color: $color-gray-75;
-          border-color: $color-gray-60;
+        @include mixins.dark-theme {
+          background-color: variables.$color-gray-75;
+          border-color: variables.$color-gray-60;
         }
       }
 
-      --direction-multiplier: 1;
+      & {
+        --direction-multiplier: 1;
+      }
       &:dir(rtl) {
         --direction-multiplier: -1;
       }
@@ -255,16 +59,16 @@
         margin-block-start: 4px;
         margin-inline: 4px 12px;
 
-        @include dark-theme {
-          @include color-svg(
+        @include mixins.dark-theme {
+          @include mixins.color-svg(
             '../images/icons/v3/share/share.svg',
-            $color-white
+            variables.$color-white
           );
         }
-        @include light-theme {
-          @include color-svg(
+        @include mixins.light-theme {
+          @include mixins.color-svg(
             '../images/icons/v3/share/share.svg',
-            $color-black
+            variables.$color-black
           );
         }
       }
@@ -273,64 +77,53 @@
         text-align: start;
 
         h3 {
-          @include font-body-2-bold;
+          @include mixins.font-body-2-bold;
           margin: 0;
         }
 
         p {
-          @include font-subtitle;
+          @include mixins.font-subtitle;
           max-width: 240px;
           margin: 0;
         }
       }
 
       &__close {
-        @include button-reset;
-        @include button-focus-outline;
+        @include mixins.button-reset;
+        @include mixins.button-focus-outline;
 
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        margin: 0;
+        & {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          margin: 0;
+        }
 
-        @include color-svg('../images/icons/v3/x/x.svg', $color-gray-45);
-        @include dark-theme {
-          @include color-svg('../images/icons/v3/x/x.svg', $color-gray-25);
+        @include mixins.color-svg(
+          '../images/icons/v3/x/x.svg',
+          variables.$color-gray-45
+        );
+        @include mixins.dark-theme {
+          @include mixins.color-svg(
+            '../images/icons/v3/x/x.svg',
+            variables.$color-gray-25
+          );
         }
       }
     }
   }
-}
 
-.ProfileEditor__Title {
-  @include font-title-1;
-  text-align: center;
-  overflow-x: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-block: 0 4px;
-  margin-inline: 0;
-  @include light-theme() {
-    color: $color-gray-90;
-  }
-  @include dark-theme() {
-    color: $color-gray-05;
-  }
-}
+  &__button-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    padding-block: 1em 16px;
+    gap: 8px;
 
-.ProfileEditor__PhoneNumber {
-  @include font-body-2;
-  text-align: center;
-  overflow-x: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-block: 0 14px;
-  margin-inline: 0;
-  @include light-theme() {
-    color: $color-black;
-  }
-  @include dark-theme() {
-    color: $color-white;
+    .module-Button:not(:first-child) {
+      margin-inline-start: 4px;
+    }
   }
 }
 
@@ -338,13 +131,4 @@
   display: flex;
   justify-content: center;
   margin-block-end: 16px;
-}
-
-.ProfileEditor__EditPhoto {
-  @include font-subtitle;
-
-  padding-block: 5px;
-  padding-inline: 10px;
-  border-radius: 14px;
-  font-weight: 600;
 }
