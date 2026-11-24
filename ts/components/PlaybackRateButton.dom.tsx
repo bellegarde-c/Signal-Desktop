@@ -2,10 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import classNames from 'classnames';
-import React, { useCallback, useState } from 'react';
+import {
+  useCallback,
+  useState,
+  type JSX,
+  type MouseEvent,
+  type KeyboardEvent,
+} from 'react';
 import { animated, useSpring } from '@react-spring/web';
-import type { LocalizerType } from '../types/Util.std.js';
-import { useReducedMotion } from '../hooks/useReducedMotion.dom.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { useReducedMotion } from '../hooks/useReducedMotion.dom.ts';
 
 const SPRING_CONFIG = {
   mass: 0.5,
@@ -14,10 +20,18 @@ const SPRING_CONFIG = {
   velocity: 0.01,
 };
 
+type Variant = 'message-outgoing' | 'message-incoming' | 'mini-player';
+
+const VariantClassNames: Record<Variant, string> = {
+  'message-outgoing': 'PlaybackRateButton--message-outgoing',
+  'message-incoming': 'PlaybackRateButton--message-incoming',
+  'mini-player': 'PlaybackRateButton--mini-player',
+};
+
 type Props = {
   // undefined if not playing
   playbackRate: number | undefined;
-  variant: 'message-outgoing' | 'message-incoming' | 'mini-player';
+  variant: Variant;
   onClick: () => void;
   visible?: boolean;
   i18n: LocalizerType;
@@ -29,11 +43,11 @@ export function PlaybackRateButton({
   visible = true,
   i18n,
   onClick,
-}: Props): React.JSX.Element {
+}: Props): JSX.Element {
   const [isDown, setIsDown] = useState(false);
   const reducedMotion = useReducedMotion();
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- FIXME
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- FIXME
   const [animProps] = useSpring(
     {
       immediate: reducedMotion,
@@ -45,7 +59,7 @@ export function PlaybackRateButton({
 
   // Clicking button toggle playback
   const onButtonClick = useCallback(
-    (event: React.MouseEvent) => {
+    (event: MouseEvent) => {
       event.stopPropagation();
       event.preventDefault();
 
@@ -56,7 +70,7 @@ export function PlaybackRateButton({
 
   // Keyboard playback toggle
   const onButtonKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
+    (event: KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== 'Space') {
         return;
       }
@@ -76,17 +90,14 @@ export function PlaybackRateButton({
   };
 
   const label = playbackRate
-    ? playbackRateLabels[playbackRate].toString()
+    ? playbackRateLabels[playbackRate]?.toString()
     : undefined;
 
   return (
     <animated.div style={animProps}>
       <button
         type="button"
-        className={classNames(
-          'PlaybackRateButton',
-          `PlaybackRateButton--${variant}`
-        )}
+        className={classNames('PlaybackRateButton', VariantClassNames[variant])}
         onClick={onButtonClick}
         onKeyDown={onButtonKeyDown}
         onMouseDown={() => setIsDown(true)}
@@ -105,7 +116,8 @@ const playbackRates = [1, 1.5, 2, 0.5];
 
 PlaybackRateButton.nextPlaybackRate = (currentRate: number): number => {
   // cycle through the rates
+  // oxlint-disable-next-line typescript/no-non-null-assertion
   return playbackRates[
     (playbackRates.indexOf(currentRate) + 1) % playbackRates.length
-  ];
+  ]!;
 };

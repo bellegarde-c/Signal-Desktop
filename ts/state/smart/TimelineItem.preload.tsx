@@ -1,70 +1,79 @@
 // Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { RefObject } from 'react';
-import React, { useCallback, memo } from 'react';
+import type { RefObject, JSX } from 'react';
+import { useCallback, memo } from 'react';
 import { useSelector } from 'react-redux';
 
-import { TimelineItem } from '../../components/conversation/TimelineItem.dom.js';
-import type { WidthBreakpoint } from '../../components/_util.std.js';
-import { useConversationsActions } from '../ducks/conversations.preload.js';
-import { useComposerActions } from '../ducks/composer.preload.js';
-import { useGlobalModalActions } from '../ducks/globalModals.preload.js';
-import { useAccountsActions } from '../ducks/accounts.preload.js';
-import { useLightboxActions } from '../ducks/lightbox.preload.js';
-import { useStoriesActions } from '../ducks/stories.preload.js';
-import { useCallingActions } from '../ducks/calling.preload.js';
-import { getPreferredBadgeSelector } from '../selectors/badges.preload.js';
+import { TimelineItem } from '../../components/conversation/TimelineItem.dom.tsx';
+import type { WidthBreakpoint } from '../../components/_util.std.ts';
+import { useConversationsActions } from '../ducks/conversations.preload.ts';
+import { useComposerActions } from '../ducks/composer.preload.ts';
+import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
+import { useLightboxActions } from '../ducks/lightbox.preload.ts';
+import { useStoriesActions } from '../ducks/stories.preload.ts';
+import { useCallingActions } from '../ducks/calling.preload.ts';
+import { getPreferredBadgeSelector } from '../selectors/badges.preload.ts';
+import { getIntl, getTheme, getPlatform } from '../selectors/user.std.ts';
 import {
-  getIntl,
-  getInteractionMode,
-  getTheme,
-  getPlatform,
-} from '../selectors/user.std.js';
-import {
+  getSelectedMessageIds,
   getTargetedMessage,
   getTargetedMessageSource,
-} from '../selectors/conversations.dom.js';
-import { useTimelineItem } from '../selectors/timeline.preload.js';
+} from '../selectors/conversations.dom.ts';
+import { getSharedGroupNames } from '../../util/sharedGroupNames.dom.ts';
+import { useTimelineItem } from '../selectors/timeline.preload.ts';
 import {
   areMessagesInSameGroup,
   shouldCurrentMessageHideMetadata,
   UnreadIndicatorPlacement,
-} from '../../util/timelineUtil.std.js';
+} from '../../util/timelineUtil.std.ts';
 
-import { SmartContactName } from './ContactName.preload.js';
-import { SmartUniversalTimerNotification } from './UniversalTimerNotification.dom.js';
-import { isSameDay } from '../../util/timestamp.std.js';
-import { renderAudioAttachment } from './renderAudioAttachment.preload.js';
-import { renderReactionPicker } from './renderReactionPicker.dom.js';
-import type { MessageRequestState } from '../../components/conversation/MessageRequestActionsConfirmation.dom.js';
-import { TargetedMessageSource } from '../ducks/conversationsEnums.std.js';
-import type { MessageInteractivity } from '../../components/conversation/Message.dom.js';
+import { SmartContactName } from './ContactName.preload.tsx';
+import { SmartUniversalTimerNotification } from './UniversalTimerNotification.dom.tsx';
+import { isSameDay } from '../../util/timestamp.std.ts';
+import { renderAudioAttachment } from './renderAudioAttachment.preload.tsx';
+import { renderReactionPicker } from './renderReactionPicker.dom.tsx';
+import type { MessageRequestState } from '../../components/conversation/MessageRequestActionsConfirmation.dom.tsx';
+import { TargetedMessageSource } from '../ducks/conversationsEnums.std.ts';
+import { MessageInteractivity } from '../../components/conversation/Message.dom.tsx';
+import { useNavActions } from '../ducks/nav.std.ts';
+import { DataReader } from '../../sql/Client.preload.ts';
+import { isInternalFeaturesEnabled } from '../../util/isInternalFeaturesEnabled.dom.ts';
+import type { CollapseSet } from '../../util/CollapseSet.std.ts';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
+import { NavTab, SettingsPage } from '../../types/Nav.std.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { useStickersActions } from '../ducks/stickers.preload.ts';
+
+const log = createLogger('TimelineItem');
+
+export type RenderItemProps = Omit<SmartTimelineItemProps, 'renderItem'>;
 
 export type SmartTimelineItemProps = {
-  containerElementRef: RefObject<HTMLElement>;
+  containerElementRef: RefObject<HTMLElement | null>;
   containerWidthBreakpoint: WidthBreakpoint;
   conversationId: string;
   interactivity: MessageInteractivity;
   isBlocked: boolean;
   isGroup: boolean;
   isOldestTimelineItem: boolean;
-  messageId: string;
+  item: CollapseSet;
   nextMessageId: undefined | string;
   previousMessageId: undefined | string;
+  renderItem: (props: RenderItemProps) => JSX.Element;
   unreadIndicatorPlacement: undefined | UnreadIndicatorPlacement;
 };
 
-function renderContact(contactId: string): React.JSX.Element {
+function renderContact(contactId: string): JSX.Element {
   return <SmartContactName contactId={contactId} />;
 }
 
-function renderUniversalTimerNotification(): React.JSX.Element {
+function renderUniversalTimerNotification(): JSX.Element {
   return <SmartUniversalTimerNotification />;
 }
 export const SmartTimelineItem = memo(function SmartTimelineItem(
   props: SmartTimelineItemProps
-): React.JSX.Element {
+): JSX.Element {
   const {
     containerElementRef,
     containerWidthBreakpoint,
@@ -73,54 +82,77 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     isBlocked,
     isGroup,
     isOldestTimelineItem,
-    messageId,
+    item,
     nextMessageId,
     previousMessageId,
+    renderItem,
     unreadIndicatorPlacement,
   } = props;
 
+  const messageId = item.id;
   const i18n = useSelector(getIntl);
   const getPreferredBadge = useSelector(getPreferredBadgeSelector);
-  const interactionMode = useSelector(getInteractionMode);
   const theme = useSelector(getTheme);
   const platform = useSelector(getPlatform);
+  const selectedMessageIds = useSelector(getSelectedMessageIds);
 
-  const item = useTimelineItem(messageId, conversationId);
+  const itemFromSelector = useTimelineItem(messageId, conversationId);
   const previousItem = useTimelineItem(previousMessageId, conversationId);
   const nextItem = useTimelineItem(nextMessageId, conversationId);
   const targetedMessage = useSelector(getTargetedMessage);
   const targetedMessageSource = useSelector(getTargetedMessageSource);
   const isTargeted = Boolean(
+    interactivity !== MessageInteractivity.Hidden &&
     targetedMessage &&
     messageId === targetedMessage.id &&
     targetedMessageSource !== TargetedMessageSource.Reset
   );
   const isNextItemCallingNotification = nextItem?.type === 'callHistory';
 
-  const shouldCollapseAbove = areMessagesInSameGroup(
-    previousItem,
-    unreadIndicatorPlacement === UnreadIndicatorPlacement.JustAbove,
-    item
-  );
-  const shouldCollapseBelow = areMessagesInSameGroup(
-    item,
-    unreadIndicatorPlacement === UnreadIndicatorPlacement.JustBelow,
-    nextItem
-  );
-  const shouldHideMetadata = shouldCurrentMessageHideMetadata(
-    shouldCollapseBelow,
-    item,
-    nextItem
-  );
+  const shouldCollapseAbove =
+    item.type === 'none' &&
+    areMessagesInSameGroup(
+      previousItem,
+      unreadIndicatorPlacement === UnreadIndicatorPlacement.JustAbove,
+      itemFromSelector
+    );
+  const shouldCollapseBelow =
+    item.type === 'none' &&
+    areMessagesInSameGroup(
+      itemFromSelector,
+      unreadIndicatorPlacement === UnreadIndicatorPlacement.JustBelow,
+      nextItem
+    );
+  const shouldHideMetadata =
+    item.type === 'none' &&
+    shouldCurrentMessageHideMetadata(
+      shouldCollapseBelow,
+      itemFromSelector,
+      nextItem
+    );
   const shouldRenderDateHeader =
     isOldestTimelineItem ||
     Boolean(
-      item &&
+      itemFromSelector &&
       previousItem &&
       // This comparison avoids strange header behavior for out-of-order messages.
-      item.timestamp > previousItem.timestamp &&
-      !isSameDay(previousItem.timestamp, item.timestamp)
+      itemFromSelector.timestamp > previousItem.timestamp &&
+      !isSameDay(previousItem.timestamp, itemFromSelector.timestamp)
     );
+
+  const processedTimelineItem =
+    item.type !== 'none' && itemFromSelector
+      ? {
+          type: 'collapseSet' as const,
+          data: item,
+          timestamp: itemFromSelector.timestamp,
+        }
+      : itemFromSelector;
+
+  const isSelected =
+    selectedMessageIds?.includes(messageId) ||
+    (item.type !== 'none' &&
+      item.messages.some(message => selectedMessageIds?.includes(message.id)));
 
   const {
     blockGroupLinkRequests,
@@ -131,10 +163,8 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     kickOffAttachmentDownload,
     markAttachmentAsCorrupted,
     messageExpanded,
-    onPinnedMessageAdd,
     onPinnedMessageRemove,
     openGiftBadge,
-    pushPanelForConversation,
     retryDeleteForEveryone,
     retryMessageSend,
     saveAttachment,
@@ -147,10 +177,12 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     showExpiredOutgoingTapToViewToast,
     showMediaNoLongerAvailableToast,
     showSpoiler,
-    startConversation,
+    startConversationWithSharedContact,
     targetMessage,
     toggleSelectMessage,
   } = useConversationsActions();
+
+  const { changeLocation, pushPanelForConversation } = useNavActions();
 
   const {
     endPoll,
@@ -164,6 +196,7 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
   const {
     showContactModal,
     showEditHistoryModal,
+    showPinMessageDialog,
     showTapToViewNotAvailableModal,
     toggleMessageRequestActionsConfirmation,
     toggleDeleteMessagesModal,
@@ -171,7 +204,6 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     toggleForwardMessagesModal,
     toggleSafetyNumberModal,
   } = useGlobalModalActions();
-  const { checkForAccount } = useAccountsActions();
   const { showLightbox, showLightboxForViewOnceMedia } = useLightboxActions();
   const { viewStory } = useStoriesActions();
   const {
@@ -179,6 +211,7 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     onOutgoingVideoCallInConversation,
     returnToActiveCall,
   } = useCallingActions();
+  const { markStickerAsFavorite } = useStickersActions();
 
   const onOpenEditNicknameAndNoteModal = useCallback(
     (contactId: string) => {
@@ -194,16 +227,51 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
     [conversationId, toggleMessageRequestActionsConfirmation]
   );
 
+  const handleClickCtaButton = useCallback(
+    (callToActionId: string) => {
+      if (callToActionId === 'donate') {
+        void changeLocation({
+          tab: NavTab.Settings,
+          details: {
+            page: SettingsPage.DonationsDonateFlow,
+          },
+        });
+      } else {
+        log.error(
+          `handleClickCtaButton: Invalid message callToActionId ${callToActionId}`
+        );
+      }
+    },
+    [changeLocation]
+  );
+
+  const handleDebugMessage = useCallback(async () => {
+    if (!isInternalFeaturesEnabled()) {
+      return;
+    }
+    const message = await DataReader.getMessageById(messageId);
+    // oxlint-disable-next-line no-console
+    console.debug(message);
+    await window.navigator.clipboard.writeText(
+      JSON.stringify(message, null, 2)
+    );
+  }, [messageId]);
+
+  const isSignalConvo = isSignalConversation({ id: conversationId });
   return (
     <TimelineItem
-      item={item}
+      item={processedTimelineItem}
       id={messageId}
       containerElementRef={containerElementRef}
       containerWidthBreakpoint={containerWidthBreakpoint}
       conversationId={conversationId}
       getPreferredBadge={getPreferredBadge}
+      getSharedGroupNames={getSharedGroupNames}
       isNextItemCallingNotification={isNextItemCallingNotification}
       isTargeted={isTargeted}
+      isSelectMode={selectedMessageIds != null}
+      isSelected={isSelected}
+      isSignalConversation={isSignalConvo}
       renderAudioAttachment={renderAudioAttachment}
       renderContact={renderContact}
       renderReactionPicker={renderReactionPicker}
@@ -215,42 +283,45 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
       showEditHistoryModal={showEditHistoryModal}
       i18n={i18n}
       interactivity={interactivity}
-      interactionMode={interactionMode}
       isBlocked={isBlocked}
       isGroup={isGroup}
       theme={theme}
       platform={platform}
       blockGroupLinkRequests={blockGroupLinkRequests}
-      checkForAccount={checkForAccount}
       clearTargetedMessage={clearSelectedMessage}
       doubleCheckMissingQuoteReference={doubleCheckMissingQuoteReference}
       cancelAttachmentDownload={cancelAttachmentDownload}
       kickOffAttachmentDownload={kickOffAttachmentDownload}
       markAttachmentAsCorrupted={markAttachmentAsCorrupted}
+      markStickerAsFavorite={markStickerAsFavorite}
       messageExpanded={messageExpanded}
       openGiftBadge={openGiftBadge}
       pushPanelForConversation={pushPanelForConversation}
       endPoll={endPoll}
       reactToMessage={reactToMessage}
       copyMessageText={copyMessageText}
+      handleClickCtaButton={handleClickCtaButton}
+      handleDebugMessage={handleDebugMessage}
       onOpenEditNicknameAndNoteModal={onOpenEditNicknameAndNoteModal}
       onOpenMessageRequestActionsConfirmation={
         onOpenMessageRequestActionsConfirmation
       }
       onOutgoingAudioCallInConversation={onOutgoingAudioCallInConversation}
       onOutgoingVideoCallInConversation={onOutgoingVideoCallInConversation}
-      onPinnedMessageAdd={onPinnedMessageAdd}
+      showPinMessageDialog={showPinMessageDialog}
       onPinnedMessageRemove={onPinnedMessageRemove}
       scrollToPinnedMessage={scrollToPinnedMessage}
       retryDeleteForEveryone={retryDeleteForEveryone}
       retryMessageSend={retryMessageSend}
       sendPollVote={sendPollVote}
+      renderItem={renderItem}
       returnToActiveCall={returnToActiveCall}
       saveAttachment={saveAttachment}
       saveAttachments={saveAttachments}
       scrollToPollMessage={scrollToPollMessage}
       scrollToQuotedMessage={scrollToQuotedMessage}
       targetMessage={targetMessage}
+      targetedMessage={targetedMessage}
       setQuoteByMessageId={setQuoteByMessageId}
       setMessageToEdit={setMessageToEdit}
       showContactModal={showContactModal}
@@ -265,7 +336,7 @@ export const SmartTimelineItem = memo(function SmartTimelineItem(
       showMediaNoLongerAvailableToast={showMediaNoLongerAvailableToast}
       showSpoiler={showSpoiler}
       showTapToViewNotAvailableModal={showTapToViewNotAvailableModal}
-      startConversation={startConversation}
+      startConversationWithSharedContact={startConversationWithSharedContact}
       toggleDeleteMessagesModal={toggleDeleteMessagesModal}
       toggleForwardMessagesModal={toggleForwardMessagesModal}
       toggleSafetyNumberModal={toggleSafetyNumberModal}

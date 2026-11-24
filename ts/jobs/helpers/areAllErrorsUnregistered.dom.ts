@@ -1,12 +1,12 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ConversationAttributesType } from '../../model-types.d.ts';
+import type { ConversationAttributesType } from '../../model-types.std.ts';
 import {
   SendMessageProtoError,
   UnregisteredUserError,
-} from '../../textsecure/Errors.std.js';
-import { isGroup } from '../../util/whatTypeOfConversation.dom.js';
+} from '../../textsecure/Errors.std.ts';
+import { isGroup } from '../../util/whatTypeOfConversation.dom.ts';
 
 export function areAllErrorsUnregistered(
   conversation: ConversationAttributesType,

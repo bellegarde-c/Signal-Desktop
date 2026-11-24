@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import classNames from 'classnames';
-import type { KeyboardEventHandler } from 'react';
-import React from 'react';
-import { Emojify } from './Emojify.dom.js';
+import type { KeyboardEventHandler, JSX } from 'react';
+import { Emojify } from './Emojify.dom.tsx';
 
 export function AtMention({
   direction,
@@ -22,7 +21,7 @@ export function AtMention({
   name: string;
   onClick: () => void;
   onKeyUp: KeyboardEventHandler;
-}): React.JSX.Element {
+}): JSX.Element {
   const textElement = (
     <>
       @
@@ -54,7 +53,8 @@ export function AtMention({
     <span
       className={classNames(
         'MessageBody__at-mention',
-        `MessageBody__at-mention--${direction}`
+        direction === 'incoming' && 'MessageBody__at-mention--incoming',
+        direction === 'outgoing' && 'MessageBody__at-mention--outgoing'
       )}
       onClick={onClick}
       onKeyUp={onKeyUp}

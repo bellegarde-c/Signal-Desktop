@@ -1,12 +1,13 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
-import type { CallLinkPendingParticipantModalProps } from './CallLinkPendingParticipantModal.dom.js';
-import { CallLinkPendingParticipantModal } from './CallLinkPendingParticipantModal.dom.js';
-import type { ComponentMeta } from '../storybook/types.std.js';
-import { getDefaultConversation } from '../test-helpers/getDefaultConversation.std.js';
+import type { CallLinkPendingParticipantModalProps } from './CallLinkPendingParticipantModal.dom.tsx';
+import { CallLinkPendingParticipantModal } from './CallLinkPendingParticipantModal.dom.tsx';
+import type { ComponentMeta } from '../storybook/types.std.ts';
+import { getDefaultConversation } from '../test-helpers/getDefaultConversation.std.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -14,11 +15,10 @@ const conversation = getDefaultConversation({
   acceptedMessageRequest: true,
   hasMessages: true,
 });
-const conversationWithSharedGroups = getDefaultConversation({
+const conversationWithAboutText = getDefaultConversation({
   acceptedMessageRequest: true,
   aboutText: 'likes to chat',
   hasMessages: true,
-  sharedGroupNames: ['Axolotl lovers'],
 });
 const systemContact = getDefaultConversation({
   acceptedMessageRequest: true,
@@ -33,23 +33,23 @@ export default {
   args: {
     i18n,
     conversation,
+    sharedGroupNames: [],
     approveUser: action('approveUser'),
     denyUser: action('denyUser'),
     toggleAboutContactModal: action('toggleAboutContactModal'),
     onClose: action('onClose'),
-    updateSharedGroups: action('updateSharedGroups'),
   },
 } satisfies ComponentMeta<CallLinkPendingParticipantModalProps>;
 
 export function Default(
   args: CallLinkPendingParticipantModalProps
-): React.JSX.Element {
+): JSX.Element {
   return <CallLinkPendingParticipantModal {...args} />;
 }
 
 export function SystemContact(
   args: CallLinkPendingParticipantModalProps
-): React.JSX.Element {
+): JSX.Element {
   return (
     <CallLinkPendingParticipantModal {...args} conversation={systemContact} />
   );
@@ -57,11 +57,12 @@ export function SystemContact(
 
 export function WithSharedGroups(
   args: CallLinkPendingParticipantModalProps
-): React.JSX.Element {
+): JSX.Element {
   return (
     <CallLinkPendingParticipantModal
       {...args}
-      conversation={conversationWithSharedGroups}
+      conversation={conversationWithAboutText}
+      sharedGroupNames={['Axolotl lovers']}
     />
   );
 }

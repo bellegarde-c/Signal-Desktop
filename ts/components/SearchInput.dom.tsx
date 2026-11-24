@@ -7,10 +7,10 @@ import type {
   KeyboardEvent,
   ReactNode,
 } from 'react';
-import React, { forwardRef } from 'react';
+import { forwardRef, useCallback } from 'react';
 import classNames from 'classnames';
-import type { LocalizerType } from '../types/Util.std.js';
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { mergeProps, useFocusRing } from 'react-aria';
 
 export type PropTypes = Readonly<{
   children?: ReactNode;
@@ -18,7 +18,8 @@ export type PropTypes = Readonly<{
   label?: string;
   hasSearchIcon?: boolean;
   i18n: LocalizerType;
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   onClear?: () => unknown;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   onChange: (ev: ChangeEvent<HTMLInputElement>) => unknown;
@@ -26,9 +27,8 @@ export type PropTypes = Readonly<{
   placeholder: string;
   value: string;
   description?: string;
+  noMargin?: boolean;
 }>;
-
-const BASE_CLASS_NAME = 'module-SearchInput';
 
 export const SearchInput = forwardRef<HTMLInputElement, PropTypes>(
   function SearchInputInner(
@@ -38,7 +38,7 @@ export const SearchInput = forwardRef<HTMLInputElement, PropTypes>(
       hasSearchIcon = true,
       i18n,
       label,
-      moduleClassName,
+      className,
       onClear,
       onBlur,
       onChange,
@@ -46,56 +46,76 @@ export const SearchInput = forwardRef<HTMLInputElement, PropTypes>(
       placeholder,
       value,
       description,
+      noMargin,
     },
     ref
   ) {
-    const getClassName = getClassNamesFor(BASE_CLASS_NAME, moduleClassName);
+    const { isFocusVisible, focusProps } = useFocusRing({
+      within: true,
+      isTextInput: true,
+    });
+
+    const handleKeydown = useCallback(
+      (event: KeyboardEvent<HTMLInputElement>) => {
+        const { ctrlKey, key } = event;
+
+        // On Linux, this key combo selects all text.
+        if (window.platform === 'linux' && ctrlKey && key === '/') {
+          event.preventDefault();
+          event.stopPropagation();
+        } else if (key === 'Escape' && onClear) {
+          onClear();
+          event.preventDefault();
+          event.stopPropagation();
+        }
+
+        onKeyDown?.(event);
+      },
+      [onKeyDown, onClear]
+    );
+
     return (
-      <div className={getClassName('__container')} data-supertab>
-        {hasSearchIcon && <i className={getClassName('__icon')} />}
+      <div
+        className={classNames(
+          'module-SearchInput__container',
+          noMargin && 'module-SearchInput__container--noMargin',
+          className
+        )}
+        data-supertab
+      >
+        {hasSearchIcon && <i className="module-SearchInput__icon" />}
         {children}
         <input
           aria-label={label || i18n('icu:search')}
           className={classNames(
-            getClassName('__input'),
-            value && getClassName('__input--with-text'),
-            children != null && getClassName('__input--with-children')
+            'module-SearchInput__input',
+            value && 'module-SearchInput__input--with-text',
+            children != null && 'module-SearchInput__input--with-children'
           )}
           dir="auto"
           disabled={disabled}
-          onBlur={onBlur}
-          onChange={onChange}
-          onKeyDown={event => {
-            const { ctrlKey, key } = event;
-
-            // On Linux, this key combo selects all text.
-            if (window.platform === 'linux' && ctrlKey && key === '/') {
-              event.preventDefault();
-              event.stopPropagation();
-            } else if (key === 'Escape' && onClear) {
-              onClear();
-              event.preventDefault();
-              event.stopPropagation();
-            }
-
-            onKeyDown?.(event);
-          }}
           placeholder={placeholder}
           ref={ref}
           type="text"
           value={value}
+          data-focus-visible={isFocusVisible}
+          {...mergeProps(focusProps, {
+            onBlur,
+            onChange,
+            onKeyDown: handleKeydown,
+          })}
         />
         {value && onClear && (
           <button
             aria-label={i18n('icu:cancel')}
-            className={getClassName('__cancel')}
+            className="module-SearchInput__cancel"
             onClick={onClear}
             tabIndex={-1}
             type="button"
           />
         )}
         {description && (
-          <div className={getClassName('__description')}>{description}</div>
+          <div className="module-SearchInput__description">{description}</div>
         )}
       </div>
     );

@@ -25,6 +25,7 @@ export type OSType = {
   isLinux: (minVersion?: string) => boolean;
   isLinuxAppImage: () => boolean;
   isMacOS: (minVersion?: string) => boolean;
+  isMAS: () => boolean;
   isWindows: (minVersion?: string) => boolean;
 };
 
@@ -52,8 +53,10 @@ export function getOSFunctions(osRelease: string): OSType {
       return 'os-macos';
     }
     if (isWindows()) {
+      // oxlint-disable-next-line signal-desktop/enforce-class-name-has-styles
       return 'os-windows';
     }
+    // oxlint-disable-next-line signal-desktop/enforce-class-name-has-styles
     return 'os-linux';
   };
 
@@ -63,6 +66,7 @@ export function getOSFunctions(osRelease: string): OSType {
     isLinux,
     isLinuxAppImage,
     isMacOS,
+    isMAS: () => process.mas,
     isWindows,
   };
 }

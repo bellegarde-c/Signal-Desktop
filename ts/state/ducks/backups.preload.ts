@@ -3,17 +3,14 @@
 
 import { debounce, throttle } from 'lodash';
 import { ipcRenderer } from 'electron';
-
-import type { ThunkAction } from 'redux-thunk';
 import type { ReadonlyDeep } from 'type-fest';
-
-import { createLogger } from '../../logging/log.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { getBackups, getPlaintextWorkflow } from '../selectors/backups.std.js';
-import { getIntl } from '../selectors/user.std.js';
-import { promptOSAuth } from '../../util/promptOSAuth.preload.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { backupsService } from '../../services/backups/index.preload.js';
+import { createLogger } from '../../logging/log.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { getBackups, getPlaintextWorkflow } from '../selectors/backups.std.ts';
+import { getIntl } from '../selectors/user.std.ts';
+import { promptOSAuth } from '../../util/promptOSAuth.preload.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { backupsService } from '../../services/backups/index.preload.ts';
 import {
   NotEnoughStorageError,
   LocalExportErrors,
@@ -23,18 +20,17 @@ import {
   plaintextExportValidTransitions,
   LocalBackupExportSteps,
   localBackupExportValidTransitions,
-} from '../../types/LocalExport.std.js';
-
-import type { StateType } from '../reducer.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
+} from '../../types/LocalExport.std.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
 import type {
   PlaintextExportWorkflowType,
   LocalBackupExportWorkflowType,
   LocalExportErrorDetails,
-} from '../../types/LocalExport.std.js';
-import type { LocalizerType } from '../../types/I18N.std.js';
-import { toLogFormat } from '../../types/errors.std.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
+} from '../../types/LocalExport.std.ts';
+import type { LocalizerType } from '../../types/I18N.std.ts';
+import { toLogFormat } from '../../types/errors.std.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const log = createLogger('ducks/backups');
 
@@ -119,12 +115,7 @@ function clearWorkflow(): SetWorkflowAction {
 
 // Local Backup Export Actions
 
-export function startLocalBackupExport(): ThunkAction<
-  void,
-  StateType,
-  unknown,
-  SetWorkflowAction
-> {
+function startLocalBackupExport(): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const state = getBackups(getState());
     if (state.workflow != null) {
@@ -257,12 +248,7 @@ export function startLocalBackupExport(): ThunkAction<
   };
 }
 
-function cancelLocalBackupWorkflow(): ThunkAction<
-  void,
-  StateType,
-  unknown,
-  SetWorkflowAction
-> {
+function cancelLocalBackupWorkflow(): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const state = getBackups(getState());
     const { workflow } = state;
@@ -294,12 +280,7 @@ function cancelLocalBackupWorkflow(): ThunkAction<
 
 // Plaintext Export Actions
 
-function startPlaintextExport(): ThunkAction<
-  void,
-  StateType,
-  unknown,
-  SetWorkflowAction
-> {
+function startPlaintextExport(): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const state = getBackups(getState());
     if (state.workflow != null) {
@@ -321,9 +302,9 @@ function startPlaintextExport(): ThunkAction<
   };
 }
 
-export function verifyWithOSForExport(
+function verifyWithOSForExport(
   includeMedia: boolean
-): ThunkAction<void, StateType, unknown, SetWorkflowAction> {
+): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const previousWorkflow = getPlaintextWorkflow(getState());
     if (
@@ -350,18 +331,18 @@ export function verifyWithOSForExport(
     const result = await promptOSAuth('plaintext-export');
     switch (result) {
       case 'success':
-        chooseExportLocation()(dispatch, getState, null);
+        void dispatch(chooseExportLocation());
         break;
-      case 'unauthorized-no-windows-ucv':
       case 'unsupported':
-      case 'error':
-        log.warn(
-          `verifyWithOSForExport: Got '${result}' status, but continuing on`
-        );
-        chooseExportLocation()(dispatch, getState, null);
+        log.warn(`verifyWithOSForExport: Unsupported, continuing on`);
+        void dispatch(chooseExportLocation());
         break;
       case 'unauthorized':
         log.warn('verifyWithOSForExport: Not authorized; clearing workflow');
+        dispatch(clearWorkflow());
+        break;
+      case 'error':
+        log.warn('verifyWithOSForExport: Error; clearing workflow');
         dispatch(clearWorkflow());
         break;
       default:
@@ -370,12 +351,7 @@ export function verifyWithOSForExport(
   };
 }
 
-function chooseExportLocation(): ThunkAction<
-  void,
-  StateType,
-  unknown,
-  SetWorkflowAction
-> {
+function chooseExportLocation(): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const previousWorkflow = getPlaintextWorkflow(getState());
     if (
@@ -404,14 +380,14 @@ function chooseExportLocation(): ThunkAction<
     if (result.canceled || !result.dirPath) {
       dispatch(clearWorkflow());
     } else {
-      doPlaintextExport(result.dirPath)(dispatch, getState, null);
+      void dispatch(doPlaintextExport(result.dirPath));
     }
   };
 }
 
 function doPlaintextExport(
   exportPath: string
-): ThunkAction<void, StateType, unknown, SetWorkflowAction> {
+): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const previousWorkflow = getPlaintextWorkflow(getState());
     if (
@@ -537,12 +513,7 @@ function doPlaintextExport(
   };
 }
 
-function cancelWorkflow(): ThunkAction<
-  void,
-  StateType,
-  unknown,
-  SetWorkflowAction
-> {
+function cancelWorkflow(): AsyncStateThunk<SetWorkflowAction> {
   return async (dispatch, getState) => {
     const previousWorkflow = getPlaintextWorkflow(getState());
     if (

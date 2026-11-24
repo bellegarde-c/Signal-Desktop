@@ -4,11 +4,11 @@
 import { assert } from 'chai';
 import { v4 as generateUuid } from 'uuid';
 
-import { DataReader, DataWriter } from '../../sql/Client.preload.js';
-import { generateAci } from '../../types/ServiceId.std.js';
-
-import type { MessageAttributesType } from '../../model-types.d.ts';
-import { postSaveUpdates } from '../../util/cleanup.preload.js';
+import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
+import { postSaveUpdates } from '../../util/cleanup.preload.ts';
+import { generateAci } from '../../test-helpers/serviceIdUtils.std.ts';
+import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
 
 const { _getAllMessages, searchMessages } = DataReader;
 const { removeAll, saveMessages, saveMessage } = DataWriter;
@@ -60,17 +60,23 @@ describe('sql/searchMessages', () => {
 
     assert.lengthOf(await _getAllMessages(), 3);
 
-    const searchResults = await searchMessages({ query: 'unique' });
+    const searchResults = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults, 1);
-    assert.strictEqual(searchResults[0].id, message2.id);
+    assert.strictEqual(searchResults[0]?.id, message2.id);
 
     message3.body = 'message 3 - unique string';
     await saveMessage(message3, { ourAci, postSaveUpdates });
 
-    const searchResults2 = await searchMessages({ query: 'unique' });
+    const searchResults2 = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults2, 2);
-    assert.strictEqual(searchResults2[0].id, message3.id);
-    assert.strictEqual(searchResults2[1].id, message2.id);
+    assert.strictEqual(searchResults2[0]?.id, message3.id);
+    assert.strictEqual(searchResults2[1]?.id, message2.id);
   });
 
   it('excludes messages with isViewOnce = true', async () => {
@@ -117,16 +123,22 @@ describe('sql/searchMessages', () => {
 
     assert.lengthOf(await _getAllMessages(), 3);
 
-    const searchResults = await searchMessages({ query: 'unique' });
+    const searchResults = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults, 1);
-    assert.strictEqual(searchResults[0].id, message1.id);
+    assert.strictEqual(searchResults[0]?.id, message1.id);
 
     message1.body = 'message 3 - unique string';
     await saveMessage(message3, { ourAci, postSaveUpdates });
 
-    const searchResults2 = await searchMessages({ query: 'unique' });
+    const searchResults2 = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults2, 1);
-    assert.strictEqual(searchResults2[0].id, message1.id);
+    assert.strictEqual(searchResults2[0]?.id, message1.id);
   });
 
   it('excludes messages with storyId !== null', async () => {
@@ -173,16 +185,22 @@ describe('sql/searchMessages', () => {
 
     assert.lengthOf(await _getAllMessages(), 3);
 
-    const searchResults = await searchMessages({ query: 'unique' });
+    const searchResults = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults, 1);
-    assert.strictEqual(searchResults[0].id, message1.id);
+    assert.strictEqual(searchResults[0]?.id, message1.id);
 
     message1.body = 'message 3 - unique string';
     await saveMessage(message3, { ourAci, postSaveUpdates });
 
-    const searchResults2 = await searchMessages({ query: 'unique' });
+    const searchResults2 = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults2, 1);
-    assert.strictEqual(searchResults2[0].id, message1.id);
+    assert.strictEqual(searchResults2[0]?.id, message1.id);
   });
 
   it('limits messages returned to a specific conversation if specified', async () => {
@@ -220,15 +238,19 @@ describe('sql/searchMessages', () => {
 
     assert.lengthOf(await _getAllMessages(), 2);
 
-    const searchResults = await searchMessages({ query: 'unique' });
+    const searchResults = await searchMessages({
+      query: 'unique',
+      filterByUnread: false,
+    });
     assert.lengthOf(searchResults, 2);
 
     const searchResultsWithConversationId = await searchMessages({
       query: 'unique',
       conversationId: otherConversationId,
+      filterByUnread: false,
     });
     assert.lengthOf(searchResultsWithConversationId, 1);
-    assert.strictEqual(searchResultsWithConversationId[0].id, message2.id);
+    assert.strictEqual(searchResultsWithConversationId[0]?.id, message2.id);
   });
 });
 
@@ -262,7 +284,7 @@ describe('sql/searchMessages/withMentions', () => {
   }
 
   it('includes messages with mentions', async () => {
-    const mentionedAcis = [generateAci(), generateAci()];
+    const mentionedAcis = [generateAci(), generateAci()] as const;
     const messages = await storeMessages([
       {
         bodyRanges: [{ start: 0, length: 1, mentionAci: mentionedAcis[0] }],
@@ -282,27 +304,29 @@ describe('sql/searchMessages/withMentions', () => {
     const searchResults = await searchMessages({
       query: 'alice',
       contactServiceIdsMatchingQuery: [mentionedAcis[0], generateAci()],
+      filterByUnread: false,
     });
 
     assert.sameOrderedMembers(
       searchResults.map(res => res.id),
-      [messages[0].id, messages[2].id]
+      [messages[0]?.id, messages[2]?.id]
     );
 
     const searchResultsForMultipleMatchingUuids = await searchMessages({
       query: 'alice',
       contactServiceIdsMatchingQuery: [mentionedAcis[0], mentionedAcis[1]],
+      filterByUnread: false,
     });
 
     assert.sameOrderedMembers(
       searchResultsForMultipleMatchingUuids.map(res => res.id),
       // TODO: should only return unique messages
-      [messages[0].id, messages[1].id, messages[2].id]
+      [messages[0]?.id, messages[1]?.id, messages[2]?.id]
     );
   });
 
   it('includes messages with mentions and those that match the body text', async () => {
-    const mentionedAcis = [generateAci(), generateAci()];
+    const mentionedAcis = [generateAci(), generateAci()] as const;
     const messages = await storeMessages([
       {
         body: 'cat',
@@ -322,11 +346,12 @@ describe('sql/searchMessages/withMentions', () => {
     const searchResults = await searchMessages({
       query: 'cat',
       contactServiceIdsMatchingQuery: [mentionedAcis[0], generateAci()],
+      filterByUnread: false,
     });
 
     assert.sameOrderedMembers(
       searchResults.map(res => res.id),
-      [messages[0].id, messages[1].id]
+      [messages[0]?.id, messages[1]?.id]
     );
 
     // check that results get returned in the right order, independent of whether they
@@ -334,14 +359,15 @@ describe('sql/searchMessages/withMentions', () => {
     const searchResultsForDog = await searchMessages({
       query: 'dog',
       contactServiceIdsMatchingQuery: [mentionedAcis[1], generateAci()],
+      filterByUnread: false,
     });
     assert.sameOrderedMembers(
       searchResultsForDog.map(res => res.id),
-      [messages[1].id, messages[2].id]
+      [messages[1]?.id, messages[2]?.id]
     );
   });
   it('respects conversationId for mention matches', async () => {
-    const mentionedAcis = [generateAci(), generateAci()];
+    const mentionedAcis = [generateAci(), generateAci()] as const;
     const conversationId = generateUuid();
     const messages = await storeMessages([
       {
@@ -366,21 +392,59 @@ describe('sql/searchMessages/withMentions', () => {
       query: 'cat',
       contactServiceIdsMatchingQuery: [mentionedAcis[0]],
       conversationId,
+      filterByUnread: false,
     });
 
     assert.sameOrderedMembers(
       searchResults.map(res => res.id),
-      [messages[0].id, messages[1].id]
+      [messages[0]?.id, messages[1]?.id]
     );
 
     const searchResultsWithoutConversationid = await searchMessages({
       query: 'cat',
       contactServiceIdsMatchingQuery: [mentionedAcis[0]],
+      filterByUnread: false,
     });
 
     assert.sameOrderedMembers(
       searchResultsWithoutConversationid.map(res => res.id),
-      [messages[0].id, messages[1].id, messages[2].id, messages[3].id]
+      [messages[0]?.id, messages[1]?.id, messages[2]?.id, messages[3]?.id]
+    );
+  });
+
+  it('filters messages by unread state when filterByUnread is true', async () => {
+    await storeMessages([
+      {
+        id: 'unread-1',
+        body: 'unread message - search term',
+        readStatus: ReadStatus.Unread,
+      },
+      {
+        id: 'unread-2',
+        body: 'another unread message - search term',
+        readStatus: ReadStatus.Unread,
+      },
+      {
+        id: 'read-2',
+        body: 'read message - search term',
+        readStatus: ReadStatus.Read,
+      },
+    ]);
+
+    const allResults = await searchMessages({
+      query: 'search term',
+      filterByUnread: false,
+    });
+    assert.lengthOf(allResults, 3);
+
+    const unreadFilterResults = await searchMessages({
+      query: 'search term',
+      filterByUnread: true,
+    });
+    assert.lengthOf(unreadFilterResults, 2);
+    assert.sameOrderedMembers(
+      unreadFilterResults.map(res => res.id),
+      ['unread-1', 'unread-2']
     );
   });
 });

@@ -3,22 +3,22 @@
 
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import type { StateType } from '../../../state/reducer.preload.js';
-import { reducer as rootReducer } from '../../../state/reducer.preload.js';
-import { noopAction } from '../../../state/ducks/noop.std.js';
+import type { StateType } from '../../../state/reducer.preload.ts';
+import { reducer as rootReducer } from '../../../state/reducer.preload.ts';
+import { noopAction } from '../../../state/ducks/noop.std.ts';
 
-import type { PreferredReactionsStateType } from '../../../state/ducks/preferredReactions.preload.js';
+import type { PreferredReactionsStateType } from '../../../state/ducks/preferredReactions.preload.ts';
 import {
   actions,
   getEmptyState,
   reducer,
-} from '../../../state/ducks/preferredReactions.preload.js';
-import { EmojiSkinTone } from '../../../components/fun/data/emojis.std.js';
-import { itemStorage } from '../../../textsecure/Storage.preload.js';
+} from '../../../state/ducks/preferredReactions.preload.ts';
+import { itemStorage } from '../../../textsecure/Storage.preload.ts';
+import { Emoji } from '../../../axo/emoji.std.ts';
 
 describe('preferred reactions duck', () => {
   const getEmptyRootState = (): StateType =>
-    rootReducer(undefined, noopAction());
+    rootReducer(undefined, noopAction('getEmptyRootState'));
 
   const getRootState = (
     preferredReactions: PreferredReactionsStateType
@@ -30,13 +30,27 @@ describe('preferred reactions duck', () => {
   const stateWithOpenCustomizationModal = {
     ...getEmptyState(),
     customizePreferredReactionsModal: {
-      draftPreferredReactions: ['✨', '❇️', '🎇', '🦈', '💖', '🅿️'],
-      originalPreferredReactions: ['💙', '👍', '👎', '😂', '😮', '😢'],
+      draftPreferredReactions: [
+        Emoji.SPARKLES,
+        Emoji.SPARKLE,
+        Emoji.FIREWORK_SPARKLER,
+        Emoji.SHARK,
+        Emoji.SPARKLING_HEART,
+        Emoji.PARKING,
+      ],
+      originalPreferredReactions: [
+        Emoji.BLUE_HEART,
+        Emoji.getDefaultVariant(Emoji.THUMBS_UP),
+        Emoji.getDefaultVariant(Emoji.THUMBS_DOWN),
+        Emoji.JOY,
+        Emoji.OPEN_MOUTH,
+        Emoji.CRY,
+      ],
       selectedDraftEmojiIndex: undefined,
       isSaving: false as const,
       hadSaveError: false,
     },
-  };
+  } satisfies PreferredReactionsStateType;
 
   const stateWithOpenCustomizationModalAndSelectedEmoji = {
     ...stateWithOpenCustomizationModal,
@@ -44,7 +58,7 @@ describe('preferred reactions duck', () => {
       ...stateWithOpenCustomizationModal.customizePreferredReactionsModal,
       selectedDraftEmojiIndex: 1,
     },
-  };
+  } satisfies PreferredReactionsStateType;
 
   let sinonSandbox: sinon.SinonSandbox;
 
@@ -116,17 +130,19 @@ describe('preferred reactions duck', () => {
         ...emptyRootState,
         items: {
           ...emptyRootState.items,
-          emojiSkinToneDefault: EmojiSkinTone.Type5,
+          emojiSkinToneDefault: Emoji.SkinTone.Type5,
         },
       };
 
       const dispatch = sinon.spy();
-      openCustomizePreferredReactionsModal()(dispatch, () => rootState, null);
+      openCustomizePreferredReactionsModal()(dispatch, () => rootState);
       const [action] = dispatch.getCall(0).args;
 
       const result = reducer(rootState.preferredReactions, action);
 
-      const expectedEmoji = ['❤️', '👍🏿', '👎🏿', '😂', '😮', '😢'];
+      const expectedEmoji = Emoji.getDefaultPreferredReactionEmojis(
+        Emoji.SkinTone.Type5
+      );
 
       assert.deepEqual(result.customizePreferredReactionsModal, {
         draftPreferredReactions: expectedEmoji,
@@ -138,7 +154,14 @@ describe('preferred reactions duck', () => {
     });
 
     it('opens the customization modal with stored values', () => {
-      const storedPreferredReactionEmoji = ['✨', '❇️', '🎇', '🦈', '💖', '🅿️'];
+      const storedPreferredReactionEmoji = [
+        Emoji.SPARKLES,
+        Emoji.SPARKLE,
+        Emoji.FIREWORK_SPARKLER,
+        Emoji.SHARK,
+        Emoji.SPARKLING_HEART,
+        Emoji.PARKING,
+      ];
 
       const emptyRootState = getEmptyRootState();
       const state = {
@@ -150,7 +173,7 @@ describe('preferred reactions duck', () => {
       };
 
       const dispatch = sinon.spy();
-      openCustomizePreferredReactionsModal()(dispatch, () => state, null);
+      openCustomizePreferredReactionsModal()(dispatch, () => state);
       const [action] = dispatch.getCall(0).args;
 
       const result = reducer(state.preferredReactions, action);
@@ -170,21 +193,23 @@ describe('preferred reactions duck', () => {
 
     it('is a no-op if the customization modal is not open', () => {
       const state = getEmptyState();
-      const action = replaceSelectedDraftEmoji('🦈');
+      const action = replaceSelectedDraftEmoji(Emoji.SHARK);
       const result = reducer(state, action);
 
       assert.strictEqual(result, state);
     });
 
     it('is a no-op if no emoji is selected', () => {
-      const action = replaceSelectedDraftEmoji('💅');
+      const action = replaceSelectedDraftEmoji(
+        Emoji.getDefaultVariant(Emoji.NAIL_CARE)
+      );
       const result = reducer(stateWithOpenCustomizationModal, action);
 
       assert.strictEqual(result, stateWithOpenCustomizationModal);
     });
 
     it('replaces the selected draft emoji and deselects', () => {
-      const action = replaceSelectedDraftEmoji('🐱');
+      const action = replaceSelectedDraftEmoji(Emoji.CAT);
       const result = reducer(
         stateWithOpenCustomizationModalAndSelectedEmoji,
         action
@@ -192,7 +217,14 @@ describe('preferred reactions duck', () => {
 
       assert.deepStrictEqual(
         result.customizePreferredReactionsModal?.draftPreferredReactions,
-        ['✨', '🐱', '🎇', '🦈', '💖', '🅿️']
+        [
+          Emoji.SPARKLES,
+          Emoji.CAT,
+          Emoji.FIREWORK_SPARKLER,
+          Emoji.SHARK,
+          Emoji.SPARKLING_HEART,
+          Emoji.PARKING,
+        ]
       );
       assert.isUndefined(
         result.customizePreferredReactionsModal?.selectedDraftEmojiIndex
@@ -205,7 +237,7 @@ describe('preferred reactions duck', () => {
 
     function getAction(rootState: Readonly<StateType>) {
       const dispatch = sinon.spy();
-      resetDraftEmoji()(dispatch, () => rootState, null);
+      resetDraftEmoji()(dispatch, () => rootState);
       const [action] = dispatch.getCall(0).args;
       return action;
     }
@@ -226,7 +258,7 @@ describe('preferred reactions duck', () => {
 
       assert.deepEqual(
         result.customizePreferredReactionsModal?.draftPreferredReactions,
-        ['❤️', '👍', '👎', '😂', '😮', '😢']
+        Emoji.getDefaultPreferredReactionEmojis(Emoji.SkinTone.None)
       );
     });
 
@@ -248,10 +280,10 @@ describe('preferred reactions duck', () => {
 
     // We want to create a fake ConversationController for testing purposes, and we need
     //   to sidestep typechecking to do that.
-    /* eslint-disable @typescript-eslint/no-explicit-any */
 
     let storagePutStub: sinon.SinonStub;
     let captureChangeStub: sinon.SinonStub;
+    // oxlint-disable-next-line typescript/no-explicit-any
     let oldConversationController: any;
 
     beforeEach(() => {
@@ -261,9 +293,11 @@ describe('preferred reactions duck', () => {
 
       captureChangeStub = sinonSandbox.stub();
       window.ConversationController = {
+        // oxlint-disable-next-line typescript/no-explicit-any
         getOurConversationOrThrow: (): any => ({
           captureChange: captureChangeStub,
         }),
+        // oxlint-disable-next-line typescript/no-explicit-any
       } as any;
     });
 
@@ -273,10 +307,8 @@ describe('preferred reactions duck', () => {
 
     describe('thunk', () => {
       it('saves the preferred reaction emoji to local storage', async () => {
-        await savePreferredReactions()(
-          sinon.spy(),
-          () => getRootState(stateWithOpenCustomizationModal),
-          null
+        await savePreferredReactions()(sinon.spy(), () =>
+          getRootState(stateWithOpenCustomizationModal)
         );
 
         sinon.assert.calledWith(
@@ -288,10 +320,8 @@ describe('preferred reactions duck', () => {
       });
 
       it('on success, enqueues a storage service upload', async () => {
-        await savePreferredReactions()(
-          sinon.spy(),
-          () => getRootState(stateWithOpenCustomizationModal),
-          null
+        await savePreferredReactions()(sinon.spy(), () =>
+          getRootState(stateWithOpenCustomizationModal)
         );
 
         sinon.assert.calledOnce(captureChangeStub);
@@ -299,10 +329,8 @@ describe('preferred reactions duck', () => {
 
       it('on success, dispatches a pending action followed by a fulfilled action', async () => {
         const dispatch = sinon.spy();
-        await savePreferredReactions()(
-          dispatch,
-          () => getRootState(stateWithOpenCustomizationModal),
-          null
+        await savePreferredReactions()(dispatch, () =>
+          getRootState(stateWithOpenCustomizationModal)
         );
 
         sinon.assert.calledTwice(dispatch);
@@ -318,10 +346,8 @@ describe('preferred reactions duck', () => {
         storagePutStub.rejects(new Error('something went wrong'));
 
         const dispatch = sinon.spy();
-        await savePreferredReactions()(
-          dispatch,
-          () => getRootState(stateWithOpenCustomizationModal),
-          null
+        await savePreferredReactions()(dispatch, () =>
+          getRootState(stateWithOpenCustomizationModal)
         );
 
         sinon.assert.calledTwice(dispatch);
@@ -336,10 +362,8 @@ describe('preferred reactions duck', () => {
       it('on failure, does not enqueue a storage service upload', async () => {
         storagePutStub.rejects(new Error('something went wrong'));
 
-        await savePreferredReactions()(
-          sinon.spy(),
-          () => getRootState(stateWithOpenCustomizationModal),
-          null
+        await savePreferredReactions()(sinon.spy(), () =>
+          getRootState(stateWithOpenCustomizationModal)
         );
 
         sinon.assert.notCalled(captureChangeStub);

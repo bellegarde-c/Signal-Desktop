@@ -2,24 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ReactNode } from 'react';
-import React from 'react';
 
-import type { ToFindType } from './LeftPaneHelper.dom.js';
-import { LeftPaneHelper } from './LeftPaneHelper.dom.js';
-import type { LocalizerType } from '../../types/Util.std.js';
-import type { Row } from '../ConversationList.dom.js';
-import { RowType } from '../ConversationList.dom.js';
-import type { PropsData as ConversationListItemPropsType } from '../conversationList/ConversationListItem.dom.js';
-import { handleKeydownForSearch } from './handleKeydownForSearch.dom.js';
+import type { ToFindType } from './LeftPaneHelper.dom.tsx';
+import { LeftPaneHelper } from './LeftPaneHelper.dom.tsx';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import type { Row } from '../ConversationList.dom.tsx';
+import { RowType } from '../ConversationList.dom.tsx';
+import type { PropsData as ConversationListItemPropsType } from '../conversationList/ConversationListItem.dom.tsx';
+import { handleKeydownForSearch } from './handleKeydownForSearch.dom.ts';
 import type {
   ConversationType,
   ShowConversationType,
-} from '../../state/ducks/conversations.preload.js';
-import { LeftPaneSearchInput } from '../LeftPaneSearchInput.dom.js';
+} from '../../state/ducks/conversations.preload.ts';
+import { LeftPaneSearchInput } from '../LeftPaneSearchInput.dom.tsx';
 
-import { I18n } from '../I18n.dom.js';
-import { assertDev } from '../../util/assert.std.js';
-import { UserText } from '../UserText.dom.js';
+import { I18n } from '../I18n.dom.tsx';
+import { assertDev, strictAssert } from '../../util/assert.std.ts';
+import { UserText } from '../UserText.dom.tsx';
 
 // The "correct" thing to do is to measure the size of the left pane and render enough
 //   search results for the container height. But (1) that's slow (2) the list is
@@ -49,6 +48,7 @@ export type LeftPaneSearchPropsType = {
   searchConversation: undefined | ConversationType;
 };
 
+// oxlint-disable-next-line react/prefer-function-component
 export class LeftPaneSearchHelper extends LeftPaneHelper<LeftPaneSearchPropsType> {
   readonly #conversationResults: MaybeLoadedSearchResultsType<ConversationListItemPropsType>;
   readonly #contactResults: MaybeLoadedSearchResultsType<ConversationListItemPropsType>;
@@ -136,15 +136,22 @@ export class LeftPaneSearchHelper extends LeftPaneHelper<LeftPaneSearchPropsType
 
   override getPreRowsNode({
     i18n,
+    renderLeftPaneChatFolders,
   }: Readonly<{
     i18n: LocalizerType;
+    renderLeftPaneChatFolders: () => ReactNode;
   }>): ReactNode | null {
+    const showChatFolders =
+      this.#filterByUnread &&
+      this.#searchTerm.trim().length === 0 &&
+      !this.#searchConversation;
+
     const mightHaveSearchResults = this.#allResults().some(
       searchResult => searchResult.isLoading || searchResult.results.length
     );
 
     if (mightHaveSearchResults) {
-      return null;
+      return showChatFolders ? renderLeftPaneChatFolders() : null;
     }
 
     const searchTerm = this.#searchTerm;
@@ -192,20 +199,32 @@ export class LeftPaneSearchHelper extends LeftPaneHelper<LeftPaneSearchPropsType
       );
     }
 
-    return !searchConversationName || searchTerm ? (
-      <div
-        // We need this for Ctrl-T shortcut cycling through parts of app
-        tabIndex={-1}
-        className={
-          this.#filterByUnread
-            ? 'module-left-pane__no-search-results--withHeader'
-            : 'module-left-pane__no-search-results'
-        }
-        key={searchTerm}
-      >
-        {noResults}
-      </div>
-    ) : null;
+    const noResultsNode =
+      !searchConversationName || searchTerm ? (
+        <div
+          // We need this for Ctrl-T shortcut cycling through parts of app
+          tabIndex={-1}
+          className={
+            this.#filterByUnread
+              ? 'module-left-pane__no-search-results--withHeader'
+              : 'module-left-pane__no-search-results'
+          }
+          key={searchTerm}
+        >
+          {noResults}
+        </div>
+      ) : null;
+
+    if (!showChatFolders) {
+      return noResultsNode;
+    }
+
+    return (
+      <>
+        {renderLeftPaneChatFolders()}
+        {noResultsNode}
+      </>
+    );
   }
 
   getRowCount(): number {
@@ -381,6 +400,7 @@ export class LeftPaneSearchHelper extends LeftPaneHelper<LeftPaneSearchPropsType
       }
       if (pointer < list.results.length) {
         const result = list.results[pointer];
+        strictAssert(result, 'Missing result');
         return result.type === 'incoming' || result.type === 'outgoing' // message
           ? {
               conversationId: result.conversationId,
@@ -425,7 +445,7 @@ export class LeftPaneSearchHelper extends LeftPaneHelper<LeftPaneSearchPropsType
     return this.#allResults().some(results => results.isLoading);
   }
 
-  #onEnterKeyDown = (
+  readonly #onEnterKeyDown = (
     clearSearchQuery: () => unknown,
     showConversation: ShowConversationType
   ): void => {

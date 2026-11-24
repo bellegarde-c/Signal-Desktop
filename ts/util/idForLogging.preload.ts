@@ -4,18 +4,18 @@
 import type {
   ConversationAttributesType,
   ReadonlyMessageAttributesType,
-} from '../model-types.d.ts';
+} from '../model-types.std.ts';
 import {
   getSource,
   getSourceDevice,
   getSourceServiceId,
-} from '../messages/sources.preload.js';
+} from '../messages/sources.preload.ts';
 import {
   isDirectConversation,
   isGroupV2,
-} from './whatTypeOfConversation.dom.js';
-import { getE164 } from './getE164.std.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
+} from './whatTypeOfConversation.dom.ts';
+import { getE164 } from './getE164.std.ts';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 
 export function getMessageIdForLogging(
   message: Pick<

@@ -6,16 +6,17 @@ import * as sinon from 'sinon';
 import { EventEmitter } from 'node:events';
 import { v4 as uuid } from 'uuid';
 
-import { ReleaseNoteAndMegaphoneFetcher } from '../../services/releaseNoteAndMegaphoneFetcher.preload.js';
-import * as durations from '../../util/durations/index.std.js';
-import { generateAci } from '../../types/ServiceId.std.js';
-import { saveNewMessageBatcher } from '../../util/messageBatcher.preload.js';
-import type { CIType } from '../../CI.preload.js';
-import type { ConversationModel } from '../../models/conversations.preload.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
-import { DataReader, DataWriter } from '../../sql/Client.preload.js';
+import { ReleaseNoteAndMegaphoneFetcher } from '../../services/releaseNoteAndMegaphoneFetcher.preload.ts';
+import * as durations from '../../util/durations/index.std.ts';
+import { saveNewMessageBatcher } from '../../util/messageBatcher.preload.ts';
+import type { CIType } from '../../CI.preload.ts';
+import type { ConversationModel } from '../../models/conversations.preload.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
+import type { RemoteMegaphoneId } from '../../types/Megaphone.std.ts';
+import { generateAci } from '../../test-helpers/serviceIdUtils.std.ts';
 
-const { getAllMegaphones } = DataReader;
+const { getAllMegaphones, hasMegaphone } = DataReader;
 
 const waitUntil = (
   condition: () => boolean,
@@ -36,6 +37,30 @@ const waitUntil = (
     }, intervalMs);
   });
 };
+
+const testMegaphone = {
+  id: 'banana' as RemoteMegaphoneId,
+  desktopMinVersion: '1.0.0',
+  priority: 1,
+  dontShowBeforeEpochMs: 0,
+  dontShowAfterEpochMs: Date.now() + 9001,
+  showForNumberOfDays: 7,
+  primaryCtaId: null,
+  secondaryCtaId: null,
+  primaryCtaData: null,
+  secondaryCtaData: null,
+  conditionalId: null,
+  title: 'a',
+  body: 'b',
+  primaryCtaText: null,
+  secondaryCtaText: null,
+  imagePath: 'megaphone0',
+  localeFetched: 'en',
+  shownAt: null,
+  snoozedAt: null,
+  snoozeCount: 0,
+  isFinished: false,
+} as const;
 
 describe('ReleaseNoteAndMegaphoneFetcher', () => {
   const NEXT_FETCH_TIME_STORAGE_KEY = 'releaseNotesNextFetchTime';
@@ -59,6 +84,7 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
     manifestHash?: string;
     manifestAnnouncements?: Array<{
       uuid: string;
+      countries?: string;
       desktopMinVersion: string;
       ctaId: string;
       link: string;
@@ -66,6 +92,7 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
     manifestMegaphones?: Array<{
       uuid: string;
       priority: number;
+      countries?: string;
       desktopMinVersion: string;
       dontShowBeforeEpochSeconds: number;
       dontShowAfterEpochSeconds: number;
@@ -98,7 +125,6 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
   };
 
   let sandbox: sinon.SinonSandbox;
-  let clock: sinon.SinonFakeTimers | undefined;
   let originalSignalCI: CIType | undefined;
   let fakeMegaphoneUuid: string;
 
@@ -138,6 +164,11 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
       set: sandbox.stub(),
       throttledUpdateUnread: sandbox.stub(),
       id: 'fake-signal-conversation-id',
+      setArchived: sandbox.stub(),
+      attributes: {
+        archived: false,
+      },
+      updateLastMessage: sandbox.stub(),
     };
 
     // Stub global methods
@@ -193,14 +224,18 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
         ],
       }),
       getReleaseNoteHash: sandbox.stub().resolves('note-hash-1'),
-      getReleaseNote: sandbox.stub().resolves(
-        releaseNote || {
-          uuid: fakeNoteUuid,
-          title: 'New Release',
-          body: 'This is the body text of the release note',
-          bodyRanges: [{ start: 0, length: 4, style: 'bold' }],
-        }
-      ),
+      getReleaseNote: sandbox
+        .stub()
+        .callsFake(async ({ uuid: requestUuid }) => {
+          return (
+            releaseNote ?? {
+              uuid: requestUuid,
+              title: 'New Release',
+              body: 'This is the body text of the release note',
+              bodyRanges: [{ start: 0, length: 4, style: 'bold' }],
+            }
+          );
+        }),
       getReleaseNoteImageAttachment: sandbox.stub().resolves({
         imageData: new Uint8Array([1, 2, 3]),
         contentType: 'image/png',
@@ -219,11 +254,9 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
     sandbox.stub(saveNewMessageBatcher, 'add').resolves();
 
     // Mock SignalCI
-    window.SignalCI =
-      window.SignalCI ||
-      ({
-        handleEvent: sandbox.stub(),
-      } as unknown as CIType);
+    window.SignalCI ??= {
+      handleEvent: sandbox.stub(),
+    } as unknown as CIType;
 
     // Helper to run fetcher and wait for completion
     const runFetcherAndWaitForCompletion = async () => {
@@ -282,7 +315,6 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
     return {
       // Core objects
       sandbox,
-      clock,
       events,
       fakeConversation,
       serverStubs,
@@ -318,10 +350,10 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
     // Restore all stubs and timers
     sandbox.restore();
     sandbox.reset();
-    clock?.restore();
 
     // Restore original global values (even if they were undefined)
-    window.SignalCI = originalSignalCI as CIType;
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    window.SignalCI = originalSignalCI!;
 
     // Reset storage state
     await itemStorage.fetch();
@@ -371,6 +403,7 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
 
     // TODO(DESKTOP-9092): test setup requires isNewVersion=true, but
     // that flag forces a manifest fetch.
+    // oxlint-disable-next-line signal-desktop/no-disabled-tests
     it.skip('does not fetch when hash is the same', async () => {
       const {
         setupStorage,
@@ -436,6 +469,69 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
       assert.strictEqual(getCurrentWatermark(), 'v1.37.0');
     });
 
+    it('processes only release notes with matching countries value', async () => {
+      const noteVersion = 'v1.37.0';
+      const baseNote = {
+        desktopMinVersion: noteVersion,
+        ctaId: 'test-cta',
+        link: 'https://signal.org',
+      };
+      const noteForMyCountry = {
+        ...baseNote,
+        uuid: uuid(),
+        countries: '1:1000000',
+      };
+      const noteForDifferentCountry = {
+        ...baseNote,
+        uuid: uuid(),
+        countries: '20:1000000,212:1000000,213:1000000,216:1000000',
+      };
+      const noteForMyCountryBucketZeroPPM = {
+        ...baseNote,
+        uuid: uuid(),
+        countries: '1:0',
+      };
+      const noteWildcard = {
+        ...baseNote,
+        uuid: uuid(),
+        countries: '*:1000000',
+      };
+      const manifestAnnouncements = [
+        noteForDifferentCountry,
+        noteForMyCountry,
+        noteForMyCountryBucketZeroPPM,
+        noteWildcard,
+      ];
+
+      const { setupStorage, runFetcherAndWaitForCompletion, serverStubs } =
+        await setupTest({
+          storedPreviousManifestHash: 'old-hash',
+          manifestHash: 'new-hash-123',
+          currentVersion: noteVersion,
+          noteVersion,
+          storedVersionWatermark: 'v1.36.0',
+          isNewVersion: true,
+          manifestAnnouncements,
+        });
+
+      await setupStorage();
+      await runFetcherAndWaitForCompletion();
+
+      sinon.assert.calledTwice(serverStubs.getReleaseNote);
+      sinon.assert.calledWithMatch(
+        serverStubs.getReleaseNote,
+        sinon.match({ uuid: noteForMyCountry.uuid })
+      );
+      sinon.assert.calledWithMatch(
+        serverStubs.getReleaseNote,
+        sinon.match({ uuid: noteWildcard.uuid })
+      );
+
+      const messageRegisterStub = window.MessageCache
+        .register as sinon.SinonStub;
+      sinon.assert.calledTwice(messageRegisterStub);
+    });
+
     it('processes megaphones', async () => {
       const myMegaphone = {
         uuid: uuid(),
@@ -483,13 +579,13 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
       const dbMegaphones = await getAllMegaphones();
       const dbMegaphone = dbMegaphones[0];
       assert.strictEqual(dbMegaphones.length, 1);
-      assert.strictEqual(dbMegaphone.id, myMegaphone.uuid);
+      assert.strictEqual(dbMegaphone?.id, myMegaphone.uuid);
       assert.strictEqual(
-        dbMegaphone.dontShowBeforeEpochMs,
+        dbMegaphone?.dontShowBeforeEpochMs,
         myMegaphone.dontShowBeforeEpochSeconds * 1000
       );
       assert.strictEqual(
-        dbMegaphone.dontShowAfterEpochMs,
+        dbMegaphone?.dontShowAfterEpochMs,
         myMegaphone.dontShowAfterEpochSeconds * 1000
       );
     });
@@ -563,8 +659,56 @@ describe('ReleaseNoteAndMegaphoneFetcher', () => {
 
       const dbMegaphones = await getAllMegaphones();
       assert.strictEqual(dbMegaphones.length, 2);
-      assert.strictEqual(dbMegaphones[0].id, megaphoneForMyCountry.uuid);
-      assert.strictEqual(dbMegaphones[1].id, wildcardMegaphone.uuid);
+      assert.strictEqual(dbMegaphones[0]?.id, megaphoneForMyCountry.uuid);
+      assert.strictEqual(dbMegaphones[1]?.id, wildcardMegaphone.uuid);
     });
+  });
+
+  it('deletes saved megaphones which were removed from the manifest', async () => {
+    await DataWriter.createMegaphone(testMegaphone);
+    const isOldMegaphonePresentBeforeRun = await hasMegaphone(testMegaphone.id);
+    assert.isTrue(isOldMegaphonePresentBeforeRun, 'saved during setup');
+
+    const { setupStorage, runFetcherAndWaitForCompletion } = await setupTest({
+      storedPreviousManifestHash: 'old-hash',
+      manifestHash: 'new-hash-123',
+      currentVersion: 'v1.37.0',
+      noteVersion: 'v1.37.0',
+      storedVersionWatermark: 'v1.36.0',
+      isNewVersion: true,
+    });
+
+    await setupStorage();
+    await runFetcherAndWaitForCompletion();
+
+    const isOldMegaphonePresentAfterRun = await hasMegaphone(testMegaphone.id);
+    assert.isFalse(isOldMegaphonePresentAfterRun, 'deleted after run');
+
+    const dbMegaphones = await getAllMegaphones();
+    assert.strictEqual(dbMegaphones.length, 1);
+    const dbMegaphone = dbMegaphones[0];
+    assert.strictEqual(dbMegaphone?.id, fakeMegaphoneUuid);
+  });
+
+  it('deletes saved megaphones if the manifest has empty megaphones', async () => {
+    await DataWriter.createMegaphone(testMegaphone);
+    const isOldMegaphonePresentBeforeRun = await hasMegaphone(testMegaphone.id);
+    assert.isTrue(isOldMegaphonePresentBeforeRun, 'saved during setup');
+
+    const { setupStorage, runFetcherAndWaitForCompletion } = await setupTest({
+      storedPreviousManifestHash: 'old-hash',
+      manifestHash: 'new-hash-123',
+      currentVersion: 'v1.37.0',
+      noteVersion: 'v1.37.0',
+      storedVersionWatermark: 'v1.36.0',
+      isNewVersion: true,
+      manifestMegaphones: [],
+    });
+
+    await setupStorage();
+    await runFetcherAndWaitForCompletion();
+
+    const dbMegaphones = await getAllMegaphones();
+    assert.strictEqual(dbMegaphones.length, 0);
   });
 });

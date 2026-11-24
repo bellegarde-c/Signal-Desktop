@@ -1,12 +1,12 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import React from 'react';
+import type { CSSProperties, MouseEvent, ReactNode, JSX } from 'react';
 import classNames from 'classnames';
 
-import type { AvatarColorType } from '../types/Colors.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
+import type { AvatarColorType } from '../types/Avatar.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { AxoTokens } from '../axo/AxoTokens.std.ts';
 
 export type PropsType = {
   children?: ReactNode;
@@ -26,16 +26,23 @@ export function BetterAvatarBubble({
   onDelete,
   onSelect,
   style,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
+  const colorValues =
+    color != null ? AxoTokens.Avatar.getColorValues(color) : null;
+  const colorStyle =
+    colorValues != null
+      ? ({
+          '--BetterAvatarBubble-bg': colorValues?.bg,
+          '--BetterAvatarBubble-fg': colorValues?.fg,
+        } as CSSProperties)
+      : null;
+
   return (
     <div
-      className={classNames(
-        {
-          BetterAvatarBubble: true,
-          'BetterAvatarBubble--selected': isSelected,
-        },
-        color && `BetterAvatarBubble--${color}`
-      )}
+      className={classNames({
+        BetterAvatarBubble: true,
+        'BetterAvatarBubble--selected': isSelected,
+      })}
       onKeyDown={ev => {
         if (ev.key === 'Enter') {
           onSelect();
@@ -43,7 +50,7 @@ export function BetterAvatarBubble({
       }}
       onClick={onSelect}
       role="button"
-      style={style}
+      style={{ ...style, ...colorStyle }}
       tabIndex={0}
     >
       {onDelete && (

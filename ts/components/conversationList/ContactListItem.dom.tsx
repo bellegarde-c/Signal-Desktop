@@ -1,23 +1,23 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent } from 'react';
-import React, { useMemo, useState } from 'react';
+import type { FunctionComponent, JSX } from 'react';
+import { useState, memo } from 'react';
 
-import { HEADER_CONTACT_NAME_CLASS_NAME } from './BaseConversationListItem.dom.js';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
-import type { BadgeType } from '../../badges/types.std.js';
-import type { LocalizerType, ThemeType } from '../../types/Util.std.js';
-import { ContactName } from '../conversation/ContactName.dom.js';
-import { About } from '../conversation/About.dom.js';
-import { ListTile } from '../ListTile.dom.js';
-import { Avatar, AvatarSize } from '../Avatar.dom.js';
-import { ContextMenu } from '../ContextMenu.dom.js';
-import { I18n } from '../I18n.dom.js';
-import { ConfirmationDialog } from '../ConfirmationDialog.dom.js';
-import { isSignalConversation } from '../../util/isSignalConversation.dom.js';
-import { isInSystemContacts } from '../../util/isInSystemContacts.std.js';
-import { InContactsIcon } from '../InContactsIcon.dom.js';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
+import type { BadgeType } from '../../badges/types.std.ts';
+import type { LocalizerType, ThemeType } from '../../types/Util.std.ts';
+import { ContactName } from '../conversation/ContactName.dom.tsx';
+import { About } from '../conversation/About.dom.tsx';
+import { ListTile } from '../ListTile.dom.tsx';
+import { Avatar, AvatarSize } from '../Avatar.dom.tsx';
+import { I18n } from '../I18n.dom.tsx';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
+import { isInSystemContacts } from '../../util/isInSystemContacts.std.ts';
+import { InContactsIcon } from '../InContactsIcon.dom.tsx';
+import { AxoConfirmDialog } from '../../axo/AxoConfirmDialog.dom.tsx';
+import { AxoDropdownMenu } from '../../axo/menus/AxoDropdownMenu.dom.tsx';
+import { AxoIconButton } from '../../axo/AxoIconButton.dom.tsx';
 
 export type ContactListItemConversationType = Pick<
   ConversationType,
@@ -32,7 +32,6 @@ export type ContactListItemConversationType = Pick<
   | 'isMe'
   | 'phoneNumber'
   | 'profileName'
-  | 'sharedGroupNames'
   | 'systemGivenName'
   | 'systemFamilyName'
   | 'title'
@@ -59,7 +58,7 @@ type PropsHousekeepingType = {
 
 type PropsType = PropsDataType & PropsHousekeepingType;
 
-export const ContactListItem: FunctionComponent<PropsType> = React.memo(
+export const ContactListItem: FunctionComponent<PropsType> = memo(
   function ContactListItem({
     about,
     avatarUrl,
@@ -77,7 +76,6 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
     onBlock,
     phoneNumber,
     profileName,
-    sharedGroupNames,
     systemGivenName,
     systemFamilyName,
     theme,
@@ -88,67 +86,16 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
     const [isConfirmingBlocking, setConfirmingBlocking] = useState(false);
     const [isConfirmingRemoving, setConfirmingRemoving] = useState(false);
 
-    const menuOptions = useMemo(
-      () => [
-        ...(onClick
-          ? [
-              {
-                icon: 'ContactListItem__context-menu__chat-icon',
-                label: i18n('icu:ContactListItem__menu__message'),
-                onClick: () => onClick(id),
-              },
-            ]
-          : []),
-        ...(!isMe && onAudioCall
-          ? [
-              {
-                icon: 'ContactListItem__context-menu__phone-icon',
-                label: i18n('icu:ContactListItem__menu__audio-call'),
-                onClick: () => onAudioCall(id),
-              },
-            ]
-          : []),
-        ...(!isMe && onVideoCall
-          ? [
-              {
-                icon: 'ContactListItem__context-menu__video-icon',
-                label: i18n('icu:ContactListItem__menu__video-call'),
-                onClick: () => onVideoCall(id),
-              },
-            ]
-          : []),
-        ...(!isMe && onRemove
-          ? [
-              {
-                icon: 'ContactListItem__context-menu__delete-icon',
-                label: i18n('icu:ContactListItem__menu__remove'),
-                onClick: () => setConfirmingRemoving(true),
-              },
-            ]
-          : []),
-        ...(!isMe && onBlock
-          ? [
-              {
-                icon: 'ContactListItem__context-menu__block-icon',
-                label: i18n('icu:ContactListItem__menu__block'),
-                onClick: () => setConfirmingBlocking(true),
-              },
-            ]
-          : []),
-      ],
-      [id, i18n, isMe, onClick, onAudioCall, onVideoCall, onRemove, onBlock]
-    );
-
     const headerName = isMe ? (
       <ContactName
         isMe={isMe}
-        module={HEADER_CONTACT_NAME_CLASS_NAME}
+        className="module-conversation-list__item--contact-or-conversation__content__header__name__contact-name"
         title={i18n('icu:noteToSelf')}
       />
     ) : (
       <ContactName
         isSignalConversation={isSignalConversation({ id, serviceId })}
-        module={HEADER_CONTACT_NAME_CLASS_NAME}
+        className="module-conversation-list__item--contact-or-conversation__content__header__name__contact-name"
         title={title}
       />
     );
@@ -156,29 +103,74 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
     const messageText =
       about && !isMe ? <About className="" text={about} /> : undefined;
 
-    let trailing: React.JSX.Element | undefined;
+    let trailing: JSX.Element | undefined;
     if (hasContextMenu) {
       trailing = (
-        <ContextMenu
-          i18n={i18n}
-          menuOptions={menuOptions}
-          popperOptions={{ placement: 'bottom-start', strategy: 'absolute' }}
-          moduleClassName="ContactListItem__context-menu"
-          ariaLabel={i18n('icu:ContactListItem__menu')}
-          portalToRoot
-        />
+        <div className="ContactListItem__context-menu">
+          <AxoDropdownMenu.Root>
+            <AxoDropdownMenu.Trigger>
+              <AxoIconButton.Root
+                variant="implied-secondary"
+                size="sm"
+                symbol="more"
+                label={i18n('icu:ContactListItem__menu')}
+              />
+            </AxoDropdownMenu.Trigger>
+            <AxoDropdownMenu.Content align="start">
+              {onClick && (
+                <AxoDropdownMenu.Item
+                  symbol="message"
+                  onSelect={() => onClick(id)}
+                >
+                  {i18n('icu:ContactListItem__menu__message')}
+                </AxoDropdownMenu.Item>
+              )}
+              {!isMe && onAudioCall && (
+                <AxoDropdownMenu.Item
+                  symbol="phone"
+                  onSelect={() => onAudioCall(id)}
+                >
+                  {i18n('icu:ContactListItem__menu__audio-call')}
+                </AxoDropdownMenu.Item>
+              )}
+              {!isMe && onVideoCall && (
+                <AxoDropdownMenu.Item
+                  symbol="videocamera"
+                  onSelect={() => onVideoCall(id)}
+                >
+                  {i18n('icu:ContactListItem__menu__video-call')}
+                </AxoDropdownMenu.Item>
+              )}
+              {!isMe && onRemove && (
+                <AxoDropdownMenu.Item
+                  symbol="minus-circle"
+                  onSelect={() => setConfirmingRemoving(true)}
+                >
+                  {i18n('icu:ContactListItem__menu__remove')}
+                </AxoDropdownMenu.Item>
+              )}
+              {!isMe && onBlock && (
+                <AxoDropdownMenu.Item
+                  symbol="block"
+                  onSelect={() => setConfirmingBlocking(true)}
+                >
+                  {i18n('icu:ContactListItem__menu__block')}
+                </AxoDropdownMenu.Item>
+              )}
+            </AxoDropdownMenu.Content>
+          </AxoDropdownMenu.Root>
+        </div>
       );
     }
 
-    let blockConfirmation: React.JSX.Element | undefined;
-    let removeConfirmation: React.JSX.Element | undefined;
+    let blockConfirmation: JSX.Element | undefined;
+    let removeConfirmation: JSX.Element | undefined;
 
     if (isConfirmingBlocking) {
       blockConfirmation = (
-        <ConfirmationDialog
-          dialogName="ContactListItem.blocking"
-          i18n={i18n}
-          onClose={() => setConfirmingBlocking(false)}
+        <AxoConfirmDialog.Root
+          open
+          onOpenChange={() => setConfirmingBlocking(false)}
           title={
             <I18n
               i18n={i18n}
@@ -188,16 +180,16 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
               }}
             />
           }
-          actions={[
-            {
-              text: i18n('icu:MessageRequests--block'),
-              action: () => onBlock?.(id),
-              style: 'negative',
-            },
-          ]}
+          description={i18n('icu:MessageRequests--block-direct-confirm-body')}
         >
-          {i18n('icu:MessageRequests--block-direct-confirm-body')}
-        </ConfirmationDialog>
+          <AxoConfirmDialog.Cancel />
+          <AxoConfirmDialog.Action
+            variant="strong-destructive"
+            onClick={() => onBlock?.(id)}
+          >
+            {i18n('icu:MessageRequests--block')}
+          </AxoConfirmDialog.Action>
+        </AxoConfirmDialog.Root>
       );
     }
 
@@ -206,11 +198,9 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
         isInSystemContacts({ type, name, systemGivenName, systemFamilyName })
       ) {
         removeConfirmation = (
-          <ConfirmationDialog
-            key="ContactListItem.systemContact"
-            dialogName="ContactListItem.systemContact"
-            i18n={i18n}
-            onClose={() => setConfirmingRemoving(false)}
+          <AxoConfirmDialog.Root
+            open
+            onOpenChange={() => setConfirmingRemoving(false)}
             title={
               <I18n
                 i18n={i18n}
@@ -220,18 +210,16 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
                 }}
               />
             }
-            cancelText={i18n('icu:Confirmation--confirm')}
+            description={i18n('icu:ContactListItem__remove-system--body')}
           >
-            {i18n('icu:ContactListItem__remove-system--body')}
-          </ConfirmationDialog>
+            <AxoConfirmDialog.Ok />
+          </AxoConfirmDialog.Root>
         );
       } else {
         removeConfirmation = (
-          <ConfirmationDialog
-            key="ContactListItem.removing"
-            dialogName="ContactListItem.removing"
-            i18n={i18n}
-            onClose={() => setConfirmingRemoving(false)}
+          <AxoConfirmDialog.Root
+            open
+            onOpenChange={() => setConfirmingRemoving(false)}
             title={
               <I18n
                 i18n={i18n}
@@ -241,16 +229,16 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
                 }}
               />
             }
-            actions={[
-              {
-                text: i18n('icu:ContactListItem__remove--confirm'),
-                action: () => onRemove?.(id),
-                style: 'negative',
-              },
-            ]}
+            description={i18n('icu:ContactListItem__remove--body')}
           >
-            {i18n('icu:ContactListItem__remove--body')}
-          </ConfirmationDialog>
+            <AxoConfirmDialog.Cancel />
+            <AxoConfirmDialog.Action
+              variant="strong-destructive"
+              onClick={() => onRemove?.(id)}
+            >
+              {i18n('icu:ContactListItem__remove--confirm')}
+            </AxoConfirmDialog.Action>
+          </AxoConfirmDialog.Root>
         );
       }
     }
@@ -258,18 +246,17 @@ export const ContactListItem: FunctionComponent<PropsType> = React.memo(
     return (
       <>
         <ListTile
-          moduleClassName="ContactListItem"
+          className="ContactListItem"
           leading={
             <Avatar
               avatarUrl={avatarUrl}
               color={color}
               conversationType={type}
-              noteToSelf={Boolean(isMe)}
+              noteToSelf={isMe}
               i18n={i18n}
               phoneNumber={phoneNumber}
               profileName={profileName}
               title={title}
-              sharedGroupNames={sharedGroupNames}
               size={AvatarSize.THIRTY_TWO}
               // This is here to appease the type checker.
               {...(badge ? { badge, theme } : { badge: undefined })}

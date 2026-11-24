@@ -1,14 +1,14 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useState } from 'react';
+import { useState, type JSX } from 'react';
 
-import type { LocalizerType } from '../types/Util.std.js';
-import { formatFileSize } from '../util/formatFileSize.std.js';
-import { roundFractionForProgressBar } from '../util/numbers.std.js';
-import { ProgressBar } from './ProgressBar.dom.js';
-import { Button, ButtonSize, ButtonVariant } from './Button.dom.js';
-import { BackupMediaDownloadCancelConfirmationDialog } from './BackupMediaDownloadCancelConfirmationDialog.dom.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { formatFileSize } from '../util/formatFileSize.std.ts';
+import { roundFractionForProgressBar } from '../util/numbers.std.ts';
+import { ProgressBar } from './ProgressBar.dom.tsx';
+import { Button, ButtonSize, ButtonVariant } from './Button.dom.tsx';
+import { BackupMediaDownloadCancelConfirmationDialog } from './BackupMediaDownloadCancelConfirmationDialog.dom.tsx';
 
 export type PropsType = Readonly<{
   i18n: LocalizerType;
@@ -28,7 +28,7 @@ export function BackupMediaDownloadProgressSettings({
   handleCancel,
   handleResume,
   handlePause,
-}: PropsType): React.JSX.Element | null {
+}: PropsType): JSX.Element | null {
   const [isShowingCancelConfirmation, setIsShowingCancelConfirmation] =
     useState(false);
   const isRTL = i18n.getLocaleDirection() === 'rtl';
@@ -48,7 +48,7 @@ export function BackupMediaDownloadProgressSettings({
 
   let title: string;
   let description: string;
-  let actionButton: React.JSX.Element | undefined;
+  let actionButton: JSX.Element | undefined;
 
   if (isPaused) {
     title = i18n('icu:BackupMediaDownloadProgressSettings__paused--title');
@@ -65,7 +65,6 @@ export function BackupMediaDownloadProgressSettings({
         onClick={handleResume}
         variant={ButtonVariant.Secondary}
         size={ButtonSize.Small}
-        className="BackupMediaDownloadProgressSettings__button"
       >
         {i18n('icu:BackupMediaDownloadProgressSettings__button-resume')}
       </Button>
@@ -85,7 +84,6 @@ export function BackupMediaDownloadProgressSettings({
         onClick={handlePause}
         variant={ButtonVariant.Secondary}
         size={ButtonSize.Small}
-        className="BackupMediaDownloadProgressSettings__button"
       >
         {i18n('icu:BackupMediaDownloadProgressSettings__button-pause')}
       </Button>
@@ -95,10 +93,8 @@ export function BackupMediaDownloadProgressSettings({
   return (
     <div className="BackupMediaDownloadProgressSettings">
       <div className="BackupMediaDownloadProgressSettings__content">
-        <div className="BackupMediaDownloadProgressSettings__title">
-          {title}
-        </div>
-        <div className="BackupMediaDownloadProgressSettings__ProgressBar">
+        <div>{title}</div>
+        <div>
           <ProgressBar fractionComplete={fractionComplete} isRTL={isRTL} />
         </div>
         <div className="BackupMediaDownloadProgressSettings__description">
@@ -110,7 +106,6 @@ export function BackupMediaDownloadProgressSettings({
         <Button
           onClick={() => setIsShowingCancelConfirmation(true)}
           variant={ButtonVariant.SecondaryDestructive}
-          className="BackupMediaDownloadProgressSettings__button"
           size={ButtonSize.Small}
         >
           {i18n('icu:cancel')}

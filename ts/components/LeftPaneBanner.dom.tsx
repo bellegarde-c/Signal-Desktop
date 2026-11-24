@@ -1,10 +1,8 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useCallback } from 'react';
-
-const BASE_CLASS_NAME = 'LeftPaneBanner';
+import type { ReactNode, JSX, MouseEvent } from 'react';
+import { useCallback } from 'react';
 
 export type PropsType = Readonly<{
   children?: ReactNode;
@@ -16,9 +14,9 @@ export function LeftPaneBanner({
   children,
   actionText,
   onClick,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const onClickWrap = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -28,14 +26,14 @@ export function LeftPaneBanner({
   );
 
   return (
-    <div className={BASE_CLASS_NAME}>
-      <div className={`${BASE_CLASS_NAME}__content`}>{children}</div>
+    <div className="LeftPaneBanner">
+      <div className="LeftPaneBanner__content">{children}</div>
 
-      <div className={`${BASE_CLASS_NAME}__footer`}>
+      <div className="LeftPaneBanner__footer">
         <button
           title={actionText}
           aria-label={actionText}
-          className={`${BASE_CLASS_NAME}__footer__action-button`}
+          className="LeftPaneBanner__footer__action-button"
           onClick={onClickWrap}
           tabIndex={0}
           type="button"

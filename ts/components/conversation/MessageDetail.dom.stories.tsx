@@ -1,18 +1,19 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import type { PropsData as MessageDataPropsType } from './Message.dom.js';
-import { TextDirection } from './Message.dom.js';
-import type { Props } from './MessageDetail.dom.js';
-import { MessageDetail } from './MessageDetail.dom.js';
-import { SendStatus } from '../../messages/MessageSendState.std.js';
-import { ReadStatus } from '../../messages/MessageReadStatus.std.js';
-import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.js';
-import { getFakeBadge } from '../../test-helpers/getFakeBadge.std.js';
-import { ThemeType } from '../../types/Util.std.js';
+import type { PropsData as MessageDataPropsType } from './Message.dom.tsx';
+import { TextDirection } from './Message.dom.tsx';
+import type { Props } from './MessageDetail.dom.tsx';
+import { MessageDetail } from './MessageDetail.dom.tsx';
+import { SendStatus } from '../../messages/MessageSendState.std.ts';
+import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
+import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.ts';
+import { getFakeBadge } from '../../test-helpers/getFakeBadge.std.ts';
+import { ThemeType } from '../../types/Util.std.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -22,7 +23,9 @@ const defaultMessage: MessageDataPropsType = {
     title: 'Max',
   }),
   canDeleteForEveryone: true,
-  conversationColor: 'crimson',
+  canRetryDeleteForEveryone: false,
+  canSendPollVote: true,
+  bubbleColor: { bubbleColorPreset: 'crimson' },
   conversationId: 'my-convo',
   conversationTitle: 'Conversation Title',
   conversationType: 'direct',
@@ -35,8 +38,12 @@ const defaultMessage: MessageDataPropsType = {
   isPinned: false,
   isSelected: false,
   isSelectMode: false,
+  isSignalConversation: false,
   isSMS: false,
   isSpoilerExpanded: {},
+  isTargeted: false,
+  isTargetedCounter: null,
+  isTargetedSource: null,
   isVoiceMessagePlayed: false,
   previews: [],
   readStatus: ReadStatus.Read,
@@ -62,6 +69,7 @@ export default {
         isOutgoingKeyError: false,
         isUnidentifiedDelivery: false,
         status: SendStatus.Delivered,
+        statusTimestamp: Date.now(),
       },
     ],
     errors: [],
@@ -72,12 +80,10 @@ export default {
     getPreferredBadge: () => getFakeBadge(),
     i18n,
     platform: 'darwin',
-    interactionMode: 'keyboard',
     theme: ThemeType.light,
 
     toggleSafetyNumberModal: action('toggleSafetyNumberModal'),
 
-    checkForAccount: action('checkForAccount'),
     clearTargetedMessage: action('clearTargetedMessage'),
     showLightboxForViewOnceMedia: action('showLightboxForViewOnceMedia'),
     doubleCheckMissingQuoteReference: action(
@@ -101,12 +107,14 @@ export default {
       'showExpiredOutgoingTapToViewToast'
     ),
     showLightbox: action('showLightbox'),
-    startConversation: action('startConversation'),
+    startConversationWithSharedContact: action(
+      'startConversationWithSharedContact'
+    ),
     viewStory: action('viewStory'),
   },
 } satisfies Meta<Props>;
 
-export function DeliveredIncoming(args: Props): React.JSX.Element {
+export function DeliveredIncoming(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
@@ -125,7 +133,7 @@ export function DeliveredIncoming(args: Props): React.JSX.Element {
   );
 }
 
-export function DeliveredOutgoing(args: Props): React.JSX.Element {
+export function DeliveredOutgoing(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
@@ -138,7 +146,7 @@ export function DeliveredOutgoing(args: Props): React.JSX.Element {
   );
 }
 
-export function MessageStatuses(args: Props): React.JSX.Element {
+export function MessageStatuses(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
@@ -148,8 +156,10 @@ export function MessageStatuses(args: Props): React.JSX.Element {
             title: 'Max',
           }),
           isOutgoingKeyError: false,
-          isUnidentifiedDelivery: false,
+          isUnidentifiedDelivery: true,
           status: SendStatus.Sent,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
@@ -158,14 +168,18 @@ export function MessageStatuses(args: Props): React.JSX.Element {
           isOutgoingKeyError: false,
           isUnidentifiedDelivery: false,
           status: SendStatus.Pending,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
             title: 'Terry',
           }),
           isOutgoingKeyError: false,
-          isUnidentifiedDelivery: false,
+          isUnidentifiedDelivery: true,
           status: SendStatus.Failed,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
@@ -174,14 +188,18 @@ export function MessageStatuses(args: Props): React.JSX.Element {
           isOutgoingKeyError: false,
           isUnidentifiedDelivery: false,
           status: SendStatus.Delivered,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
             title: 'Nikki',
           }),
           isOutgoingKeyError: false,
-          isUnidentifiedDelivery: false,
+          isUnidentifiedDelivery: true,
           status: SendStatus.Read,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
       ]}
       message={{
@@ -193,11 +211,11 @@ export function MessageStatuses(args: Props): React.JSX.Element {
   );
 }
 
-export function NotDelivered(args: Props): React.JSX.Element {
+export function NotDelivered(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       receivedAt={undefined as any}
       message={{
         ...defaultMessage,
@@ -208,7 +226,7 @@ export function NotDelivered(args: Props): React.JSX.Element {
   );
 }
 
-export function NoContacts(args: Props): React.JSX.Element {
+export function NoContacts(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
@@ -222,7 +240,7 @@ export function NoContacts(args: Props): React.JSX.Element {
   );
 }
 
-export function AllErrors(args: Props): React.JSX.Element {
+export function AllErrors(args: Props): JSX.Element {
   return (
     <MessageDetail
       {...args}
@@ -240,6 +258,8 @@ export function AllErrors(args: Props): React.JSX.Element {
           isOutgoingKeyError: true,
           isUnidentifiedDelivery: false,
           status: SendStatus.Failed,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
@@ -254,6 +274,8 @@ export function AllErrors(args: Props): React.JSX.Element {
           isOutgoingKeyError: false,
           isUnidentifiedDelivery: true,
           status: SendStatus.Failed,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
         {
           ...getDefaultConversation({
@@ -262,6 +284,8 @@ export function AllErrors(args: Props): React.JSX.Element {
           isOutgoingKeyError: true,
           isUnidentifiedDelivery: true,
           status: SendStatus.Failed,
+          // oxlint-disable-next-line react/purity
+          statusTimestamp: Date.now(),
         },
       ]}
     />

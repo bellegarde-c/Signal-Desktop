@@ -4,14 +4,13 @@
 import type { PrimaryDevice } from '@signalapp/mock-server';
 import { Proto, StorageState } from '@signalapp/mock-server';
 
-import Long from 'long';
 import lodash from 'lodash';
 import { expect } from 'playwright/test';
-import { Bootstrap, debug, RUN_COUNT, DISCARD_COUNT } from './fixtures.node.js';
-import { stats } from '../../util/benchmark/stats.std.js';
-import { uuidToBytes } from '../../util/uuidToBytes.std.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { typeIntoInput } from '../helpers.node.js';
+import { Bootstrap, debug, RUN_COUNT, DISCARD_COUNT } from './fixtures.node.ts';
+import { stats } from '../../test-helpers/benchmarkStats.std.ts';
+import { uuidToBytes } from '../../util/uuidToBytes.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { typeIntoInput } from '../helpers.node.ts';
 
 const { sample } = lodash;
 
@@ -95,16 +94,26 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
     await phone.sendRaw(
       desktop,
       {
-        syncMessage: {
-          callEvent: {
-            peerId: uuidToBytes(contact.device.aci),
-            callId: Long.fromNumber(timestamp),
-            timestamp: Long.fromNumber(timestamp),
-            type,
-            direction,
-            event,
+        content: {
+          syncMessage: {
+            content: {
+              callEvent: {
+                conversationId: uuidToBytes(contact.device.aci),
+                callId: BigInt(timestamp),
+                timestamp: BigInt(timestamp),
+                type,
+                direction,
+                event,
+              },
+            },
+            read: null,
+            stickerPackOperation: null,
+            viewed: null,
+            padding: null,
           },
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       },
       { timestamp }
     );
@@ -142,9 +151,7 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
   const CallsTabDetailsTitle = CallsTabDetails.locator(
     '.ConversationDetailsHeader__title'
   );
-  const AnyCallListAvatar = CallsTabSidebar.locator(
-    '.CallsList__ItemAvatar'
-  ).first();
+  const AnyCallListAvatar = CallListItem.locator('.module-Avatar').first();
 
   debug('waiting for unread badge to hit correct value', unreadCount);
   await CallsNavTabUnread.getByText(`${unreadCount} unread`).waitFor();
@@ -157,13 +164,14 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
 
   async function measure(runId: number): Promise<number> {
     // setup
-    const searchContact = contacts[runId % contacts.length];
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const searchContact = contacts[runId % contacts.length]!;
     const OtherCallListItems = CallListItem.filter({
       hasNotText: searchContact.profileName,
     });
     const timestamp = bootstrap.getTimestamp();
     const NewCallListItemTime = window.locator(
-      `.CallsList__ItemCallInfo time[datetime="${new Date(timestamp).toISOString()}"]`
+      `time[datetime="${new Date(timestamp).toISOString()}"]`
     );
     const NewCallListItem = CallListItem.filter({
       has: NewCallListItemTime,
@@ -200,19 +208,19 @@ Bootstrap.benchmark(async (bootstrap: Bootstrap): Promise<void> => {
 
   const deltaList = new Array<number>();
   for (let runId = 0; runId < RUN_COUNT + DISCARD_COUNT; runId += 1) {
-    // eslint-disable-next-line no-await-in-loop
+    // oxlint-disable-next-line no-await-in-loop
     const delta = await measure(runId);
 
     if (runId >= DISCARD_COUNT) {
       deltaList.push(delta);
-      // eslint-disable-next-line no-console
+      // oxlint-disable-next-line no-console
       console.log('run=%d info=%j', runId - DISCARD_COUNT, { delta });
     } else {
-      // eslint-disable-next-line no-console
+      // oxlint-disable-next-line no-console
       console.log('discarded=%d info=%j', runId, { delta });
     }
   }
 
-  // eslint-disable-next-line no-console
+  // oxlint-disable-next-line no-console
   console.log('stats info=%j', { delta: stats(deltaList, [99, 99.8]) });
 });

@@ -4,40 +4,49 @@
 import memoizee from 'memoizee';
 import { createSelector } from 'reselect';
 
-import { deconstructLookup } from '../../util/deconstructLookup.std.js';
+import { deconstructLookup } from '../../util/deconstructLookup.std.ts';
 
-import type { StateType } from '../reducer.preload.js';
+import type { StateType } from '../reducer.preload.ts';
 
 import type {
   MessageSearchResultLookupType,
   MessageSearchResultType,
   SearchStateType,
-} from '../ducks/search.preload.js';
+} from '../ducks/search.preload.ts';
 import type {
   ConversationLookupType,
   ConversationType,
-} from '../ducks/conversations.preload.js';
+} from '../ducks/conversations.preload.ts';
 
-import type { LeftPaneSearchPropsType } from '../../components/leftPane/LeftPaneSearchHelper.dom.js';
-import type { PropsDataType as MessageSearchResultPropsDataType } from '../../components/conversationList/MessageSearchResult.dom.js';
+import type { LeftPaneSearchPropsType } from '../../components/leftPane/LeftPaneSearchHelper.dom.tsx';
+import type { PropsDataType as MessageSearchResultPropsDataType } from '../../components/conversationList/MessageSearchResult.dom.tsx';
 
-import { getIntl, getUserConversationId } from './user.std.js';
-import type { GetConversationByIdType } from './conversations.dom.js';
+import { getIntl, getUserConversationId, getRegionCode } from './user.std.ts';
+import type { GetConversationByIdType } from './conversations.dom.ts';
 import {
   getConversationLookup,
   getConversationSelector,
-  getSelectedConversationId,
-} from './conversations.dom.js';
+  getAllConversations,
+} from './conversations.dom.ts';
+import {
+  getSelectedChatFolder,
+  getStableSelectedConversationIdInChatFolder,
+} from './chatFolders.std.ts';
 
-import { hydrateRanges } from '../../util/BodyRange.node.js';
-import type { RawBodyRange } from '../../types/BodyRange.std.js';
-import { createLogger } from '../../logging/log.std.js';
-import { getOwn } from '../../util/getOwn.std.js';
-import type { MessageAttributesType } from '../../model-types.js';
+import { hydrateRanges } from '../../util/BodyRange.node.ts';
+import type { RawBodyRange } from '../../types/BodyRange.std.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { getOwn } from '../../util/getOwn.std.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
+import { getSelectedConversationId } from './nav.std.ts';
+import { isConversationInChatFolder } from '../../types/ChatFolder.std.ts';
+import type { CurrentChatFolder } from '../../types/CurrentChatFolders.std.ts';
+import { isConversationUnread } from '../../util/countUnreadStats.std.ts';
+import { filterAndSortConversations } from '../../util/filterAndSortConversations.std.ts';
 
 const log = createLogger('search');
 
-export const getSearch = (state: StateType): SearchStateType => state.search;
+const getSearch = (state: StateType): SearchStateType => state.search;
 
 export const getFilterByUnread = createSelector(
   getSearch,
@@ -49,7 +58,7 @@ export const getQuery = createSelector(
   (state: SearchStateType): string => state.query
 );
 
-export const getSelectedMessage = createSelector(
+const getSelectedMessage = createSelector(
   getSearch,
   (state: SearchStateType): string | undefined => state.targetedMessage
 );
@@ -85,7 +94,7 @@ export const getSearchConversation = createSelector(
       : undefined
 );
 
-export const getSearchConversationName = createSelector(
+const getSearchConversationName = createSelector(
   getSearchConversation,
   getIntl,
   (conversation, i18n): undefined | string => {
@@ -112,10 +121,30 @@ export const getIsActivelySearching = createSelector(
     filterByUnread || hasSearchQuery
 );
 
-export const getMessageSearchResultLookup = createSelector(
+const getMessageSearchResultLookup = createSelector(
   getSearch,
   (state: SearchStateType) => state.messageLookup
 );
+
+function isUnreadAndInChatFolder(
+  conversation: ConversationType,
+  selectedChatFolder: CurrentChatFolder | null,
+  stableSelectedConversationIdInChatFolder: string | null
+): boolean {
+  if (stableSelectedConversationIdInChatFolder === conversation.id) {
+    return true;
+  }
+  if (
+    selectedChatFolder != null &&
+    !isConversationInChatFolder(selectedChatFolder, conversation)
+  ) {
+    return false;
+  }
+  return isConversationUnread(conversation, {
+    activeProfile: undefined,
+    includeMuted: 'force-include',
+  });
+}
 
 export const getSearchResults = createSelector(
   [
@@ -123,12 +152,20 @@ export const getSearchResults = createSelector(
     getSearchConversationName,
     getConversationLookup,
     getSelectedConversationId,
+    getAllConversations,
+    getSelectedChatFolder,
+    getStableSelectedConversationIdInChatFolder,
+    getRegionCode,
   ],
   (
     state: SearchStateType,
     searchConversationName,
     conversationLookup: ConversationLookupType,
-    selectedConversationId: string | undefined
+    selectedConversationId: string | undefined,
+    allConversations: Array<ConversationType>,
+    selectedChatFolder: CurrentChatFolder | null,
+    stableSelectedConversationIdInChatFolder: string | null,
+    regionCode: string | undefined
   ): Pick<
     LeftPaneSearchPropsType,
     | 'conversationResults'
@@ -138,6 +175,39 @@ export const getSearchResults = createSelector(
     | 'searchTerm'
     | 'filterByUnread'
   > => {
+    const hasSearchQuery = state.query.trim().length > 0;
+
+    if (state.filterByUnread && !hasSearchQuery) {
+      const filtered = allConversations.filter(conversation =>
+        isUnreadAndInChatFolder(
+          conversation,
+          selectedChatFolder,
+          stableSelectedConversationIdInChatFolder
+        )
+      );
+      const sorted = filterAndSortConversations(
+        filtered,
+        '',
+        regionCode,
+        false
+      );
+
+      return {
+        conversationResults: {
+          isLoading: false,
+          results: sorted.map(conversation => ({
+            ...conversation,
+            isSelected: selectedConversationId === conversation.id,
+          })),
+        },
+        contactResults: { isLoading: false, results: [] },
+        messageResults: { isLoading: false, results: [] },
+        searchConversationName,
+        searchTerm: state.query,
+        filterByUnread: true,
+      };
+    }
+
     const {
       contactIds,
       conversationIds,
@@ -171,10 +241,7 @@ export const getSearchResults = createSelector(
       filterByUnread: state.filterByUnread,
     };
 
-    if (
-      state.filterByUnread &&
-      searchResults.conversationResults.isLoading === false
-    ) {
+    if (state.filterByUnread && !searchResults.conversationResults.isLoading) {
       searchResults.conversationResults.results =
         searchResults.conversationResults.results.map(conversation => {
           return {
@@ -215,7 +282,7 @@ function getSearchableTextAndBodyRanges(message: MessageAttributesType): {
     bodyRanges: message.bodyRanges,
   };
 }
-export const getCachedSelectorForMessageSearchResult = createSelector(
+const getCachedSelectorForMessageSearchResult = createSelector(
   getUserConversationId,
   getConversationSelector,
   (

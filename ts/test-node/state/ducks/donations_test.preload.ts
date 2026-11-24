@@ -4,19 +4,19 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 
-import type { StateType } from '../../../state/reducer.preload.js';
-import { reducer as rootReducer } from '../../../state/reducer.preload.js';
-import { noopAction } from '../../../state/ducks/noop.std.js';
-import { applyDonationBadge } from '../../../state/ducks/donations.preload.js';
-import * as conversations from '../../../state/ducks/conversations.preload.js';
-import type { BadgeType } from '../../../badges/types.std.js';
-import { BadgeCategory } from '../../../badges/BadgeCategory.std.js';
-import type { ConversationType } from '../../../state/ducks/conversations.preload.js';
-import { generateAci } from '../../../types/ServiceId.std.js';
+import type { StateType } from '../../../state/reducer.preload.ts';
+import { reducer as rootReducer } from '../../../state/reducer.preload.ts';
+import { noopAction } from '../../../state/ducks/noop.std.ts';
+import { applyDonationBadge } from '../../../state/ducks/donations.preload.ts';
+import * as conversations from '../../../state/ducks/conversations.preload.ts';
+import type { BadgeType } from '../../../badges/types.std.ts';
+import { BadgeCategory } from '../../../badges/BadgeCategory.std.ts';
+import type { ConversationType } from '../../../state/ducks/conversations.preload.ts';
+import { generateAci } from '../../../test-helpers/serviceIdUtils.std.ts';
 
 describe('donations duck', () => {
   const getEmptyRootState = (): StateType =>
-    rootReducer(undefined, noopAction());
+    rootReducer(undefined, noopAction('getEmptyRootState'));
 
   const storageMap = new Map<string, unknown>();
   const storage = {
@@ -76,7 +76,6 @@ describe('donations duck', () => {
       title: 'Me',
       acceptedMessageRequest: true,
       isMe: true,
-      sharedGroupNames: [],
     });
 
     const createRootState = (me: ConversationType): StateType => {
@@ -114,7 +113,7 @@ describe('donations duck', () => {
 
       // Helper to execute applyDonationBadge with common params
       const executeApplyDonationBadge = async (
-        badge: BadgeType | undefined,
+        badge: BadgeType | null,
         applyBadge: boolean
       ) => {
         await applyDonationBadge({
@@ -122,7 +121,7 @@ describe('donations duck', () => {
           applyBadge,
           onComplete,
           storage,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
       };
 
       return { me, onComplete, executeApplyDonationBadge };
@@ -152,10 +151,10 @@ describe('donations duck', () => {
           // Verify storage was updated from false to true
           assert.equal(storage.get('displayBadgesOnProfile'), true);
 
-          // Note: storageServiceUploadJob would be called here with
+          // Note: runStorageServiceUploadJob would be called here with
           // { reason: 'donation-badge-toggle' } but we can't spy on const exports
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
 
         it('Submit OFF: No change', async () => {
@@ -174,9 +173,9 @@ describe('donations duck', () => {
 
           // Verify storage was written with false (even though unchanged)
           assert.equal(storage.get('displayBadgesOnProfile'), false);
-          // Note: storageServiceUploadJob would not be called here
+          // Note: runStorageServiceUploadJob would not be called here
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
       });
 
@@ -202,9 +201,9 @@ describe('donations duck', () => {
 
           // Verify storage remains at true (no update needed)
           assert.equal(storage.get('displayBadgesOnProfile'), true);
-          // Note: storageServiceUploadJob would not be called here (no change)
+          // Note: runStorageServiceUploadJob would not be called here (no change)
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
 
         it('Submit OFF: Hides all badges', async () => {
@@ -225,7 +224,7 @@ describe('donations duck', () => {
           // Verify storage was updated from true to false
           assert.equal(storage.get('displayBadgesOnProfile'), false);
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
       });
 
@@ -251,7 +250,7 @@ describe('donations duck', () => {
           // Verify storage remains at true (no update needed)
           assert.equal(storage.get('displayBadgesOnProfile'), true);
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
 
         it('Submit OFF: No change', async () => {
@@ -270,7 +269,7 @@ describe('donations duck', () => {
           // Verify storage remains at true (no update needed)
           assert.equal(storage.get('displayBadgesOnProfile'), true);
 
-          sinon.assert.calledOnceWithExactly(onComplete);
+          sinon.assert.calledOnceWithExactly(onComplete, null);
         });
       });
     });
@@ -279,8 +278,8 @@ describe('donations duck', () => {
       it('No Badge Data: should show error', async () => {
         const { onComplete, executeApplyDonationBadge } = await setupTest([]);
 
-        // Modal receives undefined badge
-        await executeApplyDonationBadge(undefined, true);
+        // Modal receives null badge
+        await executeApplyDonationBadge(null, true);
 
         sinon.assert.calledOnce(onComplete);
         const error = onComplete.getCall(0).args[0];

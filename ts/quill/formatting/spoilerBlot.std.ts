@@ -3,12 +3,18 @@
 
 import InlineBlot from '@signalapp/quill-cjs/blots/inline.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type AnyRecord = Record<string, any>;
 
 export class SpoilerBlot extends InlineBlot {
   static override blotName = 'spoiler';
   static override className = 'quill--spoiler';
+
+  static override create(): HTMLElement {
+    const node = super.create(undefined);
+    node.setAttribute('data-spoiler', 'true');
+    return node;
+  }
 
   static override formats(): AnyRecord {
     return {

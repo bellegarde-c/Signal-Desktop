@@ -1,28 +1,30 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Avatar, AvatarSize } from './Avatar.dom.js';
-import { Tooltip } from './Tooltip.dom.js';
-import { I18n } from './I18n.dom.js';
-import { Theme } from '../util/theme.std.js';
-import { getParticipantName } from '../util/callingGetParticipantName.std.js';
-import { ContactName } from './conversation/ContactName.dom.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { AvatarColors } from '../types/Colors.std.js';
-import { CallMode } from '../types/CallDisposition.std.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
+import type { ReactNode, JSX } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
+import { tinykeys } from 'tinykeys';
+import classNames from 'classnames';
+import { Avatar, AvatarSize } from './Avatar.dom.tsx';
+import { Tooltip } from './Tooltip.dom.tsx';
+import { I18n } from './I18n.dom.tsx';
+import { Theme } from '../util/theme.std.ts';
+import { getParticipantName } from '../util/callingGetParticipantName.std.ts';
+import { ContactName } from './conversation/ContactName.dom.tsx';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { AvatarColors } from '../types/Avatar.std.ts';
+import { CallMode } from '../types/CallDisposition.std.ts';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import type {
   AcceptCallType,
   DeclineCallType,
-} from '../state/ducks/calling.preload.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import {
-  useIncomingCallShortcuts,
-  useKeyboardShortcuts,
-} from '../hooks/useKeyboardShortcuts.dom.js';
-import { UserText } from './UserText.dom.js';
+} from '../state/ducks/calling.preload.ts';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { UserText } from './UserText.dom.tsx';
+import { AxoDragRegion } from '../axo/AxoDragRegion.dom.tsx';
+import { getControlOrAltKey } from '../hooks/useKeyboardShortcuts.dom.tsx';
+
+const { useDisableDragRegions } = AxoDragRegion;
 
 export type PropsType = {
   acceptCall: (_: AcceptCallType) => void;
@@ -38,17 +40,16 @@ export type PropsType = {
     | 'name'
     | 'phoneNumber'
     | 'profileName'
-    | 'sharedGroupNames'
     | 'title'
     | 'type'
   >;
-  bounceAppIconStart(): unknown;
-  bounceAppIconStop(): unknown;
-  notifyForCall(
+  bounceAppIconStart: () => unknown;
+  bounceAppIconStop: () => unknown;
+  notifyForCall: (
     conversationId: string,
     conversationTitle: string,
     isVideoCall: boolean
-  ): unknown;
+  ) => unknown;
 } & (
   | {
       callMode: CallMode.Direct;
@@ -70,18 +71,18 @@ export type PropsType = {
 );
 
 type CallButtonProps = {
-  classSuffix: string;
+  iconClassName: `IncomingCallBar__button--${string}`;
   tabIndex: number;
   tooltipContent: string;
   onClick: () => void;
 };
 
 function CallButton({
-  classSuffix,
+  iconClassName,
   onClick,
   tabIndex,
   tooltipContent,
-}: CallButtonProps): React.JSX.Element {
+}: CallButtonProps): JSX.Element {
   return (
     <Tooltip
       content={tooltipContent}
@@ -90,7 +91,7 @@ function CallButton({
     >
       <button
         aria-label={tooltipContent}
-        className={`IncomingCallBar__button IncomingCallBar__button--${classSuffix}`}
+        className={classNames('IncomingCallBar__button', iconClassName)}
         onClick={onClick}
         tabIndex={tabIndex}
         type="button"
@@ -117,7 +118,7 @@ function GroupCallMessage({
     ConversationType,
     'firstName' | 'systemGivenName' | 'systemNickname' | 'title'
   >;
-}>): React.JSX.Element {
+}>): JSX.Element {
   // As an optimization, we only process the first two names.
   const [first, second] = otherMembersRung
     .slice(0, 2)
@@ -140,7 +141,9 @@ function GroupCallMessage({
           i18n={i18n}
           components={{
             ringer: ringerNode,
-            otherMember: first,
+
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            otherMember: first!,
           }}
         />
       );
@@ -151,8 +154,10 @@ function GroupCallMessage({
           i18n={i18n}
           components={{
             ringer: ringerNode,
-            first,
-            second,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            first: first!,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            second: second!,
           }}
         />
       );
@@ -163,8 +168,10 @@ function GroupCallMessage({
           i18n={i18n}
           components={{
             ringer: ringerNode,
-            first,
-            second,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            first: first!,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            second: second!,
           }}
         />
       );
@@ -175,8 +182,10 @@ function GroupCallMessage({
           i18n={i18n}
           components={{
             ringer: ringerNode,
-            first,
-            second,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            first: first!,
+            // oxlint-disable-next-line typescript/no-non-null-assertion
+            second: second!,
             remaining: otherMembersRung.length - 2,
           }}
         />
@@ -184,7 +193,7 @@ function GroupCallMessage({
   }
 }
 
-export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
+export function IncomingCallBar(props: PropsType): JSX.Element | null {
   const {
     acceptCall,
     bounceAppIconStart,
@@ -200,7 +209,6 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
     color,
     phoneNumber,
     profileName,
-    sharedGroupNames,
     title,
     type: conversationType,
   } = conversation;
@@ -248,6 +256,8 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
     };
   }, [bounceAppIconStart, bounceAppIconStop]);
 
+  useDisableDragRegions(true);
+
   const acceptVideoCall = useCallback(() => {
     if (isVideoCall) {
       acceptCall({ conversationId, asVideoCall: true });
@@ -262,12 +272,41 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
     declineCall({ conversationId });
   }, [conversationId, declineCall]);
 
-  const incomingCallShortcuts = useIncomingCallShortcuts(
-    acceptAudioCall,
-    acceptVideoCall,
-    declineIncomingCall
+  const onAcceptAudioCallShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    acceptAudioCall();
+  });
+
+  const onAcceptVideoCallShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    acceptVideoCall();
+  });
+
+  const onDeclineIncomingCallShortcut = useEffectEvent(
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      declineIncomingCall();
+    }
   );
-  useKeyboardShortcuts(incomingCallShortcuts);
+
+  useEffect(() => {
+    const ControlOrAlt = getControlOrAltKey();
+    return tinykeys(
+      window,
+      {
+        [`${ControlOrAlt}+Shift+A`]: onAcceptAudioCallShortcut,
+        [`${ControlOrAlt}+Shift+V`]: onAcceptVideoCallShortcut,
+        [`${ControlOrAlt}+Shift+D`]: onDeclineIncomingCallShortcut,
+      },
+      {
+        // Override default ignore so shortcuts work while textboxes are focused
+        ignore: () => false,
+      }
+    );
+  }, []);
 
   return (
     <div className="IncomingCallBar__container">
@@ -284,7 +323,6 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
               phoneNumber={phoneNumber}
               profileName={profileName}
               title={title}
-              sharedGroupNames={sharedGroupNames}
               size={AvatarSize.FORTY_EIGHT}
             />
           </div>
@@ -302,7 +340,7 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
         </div>
         <div className="IncomingCallBar__actions">
           <CallButton
-            classSuffix="decline"
+            iconClassName="IncomingCallBar__button--decline"
             onClick={declineIncomingCall}
             tabIndex={0}
             tooltipContent={i18n('icu:declineCall')}
@@ -310,13 +348,13 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
           {isVideoCall ? (
             <>
               <CallButton
-                classSuffix="accept-video-as-audio"
+                iconClassName="IncomingCallBar__button--accept-video-as-audio"
                 onClick={acceptAudioCall}
                 tabIndex={0}
                 tooltipContent={i18n('icu:acceptCallWithoutVideo')}
               />
               <CallButton
-                classSuffix="accept-video"
+                iconClassName="IncomingCallBar__button--accept-video"
                 onClick={acceptVideoCall}
                 tabIndex={0}
                 tooltipContent={i18n('icu:acceptCall')}
@@ -324,7 +362,7 @@ export function IncomingCallBar(props: PropsType): React.JSX.Element | null {
             </>
           ) : (
             <CallButton
-              classSuffix="accept-audio"
+              iconClassName="IncomingCallBar__button--accept-audio"
               onClick={acceptAudioCall}
               tabIndex={0}
               tooltipContent={i18n('icu:acceptCall')}

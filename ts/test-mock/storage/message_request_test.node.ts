@@ -3,14 +3,14 @@
 
 import { assert } from 'chai';
 
-import * as durations from '../../util/durations/index.std.js';
-import type { App, Bootstrap } from './fixtures.node.js';
-import { initStorage, debug } from './fixtures.node.js';
+import * as durations from '../../util/durations/index.std.ts';
+import type { App, Bootstrap } from './fixtures.node.ts';
+import { initStorage, debug } from './fixtures.node.ts';
 import {
   acceptConversation,
   typeIntoInput,
   waitForEnabledComposer,
-} from '../helpers.node.js';
+} from '../helpers.node.ts';
 
 describe('storage service', function (this: Mocha.Suite) {
   this.timeout(durations.MINUTE);
@@ -60,43 +60,29 @@ describe('storage service', function (this: Mocha.Suite) {
     await leftPane.locator(`[data-testid="${stranger.device.aci}"]`).click();
 
     debug("Verify that we stored stranger's profile key");
+    assert.isUndefined(initialState.getContact(stranger));
     const postMessageState = await phone.waitForStorageState({
       after: initialState,
+      predicate: storageState =>
+        (storageState.getContact(stranger)?.profileKey?.length ?? 0) === 32,
     });
     {
-      assert.strictEqual(postMessageState.version, 2);
       assert.isFalse(postMessageState.getContact(stranger)?.whitelisted);
-      assert.strictEqual(
-        postMessageState.getContact(stranger)?.profileKey?.length,
-        32
+      assert.deepEqual(
+        postMessageState.getContact(stranger)?.profileKey,
+        stranger.profileKey.serialize()
       );
-
-      // ContactRecord
-      const { added, removed } = postMessageState.diff(initialState);
-      assert.strictEqual(added.length, 1, 'only one record must be added');
-      assert.strictEqual(removed.length, 0, 'no records should be removed');
     }
 
     debug('Accept conversation from a stranger');
     await acceptConversation(window);
 
     debug('Verify that storage state was updated');
-    {
-      const nextState = await phone.waitForStorageState({
-        after: postMessageState,
-      });
-      assert.strictEqual(nextState.version, 3);
-      assert.isTrue(nextState.getContact(stranger)?.whitelisted);
-
-      // ContactRecord
-      const { added, removed } = nextState.diff(postMessageState);
-      assert.strictEqual(added.length, 1, 'only one record must be added');
-      assert.strictEqual(
-        removed.length,
-        1,
-        'only one record should be removed'
-      );
-    }
+    await phone.waitForStorageState({
+      after: postMessageState,
+      predicate: storageState =>
+        storageState.getContact(stranger)?.whitelisted === true,
+    });
 
     // Stranger should receive our profile key
     {
@@ -125,9 +111,5 @@ describe('storage service', function (this: Mocha.Suite) {
       assert.strictEqual(body, 'hello stranger!', 'text message has body');
       assert.strictEqual(source, desktop, 'text message has valid source');
     }
-
-    debug('Verifying the final manifest version');
-    const finalState = await phone.expectStorageState('consistency check');
-    assert.strictEqual(finalState.version, 3);
   });
 });

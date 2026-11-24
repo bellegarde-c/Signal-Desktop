@@ -1,37 +1,44 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useMemo,
+  type JSX,
+  useEffectEvent,
+} from 'react';
 import classNames from 'classnames';
 import { FocusScope } from 'react-aria';
+import { tinykeys } from 'tinykeys';
 import type {
   SetLocalAudioType,
   SetLocalVideoType,
-} from '../state/ducks/calling.preload.js';
-import { CallingButton, CallingButtonType } from './CallingButton.dom.js';
-import { TooltipPlacement } from './Tooltip.dom.js';
-import { CallBackgroundBlur } from './CallBackgroundBlur.dom.js';
-import { CallParticipantCount } from './CallParticipantCount.dom.js';
-import { CallingHeader } from './CallingHeader.dom.js';
-import { CallingPreCallInfo, RingMode } from './CallingPreCallInfo.dom.js';
+} from '../state/ducks/calling.preload.ts';
+import { CallingButton, CallingButtonType } from './CallingButton.dom.tsx';
+import { TooltipPlacement } from './Tooltip.dom.tsx';
+import { CallBackgroundBlur } from './CallBackgroundBlur.dom.tsx';
+import { CallParticipantCount } from './CallParticipantCount.dom.tsx';
+import { CallingHeader } from './CallingHeader.dom.tsx';
+import { CallingPreCallInfo, RingMode } from './CallingPreCallInfo.dom.tsx';
 import {
   CallingLobbyJoinButton,
   CallingLobbyJoinButtonVariant,
-} from './CallingLobbyJoinButton.dom.js';
-import { CallMode } from '../types/CallDisposition.std.js';
-import type { CallingConversationType } from '../types/Calling.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import * as KeyboardLayout from '../services/keyboardLayout.dom.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
-import { useCallingToasts } from './CallingToast.dom.js';
-import { CallingButtonToastsContainer } from './CallingToastManager.dom.js';
-import { isGroupOrAdhocCallMode } from '../util/isGroupOrAdhocCall.std.js';
-import { Button, ButtonVariant } from './Button.dom.js';
-import { SpinnerV2 } from './SpinnerV2.dom.js';
-import type { SetLocalPreviewContainerType } from '../services/calling.preload.js';
+} from './CallingLobbyJoinButton.dom.tsx';
+import { CallMode } from '../types/CallDisposition.std.ts';
+import type { CallingConversationType } from '../types/Calling.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
+import { useCallingToasts } from './CallingToast.dom.tsx';
+import { CallingButtonToastsContainer } from './CallingToastManager.dom.tsx';
+import { isGroupOrAdhocCallMode } from '../util/isGroupOrAdhocCall.std.ts';
+import { Button, ButtonVariant } from './Button.dom.tsx';
+import { SpinnerV2 } from './SpinnerV2.dom.tsx';
+import type { SetLocalPreviewContainerType } from '../services/calling.preload.ts';
 
 export type PropsType = {
-  availableCameras: Array<MediaDeviceInfo>;
+  availableCameras: ReadonlyArray<MediaDeviceInfo>;
   callMode: CallMode;
   conversation: Pick<
     CallingConversationType,
@@ -45,7 +52,6 @@ export type PropsType = {
     | 'name'
     | 'phoneNumber'
     | 'profileName'
-    | 'sharedGroupNames'
     | 'systemGivenName'
     | 'systemNickname'
     | 'title'
@@ -80,7 +86,7 @@ export type PropsType = {
   showParticipantsList: boolean;
   toggleParticipants: () => void;
   togglePip: () => void;
-  toggleSettings: () => void;
+  toggleSettings: (open: boolean) => void;
 };
 
 export function CallingLobby({
@@ -109,20 +115,20 @@ export function CallingLobby({
   togglePip,
   toggleSettings,
   outgoingRing,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const shouldShowLocalVideo = hasLocalVideo && availableCameras.length > 0;
 
   const isGroupOrAdhocCall = isGroupOrAdhocCallMode(callMode);
 
-  const toggleAudio = React.useCallback((): void => {
+  const toggleAudio = useCallback((): void => {
     setLocalAudio({ enabled: !hasLocalAudio });
   }, [hasLocalAudio, setLocalAudio]);
 
-  const toggleVideo = React.useCallback((): void => {
+  const toggleVideo = useCallback((): void => {
     setLocalVideo({ enabled: !hasLocalVideo });
   }, [hasLocalVideo, setLocalVideo]);
 
-  const toggleOutgoingRing = React.useCallback((): void => {
+  const toggleOutgoingRing = useCallback((): void => {
     setOutgoingRing(!outgoingRing);
   }, [outgoingRing, setOutgoingRing]);
 
@@ -130,37 +136,30 @@ export function CallingLobby({
     ? togglePip
     : undefined;
 
-  React.useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent): void {
-      let eventHandled = false;
+  const onToggleVideoShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleVideo();
+  });
 
-      const key = KeyboardLayout.lookup(event);
-      if (event.shiftKey && (key === 'V' || key === 'v')) {
-        toggleVideo();
-        eventHandled = true;
-      } else if (event.shiftKey && (key === 'M' || key === 'm')) {
-        toggleAudio();
-        eventHandled = true;
-      }
+  const onToggleAudioShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleAudio();
+  });
 
-      if (eventHandled) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    }
+  useEffect(() => {
+    return tinykeys(window, {
+      'Shift+V': onToggleVideoShortcut,
+      'Shift+M': onToggleAudioShortcut,
+    });
+  }, []);
 
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [toggleVideo, toggleAudio]);
-
-  const [isCallConnecting, setIsCallConnecting] = React.useState(
+  const [isCallConnecting, setIsCallConnecting] = useState(
     isAdhocJoinRequestPending || false
   );
 
-  // eslint-disable-next-line no-nested-ternary
+  // oxlint-disable-next-line no-nested-ternary
   const videoButtonType = hasLocalVideo
     ? CallingButtonType.VIDEO_ON
     : availableCameras.length === 0
@@ -220,7 +219,7 @@ export function CallingLobby({
     callingLobbyJoinButtonVariant = CallingLobbyJoinButtonVariant.Start;
   }
 
-  const callStatus = React.useMemo(() => {
+  const callStatus = useMemo(() => {
     if (isGroupOrAdhocCall) {
       return (
         <CallParticipantCount
@@ -252,7 +251,7 @@ export function CallingLobby({
 
   useWasInitiallyMutedToast(hasLocalAudio, i18n);
 
-  const onLocalPreviewContainerRef = React.useCallback(
+  const onLocalPreviewContainerRef = useCallback(
     (container: HTMLDivElement) => {
       setLocalPreviewContainer({
         container,
@@ -299,17 +298,16 @@ export function CallingLobby({
 
         <div
           className={classNames(
-            'module-calling__camera-is-off module-CallingLobby__camera-is-off',
-            `module-CallingLobby__camera-is-off--${
-              // eslint-disable-next-line local-rules/enforce-tw
-              shouldShowLocalVideo ? 'invisible' : 'visible'
-            }`
+            'module-calling__camera-is-off',
+            shouldShowLocalVideo
+              ? 'module-CallingLobby__camera-is-off--invisible'
+              : 'module-CallingLobby__camera-is-off--visible'
           )}
         >
           {i18n('icu:calling__your-video-is-off')}
         </div>
 
-        {/* eslint-disable-next-line no-nested-ternary */}
+        {/* oxlint-disable-next-line no-nested-ternary */}
         {callMode === CallMode.Adhoc ? (
           isAdhocJoinRequestPending ? (
             <div className="CallingLobby__CallLinkNotice CallingLobby__CallLinkNotice--join-request-pending">
@@ -395,10 +393,10 @@ function useWasInitiallyMutedToast(
   hasLocalAudio: boolean,
   i18n: LocalizerType
 ) {
-  const [wasInitiallyMuted] = React.useState(!hasLocalAudio);
+  const [wasInitiallyMuted] = useState(!hasLocalAudio);
   const { showToast, hideToast } = useCallingToasts();
   const INITIALLY_MUTED_KEY = 'initially-muted-group-size';
-  React.useEffect(() => {
+  useEffect(() => {
     if (wasInitiallyMuted) {
       showToast({
         key: INITIALLY_MUTED_KEY,
@@ -413,7 +411,7 @@ function useWasInitiallyMutedToast(
   }, [wasInitiallyMuted, i18n, showToast]);
 
   // Hide this toast if the user unmutes
-  React.useEffect(() => {
+  useEffect(() => {
     if (wasInitiallyMuted && hasLocalAudio) {
       hideToast(INITIALLY_MUTED_KEY);
     }

@@ -1,17 +1,21 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import type { Props } from './ContactDetail.dom.js';
-import { ContactDetail } from './ContactDetail.dom.js';
+import type { Props } from './ContactDetail.dom.tsx';
+import { ContactDetail } from './ContactDetail.dom.tsx';
 import {
   AddressType,
   ContactFormType,
-} from '../../types/EmbeddedContact.std.js';
-import { IMAGE_GIF } from '../../types/MIME.std.js';
-import { fakeAttachment } from '../../test-helpers/fakeAttachment.std.js';
+  type EmbeddedContactForUIType,
+} from '../../types/EmbeddedContact.std.ts';
+import { IMAGE_GIF } from '../../types/MIME.std.ts';
+import { fakeAttachment } from '../../test-helpers/fakeAttachment.std.ts';
+import { generateAci } from '../../test-helpers/serviceIdUtils.std.ts';
+import type { SharedContactResolutionType } from '../../util/sharedContact.std.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -19,17 +23,44 @@ export default {
   title: 'Components/Conversation/ContactDetail',
 } satisfies Meta<Props>;
 
-const createProps = (overrideProps: Partial<Props> = {}): Props => ({
-  cancelAttachmentDownload: action('cancelAttachmentDownload'),
-  contact: overrideProps.contact || {},
-  hasSignalAccount: overrideProps.hasSignalAccount || false,
-  i18n,
-  kickOffAttachmentDownload: action('kickOffAttachmentDownload'),
-  messageId: 'fake-message-id',
-  onSendMessage: action('onSendMessage'),
-});
+const emptyContact = {
+  aci: undefined,
+  nickname: undefined,
+  note: undefined,
+  resolution: { type: 'not-on-signal' },
+} satisfies EmbeddedContactForUIType;
 
-const fullContact = {
+const createProps = (
+  overrideProps: Partial<Props> & {
+    hasSignalAccount?: boolean;
+    resolution?: SharedContactResolutionType;
+  } = {}
+): Props => {
+  const contact = overrideProps.contact || emptyContact;
+  let resolution: SharedContactResolutionType = { type: 'not-on-signal' };
+  if (overrideProps.resolution) {
+    resolution = overrideProps.resolution;
+  } else if (overrideProps.hasSignalAccount) {
+    resolution = { type: 'aci', aci: contact.aci ?? generateAci() };
+  }
+
+  return {
+    cancelAttachmentDownload: action('cancelAttachmentDownload'),
+    contact: { ...contact, resolution },
+    hasActiveCall: overrideProps.hasActiveCall ?? false,
+    i18n,
+    kickOffAttachmentDownload: action('kickOffAttachmentDownload'),
+    messageId: 'fake-message-id',
+    onAddToGroup: action('onAddToGroup'),
+    onSendMessage: action('onSendMessage'),
+    onStartAudioCall: action('onStartAudioCall'),
+    onStartVideoCall: action('onStartVideoCall'),
+    ourRegionCode: 'US',
+  };
+};
+
+const aci = generateAci();
+const fullContact: EmbeddedContactForUIType = {
   address: [
     {
       type: AddressType.HOME,
@@ -129,9 +160,16 @@ const fullContact = {
       type: ContactFormType.CUSTOM,
     },
   ],
+  aci,
+  note: 'This is an important and long note \n with line\n breaks.',
+  nickname: {
+    givenName: 'NickGiven',
+    familyName: 'NickFamily',
+  },
+  resolution: { type: 'aci', aci },
 };
 
-export function FullyFilledOut(): React.JSX.Element {
+export function FullyFilledOut(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
@@ -139,7 +177,7 @@ export function FullyFilledOut(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function FullyFilledOutNotDownloaded(): React.JSX.Element {
+export function FullyFilledOutNotDownloaded(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
@@ -159,7 +197,7 @@ export function FullyFilledOutNotDownloaded(): React.JSX.Element {
   };
   return <ContactDetail {...propsWithUpdatedAvatar} />;
 }
-export function FullyFilledOutDownloading(): React.JSX.Element {
+export function FullyFilledOutDownloading(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
@@ -182,7 +220,7 @@ export function FullyFilledOutDownloading(): React.JSX.Element {
   };
   return <ContactDetail {...propsWithUpdatedAvatar} />;
 }
-export function FullyFilledOutTransientError(): React.JSX.Element {
+export function FullyFilledOutTransientError(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
@@ -207,7 +245,7 @@ export function FullyFilledOutTransientError(): React.JSX.Element {
   };
   return <ContactDetail {...propsWithUpdatedAvatar} />;
 }
-export function FullyFilledOutPermanentError(): React.JSX.Element {
+export function FullyFilledOutPermanentError(): JSX.Element {
   const props = createProps({
     contact: fullContact,
     hasSignalAccount: true,
@@ -229,7 +267,7 @@ export function FullyFilledOutPermanentError(): React.JSX.Element {
   return <ContactDetail {...propsWithUpdatedAvatar} />;
 }
 
-export function OnlyEmail(): React.JSX.Element {
+export function OnlyEmail(): JSX.Element {
   const props = createProps({
     contact: {
       email: [
@@ -238,6 +276,10 @@ export function OnlyEmail(): React.JSX.Element {
           type: ContactFormType.HOME,
         },
       ],
+      aci: undefined,
+      note: undefined,
+      nickname: undefined,
+      resolution: { type: 'not-on-signal' },
     },
     hasSignalAccount: true,
   });
@@ -245,9 +287,10 @@ export function OnlyEmail(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function GivenName(): React.JSX.Element {
+export function GivenName(): JSX.Element {
   const props = createProps({
     contact: {
+      ...emptyContact,
       name: {
         givenName: 'Jerry',
       },
@@ -258,9 +301,10 @@ export function GivenName(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function Organization(): React.JSX.Element {
+export function OrganizationOnly(): JSX.Element {
   const props = createProps({
     contact: {
+      ...emptyContact,
       organization: 'Company 5',
     },
     hasSignalAccount: true,
@@ -269,9 +313,10 @@ export function Organization(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function GivenFamilyName(): React.JSX.Element {
+export function GivenFamilyName(): JSX.Element {
   const props = createProps({
     contact: {
+      ...emptyContact,
       name: {
         givenName: 'Jerry',
         familyName: 'FamilyName',
@@ -283,9 +328,10 @@ export function GivenFamilyName(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function FamilyName(): React.JSX.Element {
+export function FamilyName(): JSX.Element {
   const props = createProps({
     contact: {
+      ...emptyContact,
       name: {
         familyName: 'FamilyName',
       },
@@ -295,10 +341,27 @@ export function FamilyName(): React.JSX.Element {
 
   return <ContactDetail {...props} />;
 }
-
-export function LoadingAvatar(): React.JSX.Element {
+export function NameAndOrganization(): JSX.Element {
   const props = createProps({
     contact: {
+      ...emptyContact,
+      ...emptyContact,
+      name: {
+        givenName: 'Jerry',
+        familyName: 'FamilyName',
+      },
+      organization: 'Organization',
+    },
+    hasSignalAccount: true,
+  });
+
+  return <ContactDetail {...props} />;
+}
+
+export function LoadingAvatar(): JSX.Element {
+  const props = createProps({
+    contact: {
+      ...emptyContact,
       avatar: {
         avatar: fakeAttachment({
           contentType: IMAGE_GIF,
@@ -312,16 +375,33 @@ export function LoadingAvatar(): React.JSX.Element {
   return <ContactDetail {...props} />;
 }
 
-export function EmptyWithAccount(): React.JSX.Element {
+export function EmptyWithAccount(): JSX.Element {
   const props = createProps({
     hasSignalAccount: true,
   });
   return <ContactDetail {...props} />;
 }
 
-export function EmptyWithoutAccount(): React.JSX.Element {
+export function EmptyWithoutAccount(): JSX.Element {
   const props = createProps({
     hasSignalAccount: false,
+  });
+  return <ContactDetail {...props} />;
+}
+
+export function FullyFilledOutWithoutAccount(): JSX.Element {
+  const props = createProps({
+    contact: { ...fullContact, aci: undefined },
+    hasSignalAccount: false,
+  });
+  return <ContactDetail {...props} />;
+}
+
+export function InAnotherCall(): JSX.Element {
+  const props = createProps({
+    contact: fullContact,
+    hasActiveCall: true,
+    hasSignalAccount: true,
   });
   return <ContactDetail {...props} />;
 }

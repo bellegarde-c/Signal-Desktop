@@ -1,8 +1,8 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ChangeEvent } from 'react';
-import React, { useCallback } from 'react';
+import type { ChangeEvent, Ref, JSX } from 'react';
+import { useCallback, forwardRef } from 'react';
 import classNames from 'classnames';
 
 export type Option = Readonly<{
@@ -15,26 +15,27 @@ export type PropsType = Readonly<{
   ariaLabel?: string;
   disabled?: boolean;
   id?: string;
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   name?: string;
   options: ReadonlyArray<Option>;
-  onChange(value: string): void;
+  onChange: (value: string) => void;
   value?: string | number;
 }>;
 
-export const Select = React.forwardRef(function SelectInner(
+export const Select = forwardRef(function SelectInner(
   {
     ariaLabel,
     disabled,
     id,
-    moduleClassName,
+    className,
     name,
     onChange,
     options,
     value,
   }: PropsType,
-  ref: React.Ref<HTMLSelectElement>
-): React.JSX.Element {
+  ref: Ref<HTMLSelectElement>
+): JSX.Element {
   const onSelectChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       onChange(event.target.value);
@@ -43,7 +44,7 @@ export const Select = React.forwardRef(function SelectInner(
   );
 
   return (
-    <div className={classNames(['module-select', moduleClassName])}>
+    <div className={classNames('module-select', className)}>
       <select
         aria-label={ariaLabel}
         disabled={disabled}

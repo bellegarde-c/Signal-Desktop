@@ -1,14 +1,11 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React from 'react';
+import type { ReactNode, JSX, MouseEvent, KeyboardEvent } from 'react';
 import classNames from 'classnames';
-import { Tooltip, TooltipPlacement } from './Tooltip.dom.js';
-import { WidthBreakpoint } from './_util.std.js';
+import { Tooltip, TooltipPlacement } from './Tooltip.dom.tsx';
+import { WidthBreakpoint } from './_util.std.ts';
 
-const BASE_CLASS_NAME = 'LeftPaneDialog';
-const TOOLTIP_CLASS_NAME = `${BASE_CLASS_NAME}__tooltip`;
 export type DismissOptions =
   | {
       onClose?: undefined;
@@ -21,15 +18,23 @@ export type DismissOptions =
       hasXButton: true;
     };
 
+type DialogType = 'warning' | 'error' | 'info';
+
+const DialogTypes: Record<DialogType, string> = {
+  warning: 'LeftPaneDialog--warning',
+  error: 'LeftPaneDialog--error',
+  info: 'LeftPaneDialog--info',
+};
+
+const DialogTypeTooltips: Record<DialogType, string> = {
+  error: 'LeftPaneDialog__tooltip--error',
+  warning: 'LeftPaneDialog__tooltip--warning',
+  info: 'LeftPaneDialog__tooltip--info',
+};
+
 export type PropsType = {
   type?: 'warning' | 'error' | 'info';
-  icon?:
-    | 'update'
-    | 'relink'
-    | 'network'
-    | 'warning'
-    | 'error'
-    | React.JSX.Element;
+  icon?: 'update' | 'relink' | 'network' | 'warning' | 'error' | JSX.Element;
   title?: string;
   subtitle?: string;
   children?: ReactNode;
@@ -64,15 +69,15 @@ export function LeftPaneDialog({
   hasXButton,
   onClose,
   closeLabel,
-}: PropsType): React.JSX.Element {
-  const onClickWrap = (e: React.MouseEvent) => {
+}: PropsType): JSX.Element {
+  const onClickWrap = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     onClick?.();
   };
 
-  const onKeyDownWrap = (e: React.KeyboardEvent) => {
+  const onKeyDownWrap = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' && e.key !== ' ') {
       return;
     }
@@ -83,7 +88,7 @@ export function LeftPaneDialog({
     onClick?.();
   };
 
-  const onCloseWrap = (e: React.MouseEvent) => {
+  const onCloseWrap = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -96,7 +101,7 @@ export function LeftPaneDialog({
       <button
         title={clickLabel}
         aria-label={clickLabel}
-        className={`${BASE_CLASS_NAME}__action-text`}
+        className="LeftPaneDialog__action-text"
         onClick={onClickWrap}
         tabIndex={0}
         type="button"
@@ -109,11 +114,11 @@ export function LeftPaneDialog({
   let xButton: ReactNode;
   if (hasXButton && containerWidthBreakpoint !== WidthBreakpoint.Narrow) {
     xButton = (
-      <div className={`${BASE_CLASS_NAME}__container-close`}>
+      <div className="LeftPaneDialog__container-close">
         <button
           title={closeLabel}
           aria-label={closeLabel}
-          className={`${BASE_CLASS_NAME}__close-button`}
+          className="LeftPaneDialog__close-button"
           onClick={onCloseWrap}
           tabIndex={0}
           type="button"
@@ -122,12 +127,15 @@ export function LeftPaneDialog({
     );
   }
 
-  const className = classNames(BASE_CLASS_NAME, {
-    [`${BASE_CLASS_NAME}--width-narrow`]:
-      containerWidthBreakpoint === WidthBreakpoint.Narrow,
-    [`${BASE_CLASS_NAME}--${type}`]: type != null,
-    [`${BASE_CLASS_NAME}--clickable`]: onClick != null,
-  });
+  const className = classNames(
+    'LeftPaneDialog',
+    type != null && DialogTypes[type],
+    {
+      'LeftPaneDialog--width-narrow':
+        containerWidthBreakpoint === WidthBreakpoint.Narrow,
+      'LeftPaneDialog--clickable': onClick != null,
+    }
+  );
 
   const message = (
     <>
@@ -139,9 +147,9 @@ export function LeftPaneDialog({
   );
   const content = (
     <>
-      <div className={`${BASE_CLASS_NAME}__container`}>
+      <div className="LeftPaneDialog__container">
         {icon ? (
-          <div className={`${BASE_CLASS_NAME}__icon-container`}>
+          <div className="LeftPaneDialog__icon-container">
             {typeof icon === 'string' ? (
               <LeftPaneDialogIcon type={icon} />
             ) : (
@@ -150,7 +158,7 @@ export function LeftPaneDialog({
           </div>
         ) : null}
         {containerWidthBreakpoint !== WidthBreakpoint.Narrow && (
-          <div className={`${BASE_CLASS_NAME}__message`}>{message}</div>
+          <div className="LeftPaneDialog__message">{message}</div>
         )}
       </div>
       {xButton}
@@ -186,8 +194,8 @@ export function LeftPaneDialog({
         content={message}
         direction={TooltipPlacement.Right}
         className={classNames(
-          TOOLTIP_CLASS_NAME,
-          type && `${TOOLTIP_CLASS_NAME}--${type}`
+          'LeftPaneDialog__tooltip',
+          type != null && DialogTypeTooltips[type]
         )}
       >
         {dialogNode}
@@ -198,28 +206,50 @@ export function LeftPaneDialog({
   return dialogNode;
 }
 
+type DialogIconType = 'update' | 'relink' | 'network' | 'warning' | 'error';
+
+const DialogIconTypes: Record<DialogIconType, string> = {
+  update: 'LeftPaneDialog__icon--update',
+  relink: 'LeftPaneDialog__icon--relink',
+  network: 'LeftPaneDialog__icon--network',
+  warning: 'LeftPaneDialog__icon--warning',
+  error: 'LeftPaneDialog__icon--error',
+};
+
 export function LeftPaneDialogIcon({
   type,
 }: {
-  type?: 'update' | 'relink' | 'network' | 'warning' | 'error';
-}): React.JSX.Element {
-  const iconClassName = classNames([
-    `${BASE_CLASS_NAME}__icon`,
-    `${BASE_CLASS_NAME}__icon--${type}`,
-  ]);
-  return <div className={iconClassName} />;
+  type?: DialogIconType;
+}): JSX.Element {
+  return (
+    <div
+      className={classNames(
+        'LeftPaneDialog__icon',
+        type != null && DialogIconTypes[type]
+      )}
+    />
+  );
 }
+
+type IconBackgroundType = 'warning';
+
+const IconBackgroundTypes: Record<IconBackgroundType, string> = {
+  warning: 'LeftPaneDialog__icon-background--warning',
+};
 
 export function LeftPaneDialogIconBackground({
   type,
   children,
 }: {
-  type?: 'warning';
-  children: React.ReactNode;
-}): React.JSX.Element {
+  type?: IconBackgroundType;
+  children: ReactNode;
+}): JSX.Element {
   return (
     <div
-      className={`${BASE_CLASS_NAME}__icon-background ${BASE_CLASS_NAME}__icon-background--${type}`}
+      className={classNames(
+        'LeftPaneDialog__icon-background',
+        type != null && IconBackgroundTypes[type]
+      )}
     >
       {children}
     </div>

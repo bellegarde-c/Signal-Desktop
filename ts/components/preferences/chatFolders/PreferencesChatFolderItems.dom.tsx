@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import classNames from 'classnames';
-import React, { forwardRef } from 'react';
-import type { ForwardedRef, HTMLAttributes, ReactNode } from 'react';
-import { tw } from '../../../axo/tw.dom.js';
-import type { LocalizerType } from '../../../types/I18N.std.js';
-import { AxoSymbol } from '../../../axo/AxoSymbol.dom.js';
-import type { ChatFolderPresetId } from './PreferencesChatFoldersPage.dom.js';
+import { forwardRef } from 'react';
+import type { ForwardedRef, HTMLAttributes, ReactNode, JSX } from 'react';
+import { tw } from '../../../axo/tw.dom.tsx';
+import type { LocalizerType } from '../../../types/I18N.std.ts';
+import { AxoSymbol } from '../../../axo/AxoSymbol.dom.tsx';
+import type { ChatFolderPresetId } from './PreferencesChatFoldersPage.dom.tsx';
 
 export const itemClassName = classNames(
   tw('group'),
   'Preferences__ChatFolders__ChatSelection__Item'
 );
-export const itemListItemClassName =
-  'Preferences__ChatFolders__ChatSelection__Item--ListItem';
 export const itemClickableClassName =
   'Preferences__ChatFolders__ChatSelection__Item--Clickable';
 export const itemButtonClassName =
@@ -25,7 +23,7 @@ export type ItemContentProps = HTMLAttributes<HTMLSpanElement>;
 export const ItemContent = forwardRef(function ItemContent(
   props: ItemContentProps,
   ref: ForwardedRef<HTMLSpanElement>
-): React.JSX.Element {
+): JSX.Element {
   return (
     <span
       ref={ref}
@@ -35,17 +33,30 @@ export const ItemContent = forwardRef(function ItemContent(
   );
 });
 
-export function ItemAvatar(props: {
-  kind: 'Folder' | 'Add' | ChatFolderPresetId;
-}): React.JSX.Element {
+type ItemAvatarKind = 'Folder' | 'Add' | ChatFolderPresetId;
+
+const ITEM_AVATAR_KINDS: Record<ItemAvatarKind, string> = {
+  Folder: 'Preferences__ChatFolders__ChatSelection__ItemAvatar--Folder',
+  Add: 'Preferences__ChatFolders__ChatSelection__ItemAvatar--Add',
+  UnreadChats:
+    'Preferences__ChatFolders__ChatSelection__ItemAvatar--UnreadChats',
+  DirectChats:
+    'Preferences__ChatFolders__ChatSelection__ItemAvatar--DirectChats',
+  GroupChats: 'Preferences__ChatFolders__ChatSelection__ItemAvatar--GroupChats',
+};
+
+export function ItemAvatar(props: { kind: ItemAvatarKind }): JSX.Element {
   return (
     <span
-      className={`Preferences__ChatFolders__ChatSelection__ItemAvatar Preferences__ChatFolders__ChatSelection__ItemAvatar--${props.kind}`}
+      className={classNames(
+        'Preferences__ChatFolders__ChatSelection__ItemAvatar',
+        ITEM_AVATAR_KINDS[props.kind]
+      )}
     />
   );
 }
 
-export function ItemBody(props: { children: ReactNode }): React.JSX.Element {
+export function ItemBody(props: { children: ReactNode }): JSX.Element {
   return (
     <span className="Preferences__ChatFolders__ChatSelection__ItemBody">
       {props.children}
@@ -53,7 +64,7 @@ export function ItemBody(props: { children: ReactNode }): React.JSX.Element {
   );
 }
 
-export function ItemTitle(props: { children: ReactNode }): React.JSX.Element {
+export function ItemTitle(props: { children: ReactNode }): JSX.Element {
   return (
     <span className="Preferences__ChatFolders__ChatSelection__ItemTitle">
       {props.children}
@@ -61,9 +72,7 @@ export function ItemTitle(props: { children: ReactNode }): React.JSX.Element {
   );
 }
 
-export function ItemDescription(props: {
-  children: ReactNode;
-}): React.JSX.Element {
+export function ItemDescription(props: { children: ReactNode }): JSX.Element {
   return (
     <span className="Preferences__ChatFolders__ChatSelection__ItemDescription">
       {props.children}
@@ -71,14 +80,12 @@ export function ItemDescription(props: {
   );
 }
 
-export function ItemDragHandle(props: {
-  i18n: LocalizerType;
-}): React.JSX.Element {
+export function ItemDragHandle(props: { i18n: LocalizerType }): JSX.Element {
   const { i18n } = props;
   return (
     <span
       className={tw(
-        'cursor-grab text-label-primary opacity-0 group-hovered:opacity-100 group-focused:opacity-100'
+        'cursor-grab text-primary opacity-0 group-enabled:group-focus:opacity-100 group-enabled:group-active:opacity-100'
       )}
     >
       <AxoSymbol.Icon

@@ -1,33 +1,37 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ThunkAction } from 'redux-thunk';
 import { v4 as generateUuid } from 'uuid';
-
 import type { ReadonlyDeep } from 'type-fest';
-import { createLogger } from '../../logging/log.std.js';
-import type { InMemoryAttachmentDraftType } from '../../types/Attachment.std.js';
-import { SignalService as Proto } from '../../protobuf/index.std.js';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import { fileToBytes } from '../../util/fileToBytes.std.js';
-import { recorder } from '../../services/audioRecorder.dom.js';
-import { stringToMIMEType } from '../../types/MIME.std.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { getComposerStateForConversation } from './composer.preload.js';
-
-import * as Errors from '../../types/errors.std.js';
+import { createLogger } from '../../logging/log.std.ts';
+import type { InMemoryAttachmentDraftType } from '../../types/Attachment.std.ts';
+import { SignalService as Proto } from '../../protobuf/index.std.ts';
+import { drop } from '../../util/drop.std.ts';
+import { AudioRecorder } from '../../services/audioRecorder.dom.ts';
+import { AUDIO_MPEG } from '../../types/MIME.std.ts';
+import type { PeakType } from '../../types/Audio.dom.tsx';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { getComposerStateForConversation } from './composer.preload.ts';
+import * as Errors from '../../types/errors.std.ts';
 import {
   ErrorDialogAudioRecorderType,
   RecordingState,
-} from '../../types/AudioRecorder.std.js';
+} from '../../types/AudioRecorder.std.ts';
+import { getSelectedConversationId } from '../selectors/nav.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const log = createLogger('audioRecorder');
+const MAX_PEAKS = 400;
+
+let recorder: AudioRecorder | undefined;
+let lastPeakIndex = 0;
 
 // State
 
 export type AudioRecorderStateType = ReadonlyDeep<{
   recordingState: RecordingState;
+  peaks: Array<PeakType>;
   errorDialogAudioRecorderType?: ErrorDialogAudioRecorderType;
 }>;
 
@@ -38,6 +42,7 @@ const COMPLETE_RECORDING = 'audioRecorder/COMPLETE_RECORDING';
 const ERROR_RECORDING = 'audioRecorder/ERROR_RECORDING';
 const NOW_RECORDING = 'audioRecorder/NOW_RECORDING';
 const START_RECORDING = 'audioRecorder/START_RECORDING';
+const PEAK = 'audioRecorder/PEAK';
 
 type CancelRecordingAction = ReadonlyDeep<{
   type: typeof CANCEL_RECORDING;
@@ -59,6 +64,10 @@ type NowRecordingAction = ReadonlyDeep<{
   type: typeof NOW_RECORDING;
   payload: undefined;
 }>;
+type PeakAction = ReadonlyDeep<{
+  type: typeof PEAK;
+  payload: number;
+}>;
 
 type AudioPlayerActionType = ReadonlyDeep<
   | CancelRecordingAction
@@ -66,6 +75,7 @@ type AudioPlayerActionType = ReadonlyDeep<
   | ErrorRecordingAction
   | NowRecordingAction
   | StartRecordingAction
+  | PeakAction
 >;
 
 export function getIsRecording(audioRecorder: AudioRecorderStateType): boolean {
@@ -79,19 +89,23 @@ export const actions = {
   completeRecording,
   errorRecording,
   startRecording,
+  warmupRecording,
 };
 
 export const useAudioRecorderActions = (): BoundActionCreatorsMapObject<
   typeof actions
 > => useBoundActions(actions);
 
+function warmupRecording(): AsyncStateThunk {
+  return async () => {
+    drop(AudioRecorder.warmup());
+  };
+}
+
 function startRecording(
   conversationId: string
-): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  StartRecordingAction | NowRecordingAction | ErrorRecordingAction
+): AsyncStateThunk<
+  StartRecordingAction | NowRecordingAction | PeakAction | ErrorRecordingAction
 > {
   return async (dispatch, getState) => {
     const state = getState();
@@ -106,13 +120,21 @@ function startRecording(
       return;
     }
 
+    drop(recorder?.stop());
+    recorder = new AudioRecorder();
+
     dispatch({
       type: START_RECORDING,
       payload: undefined,
     });
 
     try {
-      const started = await recorder.start();
+      const started = await recorder.start(peak => {
+        dispatch({
+          type: PEAK,
+          payload: peak,
+        });
+      });
 
       if (started) {
         dispatch({
@@ -145,41 +167,33 @@ function completeRecordingAction(): CompleteRecordingAction {
 export function completeRecording(
   conversationId: string,
   onRecordingComplete: (rec: InMemoryAttachmentDraftType) => unknown
-): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  CancelRecordingAction | CompleteRecordingAction
-> {
+): AsyncStateThunk<CancelRecordingAction | CompleteRecordingAction> {
   return async (dispatch, getState) => {
     const state = getState();
 
-    const isSelectedConversation =
-      state.conversations.selectedConversationId === conversationId;
-
-    if (!isSelectedConversation) {
+    if (getSelectedConversationId(state) !== conversationId) {
       log.warn(
-        'completeRecording: Recording started in one conversation and completed in another'
+        'completeRecording: Recording started in conversation then user switched away'
       );
-      dispatch(cancelRecording());
-      return;
     }
 
-    const blob = await recorder.stop();
+    const result = await recorder?.stop();
+    recorder = undefined;
 
     try {
-      if (!blob) {
-        throw new Error('completeRecording: no blob returned');
+      if (result == null) {
+        throw new Error('completeRecording: no data returned');
       }
-      const data = await fileToBytes(blob);
 
       const voiceNoteAttachment: InMemoryAttachmentDraftType = {
         pending: false,
         clientUuid: generateUuid(),
-        contentType: stringToMIMEType(blob.type),
-        data,
-        size: data.byteLength,
+        contentType: AUDIO_MPEG,
+        data: result.data,
+        size: result.data.byteLength,
         flags: Proto.AttachmentPointer.Flags.VOICE_MESSAGE,
+        audioWaveform: result.waveform,
+        duration: result.duration,
       };
 
       onRecordingComplete(voiceNoteAttachment);
@@ -189,15 +203,9 @@ export function completeRecording(
   };
 }
 
-function cancelRecording(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  CancelRecordingAction
-> {
+function cancelRecording(): AsyncStateThunk<CancelRecordingAction> {
   return async dispatch => {
-    await recorder.stop();
-    recorder.clear();
+    await recorder?.stop();
 
     dispatch({
       type: CANCEL_RECORDING,
@@ -209,7 +217,7 @@ function cancelRecording(): ThunkAction<
 function errorRecording(
   errorDialogAudioRecorderType: ErrorDialogAudioRecorderType
 ): ErrorRecordingAction {
-  void recorder.stop();
+  drop(recorder?.stop());
 
   return {
     type: ERROR_RECORDING,
@@ -222,6 +230,7 @@ function errorRecording(
 export function getEmptyState(): AudioRecorderStateType {
   return {
     recordingState: RecordingState.Idle,
+    peaks: [],
   };
 }
 
@@ -242,6 +251,7 @@ export function reducer(
       ...state,
       errorDialogAudioRecorderType: undefined,
       recordingState: RecordingState.Recording,
+      peaks: [],
     };
   }
 
@@ -250,6 +260,7 @@ export function reducer(
       ...state,
       errorDialogAudioRecorderType: undefined,
       recordingState: RecordingState.Idle,
+      peaks: [],
     };
   }
 
@@ -257,6 +268,21 @@ export function reducer(
     return {
       ...state,
       errorDialogAudioRecorderType: action.payload,
+      peaks: [],
+    };
+  }
+
+  if (action.type === PEAK) {
+    lastPeakIndex += 1;
+    // Wrap uint32
+    // oxlint-disable-next-line no-bitwise
+    lastPeakIndex >>>= 0;
+    return {
+      ...state,
+      peaks: state.peaks.slice(-MAX_PEAKS + 1).concat({
+        value: action.payload,
+        index: lastPeakIndex,
+      }),
     };
   }
 

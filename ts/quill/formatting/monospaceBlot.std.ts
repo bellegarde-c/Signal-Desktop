@@ -3,12 +3,18 @@
 
 import InlineBlot from '@signalapp/quill-cjs/blots/inline.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type AnyRecord = Record<string, any>;
 
 export class MonospaceBlot extends InlineBlot {
   static override blotName = 'monospace';
   static override className = 'quill--monospace';
+
+  static override create(): HTMLElement {
+    const node = super.create(undefined);
+    node.setAttribute('data-monospace', 'true');
+    return node;
+  }
 
   static override formats(): boolean {
     return true;

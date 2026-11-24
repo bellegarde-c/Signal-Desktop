@@ -1,22 +1,20 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
 import type { ReadonlyDeep } from 'type-fest';
-import type { ThunkAction } from 'redux-thunk';
 import lodash from 'lodash';
-
-import { generateSafetyNumber } from '../../util/safetyNumber.preload.js';
-import type { SafetyNumberType } from '../../types/safetyNumber.std.js';
-import type { ConversationType } from './conversations.preload.js';
+import { generateSafetyNumber } from '../../util/safetyNumber.preload.ts';
+import type { SafetyNumberType } from '../../types/safetyNumber.std.ts';
+import type { ConversationType } from './conversations.preload.ts';
 import {
   reloadProfiles,
   toggleVerification,
-} from '../../shims/contactVerification.dom.js';
-import { createLogger } from '../../logging/log.std.js';
-import * as Errors from '../../types/errors.std.js';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
+} from '../../shims/contactVerification.dom.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import * as Errors from '../../types/errors.std.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const { omit } = lodash;
 
@@ -86,7 +84,7 @@ function clearSafetyNumber(contactId: string): ClearSafetyNumberActionType {
 
 function generate(
   contact: ConversationType
-): ThunkAction<void, RootStateType, unknown, GenerateFulfilledActionType> {
+): AsyncStateThunk<GenerateFulfilledActionType> {
   return async dispatch => {
     try {
       const safetyNumber = await generateSafetyNumber(contact);
@@ -108,10 +106,7 @@ function generate(
 
 function toggleVerified(
   contact: ConversationType
-): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+): AsyncStateThunk<
   ToggleVerifiedPendingActionType | ToggleVerifiedFulfilledActionType
 > {
   return async dispatch => {
@@ -205,6 +200,7 @@ export function reducer(
     const { contact } = action.payload;
     const { id } = contact;
     const record = state.contacts[id];
+    strictAssert(record, 'Missing record');
     return {
       contacts: {
         ...state.contacts,
@@ -221,6 +217,7 @@ export function reducer(
     const { contact, ...restProps } = action.payload;
     const { id } = contact;
     const record = state.contacts[id];
+    strictAssert(record, 'Missing record');
     return {
       contacts: {
         ...state.contacts,
@@ -236,7 +233,9 @@ export function reducer(
   if (action.type === GENERATE_FULFILLED) {
     const { contact, safetyNumber } = action.payload;
     const { id } = contact;
-    const record = state.contacts[id];
+    const record = state.contacts[id] || {
+      verificationDisabled: false,
+    };
     return {
       contacts: {
         ...state.contacts,

@@ -1,104 +1,91 @@
 // Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
-import classNames from 'classnames';
+import type { JSX, MouseEvent, ReactNode } from 'react';
+
 import type { ReadonlyDeep } from 'type-fest';
 
-import { Avatar, AvatarBlur } from '../Avatar.dom.js';
-import { AvatarColors } from '../../types/Colors.std.js';
-import { getName } from '../../types/EmbeddedContact.std.js';
-import { AttachmentStatusIcon } from './AttachmentStatusIcon.dom.js';
+import { getContactInitials } from '../../types/EmbeddedContact.std.ts';
+import { useAttachmentStatus } from '../../hooks/useAttachmentStatus.std.ts';
+import { AxoAvatar } from '../../axo/AxoAvatar.dom.tsx';
+import { AxoSymbol } from '../../axo/AxoSymbol.dom.tsx';
+import type { AxoTokens } from '../../axo/AxoTokens.std.ts';
+import { AxoProgressIndicator } from '../../axo/status/AxoProgressIndicator.dom.tsx';
+import { tw } from '../../axo/tw.dom.tsx';
 
-import type { LocalizerType } from '../../types/Util.std.js';
-import type { EmbeddedContactForUIType } from '../../types/EmbeddedContact.std.js';
+import type { EmbeddedContactForUIType } from '../../types/EmbeddedContact.std.ts';
 
-export function renderAvatar({
+const AVATAR_COLOR: AxoTokens.Avatar.ColorName = 'A100';
+
+export function ContactAvatar({
   contact,
-  direction,
-  i18n,
+  isIncoming,
+  label,
+  onClick,
   size,
 }: {
   contact: ReadonlyDeep<EmbeddedContactForUIType>;
-  direction?: 'outgoing' | 'incoming';
-  i18n: LocalizerType;
+  isIncoming: boolean;
+  label: string | null;
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
   size: 52 | 80;
-}): React.JSX.Element {
-  const { avatar } = contact;
+}): JSX.Element {
+  const attachment = contact.avatar?.avatar;
+  const status = useAttachmentStatus(attachment);
+  const initials = getContactInitials(contact);
 
-  const avatarUrl = avatar && avatar.avatar && avatar.avatar.url;
-  const title = getName(contact) || '';
-  const fallback = (
-    <Avatar
-      avatarUrl={avatarUrl}
-      badge={undefined}
-      blur={AvatarBlur.NoBlur}
-      color={AvatarColors[0]}
-      conversationType="direct"
-      i18n={i18n}
-      title={title}
-      sharedGroupNames={[]}
-      size={size}
-    />
-  );
-
-  const attachment = avatar?.avatar;
-  if (attachment == null) {
-    return fallback;
+  let content: ReactNode;
+  if (status != null && status.state !== 'ReadyToShow') {
+    content = (
+      <span
+        className={tw(
+          'relative flex size-full items-center justify-center rounded-full',
+          isIncoming
+            ? 'bg-onmessage-incoming-primary text-primary'
+            : 'bg-onmessage-outgoing-primary text-primary-oncolor'
+        )}
+      >
+        <AxoSymbol.Icon
+          symbol={status.state === 'Downloading' ? 'x' : 'arrow-down'}
+          size={24}
+          label={null}
+        />
+        {status.state === 'Downloading' && (
+          <span
+            className={tw('absolute inset-0 flex items-center justify-center')}
+          >
+            <AxoProgressIndicator.Root
+              size="lg"
+              completed={status.totalDownloaded ?? 'indeterminate'}
+              total={status.size > 0 ? status.size : 'indeterminate'}
+              noTrack
+            />
+          </span>
+        )}
+      </span>
+    );
+  } else if (attachment?.url) {
+    content = (
+      <AxoAvatar.Image
+        src={attachment.url}
+        srcWidth={attachment.width ?? size}
+        srcHeight={attachment.height ?? size}
+        blur={false}
+        fallbackIcon="person"
+        fallbackColor={AVATAR_COLOR}
+      />
+    );
+  } else if (initials) {
+    content = <AxoAvatar.Initials initials={initials} color={AVATAR_COLOR} />;
+  } else {
+    content = <AxoAvatar.Icon symbol="person" />;
   }
 
   return (
-    <AttachmentStatusIcon
-      attachment={attachment}
-      isIncoming={direction === 'incoming'}
-    >
-      {fallback}
-    </AttachmentStatusIcon>
-  );
-}
-
-export function renderName({
-  contact,
-  isIncoming,
-  module,
-}: {
-  contact: ReadonlyDeep<EmbeddedContactForUIType>;
-  isIncoming: boolean;
-  module: string;
-}): React.JSX.Element {
-  return (
-    <div
-      className={classNames(
-        `module-${module}__contact-name`,
-        isIncoming ? `module-${module}__contact-name--incoming` : null
-      )}
-    >
-      {getName(contact)}
-    </div>
-  );
-}
-
-export function renderContactShorthand({
-  contact,
-  isIncoming,
-  module,
-}: {
-  contact: ReadonlyDeep<EmbeddedContactForUIType>;
-  isIncoming: boolean;
-  module: string;
-}): React.JSX.Element {
-  const { number: phoneNumber, email } = contact;
-  const firstNumber = phoneNumber && phoneNumber[0] && phoneNumber[0].value;
-  const firstEmail = email && email[0] && email[0].value;
-
-  return (
-    <div
-      className={classNames(
-        `module-${module}__contact-method`,
-        isIncoming ? `module-${module}__contact-method--incoming` : null
-      )}
-    >
-      {firstNumber || firstEmail}
-    </div>
+    <AxoAvatar.Root size={size}>
+      <AxoAvatar.Content label={label} onClick={onClick}>
+        {content}
+      </AxoAvatar.Content>
+    </AxoAvatar.Root>
   );
 }

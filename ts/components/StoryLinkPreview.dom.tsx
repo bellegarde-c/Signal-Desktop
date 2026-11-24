@@ -1,15 +1,16 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
+
 import classNames from 'classnames';
 import lodash from 'lodash';
 
-import type { LinkPreviewForUIType } from '../types/message/LinkPreviews.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { CurveType, Image } from './conversation/Image.dom.js';
-import { isImageAttachment } from '../util/Attachment.std.js';
-import { getSafeDomain } from '../types/LinkPreview.std.js';
+import type { LinkPreviewForUIType } from '../types/message/LinkPreviews.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { CurveType, Image } from './conversation/Image.dom.tsx';
+import { isImageAttachment } from '../util/Attachment.std.ts';
+import { getSafeDomain } from '../types/LinkPreview.std.ts';
 
 const { unescape } = lodash;
 
@@ -26,20 +27,15 @@ export function StoryLinkPreview({
   image,
   title,
   url,
-}: Props): React.JSX.Element {
+}: Props): JSX.Element {
   const isImage = isImageAttachment(image);
-  const location = domain || getSafeDomain(String(url));
+  const location = domain || getSafeDomain(url);
   const isCompact = forceCompactMode || !image;
 
-  let content: React.JSX.Element | undefined;
+  let content: JSX.Element | undefined;
   if (!title && !description) {
     content = (
-      <div
-        className={classNames(
-          'StoryLinkPreview__content',
-          'StoryLinkPreview__content--only-url'
-        )}
-      >
+      <div className="StoryLinkPreview__content">
         <div className="StoryLinkPreview__title">{location}</div>
       </div>
     );
@@ -52,9 +48,7 @@ export function StoryLinkPreview({
             {unescape(description)}
           </div>
         )}
-        <div className="StoryLinkPreview__footer">
-          <div className="StoryLinkPreview__location">{location}</div>
-        </div>
+        <div className="StoryLinkPreview__location">{location}</div>
       </div>
     );
   }

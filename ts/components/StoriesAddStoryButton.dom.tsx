@@ -1,24 +1,25 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useState, useCallback } from 'react';
+import type { ReactNode, JSX } from 'react';
+import { useState, useCallback } from 'react';
 
-import type { LocalizerType } from '../types/Util.std.js';
-import type { ShowToastAction } from '../state/ducks/toast.preload.js';
-import { ContextMenu } from './ContextMenu.dom.js';
-import { ToastType } from '../types/Toast.dom.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import { ToastType } from '../types/Toast.dom.tsx';
 import {
   isVideoGoodForStories,
   ReasonVideoNotGood,
-} from '../util/isVideoGoodForStories.std.js';
-import { ConfirmationDialog } from './ConfirmationDialog.dom.js';
+} from '../util/isVideoGoodForStories.std.ts';
+import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoDropdownMenu } from '../axo/menus/AxoDropdownMenu.dom.tsx';
+import { AxoIconButton } from '../axo/AxoIconButton.dom.tsx';
 
 export type PropsType = {
+  /** The trigger button, defaults to a "plus" icon button */
   children?: ReactNode;
   i18n: LocalizerType;
-  maxAttachmentSizeInKb: number;
-  moduleClassName?: string;
+  maxAttachmentVideoSize: number;
   onAddStory: (file?: File) => unknown;
   onContextMenuShowingChanged?: (value: boolean) => void;
   showToast: ShowToastAction;
@@ -27,12 +28,11 @@ export type PropsType = {
 export function StoriesAddStoryButton({
   children,
   i18n,
-  maxAttachmentSizeInKb,
-  moduleClassName,
+  maxAttachmentVideoSize,
   onAddStory,
   showToast,
   onContextMenuShowingChanged,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const [error, setError] = useState<string | undefined>();
 
   const onAddMedia = useCallback(() => {
@@ -47,7 +47,7 @@ export function StoriesAddStoryButton({
       }
 
       const result = await isVideoGoodForStories(file, {
-        maxAttachmentSizeInKb,
+        maxAttachmentVideoSize,
       });
 
       if (
@@ -85,53 +85,45 @@ export function StoriesAddStoryButton({
       onAddStory(file);
     };
     input.click();
-  }, [setError, showToast, i18n, maxAttachmentSizeInKb, onAddStory]);
+  }, [setError, showToast, i18n, maxAttachmentVideoSize, onAddStory]);
 
   return (
     <>
-      <ContextMenu
-        ariaLabel={i18n('icu:Stories__add')}
-        i18n={i18n}
-        onMenuShowingChanged={onContextMenuShowingChanged}
-        menuOptions={[
-          {
-            label: i18n('icu:Stories__add-story--media'),
-            onClick: onAddMedia,
-          },
-          {
-            label: i18n('icu:Stories__add-story--text'),
-            onClick: () => onAddStory(),
-          },
-        ]}
-        moduleClassName={moduleClassName}
-        popperOptions={{
-          placement: 'bottom',
-          strategy: 'absolute',
-        }}
+      <AxoDropdownMenu.Root onOpenChange={onContextMenuShowingChanged}>
+        <AxoDropdownMenu.Trigger>
+          {children ?? (
+            <AxoIconButton.Root
+              variant="implied-secondary"
+              size="sm"
+              symbol="plus"
+              label={i18n('icu:Stories__add')}
+            />
+          )}
+        </AxoDropdownMenu.Trigger>
+        <AxoDropdownMenu.Content>
+          <AxoDropdownMenu.Item onSelect={onAddMedia}>
+            {i18n('icu:Stories__add-story--media')}
+          </AxoDropdownMenu.Item>
+          <AxoDropdownMenu.Item onSelect={() => onAddStory()}>
+            {i18n('icu:Stories__add-story--text')}
+          </AxoDropdownMenu.Item>
+        </AxoDropdownMenu.Content>
+      </AxoDropdownMenu.Root>
+      <AxoConfirmDialog.Root
+        open={error != null}
+        onOpenChange={() => setError(undefined)}
+        // @ts-expect-error ConfirmationDialog migration: Needs title
+        title={null}
+        // @ts-expect-error ConfirmationDialog migration: Needs description
+        description={error}
       >
-        {children}
-      </ContextMenu>
-      {error && (
-        <ConfirmationDialog
-          dialogName="StoriesAddStoryButton.error"
-          noDefaultCancelButton
-          actions={[
-            {
-              action: () => {
-                setError(undefined);
-              },
-              style: 'affirmative',
-              text: i18n('icu:Confirmation--confirm'),
-            },
-          ]}
-          i18n={i18n}
-          onClose={() => {
-            setError(undefined);
-          }}
+        <AxoConfirmDialog.Action
+          variant="strong-primary"
+          onClick={() => setError(undefined)}
         >
-          {error}
-        </ConfirmationDialog>
-      )}
+          {i18n('icu:ok')}
+        </AxoConfirmDialog.Action>
+      </AxoConfirmDialog.Root>
     </>
   );
 }

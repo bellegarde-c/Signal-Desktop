@@ -1,21 +1,20 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/* eslint-disable no-console */
 import * as fs from 'node:fs';
 import { join, relative } from 'node:path';
 import normalizePath from 'normalize-path';
 import pMap from 'p-map';
 import FastGlob from 'fast-glob';
 
-import type { ExceptionType, RuleType } from './types.std.js';
-import { REASONS } from './types.std.js';
+import type { ExceptionType, RuleType } from './types.std.ts';
+import { REASONS } from './types.std.ts';
 import {
   ENCODING,
   loadJSON,
   sortExceptions,
   writeExceptions,
-} from './util.node.js';
+} from './util.node.ts';
 
 const ALL_REASONS = REASONS.join('|');
 
@@ -23,7 +22,18 @@ const rulesPath = join(__dirname, 'rules.json');
 const exceptionsPath = join(__dirname, 'exceptions.json');
 const basePath = join(__dirname, '../../..');
 
-const searchPattern = normalizePath(join(basePath, '**/*.{js,ts,tsx}'));
+const searchPattern = normalizePath(join(basePath, '**/*.{js,mjs,ts,tsx}'));
+
+const THIRD_PARTY_PATHS = ['node_modules/', 'js/', 'components/'];
+
+function pathStartsWithOneOf(
+  filePath: string,
+  pathPrefixes: ReadonlyArray<string>
+): boolean {
+  return pathPrefixes.some(pathPrefix => {
+    return filePath.startsWith(pathPrefix);
+  });
+}
 
 const excludedFilesRegexp = RegExp(
   [
@@ -65,13 +75,8 @@ const excludedFilesRegexp = RegExp(
     '^js/components.js',
     '^js/curve/',
     '^js/util_worker.js',
-    '^libtextsecure/test/test.js',
-    '^test/test.js',
     '^ts/workers/heicConverter.bundle.js',
     '^ts/sql/mainWorker.bundle.js',
-
-    // Copied from dependency
-    '^js/Mp3LameEncoder.min.js',
 
     // Test files
     '^libtextsecure/test/.+',
@@ -121,8 +126,10 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/@eslint/.+',
     '^node_modules/@signalapp/mock-server/.+',
     '^node_modules/@signalapp/mute-state-change/node_modules/prettier/.+',
+    '^node_modules/@signalapp/clonefile/node_modules/prettier/.+',
     '^node_modules/@svgr/.+',
     '^node_modules/@types/.+',
+    '^node_modules/@vitest/.+',
     '^node_modules/@webassemblyjs/.+',
     '^node_modules/@electron/.+',
     '^node_modules/ajv/.+',
@@ -134,6 +141,7 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/app-builder-lib/.+',
     '^node_modules/asn1\\.js/.+',
     '^node_modules/autoprefixer/.+',
+    '^node_modules/axe-core/.+',
     '^node_modules/babel.+',
     '^node_modules/bluebird/.+',
     '^node_modules/body-parser/.+',
@@ -172,7 +180,6 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/es-abstract/.+',
     '^node_modules/es5-shim/.+', // Currently only used in storybook
     '^node_modules/es6-shim/.+', // Currently only used in storybook
-    '^node_modules/esbuild/.+',
     '^node_modules/escodegen/.+',
     '^node_modules/eslint.+',
     '^node_modules/espree.+',
@@ -197,7 +204,6 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/hpack\\.js/.+',
     '^node_modules/http-proxy-middlewar/.+',
     '^node_modules/icss-utils/.+',
-    '^node_modules/intl-tel-input/examples/.+',
     '^node_modules/istanbul.+',
     '^node_modules/jimp/.+',
     '^node_modules/jquery/.+',
@@ -230,11 +236,8 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/preserve/.+',
     '^node_modules/prettier/.+',
     '^node_modules/prop-types/.+',
-    '^node_modules/protobufjs/cli/.+',
     '^node_modules/ramda/.+',
     '^node_modules/rambda/.+',
-    '^node_modules/react-devtools/.+',
-    '^node_modules/react-devtools-core/.+',
     '^node_modules/react-dev-utils/.+',
     '^node_modules/react-docgen/.+',
     '^node_modules/react-error-overlay/.+',
@@ -266,7 +269,6 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/to-ast/.+',
     '^node_modules/trough/.+',
     '^node_modules/ts-loader/.+',
-    '^node_modules/ts-node/.+',
     '^node_modules/tweetnacl/.+',
     '^node_modules/typed-scss-modules/.+',
     '^node_modules/typescript/.+',
@@ -275,14 +277,14 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/url-loader/.+',
     '^node_modules/use/.+',
     '^node_modules/vary/.+',
+    '^node_modules/vite/.+',
+    '^node_modules/vitest-browser-react/.+',
     '^node_modules/vm-browserify/.+',
     '^node_modules/webdriverio/.+',
     '^node_modules/webpack/.+',
     '^node_modules/xml-parse-from-string/.+',
     '^node_modules/xmlbuilder/.+',
     '^node_modules/xmldom/.+',
-    '^node_modules/yargs-unparser/',
-    '^node_modules/yargs/.+',
     '^node_modules/find-yarn-workspace-root/.+',
     '^node_modules/unzipper/node_modules/bluebird/.+',
     '^node_modules/update-notifier/.+',
@@ -316,7 +318,6 @@ const excludedFilesRegexp = RegExp(
     '^node_modules/fork-ts-checker-webpack-plugin/.+',
     '^node_modules/gzip-size/.+',
     '^node_modules/markdown-to-jsx/.+',
-    '^node_modules/mini-css-extract-plugin/.+',
     '^node_modules/polished.+',
     '^node_modules/prismjs/.+',
     '^node_modules/react-draggable/.+',
@@ -363,7 +364,7 @@ function setupRules(allRules: Array<RuleType>) {
       throw new Error(`Rule '${rule.name}' is missing an expression`);
     }
 
-    // eslint-disable-next-line no-param-reassign
+    // oxlint-disable-next-line no-param-reassign
     rule.regex = new RegExp(rule.expression, 'g');
   });
 }
@@ -399,8 +400,15 @@ async function main(argv: ReadonlyArray<string>): Promise<void> {
       const lines = (await fs.promises.readFile(file, ENCODING)).split(/\r?\n/);
 
       rules.forEach((rule: RuleType) => {
+        if (
+          rule.excludeOurCode &&
+          !pathStartsWithOneOf(relativePath, THIRD_PARTY_PATHS)
+        ) {
+          return;
+        }
+
         const excludedModules = rule.excludedModules || [];
-        if (excludedModules.some(module => relativePath.startsWith(module))) {
+        if (pathStartsWithOneOf(relativePath, excludedModules)) {
           return;
         }
 
@@ -410,7 +418,7 @@ async function main(argv: ReadonlyArray<string>): Promise<void> {
           }
           // recreate this rule since it has g flag, and carries local state
           if (rule.expression) {
-            // eslint-disable-next-line no-param-reassign
+            // oxlint-disable-next-line no-param-reassign
             rule.regex = new RegExp(rule.expression, 'g');
           }
 
@@ -486,6 +494,7 @@ async function main(argv: ReadonlyArray<string>): Promise<void> {
   process.exit(1);
 }
 
+// oxlint-disable-next-line promise/prefer-await-to-then
 main(process.argv).catch(err => {
   console.error(err);
   process.exit(1);

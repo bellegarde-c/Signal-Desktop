@@ -1,22 +1,21 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReadonlyDeep } from 'type-fest';
-import type { ThunkAction } from 'redux-thunk';
-
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { createLogger } from '../../logging/log.std.js';
-import * as Errors from '../../types/errors.std.js';
-import { DataWriter } from '../../sql/Client.preload.js';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import * as Errors from '../../types/errors.std.ts';
+import { DataWriter } from '../../sql/Client.preload.ts';
 import type {
   MegaphoneCtaId,
   RemoteMegaphoneId,
   VisibleRemoteMegaphoneType,
-} from '../../types/Megaphone.std.js';
-import type { ChangeLocationAction } from './nav.std.js';
-import { actions as navActions } from './nav.std.js';
-import { NavTab, SettingsPage } from '../../types/Nav.std.js';
+} from '../../types/Megaphone.std.ts';
+import type { ChangeLocationAction } from './nav.std.ts';
+import { actions as navActions } from './nav.std.ts';
+import { NavTab, SettingsPage } from '../../types/Nav.std.ts';
+import { isTestMegaphoneId } from '../../util/getTestMegaphone.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const log = createLogger('megaphones');
 
@@ -81,17 +80,16 @@ function removeVisibleMegaphone(
 function interactWithMegaphone(
   megaphoneId: RemoteMegaphoneId,
   ctaId: MegaphoneCtaId
-): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  RemoveVisibleMegaphoneAction | ChangeLocationAction
-> {
+): AsyncStateThunk<RemoveVisibleMegaphoneAction | ChangeLocationAction> {
   return async dispatch => {
+    const isTest = isTestMegaphoneId(megaphoneId);
+
     if (ctaId === 'donate' || ctaId === 'finish') {
       try {
         log.info(`Finishing megaphone ${megaphoneId}, ctaId=${ctaId}`);
-        await DataWriter.finishMegaphone(megaphoneId);
+        if (!isTest) {
+          await DataWriter.finishMegaphone(megaphoneId);
+        }
       } catch (error) {
         log.error(
           `Failed to finish megaphone ${megaphoneId}`,
@@ -101,18 +99,20 @@ function interactWithMegaphone(
     }
 
     if (ctaId === 'donate') {
-      dispatch(
+      void dispatch(
         navActions.changeLocation({
           tab: NavTab.Settings,
           details: {
-            page: SettingsPage.Donations,
+            page: SettingsPage.DonationsDonateFlow,
           },
         })
       );
     } else if (ctaId === 'snooze') {
       try {
         log.info(`Snoozing megaphone ${megaphoneId}`);
-        await DataWriter.snoozeMegaphone(megaphoneId);
+        if (!isTest) {
+          await DataWriter.snoozeMegaphone(megaphoneId);
+        }
       } catch (error) {
         log.error(
           `Failed to snooze megaphone ${megaphoneId}`,

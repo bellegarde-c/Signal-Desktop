@@ -1,27 +1,44 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
 
-import type { LocalizerType } from '../../types/Util.std.js';
-import { SystemMessage } from './SystemMessage.dom.js';
-import { Emojify } from './Emojify.dom.js';
-import { getStringForPhoneNumberDiscovery } from '../../util/getStringForPhoneNumberDiscovery.std.js';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import { SystemMessage } from './SystemMessage.dom.tsx';
+import { Emojify } from './Emojify.dom.tsx';
+import { getStringForPhoneNumberDiscovery } from '../../util/getStringForPhoneNumberDiscovery.std.ts';
+import {
+  useSharedGroupNamesOnMount,
+  type GetSharedGroupNamesType,
+} from '../../util/sharedGroupNames.dom.ts';
 
 export type PropsDataType = {
+  conversationId: string;
   conversationTitle: string;
   phoneNumber: string;
-  sharedGroup?: string;
 };
 export type PropsType = PropsDataType & {
+  getSharedGroupNames: GetSharedGroupNamesType;
   i18n: LocalizerType;
 };
 
 // Also known as a Session Switchover Event (SSE)
 export function PhoneNumberDiscoveryNotification(
   props: PropsType
-): React.JSX.Element {
-  const { conversationTitle, i18n, sharedGroup, phoneNumber } = props;
+): JSX.Element {
+  const {
+    conversationId,
+    conversationTitle,
+    getSharedGroupNames,
+    i18n,
+    phoneNumber,
+  } = props;
+
+  const sharedGroupNames = useSharedGroupNamesOnMount(
+    conversationId,
+    getSharedGroupNames
+  );
+  const sharedGroup = sharedGroupNames[0];
 
   const message = getStringForPhoneNumberDiscovery({
     conversationTitle,

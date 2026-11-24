@@ -2,19 +2,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import loadImage from 'blueimp-load-image';
+import {
+  Input,
+  UrlSource,
+  MP4,
+  WEBM,
+  OGG,
+  CanvasSink,
+  NullTarget,
+  Conversion,
+  Output,
+  Mp4OutputFormat,
+  Quality,
+} from 'mediabunny';
 import { blobToArrayBuffer } from 'blob-util';
-import { toLogFormat } from './errors.std.js';
-import type { MIMEType } from './MIME.std.js';
-import { IMAGE_JPEG, IMAGE_PNG } from './MIME.std.js';
-import type { LoggerType } from './Logging.std.js';
-import { strictAssert } from '../util/assert.std.js';
-import { canvasToBlob } from '../util/canvasToBlob.std.js';
-import { KIBIBYTE } from './AttachmentSize.std.js';
-import { explodePromise } from '../util/explodePromise.std.js';
-import { SECOND } from '../util/durations/index.std.js';
-import { createLogger } from '../logging/log.std.js';
+import { toLogFormat } from './errors.std.ts';
+import type { MIMEType } from './MIME.std.ts';
+import { IMAGE_JPEG, IMAGE_PNG } from './MIME.std.ts';
+import type { LoggerType } from './Logging.std.ts';
+import { strictAssert } from '../util/assert.std.ts';
+import { canvasToBlob } from '../util/canvasToBlob.dom.ts';
+import { KIBIBYTE } from './AttachmentSize.std.ts';
+import { createLogger } from '../logging/log.std.ts';
 
 const logging = createLogger('VisualAttachment');
+
+export const TRANSCODABLE_VIDEO_FORMATS = [MP4, WEBM, OGG];
 
 export { blobToArrayBuffer };
 
@@ -63,6 +76,7 @@ export function makeImageThumbnail({
   return new Promise((resolve, reject) => {
     const image = document.createElement('img');
 
+    image.crossOrigin = 'anonymous';
     image.addEventListener('load', async () => {
       // using components/blueimp-load-image
 
@@ -120,7 +134,7 @@ const MINIMUM_JPEG_QUALITY = 0.1;
 const ADDITIONAL_QUALITY_DECREASE_PER_ITERATION = 0.1;
 
 export type CreatedThumbnailType = {
-  data: Uint8Array;
+  data: Uint8Array<ArrayBuffer>;
   height: number;
   width: number;
   mimeType: MIMEType;
@@ -134,6 +148,7 @@ export async function makeImageThumbnailForBackup({
   return new Promise((resolve, reject) => {
     const image = document.createElement('img');
 
+    image.crossOrigin = 'anonymous';
     image.addEventListener('load', async () => {
       const start = performance.now();
 
@@ -170,7 +185,7 @@ export async function makeImageThumbnailForBackup({
             (maxSize / blob.size) * jpegQuality -
               ADDITIONAL_QUALITY_DECREASE_PER_ITERATION
           );
-          // eslint-disable-next-line no-await-in-loop
+          // oxlint-disable-next-line no-await-in-loop
           blob = await canvasToBlob(canvas, IMAGE_JPEG, jpegQuality);
           iterations += 1;
         }
@@ -212,89 +227,138 @@ export type MakeVideoScreenshotOptionsType = Readonly<{
   contentType?: MIMEType;
 }>;
 
-const MAKE_VIDEO_SCREENSHOT_TIMEOUT = 30 * SECOND;
-
-function captureScreenshot(
-  video: HTMLVideoElement,
-  contentType: MIMEType
-): Promise<Blob> {
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const context = canvas.getContext('2d');
-  strictAssert(context, 'Failed to get canvas context');
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvasToBlob(canvas, contentType);
-}
-
 export type MakeVideoScreenshotResultType = Readonly<{
   blob: Blob;
-  duration: number | undefined;
+  duration: number;
+  videoBitrateMbps: number;
+  width: number;
+  height: number;
 }>;
 
 export async function makeVideoScreenshot({
   objectUrl,
   contentType = IMAGE_PNG,
 }: MakeVideoScreenshotOptionsType): Promise<MakeVideoScreenshotResultType> {
-  const signal = AbortSignal.timeout(MAKE_VIDEO_SCREENSHOT_TIMEOUT);
-  const video = document.createElement('video');
+  const source = new UrlSource(objectUrl);
 
-  const { promise: videoLoadedAndSeeked, resolve, reject } = explodePromise();
-
-  function onLoaded() {
-    if (signal.aborted) {
-      return;
-    }
-    video.addEventListener('seeked', resolve);
-    video.currentTime = 1.0;
-  }
-
-  function onAborted() {
-    reject(signal.reason);
-  }
-
-  video.addEventListener('loadeddata', onLoaded);
-  video.addEventListener('error', reject);
-  signal.addEventListener('abort', onAborted);
-
-  try {
-    video.src = objectUrl;
-    await videoLoadedAndSeeked;
-    const blob = await captureScreenshot(video, contentType);
-
-    return {
-      blob,
-      duration:
-        video.duration == null || Number.isNaN(video.duration)
-          ? undefined
-          : video.duration,
-    };
-  } catch (error) {
-    logging.error('makeVideoScreenshot error:', toLogFormat(error));
-    throw error;
-  } finally {
-    // hard reset the video element so it doesn't keep loading
-    video.src = '';
-    video.load();
-
-    video.removeEventListener('loadeddata', onLoaded);
-    video.removeEventListener('error', reject);
-    video.removeEventListener('seeked', resolve);
-    signal.removeEventListener('abort', onAborted);
-  }
-}
-
-export function makeObjectUrl(
-  data: Uint8Array | ArrayBuffer,
-  contentType: MIMEType
-): string {
-  const blob = new Blob([data], {
-    type: contentType,
+  const input = new Input({
+    formats: TRANSCODABLE_VIDEO_FORMATS,
+    source,
   });
 
-  return URL.createObjectURL(blob);
+  const duration = await input.computeDuration();
+
+  const track = await input.getPrimaryVideoTrack();
+  if (track == null) {
+    throw new Error('No video track');
+  }
+
+  // Compute rough bitrate over a second or so
+  const { averageBitrate: videoBitrate } = await track.computePacketStats(30);
+
+  const sink = new CanvasSink(track);
+
+  const wrappedCanvas = await sink.getCanvas(
+    Math.max(0, await track.getFirstTimestamp())
+  );
+  if (wrappedCanvas == null) {
+    throw new Error('No video frame');
+  }
+
+  const { canvas } = wrappedCanvas;
+  strictAssert(canvas instanceof HTMLCanvasElement, 'Expected html canvas');
+
+  const blob = await canvasToBlob(canvas, contentType);
+
+  const [width, height] = await Promise.all([
+    track.getDisplayWidth(),
+    track.getDisplayHeight(),
+  ]);
+
+  return {
+    blob,
+    duration,
+    videoBitrateMbps: videoBitrate / 1e6,
+    width,
+    height,
+  };
 }
 
-export function revokeObjectUrl(objectUrl: string): void {
-  URL.revokeObjectURL(objectUrl);
+export async function estimateTranscodedVideoSize({
+  url,
+  duration,
+
+  targetResolution,
+  targetBitrate,
+}: {
+  url: string;
+  duration: number;
+
+  targetResolution: number;
+  targetBitrate: number;
+}): Promise<number> {
+  const source = new UrlSource(url);
+
+  const input = new Input({
+    formats: TRANSCODABLE_VIDEO_FORMATS,
+    source,
+  });
+
+  const track = await input.getPrimaryVideoTrack();
+  if (track == null) {
+    throw new Error('No video track');
+  }
+
+  const [width, height] = await Promise.all([
+    track.getDisplayWidth(),
+    track.getDisplayHeight(),
+  ]);
+
+  const target = new NullTarget();
+
+  const output = new Output({
+    target,
+    format: new Mp4OutputFormat(),
+  });
+
+  let outputSize = 0;
+  target.on('write', ({ end }) => {
+    outputSize = Math.max(outputSize, end);
+  });
+
+  const quality = new Quality({
+    bitrate: Math.floor(targetBitrate * 1e6),
+    bitrateMode: 'constant',
+  });
+
+  const conversion = await Conversion.init({
+    input,
+    output,
+    tracks: 'primary', // Keep only one track per type
+    video:
+      width > height
+        ? {
+            // Horizontal video
+            height: Math.min(height, targetResolution),
+            quality,
+          }
+        : {
+            // Vertical video
+            width: Math.min(width, targetResolution),
+            quality,
+          },
+    trim: {
+      // One second video should fit into memory and let us estimate the coded
+      // size
+      end: 1,
+    },
+  });
+
+  if (!conversion.isValid) {
+    throw new Error('Failed to transcode');
+  }
+
+  await conversion.execute();
+
+  return Math.ceil(outputSize * duration);
 }

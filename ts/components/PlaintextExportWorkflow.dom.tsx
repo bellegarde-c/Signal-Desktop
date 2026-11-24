@@ -1,23 +1,23 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import { useState, type JSX } from 'react';
 
 import {
   LocalExportErrors,
   PlaintextExportSteps,
-} from '../types/LocalExport.std.js';
-import { AxoDialog } from '../axo/AxoDialog.dom.js';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.js';
+} from '../types/LocalExport.std.ts';
+import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
 
-import type { PlaintextExportWorkflowType } from '../types/LocalExport.std.js';
-import type { LocalizerType } from '../types/I18N.std.js';
-import { AxoCheckbox } from '../axo/AxoCheckbox.dom.js';
-import { formatFileSize } from '../util/formatFileSize.std.js';
-import { ProgressBar } from './ProgressBar.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { tw } from '../axo/tw.dom.js';
-import { I18n } from './I18n.dom.js';
+import type { PlaintextExportWorkflowType } from '../types/LocalExport.std.ts';
+import type { LocalizerType } from '../types/I18N.std.ts';
+import { AxoCheckbox } from '../axo/AxoCheckbox.dom.tsx';
+import { formatFileSize } from '../util/formatFileSize.std.ts';
+import { ProgressBar } from './ProgressBar.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { tw } from '../axo/tw.dom.tsx';
+import { I18n } from './I18n.dom.tsx';
 
 export type PropsType = {
   cancelWorkflow: () => unknown;
@@ -29,11 +29,11 @@ export type PropsType = {
   workflow: PlaintextExportWorkflowType;
 };
 
-function Bold(parts: Array<string | React.JSX.Element>) {
+function Bold(parts: Array<string | JSX.Element>) {
   return <b>{parts}</b>;
 }
-function Secondary(parts: Array<string | React.JSX.Element>) {
-  return <span className={tw('text-label-secondary')}>{parts}</span>;
+function Secondary(parts: Array<string | JSX.Element>) {
+  return <span className={tw('text-secondary')}>{parts}</span>;
 }
 
 export function PlaintextExportWorkflow({
@@ -44,8 +44,8 @@ export function PlaintextExportWorkflow({
   osName,
   verifyWithOSForExport,
   workflow,
-}: PropsType): React.JSX.Element {
-  const [includeMedia, setIncludeMedia] = React.useState(true);
+}: PropsType): JSX.Element {
+  const [includeMedia, setIncludeMedia] = useState(true);
   const { step } = workflow;
 
   if (
@@ -58,16 +58,12 @@ export function PlaintextExportWorkflow({
     return (
       <AxoDialog.Root open onOpenChange={clearWorkflow}>
         <AxoDialog.Content size="md" escape="cancel-is-destructive">
-          <AxoDialog.Header>
+          <AxoDialog.Body>
             <AxoDialog.Title>
-              <div className={tw('pt-[10px]')}>
-                {i18n('icu:PlaintextExport--Confirmation--Header')}
-              </div>
+              {i18n('icu:PlaintextExport--Confirmation--Header')}
             </AxoDialog.Title>
-          </AxoDialog.Header>
-          <AxoDialog.Body padding="normal">
-            <div className={tw('px-[13px]')}>
-              <div className={tw('text-label-secondary')}>
+            <AxoDialog.Description>
+              <p className={tw('mb-2.5')}>
                 <I18n
                   i18n={i18n}
                   id="icu:PlaintextExport--Confirmation--Description"
@@ -75,46 +71,41 @@ export function PlaintextExportWorkflow({
                     bold: Bold,
                   }}
                 />
-              </div>
-              <label
-                className={tw('mt-2 flex items-center py-[10px] ps-4')}
-                htmlFor="includeMediaCheckbox"
-              >
-                <AxoCheckbox.Root
-                  id="includeMediaCheckbox"
-                  variant="square"
-                  disabled={shouldShowSpinner}
-                  checked={includeMedia}
-                  onCheckedChange={value => setIncludeMedia(value)}
+              </p>
+            </AxoDialog.Description>
+            <label
+              className={tw('flex items-center text-primary')}
+              htmlFor="includeMediaCheckbox"
+            >
+              <AxoCheckbox.Root
+                id="includeMediaCheckbox"
+                variant="square"
+                disabled={shouldShowSpinner}
+                checked={includeMedia}
+                onCheckedChange={value => setIncludeMedia(value)}
+              />
+              <span className={tw('ps-2')}>
+                <I18n
+                  i18n={i18n}
+                  id="icu:PlaintextExport--Confirmation--IncludeMedia"
+                  components={{
+                    secondary: Secondary,
+                  }}
                 />
-                <div className={tw('ps-2')}>
-                  <I18n
-                    i18n={i18n}
-                    id="icu:PlaintextExport--Confirmation--IncludeMedia"
-                    components={{
-                      secondary: Secondary,
-                    }}
-                  />
-                </div>
-              </label>
-            </div>
+              </span>
+            </label>
           </AxoDialog.Body>
           <AxoDialog.Footer>
             <AxoDialog.Actions>
-              <AxoDialog.Action variant="secondary" onClick={clearWorkflow}>
+              <AxoDialog.Action
+                variant="subtle-secondary"
+                onClick={clearWorkflow}
+              >
                 {i18n('icu:cancel')}
               </AxoDialog.Action>
               <AxoDialog.Action
-                variant="primary"
-                experimentalSpinner={
-                  shouldShowSpinner
-                    ? {
-                        'aria-label': i18n(
-                          'icu:PlaintextExport--Confirmation--WaitingLabel'
-                        ),
-                      }
-                    : null
-                }
+                variant="strong-primary"
+                pending={shouldShowSpinner}
                 onClick={() => verifyWithOSForExport(includeMedia)}
               >
                 {i18n('icu:PlaintextExport--Confirmation--ContinueButton')}
@@ -143,13 +134,17 @@ export function PlaintextExportWorkflow({
 
       progressElements = (
         <>
-          <div className={tw('mb-[17px]')}>
+          <div className={tw('mb-4')}>
             <ProgressBar
               fractionComplete={fractionComplete}
               isRTL={i18n.getLocaleDirection() === 'rtl'}
             />
           </div>
-          <div className={tw('mb-1.5 text-center type-body-small font-[600]')}>
+          <div
+            className={tw(
+              'mb-1.5 text-center type-body-small font-semibold text-primary'
+            )}
+          >
             {i18n('icu:PlaintextExport--ProgressDialog--Progress', {
               currentBytes: formatFileSize(progress.currentBytes),
               totalBytes: formatFileSize(progress.totalBytes),
@@ -160,7 +155,7 @@ export function PlaintextExportWorkflow({
       );
     } else {
       progressElements = (
-        <div className={tw('mb-[17px]')}>
+        <div className={tw('mb-4')}>
           <ProgressBar
             fractionComplete={null}
             isRTL={i18n.getLocaleDirection() === 'rtl'}
@@ -172,40 +167,30 @@ export function PlaintextExportWorkflow({
     return (
       <AxoDialog.Root open onOpenChange={cancelWorkflow}>
         <AxoDialog.Content size="md" escape="cancel-is-destructive">
-          <AxoDialog.Header>
-            <AxoDialog.Title>
-              <div className={tw('pt-[10px]')}>
+          <AxoDialog.Body>
+            <div className={tw('text-center')}>
+              <AxoDialog.Title>
                 {i18n('icu:PlaintextExport--ProgressDialog--Header')}
-              </div>
-            </AxoDialog.Title>
-          </AxoDialog.Header>
-          <AxoDialog.Body padding="normal">
-            <div className={tw('mx-auto my-[29px] w-[331px]')}>
-              {progressElements}
-              <div
-                className={tw(
-                  'text-center type-body-small text-label-secondary'
-                )}
-              >
-                {i18n('icu:PlaintextExport--ProgressDialog--TimeWarning')}
+              </AxoDialog.Title>
+              <div className={tw('my-6')}>
+                {progressElements}
+                <AxoDialog.Description>
+                  <p className={tw('type-body-small text-secondary')}>
+                    {i18n('icu:PlaintextExport--ProgressDialog--TimeWarning')}
+                  </p>
+                </AxoDialog.Description>
               </div>
             </div>
           </AxoDialog.Body>
           <AxoDialog.Footer>
-            <div
-              className={tw(
-                // Unlike AxoDialog.Actions, we want these buttons centered
-                'mx-auto',
-                // Everything else is copied from AxoDialog.Action
-                'flex flex-wrap',
-                'max-w-full',
-                'items-center gap-x-2 gap-y-3'
-              )}
-            >
-              <AxoDialog.Action variant="secondary" onClick={cancelWorkflow}>
+            <AxoDialog.Actions width="fill">
+              <AxoDialog.Action
+                variant="subtle-secondary"
+                onClick={cancelWorkflow}
+              >
                 {i18n('icu:cancel')}
               </AxoDialog.Action>
-            </div>
+            </AxoDialog.Actions>
           </AxoDialog.Footer>
         </AxoDialog.Content>
       </AxoDialog.Root>
@@ -244,17 +229,14 @@ export function PlaintextExportWorkflow({
           </AxoAlertDialog.Body>
           <AxoAlertDialog.Footer>
             <AxoAlertDialog.Action
-              variant="secondary"
+              variant="subtle-secondary"
               onClick={() => {
                 openFileInFolder(workflow.exportPath);
-                clearWorkflow();
               }}
             >
               {showInFolderText}
             </AxoAlertDialog.Action>
-            <AxoAlertDialog.Action variant="primary" onClick={clearWorkflow}>
-              {i18n('icu:ok')}
-            </AxoAlertDialog.Action>
+            <AxoAlertDialog.Ok />
           </AxoAlertDialog.Footer>
         </AxoAlertDialog.Content>
       </AxoAlertDialog.Root>
@@ -293,9 +275,7 @@ export function PlaintextExportWorkflow({
             <AxoAlertDialog.Description>{detail}</AxoAlertDialog.Description>
           </AxoAlertDialog.Body>
           <AxoAlertDialog.Footer>
-            <AxoAlertDialog.Action variant="primary" onClick={clearWorkflow}>
-              {i18n('icu:ok')}
-            </AxoAlertDialog.Action>
+            <AxoAlertDialog.Ok />
           </AxoAlertDialog.Footer>
         </AxoAlertDialog.Content>
       </AxoAlertDialog.Root>

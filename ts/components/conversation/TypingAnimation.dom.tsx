@@ -1,24 +1,30 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
+
 import classNames from 'classnames';
 
-import type { LocalizerType } from '../../types/Util.std.js';
+import type { LocalizerType } from '../../types/Util.std.ts';
+
+type Color = 'light';
+
+const COLOR_CLASSES: Record<Color, string> = {
+  light: 'module-typing-animation__dot--light',
+};
 
 export type Props = {
   i18n: LocalizerType;
-  color?: string;
+  color?: Color;
 };
 
-export function TypingAnimation({ i18n, color }: Props): React.JSX.Element {
+export function TypingAnimation({ i18n, color }: Props): JSX.Element {
   return (
     <div className="module-typing-animation" title={i18n('icu:typingAlt')}>
       <div
         className={classNames(
           'module-typing-animation__dot',
-          'module-typing-animation__dot--first',
-          color ? `module-typing-animation__dot--${color}` : null
+          color != null && COLOR_CLASSES[color]
         )}
       />
       <div className="module-typing-animation__spacer" />
@@ -26,7 +32,7 @@ export function TypingAnimation({ i18n, color }: Props): React.JSX.Element {
         className={classNames(
           'module-typing-animation__dot',
           'module-typing-animation__dot--second',
-          color ? `module-typing-animation__dot--${color}` : null
+          color != null && COLOR_CLASSES[color]
         )}
       />
       <div className="module-typing-animation__spacer" />
@@ -34,7 +40,7 @@ export function TypingAnimation({ i18n, color }: Props): React.JSX.Element {
         className={classNames(
           'module-typing-animation__dot',
           'module-typing-animation__dot--third',
-          color ? `module-typing-animation__dot--${color}` : null
+          color != null && COLOR_CLASSES[color]
         )}
       />
     </div>

@@ -1,21 +1,21 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React from 'react';
+import type { ReactNode, ChangeEvent } from 'react';
 
-import { LeftPaneHelper } from './LeftPaneHelper.dom.js';
-import type { Row } from '../ConversationList.dom.js';
-import { RowType } from '../ConversationList.dom.js';
-import { SearchInput } from '../SearchInput.dom.js';
-import type { LocalizerType } from '../../types/Util.std.js';
-import type { ShowConversationType } from '../../state/ducks/conversations.preload.js';
-import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.js';
-import { isFetchingByUsername } from '../../util/uuidFetchState.std.js';
-import { drop } from '../../util/drop.std.js';
-import type { LookupConversationWithoutServiceIdActionsType } from '../../util/lookupConversationWithoutServiceId.preload.js';
-import { Spinner } from '../Spinner.dom.js';
-import { Button } from '../Button.dom.js';
+import { LeftPaneHelper } from './LeftPaneHelper.dom.tsx';
+import type { Row } from '../ConversationList.dom.tsx';
+import { RowType } from '../ConversationList.dom.tsx';
+import { SearchInput } from '../SearchInput.dom.tsx';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import type { ShowConversationType } from '../../state/ducks/conversations.preload.ts';
+import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.ts';
+import { isFetchingByUsername } from '../../util/uuidFetchState.std.ts';
+import { drop } from '../../util/drop.std.ts';
+import type { LookupConversationWithoutServiceIdActionsType } from '../../util/lookupConversationWithoutServiceId.preload.ts';
+import { Spinner } from '../Spinner.dom.tsx';
+import { Button } from '../Button.dom.tsx';
+import { NavSidebarBackButton } from '../NavSidebar.dom.tsx';
 
 export type LeftPaneFindByUsernamePropsType = {
   searchTerm: string;
@@ -29,6 +29,7 @@ type DoLookupActionsType = Readonly<{
 }> &
   LookupConversationWithoutServiceIdActionsType;
 
+// oxlint-disable-next-line react/prefer-function-component
 export class LeftPaneFindByUsernameHelper extends LeftPaneHelper<LeftPaneFindByUsernamePropsType> {
   readonly #searchTerm: string;
   readonly #username: string | undefined;
@@ -58,14 +59,13 @@ export class LeftPaneFindByUsernameHelper extends LeftPaneHelper<LeftPaneFindByU
 
     return (
       <div className="module-left-pane__header__contents">
-        <button
-          aria-label={backButtonLabel}
-          className="module-left-pane__header__contents__back-button"
-          disabled={this.#isFetching()}
-          onClick={this.getBackAction({ startComposing })}
-          title={backButtonLabel}
-          type="button"
-        />
+        <div className="module-left-pane__header__contents__back-button">
+          <NavSidebarBackButton
+            label={backButtonLabel}
+            disabled={this.#isFetching()}
+            onClick={this.getBackAction({ startComposing })}
+          />
+        </div>
         <div className="module-left-pane__header__contents__text">
           {i18n('icu:LeftPaneFindByHelper__title--findByUsername')}
         </div>
@@ -88,7 +88,7 @@ export class LeftPaneFindByUsernameHelper extends LeftPaneHelper<LeftPaneFindByU
   }: Readonly<{
     i18n: LocalizerType;
     onChangeComposeSearchTerm: (
-      event: React.ChangeEvent<HTMLInputElement>
+      event: ChangeEvent<HTMLInputElement>
     ) => unknown;
   }> &
     DoLookupActionsType): ReactNode {
@@ -103,7 +103,7 @@ export class LeftPaneFindByUsernameHelper extends LeftPaneHelper<LeftPaneFindByU
         hasSearchIcon={false}
         disabled={this.#isFetching()}
         i18n={i18n}
-        moduleClassName="LeftPaneFindByUsernameHelper__search-input"
+        className="LeftPaneFindByUsernameHelper__search-input"
         onChange={onChangeComposeSearchTerm}
         placeholder={placeholder}
         ref={focusRef}

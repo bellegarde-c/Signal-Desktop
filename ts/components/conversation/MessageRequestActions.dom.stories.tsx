@@ -1,14 +1,16 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import { action } from '@storybook/addon-actions';
 import type { Meta } from '@storybook/react';
-import { MessageRequestActions } from './MessageRequestActions.dom.js';
+import { MessageRequestActions } from './MessageRequestActions.dom.tsx';
 import {
   getDefaultConversation,
   getDefaultGroup,
-} from '../../test-helpers/getDefaultConversation.std.js';
+} from '../../test-helpers/getDefaultConversation.std.ts';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
 
 const { i18n } = window.SignalContext;
 
@@ -32,18 +34,9 @@ export default {
   args: {
     conversationType: 'direct',
   },
-  decorators: [
-    (Story: React.ComponentType): React.JSX.Element => {
-      return (
-        <div style={{ width: '480px' }}>
-          <Story />
-        </div>
-      );
-    },
-  ],
 } satisfies Meta<Args>;
 
-function Example(args: Args): React.JSX.Element {
+function Example(args: Args): JSX.Element {
   const conversation =
     args.conversationType === 'group'
       ? getDefaultGroup()
@@ -60,6 +53,8 @@ function Example(args: Args): React.JSX.Element {
       isBlocked={args.isBlocked}
       isHidden={args.isHidden}
       isReported={args.isReported}
+      isSignalConversation={isSignalConversation(conversation)}
+      getSharedGroupNames={() => []}
       acceptConversation={action('acceptConversation')}
       blockAndReportSpam={action('blockAndReportSpam')}
       blockConversation={action('blockConversation')}
@@ -69,34 +64,34 @@ function Example(args: Args): React.JSX.Element {
   );
 }
 
-export function Direct(args: Args): React.JSX.Element {
+export function Direct(args: Args): JSX.Element {
   return <Example {...args} />;
 }
 
-export function DirectBlocked(args: Args): React.JSX.Element {
+export function DirectBlocked(args: Args): JSX.Element {
   return <Example {...args} isBlocked />;
 }
 
-export function DirectReported(args: Args): React.JSX.Element {
+export function DirectReported(args: Args): JSX.Element {
   return <Example {...args} isReported />;
 }
 
-export function DirectBlockedAndReported(args: Args): React.JSX.Element {
+export function DirectBlockedAndReported(args: Args): JSX.Element {
   return <Example {...args} isBlocked isReported />;
 }
 
-export function Group(args: Args): React.JSX.Element {
+export function Group(args: Args): JSX.Element {
   return <Example {...args} conversationType="group" />;
 }
 
-export function GroupBlocked(args: Args): React.JSX.Element {
+export function GroupBlocked(args: Args): JSX.Element {
   return <Example {...args} conversationType="group" isBlocked />;
 }
 
-export function GroupReported(args: Args): React.JSX.Element {
+export function GroupReported(args: Args): JSX.Element {
   return <Example {...args} conversationType="group" isReported />;
 }
 
-export function GroupBlockedAndReported(args: Args): React.JSX.Element {
+export function GroupBlockedAndReported(args: Args): JSX.Element {
   return <Example {...args} conversationType="group" isBlocked isReported />;
 }

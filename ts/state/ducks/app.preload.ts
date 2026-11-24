@@ -1,30 +1,35 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ThunkAction } from 'redux-thunk';
 import type { ReadonlyDeep } from 'type-fest';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { createLogger } from '../../logging/log.std.js';
-import { getEnvironment, Environment } from '../../environment.std.js';
+
+import { createLogger } from '../../logging/log.std.ts';
+import { AppViewType } from '../../types/app.std.ts';
+import { getEnvironment } from '../../environment.std.ts';
 import {
   START_INSTALLER,
-  type StartInstallerActionType,
   SHOW_BACKUP_IMPORT,
-  type ShowBackupImportActionType,
-} from './installer.preload.js';
+  cancelInstall,
+} from './installer.preload.ts';
+import {
+  cancelRegistration,
+  startRegistration,
+} from './standaloneInstaller.preload.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { isStandaloneEnabled } from '../../types/StandaloneRegistration.std.ts';
+
+import type { CancelWorkflowActionType } from './standaloneInstaller.preload.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import type {
+  StartInstallerActionType,
+  ShowBackupImportActionType,
+  CancelInstallerActionType,
+} from './installer.preload.ts';
 
 const log = createLogger('app');
 
 // State
-
-export enum AppViewType {
-  Blank = 'Blank',
-  Inbox = 'Inbox',
-  Installer = 'Installer',
-  Standalone = 'Standalone',
-}
 
 export type AppStateType = ReadonlyDeep<{
   hasInitialLoadCompleted: boolean;
@@ -34,15 +39,19 @@ export type AppStateType = ReadonlyDeep<{
 // Actions
 
 const INITIAL_LOAD_COMPLETE = 'app/INITIAL_LOAD_COMPLETE';
+const OPEN_ENTRY_POINT = 'app/OPEN_ENTRY_POINT';
 const OPEN_INBOX = 'app/OPEN_INBOX';
-export const OPEN_INSTALLER = 'app/OPEN_INSTALLER';
 const OPEN_STANDALONE = 'app/OPEN_STANDALONE';
 
 type InitialLoadCompleteActionType = ReadonlyDeep<{
   type: typeof INITIAL_LOAD_COMPLETE;
 }>;
 
-type OpenInboxActionType = ReadonlyDeep<{
+export type OpenEntryPointActionType = ReadonlyDeep<{
+  type: typeof OPEN_ENTRY_POINT;
+}>;
+
+export type OpenInboxActionType = ReadonlyDeep<{
   type: typeof OPEN_INBOX;
 }>;
 
@@ -51,11 +60,15 @@ type OpenStandaloneActionType = ReadonlyDeep<{
 }>;
 
 export type AppActionType = ReadonlyDeep<
-  InitialLoadCompleteActionType | OpenInboxActionType | OpenStandaloneActionType
+  | InitialLoadCompleteActionType
+  | OpenEntryPointActionType
+  | OpenInboxActionType
+  | OpenStandaloneActionType
 >;
 
 export const actions = {
   initialLoadComplete,
+  openEntryPoint,
   openInbox,
   openStandalone,
 };
@@ -69,12 +82,26 @@ function initialLoadComplete(): InitialLoadCompleteActionType {
   };
 }
 
-function openInbox(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  OpenInboxActionType
+function openEntryPoint(): AsyncStateThunk<
+  | OpenEntryPointActionType
+  | CancelWorkflowActionType
+  | CancelInstallerActionType
 > {
+  return async dispatch => {
+    log.info('open entrypoint');
+
+    dispatch({
+      type: OPEN_ENTRY_POINT,
+    });
+
+    // Eagerly cancel standalone and link operations - starting one will cancel the other,
+    // but this starts that process early.
+    dispatch(cancelInstall());
+    dispatch(cancelRegistration());
+  };
+}
+
+export function openInbox(): AsyncStateThunk<OpenInboxActionType> {
   return async dispatch => {
     log.info('open inbox');
 
@@ -86,18 +113,25 @@ function openInbox(): ThunkAction<
   };
 }
 
-function openStandalone(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  OpenStandaloneActionType
-> {
-  return dispatch => {
-    if (getEnvironment() === Environment.PackagedApp) {
+function openStandalone(
+  startFromBeginning = true
+): AsyncStateThunk<OpenStandaloneActionType> {
+  return async dispatch => {
+    if (!isStandaloneEnabled(window.getVersion())) {
+      log.warn(
+        `openStandalone: refusing because feature is not enabled: ${getEnvironment()}`
+      );
       return;
     }
 
+    dispatch(cancelInstall());
+
     window.IPC.addSetupMenuItems();
+
+    if (startFromBeginning) {
+      await dispatch(startRegistration());
+    }
+
     dispatch({
       type: OPEN_STANDALONE,
     });
@@ -123,6 +157,13 @@ export function reducer(
     return {
       ...state,
       appView: AppViewType.Inbox,
+    };
+  }
+
+  if (action.type === OPEN_ENTRY_POINT) {
+    return {
+      ...state,
+      appView: AppViewType.EntryPoint,
     };
   }
 

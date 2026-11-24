@@ -1,10 +1,30 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, type JSX } from 'react';
 import classNames from 'classnames';
 
-import { getIncrement, getTimerBucket } from '../../util/timer.std.js';
+import {
+  getIncrement,
+  getTimerBucket,
+  type TimerBucket,
+} from '../../util/timer.std.ts';
+
+const TimerBucketClassNames: Record<TimerBucket, string> = {
+  '60': 'module-expire-timer--60',
+  '55': 'module-expire-timer--55',
+  '50': 'module-expire-timer--50',
+  '45': 'module-expire-timer--45',
+  '40': 'module-expire-timer--40',
+  '35': 'module-expire-timer--35',
+  '30': 'module-expire-timer--30',
+  '25': 'module-expire-timer--25',
+  '20': 'module-expire-timer--20',
+  '15': 'module-expire-timer--15',
+  '10': 'module-expire-timer--10',
+  '05': 'module-expire-timer--05',
+  '00': 'module-expire-timer--00',
+};
 
 export type Props = Readonly<{
   expirationLength: number;
@@ -14,7 +34,7 @@ export type Props = Readonly<{
 export function ExpireTimer({
   expirationLength,
   expirationTimestamp,
-}: Props): React.JSX.Element {
+}: Props): JSX.Element {
   const [, forceUpdate] = useReducer(() => ({}), {});
 
   useEffect(() => {
@@ -32,7 +52,7 @@ export function ExpireTimer({
     <div
       className={classNames(
         'module-expire-timer',
-        `module-expire-timer--${bucket}`
+        TimerBucketClassNames[bucket]
       )}
     />
   );

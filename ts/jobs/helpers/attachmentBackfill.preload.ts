@@ -1,49 +1,47 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AttachmentBackfillResponseSyncEvent } from '../../textsecure/messageReceiverEvents.std.js';
-import { MessageSender } from '../../textsecure/SendMessage.preload.js';
-import { createLogger } from '../../logging/log.std.js';
-import type { ReadonlyMessageAttributesType } from '../../model-types.d.ts';
-import type { AttachmentType } from '../../types/Attachment.std.js';
+import type { AttachmentBackfillResponseSyncEvent } from '../../textsecure/messageReceiverEvents.std.ts';
+import { MessageSender } from '../../textsecure/SendMessage.preload.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import type { ReadonlyMessageAttributesType } from '../../model-types.std.ts';
+import type { AttachmentType } from '../../types/Attachment.std.ts';
 import {
   isDownloading,
   isDownloaded,
-  isDownloadable,
   getUndownloadedAttachmentSignature,
-} from '../../util/Attachment.std.js';
+} from '../../util/Attachment.std.ts';
 import {
   type MessageAttachmentType,
   AttachmentDownloadUrgency,
-} from '../../types/AttachmentDownload.std.js';
-import { AttachmentDownloadSource } from '../../sql/Interface.std.js';
-import { APPLICATION_OCTET_STREAM } from '../../types/MIME.std.js';
+} from '../../types/AttachmentDownload.std.ts';
+import { AttachmentDownloadSource } from '../../sql/Interface.std.ts';
+import { APPLICATION_OCTET_STREAM } from '../../types/MIME.std.ts';
 import {
   getConversationIdentifier,
   getAddressableMessage,
-  getConversationFromTarget,
-  getMessageQueryFromTarget,
-  findMatchingMessage,
-} from '../../util/syncIdentifiers.preload.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { drop } from '../../util/drop.std.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { isStagingServer } from '../../util/isStagingServer.dom.js';
+  findMessageFromTarget,
+} from '../../util/syncIdentifiers.preload.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { drop } from '../../util/drop.std.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { isStagingServer } from '../../util/isStagingServer.dom.ts';
 import {
   ensureBodyAttachmentsAreSeparated,
   queueAttachmentDownloads,
-} from '../../util/queueAttachmentDownloads.preload.js';
-import { SECOND } from '../../util/durations/index.std.js';
-import { showDownloadFailedToast } from '../../util/showDownloadFailedToast.dom.js';
-import { markAttachmentAsPermanentlyErrored } from '../../util/attachments/markAttachmentAsPermanentlyErrored.std.js';
-import { singleProtoJobQueue } from '../singleProtoJobQueue.preload.js';
-import { MessageModel } from '../../models/messages.preload.js';
-import { getMessageById } from '../../messages/getMessageById.preload.js';
-import { addAttachmentToMessage } from '../../messageModifiers/AttachmentDownloads.preload.js';
-import { SignalService as Proto } from '../../protobuf/index.std.js';
-import * as RemoteConfig from '../../RemoteConfig.dom.js';
-import { isTestOrMockEnvironment } from '../../environment.std.js';
-import { BackfillFailureKind } from '../../components/BackfillFailureModal.dom.js';
+} from '../../util/queueAttachmentDownloads.preload.ts';
+import { SECOND } from '../../util/durations/index.std.ts';
+import { showDownloadFailedToast } from '../../util/showDownloadFailedToast.dom.ts';
+import { singleProtoJobQueue } from '../singleProtoJobQueue.preload.ts';
+import { MessageModel } from '../../models/messages.preload.ts';
+import { getMessageById } from '../../messages/getMessageById.preload.ts';
+import { addAttachmentToMessage } from '../../messageModifiers/AttachmentDownloads.preload.ts';
+import { SignalService as Proto } from '../../protobuf/index.std.ts';
+import * as RemoteConfig from '../../RemoteConfig.dom.ts';
+import { isTestOrMockEnvironment } from '../../environment.std.ts';
+import { BackfillFailureModalKind } from '../../components/BackfillFailureModal.dom.tsx';
+import { markAttachmentAsErrored } from '../../util/attachments/markAttachmentAsErrored.std.ts';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
 
 const log = createLogger('attachmentBackfill');
 
@@ -56,6 +54,9 @@ const PLACEHOLDER_ATTACHMENT: AttachmentType = {
 };
 
 function isBackfillEnabled(): boolean {
+  if (window.ConversationController.areWePrimaryDevice()) {
+    return false;
+  }
   if (isStagingServer() || isTestOrMockEnvironment()) {
     return true;
   }
@@ -67,12 +68,29 @@ function isBackfillEnabled(): boolean {
 }
 
 export class AttachmentBackfill {
-  #pendingRequests = new Map<
+  readonly #pendingRequests = new Map<
     ReadonlyMessageAttributesType['id'],
     NodeJS.Timeout
   >();
 
   public async request(message: ReadonlyMessageAttributesType): Promise<void> {
+    if (!window.ConversationController.doWeHaveOtherDevices()) {
+      log.info(
+        'attachmentBackfill: We have no other devices; not sending sync message'
+      );
+      return;
+    }
+
+    const convo = window.ConversationController.get(message.conversationId);
+    strictAssert(convo != null, 'Missing message conversation');
+
+    if (isSignalConversation(convo.attributes)) {
+      log.info(
+        'attachmentBackfill: Signal conversation; not sending sync request'
+      );
+      return;
+    }
+
     const existingTimer = this.#pendingRequests.get(message.id);
     if (existingTimer != null) {
       return;
@@ -82,9 +100,6 @@ export class AttachmentBackfill {
     if (addr == null) {
       throw new Error('No address for message');
     }
-
-    const convo = window.ConversationController.get(message.conversationId);
-    strictAssert(convo != null, 'Missing message conversation');
 
     this.#pendingRequests.set(
       message.id,
@@ -116,16 +131,7 @@ export class AttachmentBackfill {
       AttachmentData: { Status },
     } = Proto.SyncMessage.AttachmentBackfillResponse;
 
-    const { targetMessage, targetConversation } = response;
-
-    const convo = getConversationFromTarget(targetConversation);
-    if (convo == null) {
-      log.error(`${logId}: conversation not found`);
-      return;
-    }
-
-    const query = getMessageQueryFromTarget(targetMessage);
-    const attributes = await findMatchingMessage(convo.id, query);
+    const attributes = await findMessageFromTarget(response);
     if (attributes == null) {
       log.error(`${logId}: message not found`);
       return;
@@ -146,9 +152,9 @@ export class AttachmentBackfill {
       }
 
       if (response.error === ErrorEnum.MESSAGE_NOT_FOUND) {
-        window.reduxActions.globalModals.showBackfillFailureModal({
-          kind: BackfillFailureKind.NotFound,
-        });
+        window.reduxActions.globalModals.showBackfillFailureModal(
+          BackfillFailureModalKind.NotFound
+        );
       } else {
         throw missingCaseError(response.error);
       }
@@ -200,9 +206,7 @@ export class AttachmentBackfill {
           changeCount += 1;
           updatedSticker = {
             ...updatedSticker,
-            data: markAttachmentAsPermanentlyErrored(existing, {
-              backfillError: true,
-            }),
+            data: markAttachmentAsErrored(existing, 'backfill-terminal-error'),
           };
           showToast = true;
         } else {
@@ -214,7 +218,7 @@ export class AttachmentBackfill {
         // a download.
         if (isDownloading(updatedSticker.data)) {
           attachmentSignaturesToDownload.add(
-            getUndownloadedAttachmentSignature(updatedSticker.data)
+            getUndownloadedAttachmentSignature(remoteSticker.attachment)
           );
         }
         updatedSticker = {
@@ -252,9 +256,9 @@ export class AttachmentBackfill {
           pendingCount += 1;
         } else if (response.longText.status === Status.TERMINAL_ERROR) {
           changeCount += 1;
-          updatedBodyAttachment = markAttachmentAsPermanentlyErrored(
+          updatedBodyAttachment = markAttachmentAsErrored(
             updatedBodyAttachment,
-            { backfillError: true }
+            'backfill-terminal-error'
           );
           showToast = true;
         } else {
@@ -264,7 +268,7 @@ export class AttachmentBackfill {
         // See sticker handling code above for the reasoning
         if (isDownloading(updatedBodyAttachment)) {
           attachmentSignaturesToDownload.add(
-            getUndownloadedAttachmentSignature(updatedBodyAttachment)
+            getUndownloadedAttachmentSignature(response.longText.attachment)
           );
         }
         updatedBodyAttachment = response.longText.attachment;
@@ -288,9 +292,10 @@ export class AttachmentBackfill {
           showToast = true;
 
           changeCount += 1;
-          updatedAttachments[index] = markAttachmentAsPermanentlyErrored(
+          updatedAttachments[index] = markAttachmentAsErrored(
+            // @ts-expect-error - broken after renaming model-types
             existing,
-            { backfillError: true }
+            'backfill-terminal-error'
           );
         } else {
           throw missingCaseError(entry.status);
@@ -303,7 +308,7 @@ export class AttachmentBackfill {
       // See sticker handling code above for the reasoning
       if (isDownloading(existing)) {
         attachmentSignaturesToDownload.add(
-          getUndownloadedAttachmentSignature(existing)
+          getUndownloadedAttachmentSignature(entry.attachment)
         );
       }
       updatedAttachments[index] = entry.attachment;
@@ -352,15 +357,22 @@ export class AttachmentBackfill {
     await window.MessageCache.saveMessage(message.attributes);
   }
 
-  public static isEnabledForJob(
-    jobType: MessageAttachmentType,
-    message: Pick<ReadonlyMessageAttributesType, 'type'>
-  ): boolean {
-    if (message.type === 'story') {
+  public static canRequestForAttachment({
+    attachment,
+    attachmentType,
+    isStory,
+  }: {
+    attachment: AttachmentType;
+    attachmentType: MessageAttachmentType;
+    isStory: boolean;
+  }): boolean {
+    if (attachment.backfillError) {
       return false;
     }
-
-    switch (jobType) {
+    if (isStory) {
+      return false;
+    }
+    switch (attachmentType) {
       // Supported
       case 'long-message':
         break;
@@ -378,7 +390,7 @@ export class AttachmentBackfill {
         return false;
 
       default:
-        throw missingCaseError(jobType);
+        throw missingCaseError(attachmentType);
     }
 
     return isBackfillEnabled();
@@ -448,54 +460,8 @@ export class AttachmentBackfill {
       );
     }
 
-    window.reduxActions.globalModals.showBackfillFailureModal({
-      kind: BackfillFailureKind.Timeout,
-    });
+    window.reduxActions.globalModals.showBackfillFailureModal(
+      BackfillFailureModalKind.Timeout
+    );
   }
-}
-
-export function isPermanentlyUndownloadable(
-  attachment: AttachmentType,
-  disposition: MessageAttachmentType,
-  message: Pick<ReadonlyMessageAttributesType, 'type'>
-): boolean {
-  // Attachment is downloadable or user have not failed to download it yet
-  if (isDownloadable(attachment) || !attachment.error) {
-    return false;
-  }
-
-  // Too big attachments cannot be retried anymore
-  if (attachment.wasTooBig) {
-    return true;
-  }
-
-  // Previous backfill failed
-  if (attachment.backfillError) {
-    return true;
-  }
-
-  // If backfill is unavailable for the attachment - it cannot be downloaded
-  // at this time.
-  return !AttachmentBackfill.isEnabledForJob(disposition, message);
-}
-
-export function isPermanentlyUndownloadableWithoutBackfill(
-  attachment: AttachmentType
-): boolean {
-  // Attachment is downloadable or user have not failed to download it yet
-  if (isDownloadable(attachment) || !attachment.error) {
-    return false;
-  }
-
-  // Too big attachments cannot be retried anymore
-  if (attachment.wasTooBig) {
-    return true;
-  }
-
-  // Previous backfill failed
-  if (attachment.backfillError) {
-    return true;
-  }
-
-  return true;
 }

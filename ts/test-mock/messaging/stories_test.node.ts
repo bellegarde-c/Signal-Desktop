@@ -2,16 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import createDebug from 'debug';
-import Long from 'long';
-import { Proto, StorageState } from '@signalapp/mock-server';
-import type { Group } from '@signalapp/mock-server';
+import {
+  Proto,
+  StorageState,
+  EMPTY_DATA_MESSAGE,
+} from '@signalapp/mock-server';
+import type { Group, PrimaryDevice } from '@signalapp/mock-server';
 
-import * as durations from '../../util/durations/index.std.js';
-import { uuidToBytes } from '../../util/uuidToBytes.std.js';
-import { MY_STORY_ID } from '../../types/Stories.std.js';
-import { generateStoryDistributionId } from '../../types/StoryDistributionId.std.js';
-import type { App } from '../playwright.node.js';
-import { Bootstrap } from '../bootstrap.node.js';
+import * as durations from '../../util/durations/index.std.ts';
+import { uuidToBytes } from '../../util/uuidToBytes.std.ts';
+import { MY_STORY_ID } from '../../types/Stories.std.ts';
+import { generateStoryDistributionId } from '../../types/StoryDistributionId.std.ts';
+import type { App } from '../playwright.node.ts';
+import { Bootstrap } from '../bootstrap.node.ts';
 
 export const debug = createDebug('mock:test:stories');
 
@@ -32,7 +35,7 @@ describe('story/messaging', function (this: Mocha.Suite) {
     await bootstrap.init();
 
     const { phone, contacts } = bootstrap;
-    const [first, second] = contacts;
+    const [first, second] = contacts as [PrimaryDevice, PrimaryDevice];
 
     let state = StorageState.getEmpty();
 
@@ -51,6 +54,8 @@ describe('story/messaging', function (this: Mocha.Suite) {
           identifier: uuidToBytes(MY_STORY_ID),
           isBlockList: false,
           name: MY_STORY_ID,
+          deletedAtTimestamp: null,
+          recipientServiceIdsBinary: null,
         },
       },
     });
@@ -65,6 +70,7 @@ describe('story/messaging', function (this: Mocha.Suite) {
           isBlockList: false,
           name: 'first',
           recipientServiceIdsBinary: [first.device.aciBinary],
+          deletedAtTimestamp: null,
         },
       },
     });
@@ -77,6 +83,7 @@ describe('story/messaging', function (this: Mocha.Suite) {
           isBlockList: false,
           name: 'second',
           recipientServiceIdsBinary: [second.device.aciBinary],
+          deletedAtTimestamp: null,
         },
       },
     });
@@ -123,7 +130,7 @@ describe('story/messaging', function (this: Mocha.Suite) {
 
   it('allows replies on multiple distribution lists', async () => {
     const { phone, desktop, contacts } = bootstrap;
-    const [first, second] = contacts;
+    const [first, second] = contacts as [PrimaryDevice, PrimaryDevice];
 
     const window = await app.getWindow();
     const sentAt = Date.now();
@@ -135,30 +142,59 @@ describe('story/messaging', function (this: Mocha.Suite) {
     await phone.sendRaw(
       desktop,
       {
-        syncMessage: {
-          sent: {
-            timestamp: Long.fromNumber(sentAt),
-            expirationStartTimestamp: Long.fromNumber(sentAt),
-            storyMessage: {
-              textAttachment: {
-                text: 'hello',
+        content: {
+          syncMessage: {
+            content: {
+              sent: {
+                timestamp: BigInt(sentAt),
+                expirationStartTimestamp: BigInt(sentAt),
+                storyMessage: {
+                  attachment: {
+                    textAttachment: {
+                      text: 'hello',
+                      textStyle: null,
+                      textForegroundColor: null,
+                      textBackgroundColor: null,
+                      preview: null,
+                      background: null,
+                    },
+                  },
+                  allowsReplies: true,
+                  profileKey: null,
+                  group: null,
+                  bodyRanges: null,
+                },
+                storyMessageRecipients: [
+                  {
+                    destinationServiceIdBinary: first.device.aciBinary,
+                    distributionListIds: [DISTRIBUTION1],
+                    isAllowedToReply: true,
+                    destinationServiceId: null,
+                  },
+                  {
+                    destinationServiceIdBinary: second.device.aciBinary,
+                    distributionListIds: [DISTRIBUTION2],
+                    isAllowedToReply: true,
+                    destinationServiceId: null,
+                  },
+                ],
+                destinationE164: null,
+                message: null,
+                unidentifiedStatus: null,
+                isRecipientUpdate: null,
+                editMessage: null,
+                destinationServiceIdBinary: null,
+                destinationServiceId: null,
               },
-              allowsReplies: true,
             },
-            storyMessageRecipients: [
-              {
-                destinationServiceIdBinary: first.device.aciBinary,
-                distributionListIds: [DISTRIBUTION1],
-                isAllowedToReply: true,
-              },
-              {
-                destinationServiceIdBinary: second.device.aciBinary,
-                distributionListIds: [DISTRIBUTION2],
-                isAllowedToReply: true,
-              },
-            ],
+            read: null,
+            stickerPackOperation: null,
+            viewed: null,
+            padding: null,
           },
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       },
       { timestamp: sentAt }
     );
@@ -167,28 +203,40 @@ describe('story/messaging', function (this: Mocha.Suite) {
     await first.sendRaw(
       desktop,
       {
-        dataMessage: {
-          body: 'first reply',
-          storyContext: {
-            authorAciBinary: phone.device.aciRawUuid,
-            sentTimestamp: Long.fromNumber(sentAt),
+        content: {
+          dataMessage: {
+            ...EMPTY_DATA_MESSAGE,
+            body: 'first reply',
+            storyContext: {
+              authorAciBinary: phone.device.aciRawUuid,
+              sentTimestamp: BigInt(sentAt),
+              authorAci: null,
+            },
+            timestamp: BigInt(sentAt + 1),
           },
-          timestamp: Long.fromNumber(sentAt + 1),
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       },
       { timestamp: sentAt + 1 }
     );
     await second.sendRaw(
       desktop,
       {
-        dataMessage: {
-          body: 'second reply',
-          storyContext: {
-            authorAciBinary: phone.device.aciRawUuid,
-            sentTimestamp: Long.fromNumber(sentAt),
+        content: {
+          dataMessage: {
+            ...EMPTY_DATA_MESSAGE,
+            body: 'second reply',
+            storyContext: {
+              authorAciBinary: phone.device.aciRawUuid,
+              sentTimestamp: BigInt(sentAt),
+              authorAci: null,
+            },
+            timestamp: BigInt(sentAt + 2),
           },
-          timestamp: Long.fromNumber(sentAt + 2),
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       },
       { timestamp: sentAt + 2 }
     );
@@ -206,6 +254,7 @@ describe('story/messaging', function (this: Mocha.Suite) {
 
   it('allows replies to groups', async () => {
     const { desktop, contacts } = bootstrap;
+    const [first] = contacts as [PrimaryDevice];
 
     const window = await app.getWindow();
 
@@ -215,8 +264,11 @@ describe('story/messaging', function (this: Mocha.Suite) {
     await window.getByTestId('NavTabsItem--Stories').click();
 
     debug('Create and send a story to the group');
-    await window.getByRole('button', { name: 'Add a story' }).first().click();
-    await window.getByRole('button', { name: 'Text story' }).click();
+    await window
+      .locator('.Stories__pane__list')
+      .getByRole('button', { name: 'Add a story' })
+      .click();
+    await window.getByRole('menuitem', { name: 'Text story' }).click();
     // Note: For some reason `.click()` doesn't work here anymore.
     await window.locator('.TextAttachment').dispatchEvent('click');
     await window.getByRole('textbox', { name: 'Add text' }).fill('hello');
@@ -238,34 +290,42 @@ describe('story/messaging', function (this: Mocha.Suite) {
       story: sentAt,
       reply: sentAt + 1,
     });
-    await contacts[0].sendRaw(
+    await first.sendRaw(
       desktop,
       {
-        dataMessage: {
-          body: 'first reply',
-          storyContext: {
-            authorAciBinary: desktop.aciRawUuid,
-            sentTimestamp: Long.fromNumber(sentAt),
+        content: {
+          dataMessage: {
+            ...EMPTY_DATA_MESSAGE,
+            body: 'first reply',
+            storyContext: {
+              authorAciBinary: desktop.aciRawUuid,
+              sentTimestamp: BigInt(sentAt),
+              authorAci: null,
+            },
+            groupV2: {
+              masterKey: group.masterKey,
+              revision: null,
+              groupChange: null,
+            },
+            timestamp: BigInt(sentAt + 1),
           },
-          groupV2: {
-            masterKey: group.masterKey,
-          },
-          timestamp: Long.fromNumber(sentAt + 1),
         },
+        pniSignatureMessage: null,
+        senderKeyDistributionMessage: null,
       },
       { timestamp: sentAt + 1 }
     );
 
     debug('Ensure sender sees the reply');
     await window
-      .locator('.StoryListItem__button')
-      .getByText('Mock Group')
+      .locator('.Stories__pane__list')
+      .getByRole('button', { name: /Mock Group/ })
       .click();
     // For some reason we need to click the story & exit before the reply shows up
     await window.getByRole('button', { name: 'Close' }).click();
     await window
-      .locator('.StoryListItem__button')
-      .getByText('Mock Group')
+      .locator('.Stories__pane__list')
+      .getByRole('button', { name: /Mock Group/ })
       .click();
 
     await window.getByText('1 reply').click();

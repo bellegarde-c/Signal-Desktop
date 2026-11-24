@@ -2,19 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { assert } from 'chai';
-import Long from 'long';
 import { expect } from 'playwright/test';
-import type { Group, StorageState } from '@signalapp/mock-server';
+import type {
+  Group,
+  PrimaryDevice,
+  StorageState,
+  StorageStateRecord,
+} from '@signalapp/mock-server';
 import { Proto } from '@signalapp/mock-server';
 
-import * as durations from '../../util/durations/index.std.js';
-import { createCallLink } from '../helpers.node.js';
-import type { App, Bootstrap } from './fixtures.node.js';
+import * as durations from '../../util/durations/index.std.ts';
+import { createCallLink } from '../helpers.node.ts';
+import type { App, Bootstrap } from './fixtures.node.ts';
 import {
   initStorage,
   debug,
   getCallLinkRecordPredicate,
-} from './fixtures.node.js';
+} from './fixtures.node.ts';
 
 const IdentifierType = Proto.ManifestRecord.Identifier.Type;
 
@@ -40,12 +44,10 @@ describe('storage service', function (this: Mocha.Suite) {
   });
 
   for (const kind of ['contact', 'group']) {
-    // eslint-disable-next-line no-loop-func
+    // oxlint-disable-next-line no-loop-func
     it(`should handle ${kind} conflicts`, async () => {
-      const {
-        phone,
-        contacts: [first],
-      } = bootstrap;
+      const { phone, contacts } = bootstrap;
+      const [first] = contacts as [PrimaryDevice];
 
       const window = await app.getWindow();
 
@@ -57,30 +59,44 @@ describe('storage service', function (this: Mocha.Suite) {
       debug('archiving conversation on desktop');
       {
         const state = await phone.expectStorageState('consistency check');
-
         await leftPane.locator(`[data-testid="${testid}"]`).click();
 
         await conversationStack
           .getByRole('button', { name: 'More Info' })
           .click();
 
-        await window.getByRole('menuitem', { name: 'Archive' }).click();
+        await window
+          .getByRole('menuitem', { name: 'Archive', exact: true })
+          .click();
 
-        const newState = await phone.waitForStorageState({
+        await phone.waitForStorageState({
           after: state,
+          predicate: storageState => {
+            if (kind === 'contact') {
+              return storageState.getContact(first)?.archived === true;
+            }
+
+            return storageState.getGroup(group)?.archived === true;
+          },
         });
-
-        const record =
-          kind === 'contact'
-            ? await newState.getContact(first)
-            : await newState.getGroup(group);
-
-        assert.ok(record, 'contact record not found');
-        assert.ok(record?.archived, 'contact archived');
       }
 
+      debug('attempting unarchive');
+      await leftPane.getByLabel('Archived Chats').click();
+
+      await leftPane.locator(`[data-testid="${testid}"]`).click();
+
+      await conversationStack
+        .getByRole('button', { name: 'More Info' })
+        .click();
+
+      // To test explicit conflicts in local and remote state, we need
+      // to control when storage service is fetched, so we need to pause SS
+      // and ensure there are no concurrent fetches happening
+      await app.pauseStorageService();
+
       debug('updating contact on phone without sync message');
-      let archivedVersion: number;
+      let archivedVersion: bigint;
       {
         const state = await phone.expectStorageState('consistency check');
 
@@ -96,23 +112,17 @@ describe('storage service', function (this: Mocha.Suite) {
         archivedVersion = newState.version;
       }
 
-      debug('attempting unarchive');
-      await leftPane.getByLabel('Archived Chats').click();
-
-      await leftPane.locator(`[data-testid="${testid}"]`).click();
-
-      await conversationStack
-        .getByRole('button', { name: 'More Info' })
-        .click();
-
       await window.getByRole('menuitem', { name: 'Unarchive' }).click();
 
+      await app.resumeStorageService();
       await app.waitForManifestVersion(archivedVersion);
 
       debug('waiting for archived chats to appear again');
-      await leftPane.getByLabel('Archived Chats').waitFor();
+      await leftPane.getByLabel('Archived Chats').click();
 
-      // Conversation should be still open
+      // Conversation was closed on re-archive - need to open it again
+      await leftPane.locator(`[data-testid="${testid}"]`).click();
+
       await conversationStack
         .getByRole('button', { name: 'More Info' })
         .click();
@@ -127,11 +137,8 @@ describe('storage service', function (this: Mocha.Suite) {
   }
 
   it('should handle account conflicts', async () => {
-    const {
-      phone,
-      desktop,
-      contacts: [first, second],
-    } = bootstrap;
+    const { phone, desktop, contacts } = bootstrap;
+    const [first, second] = contacts as [PrimaryDevice, PrimaryDevice];
 
     const window = await app.getWindow();
 
@@ -151,17 +158,21 @@ describe('storage service', function (this: Mocha.Suite) {
         .getByRole('button', { name: 'More Info' })
         .click();
 
-      await window.getByRole('menuitem', { name: 'Pin chat' }).click();
+      await window
+        .getByRole('menuitem', { name: 'Pin chat', exact: true })
+        .click();
 
-      const newState = await phone.waitForStorageState({
+      assert.isFalse(state.isPinned(second));
+      await phone.waitForStorageState({
         after: state,
+        predicate: storageState => storageState.isPinned(second),
       });
-
-      assert(newState.isPinned(second));
     }
 
+    await app.pauseStorageService();
+
     debug('updating pins on phone without sync message');
-    let archivedVersion: number;
+    let archivedVersion: bigint;
     {
       const state = await phone.expectStorageState('consistency check');
 
@@ -176,6 +187,7 @@ describe('storage service', function (this: Mocha.Suite) {
 
     await window.getByRole('menuitem', { name: 'Unpin chat' }).click();
 
+    await app.resumeStorageService();
     await app.waitForManifestVersion(archivedVersion);
 
     debug('verifying that second contact is still unpinned');
@@ -200,7 +212,10 @@ describe('storage service', function (this: Mocha.Suite) {
 
       await window.getByTestId('NavTabsItem--Stories').click();
 
-      await window.locator('.StoriesTab__MoreActionsIcon').click();
+      await window
+        .locator('.NavSidebar__HeaderActions')
+        .getByRole('button', { name: 'More actions' })
+        .click();
       await window.getByRole('menuitem', { name: 'Story Privacy' }).click();
 
       await window
@@ -212,53 +227,66 @@ describe('storage service', function (this: Mocha.Suite) {
         .locator('input[name=replies-reactions]')
         .click();
 
-      const newState = await phone.waitForStorageState({
+      await phone.waitForStorageState({
         after: state,
+        predicate: storageState => {
+          const updatedList = storageState.findRecord(
+            (
+              record
+            ): record is StorageStateRecord<{
+              record: 'storyDistributionList';
+              storyDistributionList: Proto.StoryDistributionListRecord.Params;
+            }> => {
+              return record.type === IdentifierType.STORY_DISTRIBUTION_LIST;
+            }
+          );
+          return (
+            updatedList?.record.storyDistributionList.allowsReplies === false
+          );
+        },
       });
-
-      const updatedList = newState.findRecord(({ type }) => {
-        return type === IdentifierType.STORY_DISTRIBUTION_LIST;
-      });
-      assert.isFalse(updatedList?.record?.storyDistributionList?.allowsReplies);
     }
 
+    await app.pauseStorageService();
+
     debug('updating distribution list on phone without sync');
-    let archivedVersion: number;
+    let newStateVersion: bigint;
     {
       const state = await phone.expectStorageState('consistency check');
 
       let newState = state.updateRecord(
-        ({ type }) => {
-          return type === IdentifierType.STORY_DISTRIBUTION_LIST;
+        (record): record is StorageStateRecord => {
+          return record.type === IdentifierType.STORY_DISTRIBUTION_LIST;
         },
         // Just changing storage ID
         record => record
       );
 
       newState = await phone.setStorageState(newState);
-      archivedVersion = newState.version;
+      newStateVersion = newState.version;
     }
+
+    const checkbox = window
+      .getByTestId('DistributionListSettingsModal')
+      .locator('input[name=replies-reactions]');
 
     debug('attempting update through UI again');
-    await window
-      .getByTestId('DistributionListSettingsModal')
-      .locator('input[name=replies-reactions]')
-      .click();
+    await checkbox.click();
 
-    await app.waitForManifestVersion(archivedVersion);
+    // Should change locally first
+    await expect(checkbox).toBeChecked();
+
+    // Then storage service should revert that change
+    await app.resumeStorageService();
+    await app.waitForManifestVersion(newStateVersion);
 
     debug('wait for checkbox to go back to unchecked');
-    {
-      const checkbox = window
-        .getByTestId('DistributionListSettingsModal')
-        .locator('input[name=replies-reactions]');
-      await expect(checkbox).not.toBeChecked();
-    }
+    await expect(checkbox).not.toBeChecked();
 
     debug('Verifying the final manifest version');
     const finalState = await phone.expectStorageState('final state');
 
-    assert.strictEqual(finalState.version, archivedVersion);
+    assert.strictEqual(finalState.version, newStateVersion);
   });
 
   it('should handle call link conflicts', async () => {
@@ -272,17 +300,22 @@ describe('storage service', function (this: Mocha.Suite) {
     assert.exists(roomId, 'Call link roomId should exist');
 
     debug('Waiting for storage update');
-    state = await phone.waitForStorageState({ after: state });
+    state = await phone.waitForStorageState({
+      after: state,
+      predicate: storageState => {
+        return storageState.hasRecord(getCallLinkRecordPredicate(roomId));
+      },
+    });
 
-    assert.exists(state.findRecord(getCallLinkRecordPredicate(roomId)));
+    await app.pauseStorageService();
 
     debug('Updating storage without sync');
     const deletedAt = bootstrap.getTimestamp();
     state = state.updateRecord(getCallLinkRecordPredicate(roomId), record => ({
-      ...record,
+      record: 'callLink',
       callLink: {
-        ...(record.callLink ?? {}),
-        deletedAtTimestampMs: Long.fromNumber(deletedAt),
+        ...record.callLink,
+        deletedAtTimestampMs: BigInt(deletedAt),
       },
     }));
 
@@ -292,13 +325,15 @@ describe('storage service', function (this: Mocha.Suite) {
     await window.getByText('Fun link').click();
     await window
       .locator('.CallsTab__ConversationCallDetails')
-      .getByText('Delete link')
+      .getByRole('button', { name: 'Delete link' })
       .click();
 
-    const confirmModal = await window.getByTestId(
-      'ConfirmationDialog.CallLinkDetails__DeleteLinkModal'
-    );
-    await confirmModal.locator('.module-Button').getByText('Delete').click();
+    await window
+      .getByRole('alertdialog', { name: 'Delete call link?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+
+    await app.resumeStorageService();
 
     debug('Waiting for manifest sync');
     await app.waitForManifestVersion(state.version);
@@ -308,14 +343,16 @@ describe('storage service', function (this: Mocha.Suite) {
     assert.exists(otherRoomId, 'Call link roomId should exist');
 
     debug('Waiting for storage update');
-    state = await phone.waitForStorageState({ after: state });
+    state = await phone.waitForStorageState({
+      after: state,
+      predicate: storageState => {
+        return (
+          storageState.findRecord(getCallLinkRecordPredicate(roomId))?.record
+            .callLink.deletedAtTimestampMs === BigInt(deletedAt)
+        );
+      },
+    });
 
-    assert.strictEqual(
-      state
-        .findRecord(getCallLinkRecordPredicate(roomId))
-        ?.record.callLink?.deletedAtTimestampMs?.toNumber(),
-      deletedAt
-    );
     assert.exists(state.findRecord(getCallLinkRecordPredicate(otherRoomId)));
   });
 });

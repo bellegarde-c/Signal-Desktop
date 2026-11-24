@@ -7,8 +7,8 @@ import type { Readable, Writable } from 'node:stream';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import fsExtra from 'fs-extra';
-import { join } from 'node:path';
-import { createGzip, createGunzip } from 'node:zlib';
+import { basename, join } from 'node:path';
+import { createGunzip } from 'node:zlib';
 import { createCipheriv, createHmac, randomBytes } from 'node:crypto';
 import lodash from 'lodash';
 import { BackupLevel } from '@signalapp/libsignal-client/zkgroup.js';
@@ -16,108 +16,127 @@ import { BackupKey } from '@signalapp/libsignal-client/dist/AccountKeys.js';
 import lodashFp from 'lodash/fp.js';
 import { ipcRenderer } from 'electron';
 
-import { DataReader, DataWriter } from '../../sql/Client.preload.js';
-import { createLogger } from '../../logging/log.std.js';
-import * as Bytes from '../../Bytes.std.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { drop } from '../../util/drop.std.js';
-import { TEMP_PATH } from '../../util/basePaths.preload.js';
-import { getAbsoluteDownloadsPath } from '../../util/migrations.preload.js';
-import { waitForAllBatchers } from '../../util/batcher.std.js';
-import { flushAllWaitBatchers } from '../../util/waitBatcher.std.js';
-import { DelimitedStream } from '../../util/DelimitedStream.node.js';
-import { appendPaddingStream } from '../../util/logPadding.node.js';
-import { prependStream } from '../../util/prependStream.node.js';
-import { appendMacStream } from '../../util/appendMacStream.node.js';
-import { getMacAndUpdateHmac } from '../../util/getMacAndUpdateHmac.node.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { HOUR, SECOND } from '../../util/durations/index.std.js';
-import type { ExplodePromiseResultType } from '../../util/explodePromise.std.js';
-import { explodePromise } from '../../util/explodePromise.std.js';
-import type { RetryBackupImportValue } from '../../state/ducks/installer.preload.js';
-import { CipherType, HashType } from '../../types/Crypto.std.js';
+import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import * as Bytes from '../../Bytes.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { drop } from '../../util/drop.std.ts';
+import { TEMP_PATH } from '../../util/basePaths.preload.ts';
+import { getAbsoluteDownloadsPath } from '../../util/migrations.preload.ts';
+import { waitForAllBatchers } from '../../util/batcher.std.ts';
+import { flushAllWaitBatchers } from '../../util/waitBatcher.std.ts';
+import { DelimitedStream } from '../../util/DelimitedStream.node.ts';
+import { prependStream } from '../../util/prependStream.node.ts';
+import { appendMacStream } from '../../util/appendMacStream.node.ts';
+import { getMacAndUpdateHmac } from '../../util/getMacAndUpdateHmac.node.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { HOUR, SECOND } from '../../util/durations/index.std.ts';
+import type { ExplodePromiseResultType } from '../../util/explodePromise.std.ts';
+import { explodePromise } from '../../util/explodePromise.std.ts';
+import type { ErrorDialogDecision } from '../../state/ducks/installer.preload.ts';
+import { CipherType, HashType } from '../../types/Crypto.std.ts';
 import {
   InstallScreenBackupStep,
   InstallScreenBackupError,
-} from '../../types/InstallScreen.std.js';
-import * as Errors from '../../types/errors.std.js';
+} from '../../types/InstallScreen.std.ts';
+import * as Errors from '../../types/errors.std.ts';
 import {
   BackupCredentialType,
   type BackupsSubscriptionType,
   type BackupStatusType,
-} from '../../types/backups.node.js';
-import { HTTPError } from '../../types/HTTPError.std.js';
-import { constantTimeEqual } from '../../Crypto.node.js';
-import { measureSize, safeUnlink } from '../../AttachmentCrypto.node.js';
-import { signalProtocolStore } from '../../SignalProtocolStore.preload.js';
-import { isTestOrMockEnvironment } from '../../environment.std.js';
-import { runStorageServiceSyncJob } from '../storage.preload.js';
-import { BackupExportStream } from './export.preload.js';
-import { BackupImportStream } from './import.preload.js';
+} from '../../types/backups.node.ts';
+import { HTTPError } from '../../types/HTTPError.std.ts';
+import { constantTimeEqual } from '../../Crypto.node.ts';
+import { measureSize } from '../../AttachmentCrypto.node.ts';
+import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
+import { isTestOrMockEnvironment } from '../../environment.std.ts';
+import { runStorageServiceSyncJob } from '../storage.preload.ts';
+import { BackupExportStream } from './export.preload.ts';
+import { AttachmentBackupManager } from '../../jobs/AttachmentBackupManager.preload.ts';
+import { getBackupContentPolicy } from './policy.std.ts';
+import type { BackupContentPolicy } from './policy.std.ts';
+import { BackupImportStream } from './import.preload.ts';
+import {
+  toPaddedGzipIterable,
+  toDelimitedIterable,
+  toJSONIterable,
+} from './encoding.node.ts';
 import {
   getBackupId,
-  getKeyMaterial,
+  getBackupKey,
   getLocalBackupMetadataKey,
-} from './crypto.preload.js';
-import { BackupCredentials } from './credentials.preload.js';
-import { BackupAPI } from './api.preload.js';
+  getMessageBackupKey,
+} from './crypto.preload.ts';
+import { BackupCredentials } from './credentials.preload.ts';
+import { BackupAPI } from './api.preload.ts';
 import {
   validateBackup,
-  validateBackupStream,
-  ValidationType,
-} from './validator.preload.js';
+  _internalValidateBackupIterator,
+} from './validator.preload.ts';
 import type {
   BackupExportOptions,
   BackupImportOptions,
   ExportResultType,
   LocalBackupExportResultType,
   OnProgressCallback,
-} from './types.std.js';
+} from './types.std.ts';
 import {
   BackupInstallerError,
   BackupDownloadFailedError,
   BackupImportCanceledError,
   BackupProcessingError,
   RelinkRequestedError,
-} from './errors.std.js';
-import { FileStream } from './util/FileStream.node.js';
-import { ToastType } from '../../types/Toast.dom.js';
-import { isAdhoc, isNightly } from '../../util/version.std.js';
-import { isLocalBackupsEnabled } from '../../util/isLocalBackupsEnabled.dom.js';
-import type { ValidateLocalBackupStructureResultType } from './util/localBackup.node.js';
+} from './errors.std.ts';
+import { FileStream } from './util/FileStream.node.ts';
+import { ToastType } from '../../types/Toast.dom.tsx';
+import { isAdhoc, isNightly } from '../../util/version.std.ts';
+import type { ValidateLocalBackupStructureResultType } from './util/localBackup.node.ts';
 import {
   writeLocalBackupMetadata,
   verifyLocalBackupMetadata,
   writeLocalBackupFilesList,
   readLocalBackupFilesList,
+  pruneLocalBackups,
   validateLocalBackupStructure,
-  getAllPathsInLocalBackupFilesDirectory,
   getLocalBackupFilesDirectory,
-} from './util/localBackup.node.js';
+  getLocalBackupSnapshotDirectory,
+  LOCAL_BACKUP_DIR_NAME,
+} from './util/localBackup.node.ts';
 import {
   AttachmentPermanentlyMissingError,
   getJobIdForLogging,
   runAttachmentBackupJob,
-} from '../../jobs/AttachmentLocalBackupManager.preload.js';
-import { decipherWithAesKey } from '../../util/decipherWithAesKey.node.js';
-import { areRemoteBackupsTurnedOn } from '../../util/isBackupEnabled.preload.js';
+} from '../../jobs/AttachmentLocalBackupManager.preload.ts';
+import { decipherWithAesKey } from '../../util/decipherWithAesKey.node.ts';
+import { areRemoteBackupsTurnedOn } from '../../util/isBackupEnabled.preload.ts';
 import {
   isOnline,
   unlink as unlinkAccount,
-} from '../../textsecure/WebAPI.preload.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
-import { LOCAL_BACKUP_VERSION } from './constants.std.js';
-import { getTimestampForFolder } from '../../util/timestamp.std.js';
-import { MEBIBYTE } from '../../types/AttachmentSize.std.js';
+} from '../../textsecure/WebAPI.preload.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { addSensitivePath } from '../../util/privacy.node.ts';
+import { LOCAL_BACKUP_VERSION } from './constants.std.ts';
+import { getTimestampForFolder } from '../../util/timestamp.std.ts';
+import { MEBIBYTE } from '../../types/AttachmentSize.std.ts';
 import {
   NotEnoughStorageError,
   RanOutOfStorageError,
   StoragePermissionsError,
-} from '../../types/LocalExport.std.js';
-import { getFreeDiskSpace } from '../../util/getFreeDiskSpace.node.js';
-import { isFeaturedEnabledNoRedux } from '../../util/isFeatureEnabled.dom.js';
+} from '../../types/LocalExport.std.ts';
+import { getFreeDiskSpace } from '../../util/getFreeDiskSpace.node.ts';
+import { Purpose } from '@signalapp/libsignal-client/dist/MessageBackup.js';
 
-const { ensureFile } = fsExtra;
+const { ensureFile, exists } = fsExtra;
+
+type EncryptedExportEncodingType = {
+  type: 'encrypted';
+  backupKey: BackupKey;
+  purpose: Purpose;
+};
+
+type ExportEncodingType =
+  | EncryptedExportEncodingType
+  | { type: 'plaintext-delimited' | 'plaintext-jsonl' };
 
 const { throttle } = lodashFp;
 
@@ -130,6 +149,7 @@ const IV_LENGTH = 16;
 const BACKUP_REFRESH_INTERVAL = 24 * HOUR;
 
 const MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT = 200 * MEBIBYTE;
+const LOCAL_BACKUP_SNAPSHOTS_TO_KEEP = 2;
 
 export type DownloadOptionsType = Readonly<{
   onProgress?: (
@@ -142,7 +162,7 @@ export type DownloadOptionsType = Readonly<{
 
 type DoDownloadOptionsType = Readonly<{
   downloadPath: string;
-  ephemeralKey?: Uint8Array;
+  ephemeralBackupKey: BackupKey | undefined;
   onProgress?: (
     backupStep: InstallScreenBackupStep,
     currentBytes: number,
@@ -165,8 +185,8 @@ export class BackupsService {
   #importController: AbortController | undefined;
   #downloadController: AbortController | undefined;
 
-  #downloadRetryPromise:
-    | ExplodePromiseResultType<RetryBackupImportValue>
+  #errorDialogDecision:
+    | ExplodePromiseResultType<ErrorDialogDecision>
     | undefined;
 
   #localBackupSnapshotDir: string | undefined;
@@ -205,6 +225,318 @@ export class BackupsService {
       await this.resetCachedData();
     });
   }
+
+  // Public Export API
+
+  public async exportForRemote({
+    path,
+    level,
+    abortSignal,
+  }: {
+    path: string;
+    level: BackupLevel;
+    abortSignal: AbortSignal;
+  }): Promise<ExportResultType> {
+    strictAssert(
+      areRemoteBackupsTurnedOn(),
+      'Remote backups must be turned on for a remote export'
+    );
+
+    return this.#runExclusiveExport(async () => {
+      log.info('exportForRemote: Fetching latest backup CDN metadata');
+      await this.fetchAndSaveBackupCdnObjectMetadata();
+
+      const exportResult = await this.#exportEncryptedAndValidate({
+        path,
+        policy: getBackupContentPolicy({ type: 'remote', level }),
+        abortSignal,
+        encoding: {
+          type: 'encrypted',
+          backupKey: getBackupKey(),
+          purpose: Purpose.RemoteBackup,
+        },
+      });
+
+      await this.#replaceRemoteAttachmentBackupQueue(
+        level === BackupLevel.Paid ? exportResult.attachmentBackupJobs : []
+      );
+
+      return exportResult;
+    });
+  }
+
+  public async exportForLinkAndSync({
+    path,
+    ephemeralBackupKey,
+    abortSignal,
+  }: {
+    path: string;
+    ephemeralBackupKey: BackupKey;
+    abortSignal: AbortSignal;
+  }): Promise<ExportResultType> {
+    if (isOnline()) {
+      await this.#waitForEmptyQueues('backups.exportForLinkAndSync');
+    } else {
+      log.info('exportForLinkAndSync: offline; skipping wait for empty queues');
+    }
+
+    return this.#runExclusiveExport(() =>
+      this.#exportEncryptedAndValidate({
+        path,
+        policy: getBackupContentPolicy({ type: 'link-and-sync' }),
+        abortSignal,
+        encoding: {
+          type: 'encrypted',
+          backupKey: ephemeralBackupKey,
+          purpose: Purpose.DeviceTransfer,
+        },
+      })
+    );
+  }
+
+  public async exportLocalBackup(options: {
+    backupsBaseDir: string;
+    abortSignal: AbortSignal;
+    onProgress: OnProgressCallback;
+  }): Promise<LocalBackupExportResultType> {
+    const fnLog = log.child('exportLocalBackup');
+    fnLog.info('starting...');
+
+    if (isOnline()) {
+      await this.#waitForEmptyQueues('backups.exportLocalBackup');
+    } else {
+      fnLog.info('offline; skipping wait for empty queues');
+    }
+
+    // Just in case it's been deleted, ensure the backup dir exists
+    await mkdir(options.backupsBaseDir, { recursive: true });
+
+    const freeSpaceBytes = await getFreeDiskSpace(options.backupsBaseDir);
+    const bytesNeeded = MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT - freeSpaceBytes;
+    if (bytesNeeded > 0) {
+      fnLog.info(
+        `Not enough storage; only ${freeSpaceBytes} available, ${MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT} is minimum needed`
+      );
+    }
+
+    const filesDir = getLocalBackupFilesDirectory({
+      backupsBaseDir: options.backupsBaseDir,
+    });
+
+    await mkdir(filesDir, { recursive: true });
+
+    const snapshotDir = getLocalBackupSnapshotDirectory(
+      options.backupsBaseDir,
+      Date.now()
+    );
+
+    if (await exists(snapshotDir)) {
+      throw new Error('snapshotDir already exists');
+    }
+
+    try {
+      await mkdir(snapshotDir, { recursive: true });
+
+      const exportResult = await this.#runExclusiveExport(() =>
+        this.#exportEncryptedAndValidate({
+          path: join(snapshotDir, 'main'),
+          policy: getBackupContentPolicy({ type: 'local-encrypted' }),
+          abortSignal: options.abortSignal,
+          encoding: {
+            type: 'encrypted',
+            backupKey: getBackupKey(),
+            // libsignal does not have a separate localBackup purpose
+            purpose: Purpose.RemoteBackup,
+          },
+        })
+      );
+
+      fnLog.info('writing local backup files list');
+      const filesWritten = await writeLocalBackupFilesList({
+        snapshotDir,
+        mediaNames: exportResult.mediaNames,
+      });
+      const filesRead = await readLocalBackupFilesList(snapshotDir);
+      strictAssert(
+        isEqual(filesWritten, filesRead),
+        'exportBackup: Local backup files proto must match files written'
+      );
+
+      fnLog.info('writing metadata');
+      const metadataArgs = {
+        snapshotDir,
+        backupId: getBackupId(),
+        metadataKey: getLocalBackupMetadataKey(),
+      };
+      await writeLocalBackupMetadata(metadataArgs);
+      await verifyLocalBackupMetadata(metadataArgs);
+
+      await this.#runLocalAttachmentBackupJobs({
+        attachmentBackupJobs: exportResult.attachmentBackupJobs,
+        baseDir: options.backupsBaseDir,
+        onProgress: options.onProgress,
+        abortSignal: options.abortSignal,
+      });
+
+      try {
+        await pruneLocalBackups({
+          backupsBaseDir: options.backupsBaseDir,
+          numSnapshotsToKeep: LOCAL_BACKUP_SNAPSHOTS_TO_KEEP,
+        });
+      } catch (error) {
+        fnLog.warn(
+          'failed to prune old local backups',
+          Errors.toLogFormat(error)
+        );
+      }
+
+      return { ...exportResult, snapshotDir };
+    } catch (e) {
+      if (options.abortSignal.aborted) {
+        fnLog.warn('aborted', Errors.toLogFormat(e));
+      } else {
+        fnLog.error('encountered error', Errors.toLogFormat(e));
+      }
+
+      fnLog.info('Deleting just-created snapshot directory');
+      await rm(snapshotDir, { recursive: true, force: true });
+      fnLog.info('Deleted just-created directory');
+
+      // Prune to remove any files which may have been written before the error occurred
+      try {
+        await pruneLocalBackups({
+          backupsBaseDir: options.backupsBaseDir,
+          numSnapshotsToKeep: LOCAL_BACKUP_SNAPSHOTS_TO_KEEP,
+        });
+      } catch (error) {
+        fnLog.warn(
+          'failed to prune local backups after export error',
+          Errors.toLogFormat(error)
+        );
+      }
+
+      throw e;
+    }
+  }
+
+  public async exportPlaintext({
+    abortSignal,
+    onProgress,
+    shouldIncludeMedia,
+    targetPath,
+  }: {
+    abortSignal: AbortSignal;
+    onProgress: OnProgressCallback;
+    shouldIncludeMedia: boolean;
+    targetPath: string;
+  }): Promise<LocalBackupExportResultType> {
+    let exportDir: string | undefined;
+    const fnLog = log.child('exportPlaintext');
+    try {
+      fnLog.info('starting...');
+
+      const freeSpaceBytes = await getFreeDiskSpace(targetPath);
+      const bytesNeeded = MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT - freeSpaceBytes;
+      if (bytesNeeded > 0) {
+        fnLog.info(
+          `Not enough storage; only ${freeSpaceBytes} available, ${MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT} is minimum needed`
+        );
+        throw new NotEnoughStorageError(bytesNeeded);
+      }
+
+      exportDir = join(targetPath, `signal-export-${getTimestampForFolder()}`);
+      await mkdir(exportDir, { recursive: true });
+
+      if (isOnline()) {
+        await this.#waitForEmptyQueues('backups.exportPlaintext');
+      } else {
+        fnLog.info('offline; skipping wait for empty queues');
+      }
+
+      fnLog.info('starting...');
+
+      await mkdir(exportDir, { recursive: true });
+
+      const exportResult = await this.#runExclusiveExport(() => {
+        strictAssert(exportDir, 'exists');
+        return this.#runExport({
+          policy: getBackupContentPolicy({ type: 'plaintext-export' }),
+          abortSignal,
+          encoding: { type: 'plaintext-jsonl' },
+          sink: createWriteStream(join(exportDir, 'main.jsonl')),
+        });
+      });
+
+      fnLog.info('writing metadata');
+
+      const metadataPath = join(exportDir, 'metadata.json');
+      await writeFile(
+        metadataPath,
+        JSON.stringify({
+          version: LOCAL_BACKUP_VERSION,
+        })
+      );
+
+      if (shouldIncludeMedia) {
+        await this.#runLocalAttachmentBackupJobs({
+          attachmentBackupJobs: exportResult.attachmentBackupJobs,
+          baseDir: exportDir,
+          onProgress,
+          abortSignal,
+        });
+      }
+
+      fnLog.info('finished');
+
+      return {
+        ...exportResult,
+        snapshotDir: exportDir,
+      };
+    } catch (error) {
+      fnLog.warn('encountered error', Errors.toLogFormat(error));
+      if (exportDir) {
+        fnLog.info('Deleting export directory');
+        await rm(exportDir, { recursive: true, force: true });
+        fnLog.info('Export directory deleted');
+      }
+
+      if (error.code === 'EPERM' || error.code === 'EACCES') {
+        throw new StoragePermissionsError();
+      }
+
+      throw error;
+    }
+  }
+
+  public async exportForCrossClientIntegrationTest(): Promise<
+    { data: Uint8Array<ArrayBuffer> } & ExportResultType
+  > {
+    const sink = new PassThrough();
+
+    const chunks = new Array<Uint8Array<ArrayBuffer>>();
+    sink.on('data', chunk => chunks.push(chunk));
+    const result = await this.#runExclusiveExport(async () => {
+      await this.fetchAndSaveBackupCdnObjectMetadata();
+
+      return this.#runExport({
+        policy: getBackupContentPolicy({
+          type: 'cross-client-integration-test',
+          level: BackupLevel.Paid,
+        }),
+        abortSignal: new AbortController().signal,
+        encoding: { type: 'plaintext-delimited' },
+        sink,
+      });
+    });
+
+    return {
+      ...result,
+      data: Bytes.concatenate(chunks),
+    };
+  }
+
+  // Public Import API
+
   public async downloadAndImport(
     options: DownloadOptionsType
   ): Promise<{ wasBackupImported: boolean }> {
@@ -217,18 +549,19 @@ export class BackupsService {
     log.info('backups.downloadAndImport: downloading...');
 
     const ephemeralKey = itemStorage.get('backupEphemeralKey');
-
     const absoluteDownloadPath = getAbsoluteDownloadsPath(backupDownloadPath);
     let hasBackup = false;
 
-    // eslint-disable-next-line no-constant-condition
+    // oxlint-disable-next-line no-constant-condition
     while (true) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+        // oxlint-disable-next-line no-await-in-loop
         hasBackup = await this.#doDownloadAndImport({
           downloadPath: absoluteDownloadPath,
           onProgress: options.onProgress,
-          ephemeralKey,
+          ephemeralBackupKey: ephemeralKey
+            ? new BackupKey(ephemeralKey)
+            : undefined,
         });
 
         if (!hasBackup) {
@@ -237,7 +570,7 @@ export class BackupsService {
           window.reduxActions.installer.handleMissingBackup();
         }
       } catch (error) {
-        this.#downloadRetryPromise = explodePromise<RetryBackupImportValue>();
+        this.#errorDialogDecision = explodePromise<ErrorDialogDecision>();
 
         let installerError: InstallScreenBackupError;
         if (error instanceof BackupInstallerError) {
@@ -261,8 +594,8 @@ export class BackupsService {
         const nextStep =
           error instanceof BackupImportCanceledError
             ? 'cancel'
-            : // eslint-disable-next-line no-await-in-loop
-              await this.#downloadRetryPromise.promise;
+            : // oxlint-disable-next-line no-await-in-loop
+              await this.#errorDialogDecision.promise;
         if (nextStep === 'retry') {
           log.warn('backups.downloadAndImport: retrying');
           continue;
@@ -276,11 +609,11 @@ export class BackupsService {
         // getting an error (potentially fatal).
         log.warn('backups.downloadAndImport: unlinking');
 
-        // eslint-disable-next-line no-await-in-loop
+        // oxlint-disable-next-line no-await-in-loop
         await this.#unlinkAndDeleteAllData();
 
         try {
-          // eslint-disable-next-line no-await-in-loop
+          // oxlint-disable-next-line no-await-in-loop
           await unlink(absoluteDownloadPath);
         } catch {
           // Best-effort
@@ -303,15 +636,387 @@ export class BackupsService {
     return { wasBackupImported: hasBackup };
   }
 
-  public retryDownload(): void {
-    if (!this.#downloadRetryPromise) {
+  public retryBackupImport(): void {
+    if (!this.#errorDialogDecision) {
       return;
     }
 
-    this.#downloadRetryPromise.resolve('retry');
+    this.#errorDialogDecision.resolve('retry');
   }
 
-  public async upload(): Promise<void> {
+  public cancelDownloadAndImport(): void {
+    if (this.#errorDialogDecision) {
+      this.#errorDialogDecision.resolve('cancel');
+    }
+
+    if (!this.#downloadController && !this.#importController) {
+      log.warn('cancelDownloadAndImport: download or import is not running');
+      return;
+    }
+
+    if (this.#downloadController) {
+      log.warn('cancelDownloadAndImport: canceling download');
+      this.#downloadController.abort();
+      this.#downloadController = undefined;
+    }
+
+    if (this.#importController) {
+      log.warn('cancelDownloadAndImport: canceling import processing');
+      this.#importController.abort();
+      this.#importController = undefined;
+    }
+  }
+
+  public async importFromDisk(
+    backupFile: string,
+    options: BackupImportOptions
+  ): Promise<void> {
+    return this.importBackup(() => createReadStream(backupFile), options);
+  }
+
+  public async importBackup(
+    createBackupStream: () => Readable,
+    options: BackupImportOptions
+  ): Promise<void> {
+    strictAssert(!this.#isRunning, 'BackupService is already running');
+
+    window.IPC.startTrackingQueryStats();
+
+    log.info(`importBackup: starting ${options.type}...`);
+    this.#isRunning = 'import';
+    const importStart = Date.now();
+
+    await DataWriter.disableMessageInsertTriggers();
+    await DataWriter.disableFSync();
+
+    try {
+      const controller = new AbortController();
+
+      this.#importController?.abort();
+      this.#importController = controller;
+
+      window.ConversationController.setReadOnly(true);
+
+      const importStream = await BackupImportStream.create(options);
+      if (
+        options.type === 'remote' ||
+        options.type === 'local-encrypted' ||
+        options.type === 'link-and-sync'
+      ) {
+        const aci = itemStorage.user.getCheckedAci();
+
+        const backupKey =
+          options.type === 'link-and-sync'
+            ? options.ephemeralBackupKey
+            : getBackupKey();
+
+        const { aesKey, hmacKey } = getMessageBackupKey(backupKey, aci);
+
+        // First pass - don't decrypt, only verify mac
+        let hmac = createHmac(HashType.size256, hmacKey);
+        let theirMac: Uint8Array<ArrayBuffer> | undefined;
+        let totalBytes = 0;
+
+        const sink = new PassThrough();
+        sink.on('data', chunk => {
+          totalBytes += chunk.byteLength;
+        });
+        // Discard the data in the first pass
+        sink.resume();
+
+        await pipeline(
+          createBackupStream(),
+          getMacAndUpdateHmac(hmac, theirMacValue => {
+            theirMac = theirMacValue;
+          }),
+          sink
+        );
+
+        if (controller.signal.aborted) {
+          throw new BackupImportCanceledError();
+        }
+
+        options.onProgress?.(0, totalBytes);
+
+        strictAssert(theirMac != null, 'importBackup: Missing MAC');
+        strictAssert(
+          constantTimeEqual(hmac.digest(), theirMac),
+          'importBackup: Bad MAC'
+        );
+
+        // Second pass - decrypt (but still check the mac at the end)
+        hmac = createHmac(HashType.size256, hmacKey);
+
+        const progressReporter = new PassThrough();
+        progressReporter.pause();
+
+        let currentBytes = 0;
+        progressReporter.on('data', chunk => {
+          currentBytes += chunk.byteLength;
+          options.onProgress?.(currentBytes, totalBytes);
+        });
+
+        await pipeline(
+          createBackupStream(),
+          getMacAndUpdateHmac(hmac, noop),
+          progressReporter,
+          decipherWithAesKey(aesKey),
+          createGunzip(),
+          new DelimitedStream(),
+          importStream,
+          { signal: controller.signal }
+        );
+
+        strictAssert(
+          constantTimeEqual(hmac.digest(), theirMac),
+          'importBackup: Bad MAC, second pass'
+        );
+      } else if (options.type === 'cross-client-integration-test') {
+        strictAssert(
+          isTestOrMockEnvironment(),
+          'Plaintext backups can be imported only in test harness'
+        );
+
+        await pipeline(
+          createBackupStream(),
+          new DelimitedStream(),
+          importStream
+        );
+      } else {
+        throw missingCaseError(options.type);
+      }
+
+      log.info('importBackup: finished...');
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        log.info('importBackup: canceled by user');
+        throw new BackupImportCanceledError();
+      }
+
+      log.error(`importBackup: failed, error: ${Errors.toLogFormat(error)}`);
+
+      if (isNightly(window.getVersion()) || isAdhoc(window.getVersion())) {
+        window.reduxActions.toast.showToast({
+          toastType: ToastType.FailedToImportBackup,
+        });
+      }
+
+      throw error;
+    } finally {
+      window.ConversationController.setReadOnly(false);
+      this.#isRunning = false;
+      this.#importController = undefined;
+
+      await DataWriter.enableMessageInsertTriggersAndBackfill();
+      await DataWriter.enableFSyncAndCheckpoint();
+
+      window.IPC.stopTrackingQueryStats({ epochName: 'Backup Import' });
+      if (window.SignalCI) {
+        window.SignalCI.handleEvent('backupImportComplete', {
+          duration: Date.now() - importStart,
+        });
+      }
+    }
+  }
+
+  public async stageLocalBackupForImport(
+    snapshotDir: string
+  ): Promise<ValidateLocalBackupStructureResultType> {
+    const result = await validateLocalBackupStructure(snapshotDir);
+    const { success, error } = result;
+    if (success) {
+      this.#localBackupSnapshotDir = snapshotDir;
+
+      if (!isTestOrMockEnvironment()) {
+        // Regenerate QR code without link & sync option
+        window.reduxActions.installer.startInstaller();
+
+        // oxlint-disable-next-line no-alert
+        window.alert(
+          'Staged backup successfully. Please link to perform import.'
+        );
+      }
+
+      log.info(
+        `stageLocalBackupForImport: Staged ${snapshotDir} for import. Please link to perform import.`
+      );
+    } else {
+      this.#localBackupSnapshotDir = undefined;
+      // oxlint-disable-next-line no-alert
+      window.alert(
+        'Invalid backup snapshot directory; make sure you choose a snapshot directory (e.g. `signal-backup-2026-01-01-12-00-00`)'
+      );
+      log.info(
+        `stageLocalBackupForImport: Invalid snapshot ${snapshotDir}. Error: ${error}.`
+      );
+    }
+    return result;
+  }
+
+  public isLocalBackupStaged(): boolean {
+    return Boolean(this.#localBackupSnapshotDir);
+  }
+
+  public async importLocalBackup(): Promise<void> {
+    strictAssert(
+      this.#localBackupSnapshotDir,
+      'importLocalBackup: Staged backup is required, use stageLocalBackupForImport()'
+    );
+
+    log.info(`importLocalBackup: Importing ${this.#localBackupSnapshotDir}`);
+
+    const backupFile = join(this.#localBackupSnapshotDir, 'main');
+    await this.importFromDisk(backupFile, {
+      type: 'local-encrypted',
+      localBackupSnapshotDir: this.#localBackupSnapshotDir,
+    });
+
+    await verifyLocalBackupMetadata({
+      snapshotDir: this.#localBackupSnapshotDir,
+      backupId: getBackupId(),
+      metadataKey: getLocalBackupMetadataKey(),
+    });
+
+    this.#localBackupSnapshotDir = undefined;
+
+    log.info('importLocalBackup: Done');
+  }
+
+  // Public Status API
+
+  public isImportRunning(): boolean {
+    return this.#isRunning === 'import';
+  }
+
+  public isExportRunning(): boolean {
+    return this.#isRunning === 'export';
+  }
+
+  public async fetchAndSaveBackupCdnObjectMetadata(): Promise<void> {
+    log.info('fetchAndSaveBackupCdnObjectMetadata: clearing existing metadata');
+    await DataWriter.clearAllBackupCdnObjectMetadata();
+
+    strictAssert(
+      areRemoteBackupsTurnedOn(),
+      'Remote backups must be turned on to fetch cdn metadata'
+    );
+
+    let cursor: string | undefined;
+    const PAGE_SIZE = 1000;
+    let numObjects = 0;
+    do {
+      log.info('fetchAndSaveBackupCdnObjectMetadata: fetching next page');
+      // oxlint-disable-next-line no-await-in-loop
+      const listResult = await this.api.listMedia({ cursor, limit: PAGE_SIZE });
+
+      // oxlint-disable-next-line no-await-in-loop
+      await DataWriter.saveBackupCdnObjectMetadata(
+        listResult.storedMediaObjects.map(object => ({
+          mediaId: object.mediaId,
+          cdnNumber: object.cdn,
+          sizeOnBackupCdn: object.objectLength,
+        }))
+      );
+      numObjects += listResult.storedMediaObjects.length;
+
+      cursor = listResult.cursor ?? undefined;
+    } while (cursor);
+
+    log.info(
+      `fetchAndSaveBackupCdnObjectMetadata: finished fetching metadata for ${numObjects} objects`
+    );
+  }
+
+  public async getBackupCdnInfo(
+    mediaId: string
+  ): Promise<
+    { isInBackupTier: true; cdnNumber: number } | { isInBackupTier: false }
+  > {
+    const storedInfo = await DataReader.getBackupCdnObjectMetadata(mediaId);
+    if (!storedInfo) {
+      return { isInBackupTier: false };
+    }
+
+    return { isInBackupTier: true, cdnNumber: storedInfo.cdnNumber };
+  }
+
+  async refreshBackupAndSubscriptionStatus(): Promise<void> {
+    await Promise.all([
+      this.#fetchSubscriptionStatus(),
+      this.#fetchCloudBackupStatus(),
+    ]);
+  }
+
+  async resetCachedData(): Promise<void> {
+    this.api.clearCache();
+    await this.credentials.clearCache();
+    await itemStorage.remove('backupSubscriptionStatus');
+    await itemStorage.remove('cloudBackupStatus');
+    await this.refreshBackupAndSubscriptionStatus();
+  }
+
+  hasMediaBackups(): boolean {
+    return itemStorage.get('backupTier') === BackupLevel.Paid;
+  }
+
+  getCachedCloudBackupStatus(): BackupStatusType | undefined {
+    return itemStorage.get('cloudBackupStatus');
+  }
+
+  async pickLocalBackupFolder(): Promise<string | undefined> {
+    const { canceled, dirPath: backupsParentDir } = await ipcRenderer.invoke(
+      'show-open-folder-dialog'
+    );
+    if (canceled || !backupsParentDir) {
+      return;
+    }
+
+    const localBackupsBaseDir = join(backupsParentDir, LOCAL_BACKUP_DIR_NAME);
+
+    await mkdir(localBackupsBaseDir, { recursive: true });
+
+    await itemStorage.put('localBackupFolder', localBackupsBaseDir);
+    addSensitivePath(localBackupsBaseDir);
+    return localBackupsBaseDir;
+  }
+
+  async disableLocalBackups({
+    deleteExistingBackups,
+  }: {
+    deleteExistingBackups: boolean;
+  }): Promise<void> {
+    const backupsBaseDir = itemStorage.get('localBackupFolder');
+
+    await Promise.all([
+      itemStorage.remove('lastLocalBackup'),
+      itemStorage.remove('localBackupFolder'),
+      itemStorage.remove('backupKeyViewedHash'),
+    ]);
+
+    if (deleteExistingBackups) {
+      if (!backupsBaseDir) {
+        log.error('disableLocalBackups: backups dir not set');
+        return;
+      }
+
+      if (basename(backupsBaseDir) !== LOCAL_BACKUP_DIR_NAME) {
+        log.warn(
+          'disableLocalBackups: backups dir does not have expected name, bailing on deleting backups'
+        );
+        return;
+      }
+
+      await rm(backupsBaseDir, {
+        force: true,
+        recursive: true,
+        maxRetries: 10,
+      });
+      log.info('disableLocalBackups: deleted backups directory');
+    }
+  }
+
+  // Test harness
+  public async _upload(): Promise<void> {
     await this.#waitForEmptyQueues('backups.upload');
 
     const fileName = `backup-${randomBytes(32).toString('hex')}`;
@@ -323,8 +1028,8 @@ export class BackupsService {
     log.info(`exportBackup: starting, backup level: ${backupLevel}...`);
 
     try {
-      const { totalBytes } = await this.exportToDisk(filePath, {
-        type: 'remote',
+      const { totalBytes } = await this.exportForRemote({
+        path: filePath,
         level: backupLevel,
         abortSignal: new AbortController().signal,
       });
@@ -339,97 +1044,211 @@ export class BackupsService {
     }
   }
 
-  public async exportLocalBackup(options: {
-    backupsBaseDir: string;
-    abortSignal: AbortSignal;
-    onProgress: OnProgressCallback;
-  }): Promise<LocalBackupExportResultType> {
-    strictAssert(isLocalBackupsEnabled(), 'Local backups must be enabled');
-    const fnLog = log.child('exportLocalBackup');
-    fnLog.info('starting...');
-
-    if (isOnline()) {
-      await this.#waitForEmptyQueues('backups.exportLocalBackup');
-    } else {
-      fnLog.info('offline; skipping wait for empty queues');
-    }
-
-    const snapshotDir = join(
-      options.backupsBaseDir,
-      `signal-backup-${getTimestampForFolder()}`
+  // Test harness
+  public async _internalStageLocalBackupForImport(): Promise<ValidateLocalBackupStructureResultType> {
+    const { canceled, dirPath: snapshotDir } = await ipcRenderer.invoke(
+      'show-open-folder-dialog'
     );
-
-    const freeSpaceBytes = await getFreeDiskSpace(options.backupsBaseDir);
-    const bytesNeeded = MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT - freeSpaceBytes;
-    if (bytesNeeded > 0) {
-      fnLog.info(
-        `Not enough storage; only ${freeSpaceBytes} available, ${MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT} is minimum needed`
-      );
+    if (canceled || !snapshotDir) {
+      return {
+        success: false,
+        error: 'File dialog canceled',
+        snapshotDir: undefined,
+      };
     }
 
-    const filesDir = getLocalBackupFilesDirectory({
-      backupsBaseDir: options.backupsBaseDir,
-    });
+    return this.stageLocalBackupForImport(snapshotDir);
+  }
 
-    await mkdir(filesDir, { recursive: true });
+  // Test harness
+  public async _internalValidate(
+    exportOptions: BackupExportOptions = { type: 'local-encrypted' }
+  ): Promise<ValidationResultType> {
+    try {
+      log.info('internal validation: starting');
+      const start = Date.now();
 
-    const attachmentPathsWrittenBeforeThisBackup =
-      await getAllPathsInLocalBackupFilesDirectory({
-        backupsBaseDir: options.backupsBaseDir,
+      window.IPC.startTrackingQueryStats();
+      const exportStream = new BackupExportStream(
+        getBackupContentPolicy(exportOptions)
+      );
+
+      const { info, iterable } = exportStream.run();
+
+      const totalBytes = await this.#runExclusiveExport(() =>
+        _internalValidateBackupIterator(info, iterable)
+      );
+      window.IPC.stopTrackingQueryStats({
+        epochName: 'Internal Validate Backup',
       });
+
+      const duration = Date.now() - start;
+
+      log.info('internal validation: succeeded');
+      return {
+        result: {
+          attachmentBackupJobs: exportStream.getAttachmentBackupJobs(),
+          mediaNames: exportStream.getMediaNames(),
+          duration,
+          stats: exportStream.getStats(),
+          totalBytes,
+        },
+      };
+    } catch (error) {
+      log.warn(
+        'internal validation: failed with errors\n',
+        Errors.toLogFormat(error)
+      );
+      return { error: Errors.toLogFormat(error) };
+    }
+  }
+
+  // Private Export Helpers
+
+  async #runExclusiveExport<T>(fn: () => Promise<T>): Promise<T> {
+    strictAssert(!this.#isRunning, 'BackupService is already running');
+    this.#isRunning = 'export';
 
     try {
-      await mkdir(snapshotDir, { recursive: true });
-
-      const exportResult = await this.exportToDisk(join(snapshotDir, 'main'), {
-        type: 'local-encrypted',
-        snapshotDir,
-        abortSignal: options.abortSignal,
-      });
-
-      const metadataArgs = {
-        snapshotDir,
-        backupId: getBackupId(),
-        metadataKey: getLocalBackupMetadataKey(),
-      };
-      await writeLocalBackupMetadata(metadataArgs);
-      await verifyLocalBackupMetadata(metadataArgs);
-      await this.#runLocalAttachmentBackupJobs({
-        attachmentBackupJobs: exportResult.attachmentBackupJobs,
-        baseDir: options.backupsBaseDir,
-        onProgress: options.onProgress,
-        abortSignal: options.abortSignal,
-      });
-
-      return { ...exportResult, snapshotDir };
-    } catch (e) {
-      if (options.abortSignal.aborted) {
-        log.warn('exportLocalBackup aborted', Errors.toLogFormat(e));
-      } else {
-        log.error('exportLocalBackup encountered error', Errors.toLogFormat(e));
+      await AttachmentBackupManager.stop();
+      try {
+        return await fn();
+      } finally {
+        await AttachmentBackupManager.start();
       }
-
-      log.info('Deleting snapshot directory');
-      await rm(snapshotDir, { recursive: true, force: true });
-      log.info('Deleted Snapshot directory');
-
-      const attachmentPathsAfterBackup =
-        await getAllPathsInLocalBackupFilesDirectory({
-          backupsBaseDir: options.backupsBaseDir,
-        });
-
-      const pathsAdded = new Set(attachmentPathsAfterBackup).difference(
-        new Set(attachmentPathsWrittenBeforeThisBackup)
-      );
-
-      if (pathsAdded.size > 0) {
-        log.info(`Deleting ${pathsAdded.size} newly written files`);
-        await Promise.all([...pathsAdded].map(safeUnlink));
-        log.info(`Deleted ${pathsAdded.size} files`);
-      }
-
-      throw e;
+    } finally {
+      this.#isRunning = false;
     }
+  }
+
+  async #exportEncryptedAndValidate({
+    path,
+    policy,
+    encoding,
+    abortSignal,
+  }: {
+    path: string;
+    policy: BackupContentPolicy;
+    encoding: EncryptedExportEncodingType;
+    abortSignal: AbortSignal;
+  }): Promise<ExportResultType> {
+    const exportResult = await this.#runExport({
+      policy,
+      encoding,
+      abortSignal,
+      sink: createWriteStream(path),
+    });
+
+    await validateBackup(
+      () => new FileStream(path),
+      exportResult.totalBytes,
+      encoding.purpose,
+      encoding.backupKey
+    );
+
+    return exportResult;
+  }
+
+  async #runExport({
+    policy,
+    encoding,
+    sink,
+    abortSignal,
+  }: {
+    policy: BackupContentPolicy;
+    encoding: ExportEncodingType;
+    sink: Writable;
+    abortSignal: AbortSignal;
+  }): Promise<ExportResultType> {
+    strictAssert(
+      this.#isRunning === 'export',
+      'exportBackup: must be called from #runExclusiveExport'
+    );
+
+    log.info('exportBackup: starting...');
+
+    const start = Date.now();
+    window.IPC.startTrackingQueryStats();
+    try {
+      const exportStream = new BackupExportStream(policy);
+
+      const runOutput = exportStream.run();
+
+      let totalBytes = 0;
+      const measure = measureSize({
+        onComplete: size => {
+          totalBytes = size;
+        },
+      });
+
+      switch (encoding.type) {
+        case 'encrypted': {
+          const { aesKey, hmacKey } = getMessageBackupKey(
+            encoding.backupKey,
+            itemStorage.user.getCheckedAci()
+          );
+          const iv = randomBytes(IV_LENGTH);
+          await pipeline(
+            toPaddedGzipIterable(runOutput),
+            createCipheriv(CipherType.AES256CBC, aesKey, iv),
+            prependStream(iv),
+            appendMacStream(hmacKey),
+            measure,
+            sink,
+            { signal: abortSignal }
+          );
+          break;
+        }
+        case 'plaintext-delimited':
+          strictAssert(
+            isTestOrMockEnvironment(),
+            'exportBackup: plaintext-delimited export is only for cross-client-integration tests'
+          );
+          await pipeline(toDelimitedIterable(runOutput), measure, sink, {
+            signal: abortSignal,
+          });
+          break;
+        case 'plaintext-jsonl':
+          await pipeline(toJSONIterable(runOutput, log), measure, sink, {
+            signal: abortSignal,
+          });
+          break;
+        default:
+          throw missingCaseError(encoding);
+      }
+
+      const duration = Date.now() - start;
+      return {
+        attachmentBackupJobs: exportStream.getAttachmentBackupJobs(),
+        mediaNames: exportStream.getMediaNames(),
+        totalBytes,
+        stats: exportStream.getStats(),
+        duration,
+      };
+    } finally {
+      window.IPC.stopTrackingQueryStats({ epochName: 'Backup Export' });
+      log.info('exportBackup: finished...');
+    }
+  }
+
+  async #replaceRemoteAttachmentBackupQueue(
+    jobs: ExportResultType['attachmentBackupJobs']
+  ): Promise<void> {
+    // TODO (DESKTOP-7344): Clear & add backup jobs in a single transaction
+    log.info(`Enqueuing ${jobs.length} remote attachment backup jobs`);
+    await DataWriter.clearAllAttachmentBackupJobs();
+    await Promise.all(
+      jobs.map(job => {
+        if (job.type === 'local') {
+          log.error(
+            "Can't enqueue local backup jobs during remote backup, skipping"
+          );
+          return Promise.resolve();
+        }
+
+        return AttachmentBackupManager.addJobAndMaybeThumbnailJob(job);
+      })
+    );
   }
 
   async #runLocalAttachmentBackupJobs({
@@ -477,7 +1296,7 @@ export class BackupsService {
       }
 
       try {
-        // eslint-disable-next-line no-await-in-loop
+        // oxlint-disable-next-line no-await-in-loop
         await runAttachmentBackupJob(job, baseDir);
 
         currentBytes += job.data.size;
@@ -504,454 +1323,11 @@ export class BackupsService {
     }
   }
 
-  public async stageLocalBackupForImport(
-    snapshotDir: string
-  ): Promise<ValidateLocalBackupStructureResultType> {
-    const result = await validateLocalBackupStructure(snapshotDir);
-    const { success, error } = result;
-    if (success) {
-      this.#localBackupSnapshotDir = snapshotDir;
-      log.info(
-        `stageLocalBackupForImport: Staged ${snapshotDir} for import. Please link to perform import.`
-      );
-    } else {
-      this.#localBackupSnapshotDir = undefined;
-      log.info(
-        `stageLocalBackupForImport: Invalid snapshot ${snapshotDir}. Error: ${error}.`
-      );
-    }
-    return result;
-  }
-
-  public isLocalBackupStaged(): boolean {
-    return Boolean(this.#localBackupSnapshotDir);
-  }
-
-  public async importLocalBackup(): Promise<void> {
-    strictAssert(
-      this.#localBackupSnapshotDir,
-      'importLocalBackup: Staged backup is required, use stageLocalBackupForImport()'
-    );
-
-    log.info(`importLocalBackup: Importing ${this.#localBackupSnapshotDir}`);
-
-    const backupFile = join(this.#localBackupSnapshotDir, 'main');
-    await this.importFromDisk(backupFile, {
-      type: 'local-encrypted',
-      localBackupSnapshotDir: this.#localBackupSnapshotDir,
-    });
-
-    await verifyLocalBackupMetadata({
-      snapshotDir: this.#localBackupSnapshotDir,
-      backupId: getBackupId(),
-      metadataKey: getLocalBackupMetadataKey(),
-    });
-
-    this.#localBackupSnapshotDir = undefined;
-
-    log.info('importLocalBackup: Done');
-  }
-
-  // Test harness
-  public async exportBackupData(
-    options: BackupExportOptions
-  ): Promise<{ data: Uint8Array } & ExportResultType> {
-    const sink = new PassThrough();
-
-    const chunks = new Array<Uint8Array>();
-    sink.on('data', chunk => chunks.push(chunk));
-    const result = await this.#exportBackup(sink, options);
-
-    return {
-      ...result,
-      data: Bytes.concatenate(chunks),
-    };
-  }
-
-  public async exportToDisk(
-    path: string,
-    options: BackupExportOptions
-  ): Promise<ExportResultType> {
-    const exportResult = await this.#exportBackup(
-      createWriteStream(path),
-      options
-    );
-
-    if (options.type === 'local-encrypted' || options.type === 'remote') {
-      await validateBackup(
-        () => new FileStream(path),
-        exportResult.totalBytes,
-        isTestOrMockEnvironment()
-          ? ValidationType.Internal
-          : ValidationType.Export
-      );
-    }
-
-    return exportResult;
-  }
-
-  public async exportPlaintext({
-    abortSignal,
-    onProgress,
-    shouldIncludeMedia,
-    targetPath,
-  }: {
-    abortSignal: AbortSignal;
-    onProgress: OnProgressCallback;
-    shouldIncludeMedia: boolean;
-    targetPath: string;
-  }): Promise<LocalBackupExportResultType> {
-    let exportDir: string | undefined;
-    const fnLog = log.child('exportPlaintext');
-    try {
-      fnLog.info('starting...');
-
-      const freeSpaceBytes = await getFreeDiskSpace(targetPath);
-      const bytesNeeded = MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT - freeSpaceBytes;
-      if (bytesNeeded > 0) {
-        fnLog.info(
-          `Not enough storage; only ${freeSpaceBytes} available, ${MIMINUM_DISK_SPACE_FOR_LOCAL_EXPORT} is minimum needed`
-        );
-        throw new NotEnoughStorageError(bytesNeeded);
-      }
-
-      exportDir = join(targetPath, `signal-export-${getTimestampForFolder()}`);
-
-      await mkdir(exportDir, { recursive: true });
-
-      strictAssert(
-        isFeaturedEnabledNoRedux({
-          betaKey: 'desktop.plaintextExport.beta',
-          prodKey: 'desktop.plaintextExport.prod',
-        }),
-        'Plaintext export must be enabled'
-      );
-
-      if (isOnline()) {
-        await this.#waitForEmptyQueues('backups.exportPlaintext');
-      } else {
-        fnLog.info('exportPlaintext: Offline; skipping wait for empty queues');
-      }
-
-      fnLog.info('exportPlaintext: starting...');
-
-      await mkdir(exportDir, { recursive: true });
-
-      const exportResult = await this.exportToDisk(
-        join(exportDir, 'main.jsonl'),
-        {
-          type: 'plaintext-export',
-          abortSignal,
-        }
-      );
-
-      fnLog.info('exportPlaintext: writing metadata');
-
-      const metadataPath = join(exportDir, 'metadata.json');
-      await writeFile(
-        metadataPath,
-        JSON.stringify({
-          version: LOCAL_BACKUP_VERSION,
-        })
-      );
-
-      if (shouldIncludeMedia) {
-        await this.#runLocalAttachmentBackupJobs({
-          attachmentBackupJobs: exportResult.attachmentBackupJobs,
-          baseDir: exportDir,
-          onProgress,
-          abortSignal,
-        });
-      }
-
-      fnLog.info('finished');
-
-      return {
-        ...exportResult,
-        snapshotDir: exportDir,
-      };
-    } catch (error) {
-      fnLog.warn('encountered error', Errors.toLogFormat(error));
-      if (exportDir) {
-        fnLog.info('Deleting export directory');
-        await rm(exportDir, { recursive: true, force: true });
-        fnLog.info('Export directory deleted');
-      }
-
-      if (error.code === 'EPERM' || error.code === 'EACCES') {
-        throw new StoragePermissionsError();
-      }
-
-      throw error;
-    }
-  }
-
-  public async _internalStageLocalBackupForImport(): Promise<ValidateLocalBackupStructureResultType> {
-    const { canceled, dirPath: snapshotDir } = await ipcRenderer.invoke(
-      'show-open-folder-dialog'
-    );
-    if (canceled || !snapshotDir) {
-      return {
-        success: false,
-        error: 'File dialog canceled',
-        snapshotDir: undefined,
-      };
-    }
-
-    return this.stageLocalBackupForImport(snapshotDir);
-  }
-
-  // Test harness
-  public async _internalValidate(): Promise<ValidationResultType> {
-    try {
-      const start = Date.now();
-
-      const recordStream = new BackupExportStream({
-        type: 'remote',
-        level: BackupLevel.Free,
-        abortSignal: new AbortController().signal,
-      });
-
-      recordStream.run();
-
-      const totalBytes = await validateBackupStream(recordStream);
-
-      const duration = Date.now() - start;
-
-      return {
-        result: {
-          attachmentBackupJobs: recordStream.getAttachmentBackupJobs(),
-          duration,
-          stats: recordStream.getStats(),
-          totalBytes,
-        },
-      };
-    } catch (error) {
-      return { error: Errors.toLogFormat(error) };
-    }
-  }
-
-  public async importFromDisk(
-    backupFile: string,
-    options: BackupImportOptions
-  ): Promise<void> {
-    return this.importBackup(() => createReadStream(backupFile), options);
-  }
-
-  public cancelDownloadAndImport(): void {
-    if (!this.#downloadController && !this.#importController) {
-      log.error(
-        'cancelDownloadAndImport: not canceling, download or import is not running'
-      );
-      return;
-    }
-
-    if (this.#downloadController) {
-      log.warn('cancelDownloadAndImport: canceling download');
-      this.#downloadController.abort();
-      this.#downloadController = undefined;
-      if (this.#downloadRetryPromise) {
-        this.#downloadRetryPromise.resolve('cancel');
-      }
-    }
-
-    if (this.#importController) {
-      log.warn('cancelDownloadAndImport: canceling import processing');
-      this.#importController.abort();
-      this.#importController = undefined;
-    }
-  }
-
-  public async importBackup(
-    createBackupStream: () => Readable,
-    options: BackupImportOptions
-  ): Promise<void> {
-    strictAssert(!this.#isRunning, 'BackupService is already running');
-
-    window.IPC.startTrackingQueryStats();
-
-    log.info(`importBackup: starting ${options.type}...`);
-    this.#isRunning = 'import';
-    const importStart = Date.now();
-
-    await DataWriter.disableMessageInsertTriggers();
-    await DataWriter.disableFSync();
-
-    try {
-      const controller = new AbortController();
-
-      this.#importController?.abort();
-      this.#importController = controller;
-
-      window.ConversationController.setReadOnly(true);
-
-      const importStream = await BackupImportStream.create(options);
-      if (options.type === 'remote' || options.type === 'local-encrypted') {
-        const { aesKey, macKey } = getKeyMaterial(
-          options.ephemeralKey ? new BackupKey(options.ephemeralKey) : undefined
-        );
-
-        // First pass - don't decrypt, only verify mac
-        let hmac = createHmac(HashType.size256, macKey);
-        let theirMac: Uint8Array | undefined;
-        let totalBytes = 0;
-
-        const sink = new PassThrough();
-        sink.on('data', chunk => {
-          totalBytes += chunk.byteLength;
-        });
-        // Discard the data in the first pass
-        sink.resume();
-
-        await pipeline(
-          createBackupStream(),
-          getMacAndUpdateHmac(hmac, theirMacValue => {
-            theirMac = theirMacValue;
-          }),
-          sink
-        );
-
-        if (controller.signal.aborted) {
-          throw new BackupImportCanceledError();
-        }
-
-        options.onProgress?.(0, totalBytes);
-
-        strictAssert(theirMac != null, 'importBackup: Missing MAC');
-        strictAssert(
-          constantTimeEqual(hmac.digest(), theirMac),
-          'importBackup: Bad MAC'
-        );
-
-        // Second pass - decrypt (but still check the mac at the end)
-        hmac = createHmac(HashType.size256, macKey);
-
-        const progressReporter = new PassThrough();
-        progressReporter.pause();
-
-        let currentBytes = 0;
-        progressReporter.on('data', chunk => {
-          currentBytes += chunk.byteLength;
-          options.onProgress?.(currentBytes, totalBytes);
-        });
-
-        await pipeline(
-          createBackupStream(),
-          getMacAndUpdateHmac(hmac, noop),
-          progressReporter,
-          decipherWithAesKey(aesKey),
-          createGunzip(),
-          new DelimitedStream(),
-          importStream,
-          { signal: controller.signal }
-        );
-
-        strictAssert(
-          constantTimeEqual(hmac.digest(), theirMac),
-          'importBackup: Bad MAC, second pass'
-        );
-      } else if (options.type === 'cross-client-integration-test') {
-        strictAssert(
-          isTestOrMockEnvironment(),
-          'Plaintext backups can be imported only in test harness'
-        );
-        strictAssert(
-          options.ephemeralKey == null,
-          'Plaintext backups cannot have ephemeral key'
-        );
-        await pipeline(
-          createBackupStream(),
-          new DelimitedStream(),
-          importStream
-        );
-      } else {
-        throw missingCaseError(options.type);
-      }
-
-      log.info('importBackup: finished...');
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        log.info('importBackup: canceled by user');
-        throw new BackupImportCanceledError();
-      }
-
-      log.error(`importBackup: failed, error: ${Errors.toLogFormat(error)}`);
-
-      if (isNightly(window.getVersion()) || isAdhoc(window.getVersion())) {
-        window.reduxActions.toast.showToast({
-          toastType: ToastType.FailedToImportBackup,
-        });
-      }
-
-      throw error;
-    } finally {
-      window.ConversationController.setReadOnly(false);
-      this.#isRunning = false;
-      this.#importController = undefined;
-
-      await DataWriter.enableMessageInsertTriggersAndBackfill();
-      await DataWriter.enableFSyncAndCheckpoint();
-
-      window.IPC.stopTrackingQueryStats({ epochName: 'Backup Import' });
-      if (window.SignalCI) {
-        window.SignalCI.handleEvent('backupImportComplete', {
-          duration: Date.now() - importStart,
-        });
-      }
-    }
-  }
-
-  public async fetchAndSaveBackupCdnObjectMetadata(): Promise<void> {
-    log.info('fetchAndSaveBackupCdnObjectMetadata: clearing existing metadata');
-    await DataWriter.clearAllBackupCdnObjectMetadata();
-
-    strictAssert(
-      areRemoteBackupsTurnedOn(),
-      'Remote backups must be turned on to fetch cdn metadata'
-    );
-
-    let cursor: string | undefined;
-    const PAGE_SIZE = 1000;
-    let numObjects = 0;
-    do {
-      log.info('fetchAndSaveBackupCdnObjectMetadata: fetching next page');
-      // eslint-disable-next-line no-await-in-loop
-      const listResult = await this.api.listMedia({ cursor, limit: PAGE_SIZE });
-
-      // eslint-disable-next-line no-await-in-loop
-      await DataWriter.saveBackupCdnObjectMetadata(
-        listResult.storedMediaObjects.map(object => ({
-          mediaId: object.mediaId,
-          cdnNumber: object.cdn,
-          sizeOnBackupCdn: object.objectLength,
-        }))
-      );
-      numObjects += listResult.storedMediaObjects.length;
-
-      cursor = listResult.cursor ?? undefined;
-    } while (cursor);
-
-    log.info(
-      `fetchAndSaveBackupCdnObjectMetadata: finished fetching metadata for ${numObjects} objects`
-    );
-  }
-
-  public async getBackupCdnInfo(
-    mediaId: string
-  ): Promise<
-    { isInBackupTier: true; cdnNumber: number } | { isInBackupTier: false }
-  > {
-    const storedInfo = await DataReader.getBackupCdnObjectMetadata(mediaId);
-    if (!storedInfo) {
-      return { isInBackupTier: false };
-    }
-
-    return { isInBackupTier: true, cdnNumber: storedInfo.cdnNumber };
-  }
+  // Private Import Helpers
 
   async #doDownloadAndImport({
     downloadPath,
-    ephemeralKey,
+    ephemeralBackupKey,
     onProgress,
   }: DoDownloadOptionsType): Promise<boolean> {
     const controller = new AbortController();
@@ -986,7 +1362,7 @@ export class BackupsService {
     let stream: Readable;
 
     try {
-      if (ephemeralKey == null) {
+      if (ephemeralBackupKey == null) {
         stream = await this.api.download({
           downloadOffset,
           onProgress: onDownloadProgress,
@@ -1074,17 +1450,27 @@ export class BackupsService {
 
         await itemStorage.remove('password');
 
-        await this.importFromDisk(downloadPath, {
-          type: 'remote',
-          ephemeralKey,
-          onProgress: (currentBytes, totalBytes) => {
-            onProgress?.(
-              InstallScreenBackupStep.Process,
-              currentBytes,
-              totalBytes
-            );
-          },
-        });
+        const onImportProgress = (
+          currentBytes: number,
+          totalBytes: number
+        ): void => {
+          onProgress?.(
+            InstallScreenBackupStep.Process,
+            currentBytes,
+            totalBytes
+          );
+        };
+
+        await this.importFromDisk(
+          downloadPath,
+          ephemeralBackupKey
+            ? {
+                type: 'link-and-sync',
+                ephemeralBackupKey,
+                onProgress: onImportProgress,
+              }
+            : { type: 'remote', onProgress: onImportProgress }
+        );
 
         // Restore password on success
         await itemStorage.put('password', password);
@@ -1109,143 +1495,6 @@ export class BackupsService {
     }
 
     return true;
-  }
-
-  async #exportBackup(
-    sink: Writable,
-    options: BackupExportOptions
-  ): Promise<ExportResultType> {
-    strictAssert(!this.#isRunning, 'BackupService is already running');
-
-    log.info('exportBackup: starting...');
-    this.#isRunning = 'export';
-
-    const start = Date.now();
-    try {
-      if (options.type === 'remote') {
-        strictAssert(
-          areRemoteBackupsTurnedOn(),
-          'Remote backups must be turned on for a remote export'
-        );
-      }
-
-      // TODO (DESKTOP-7168): Update mock-server to support this endpoint
-      if (window.SignalCI || options.type === 'cross-client-integration-test') {
-        strictAssert(
-          isTestOrMockEnvironment(),
-          'exportBackup: cross-client-integration tests must only be run in test harness'
-        );
-      }
-
-      switch (options.type) {
-        case 'remote':
-          log.info('exportBackup: Fetching latest backup CDN metadata');
-          await this.fetchAndSaveBackupCdnObjectMetadata();
-          break;
-        case 'cross-client-integration-test':
-        case 'local-encrypted':
-        case 'plaintext-export':
-          // no need to fetch what's on backup CDN
-          break;
-        default:
-          throw missingCaseError(options);
-      }
-
-      const { aesKey, macKey } = getKeyMaterial();
-      const recordStream = new BackupExportStream(options);
-
-      recordStream.run();
-
-      const iv = randomBytes(IV_LENGTH);
-
-      let totalBytes = 0;
-
-      const { type } = options;
-      switch (type) {
-        case 'remote':
-        case 'local-encrypted':
-          await pipeline(
-            recordStream,
-            createGzip(),
-            appendPaddingStream(),
-            createCipheriv(CipherType.AES256CBC, aesKey, iv),
-            prependStream(iv),
-            appendMacStream(macKey),
-            measureSize({
-              onComplete: size => {
-                totalBytes = size;
-              },
-            }),
-            sink,
-            { signal: options.abortSignal }
-          );
-          break;
-        case 'cross-client-integration-test':
-          strictAssert(
-            isTestOrMockEnvironment(),
-            'exportBackup: Plaintext backups can be exported only in test harness'
-          );
-          await pipeline(
-            recordStream,
-            measureSize({
-              onComplete: size => {
-                totalBytes = size;
-              },
-            }),
-            sink,
-            { signal: options.abortSignal }
-          );
-          break;
-        case 'plaintext-export':
-          await pipeline(
-            recordStream,
-            measureSize({
-              onComplete: size => {
-                totalBytes = size;
-              },
-            }),
-            sink,
-            { signal: options.abortSignal }
-          );
-          break;
-        default:
-          throw missingCaseError(type);
-      }
-
-      if (type === 'local-encrypted') {
-        log.info('exportBackup: writing local backup files list');
-        const filesWritten = await writeLocalBackupFilesList({
-          snapshotDir: options.snapshotDir,
-          mediaNamesIterator: recordStream.getMediaNamesIterator(),
-        });
-        const filesRead = await readLocalBackupFilesList(options.snapshotDir);
-        strictAssert(
-          isEqual(filesWritten, filesRead),
-          'exportBackup: Local backup files proto must match files written'
-        );
-      }
-
-      const duration = Date.now() - start;
-      return {
-        attachmentBackupJobs: recordStream.getAttachmentBackupJobs(),
-        totalBytes,
-        stats: recordStream.getStats(),
-        duration,
-      };
-    } finally {
-      log.info('exportBackup: finished...');
-      this.#isRunning = false;
-    }
-  }
-
-  async #runPeriodicRefresh(): Promise<void> {
-    try {
-      await this.api.refresh();
-      log.info('Backup: refreshed');
-    } catch (error) {
-      log.error('Backup: periodic refresh failed', Errors.toLogFormat(error));
-    }
-    await this.refreshBackupAndSubscriptionStatus();
   }
 
   async #unlinkAndDeleteAllData() {
@@ -1278,11 +1527,24 @@ export class BackupsService {
     window.reduxActions.installer.startInstaller();
   }
 
+  // Private Helpers
+
+  async #runPeriodicRefresh(): Promise<void> {
+    try {
+      await this.api.refresh();
+      log.info('Backup: refreshed');
+    } catch (error) {
+      log.error('Backup: periodic refresh failed', Errors.toLogFormat(error));
+    }
+    await this.refreshBackupAndSubscriptionStatus();
+  }
+
   async #waitForEmptyQueues(
     reason:
       | 'backups.upload'
       | 'backups.exportPlaintext'
       | 'backups.exportLocalBackup'
+      | 'backups.exportForLinkAndSync'
   ) {
     // Make sure we are up-to-date on storage service
     {
@@ -1299,13 +1561,6 @@ export class BackupsService {
 
     // Make sure all batches are flushed
     await Promise.all([waitForAllBatchers(), flushAllWaitBatchers()]);
-  }
-
-  public isImportRunning(): boolean {
-    return this.#isRunning === 'import';
-  }
-  public isExportRunning(): boolean {
-    return this.#isRunning === 'export';
   }
 
   #getBackupTierFromStorage(): BackupLevel | null {
@@ -1371,41 +1626,13 @@ export class BackupsService {
     });
     return result;
   }
-
-  async refreshBackupAndSubscriptionStatus(): Promise<void> {
-    await Promise.all([
-      this.#fetchSubscriptionStatus(),
-      this.#fetchCloudBackupStatus(),
-    ]);
-  }
-
-  async resetCachedData(): Promise<void> {
-    this.api.clearCache();
-    await this.credentials.clearCache();
-    await itemStorage.remove('backupSubscriptionStatus');
-    await itemStorage.remove('cloudBackupStatus');
-    await this.refreshBackupAndSubscriptionStatus();
-  }
-
-  hasMediaBackups(): boolean {
-    return itemStorage.get('backupTier') === BackupLevel.Paid;
-  }
-
-  getCachedCloudBackupStatus(): BackupStatusType | undefined {
-    return itemStorage.get('cloudBackupStatus');
-  }
-
-  async pickLocalBackupFolder(): Promise<string | undefined> {
-    const { canceled, dirPath: snapshotDir } = await ipcRenderer.invoke(
-      'show-open-folder-dialog'
-    );
-    if (canceled || !snapshotDir) {
-      return;
-    }
-
-    drop(itemStorage.put('localBackupFolder', snapshotDir));
-    return snapshotDir;
-  }
 }
 
 export const backupsService = new BackupsService();
+
+itemStorage.onready(() => {
+  const localBackupFolder = itemStorage.get('localBackupFolder');
+  if (localBackupFolder) {
+    addSensitivePath(localBackupFolder);
+  }
+});

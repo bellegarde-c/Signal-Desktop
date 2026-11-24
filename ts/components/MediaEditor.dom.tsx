@@ -1,80 +1,87 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, {
+import {
   useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
+  type JSX,
 } from 'react';
 import classNames from 'classnames';
 import { createPortal } from 'react-dom';
 import { fabric } from 'fabric';
 import lodash from 'lodash';
+import { tinykeys } from 'tinykeys';
 import type {
   DraftBodyRanges,
   HydratedBodyRangesType,
-} from '../types/BodyRange.std.js';
-import type { ImageStateType } from '../mediaEditor/ImageStateType.std.js';
+} from '../types/BodyRange.std.ts';
+import type { ImageStateType } from '../mediaEditor/ImageStateType.std.ts';
 import type {
   InputApi,
   Props as CompositionInputProps,
-} from './CompositionInput.dom.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import type { MIMEType } from '../types/MIME.std.js';
-import type { imageToBlurHash } from '../util/imageToBlurHash.dom.js';
-import { MediaEditorFabricAnalogTimeSticker } from '../mediaEditor/MediaEditorFabricAnalogTimeSticker.dom.js';
-import { MediaEditorFabricCropRect } from '../mediaEditor/MediaEditorFabricCropRect.dom.js';
-import { MediaEditorFabricDigitalTimeSticker } from '../mediaEditor/MediaEditorFabricDigitalTimeSticker.dom.js';
-import { MediaEditorFabricIText } from '../mediaEditor/MediaEditorFabricIText.dom.js';
-import { MediaEditorFabricPencilBrush } from '../mediaEditor/MediaEditorFabricPencilBrush.dom.js';
-import { MediaEditorFabricSticker } from '../mediaEditor/MediaEditorFabricSticker.dom.js';
-import { fabricEffectListener } from '../mediaEditor/fabricEffectListener.std.js';
-import { getRGBA, getHSL } from '../mediaEditor/util/color.std.js';
+} from './CompositionInput.dom.tsx';
+import type { LocalizerType } from '../types/Util.std.ts';
+import type { MIMEType } from '../types/MIME.std.ts';
+import type { imageToBlurHash } from '../util/imageToBlurHash.dom.ts';
+import { MediaEditorFabricAnalogTimeSticker } from '../mediaEditor/MediaEditorFabricAnalogTimeSticker.dom.ts';
+import { MediaEditorFabricCropRect } from '../mediaEditor/MediaEditorFabricCropRect.dom.ts';
+import { MediaEditorFabricDigitalTimeSticker } from '../mediaEditor/MediaEditorFabricDigitalTimeSticker.dom.ts';
+import { MediaEditorFabricIText } from '../mediaEditor/MediaEditorFabricIText.dom.ts';
+import { MediaEditorFabricPencilBrush } from '../mediaEditor/MediaEditorFabricPencilBrush.dom.ts';
+import { MediaEditorFabricSticker } from '../mediaEditor/MediaEditorFabricSticker.dom.ts';
+import { fabricEffectListener } from '../mediaEditor/fabricEffectListener.std.ts';
+import { getRGBA, getHSL } from '../mediaEditor/util/color.std.ts';
 import {
   getTextStyleAttributes,
   TextStyle,
-} from '../mediaEditor/util/getTextStyleAttributes.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { Button, ButtonVariant } from './Button.dom.js';
-import { CompositionInput } from './CompositionInput.dom.js';
-import { ContextMenu } from './ContextMenu.dom.js';
-import { IMAGE_PNG } from '../types/MIME.std.js';
-import { SizeObserver } from '../hooks/useSizeObserver.dom.js';
-import { Slider } from './Slider.dom.js';
-import { Spinner } from './Spinner.dom.js';
-import { Theme } from '../util/theme.std.js';
-import { ThemeType } from '../types/Util.std.js';
-import { arrow } from '../util/keyboard.dom.js';
-import { canvasToBytes } from '../util/canvasToBytes.std.js';
-import { loadImage } from '../util/loadImage.std.js';
-import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.js';
-import { useFabricHistory } from '../mediaEditor/useFabricHistory.dom.js';
-import { usePortal } from '../hooks/usePortal.dom.js';
-import { FunEmojiPicker } from './fun/FunEmojiPicker.dom.js';
+} from '../mediaEditor/util/getTextStyleAttributes.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { Button, ButtonVariant } from './Button.dom.tsx';
+import { CompositionInput } from './CompositionInput.dom.tsx';
+import { IMAGE_PNG } from '../types/MIME.std.ts';
+import { SizeObserver } from '../hooks/useSizeObserver.dom.tsx';
+import { Slider } from './Slider.dom.tsx';
+import { Theme } from '../util/theme.std.ts';
+import { ThemeType } from '../types/Util.std.ts';
+import { canvasToBytes } from '../util/canvasToBytes.dom.ts';
+import { loadImage } from '../util/loadImage.std.ts';
+import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.tsx';
+import { useFabricHistory } from '../mediaEditor/useFabricHistory.dom.ts';
+import { usePortal } from '../hooks/usePortal.dom.ts';
+import { FunEmojiPicker } from './fun/FunEmojiPicker.dom.tsx';
 import {
   FunEmojiPickerButton,
   FunStickerPickerButton,
-} from './fun/FunButton.dom.js';
-import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis.dom.js';
-import { FunStickerPicker } from './fun/FunStickerPicker.dom.js';
-import type { FunStickerSelection } from './fun/panels/FunPanelStickers.dom.js';
-import { drop } from '../util/drop.std.js';
-import type { FunTimeStickerStyle } from './fun/constants.dom.js';
-import * as Errors from '../types/errors.std.js';
+} from './fun/FunButton.dom.tsx';
+import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis.dom.tsx';
+import { FunStickerPicker } from './fun/FunStickerPicker.dom.tsx';
+import type { FunStickerSelection } from './fun/panels/FunPanelStickers.dom.tsx';
+import { drop } from '../util/drop.std.ts';
+import { MediaQualitySelector } from './MediaQualitySelector.dom.tsx';
+import { AxoButton } from '../axo/AxoButton.dom.tsx';
+import { tw } from '../axo/tw.dom.tsx';
+import type { FunTimeStickerStyle } from './fun/constants.dom.tsx';
+import * as Errors from '../types/errors.std.ts';
+import { AxoTheme } from '../axo/AxoTheme.dom.tsx';
+import { AxoDropdownMenu } from '../axo/menus/AxoDropdownMenu.dom.tsx';
+import type { StickerReferenceType } from '../types/Stickers.preload.ts';
 
 const { get, has, noop } = lodash;
 
 const log = createLogger('MediaEditor');
 
 export type MediaEditorResultType = Readonly<{
-  data: Uint8Array;
+  data: Uint8Array<ArrayBuffer>;
   contentType: MIMEType;
   blurHash: string;
   caption?: string;
   captionBodyRanges?: DraftBodyRanges;
+  isViewOnce?: boolean;
+  isHighQuality?: boolean;
 }>;
 
 export type PropsType = {
@@ -86,9 +93,16 @@ export type PropsType = {
   imageToBlurHash: typeof imageToBlurHash;
   onClose: () => unknown;
   onDone: (result: MediaEditorResultType) => unknown;
+  onMarkStickerAsFavorite: (
+    stickerRef: StickerReferenceType,
+    markAsFavorite: boolean
+  ) => void;
   convertDraftBodyRangesIntoHydrated: (
     bodyRanges: DraftBodyRanges | undefined
   ) => HydratedBodyRangesType | undefined;
+  isHighQuality?: boolean;
+  isViewOnce?: boolean;
+  showViewOnceToggle?: boolean;
 } & Pick<
   CompositionInputProps,
   | 'draftText'
@@ -144,13 +158,6 @@ type PendingCropType = {
   height: number;
 };
 
-function isCmdOrCtrl(ev: KeyboardEvent): boolean {
-  const { ctrlKey, metaKey } = ev;
-  const commandKey = get(window, 'platform') === 'darwin' && metaKey;
-  const controlKey = get(window, 'platform') !== 'darwin' && ctrlKey;
-  return commandKey || controlKey;
-}
-
 export function MediaEditor({
   doneButtonLabel,
   i18n,
@@ -159,6 +166,9 @@ export function MediaEditor({
   isSending,
   onClose,
   onDone,
+  isHighQuality,
+  isViewOnce,
+  showViewOnceToggle = false,
 
   // CompositionInput
   draftText,
@@ -167,13 +177,14 @@ export function MediaEditor({
   isFormattingEnabled,
   emojiSkinToneDefault,
   onSelectEmoji,
+  onMarkStickerAsFavorite,
   onTextTooLong,
   ourConversationId,
   platform,
   sortedGroupMembers,
   convertDraftBodyRangesIntoHydrated,
   imageToBlurHash,
-}: PropsType): React.JSX.Element | null {
+}: PropsType): JSX.Element | null {
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | undefined>();
   const [image, setImage] = useState<HTMLImageElement>(new Image());
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -182,18 +193,29 @@ export function MediaEditor({
   const [caption, setCaption] = useState(draftText ?? '');
   const [captionBodyRanges, setCaptionBodyRanges] =
     useState<DraftBodyRanges | null>(draftBodyRanges);
+  const [localIsViewOnce, setLocalIsViewOnce] = useState(isViewOnce ?? false);
+  const hasViewOnceChange = localIsViewOnce !== (isViewOnce ?? false);
+  const [localIsHighQuality, setLocalIsHighQuality] = useState(
+    isHighQuality ?? false
+  );
+  const hasHighQualityChange =
+    typeof isHighQuality === 'boolean' && localIsHighQuality !== isHighQuality;
+  const showMediaQualitySelector = typeof isHighQuality === 'boolean';
+  const pickerTheme = ThemeType.dark;
 
   const hydratedBodyRanges = useMemo(
     () => convertDraftBodyRangesIntoHydrated(captionBodyRanges ?? undefined),
     [captionBodyRanges, convertDraftBodyRangesIntoHydrated]
   );
 
-  const inputApiRef = useRef<InputApi | undefined>();
+  const inputApiRef = useRef<InputApi | null>(null);
 
   const canvasId = useId();
 
   const [imageState, setImageState] =
     useState<ImageStateType>(INITIAL_IMAGE_STATE);
+
+  const [editMode, setEditMode] = useState<EditMode | undefined>();
 
   const handleEmojiPickerOpenChange = useCallback((open: boolean) => {
     setEmojiPickerOpen(open);
@@ -207,6 +229,10 @@ export function MediaEditor({
     if (inputApiRef.current) {
       inputApiRef.current.insertEmoji(emojiSelection);
     }
+  }, []);
+
+  const handleSelectQuality = useCallback((_id: string, isHQ: boolean) => {
+    setLocalIsHighQuality(isHQ);
   }, []);
 
   const handlePickSticker = useCallback(
@@ -296,6 +322,19 @@ export function MediaEditor({
     [handlePickSticker]
   );
 
+  const handleMarkStickerAsFavorite = useCallback(
+    (stickerSelection: FunStickerSelection, markAsFavorite: boolean) => {
+      onMarkStickerAsFavorite(
+        {
+          packId: stickerSelection.stickerPackId,
+          stickerId: stickerSelection.stickerId,
+        },
+        markAsFavorite
+      );
+    },
+    [onMarkStickerAsFavorite]
+  );
+
   const [cropPreset, setCropPreset] = useState<CropPreset>(CropPreset.Freeform);
 
   // History state
@@ -315,6 +354,7 @@ export function MediaEditor({
     }
 
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       setImage(img);
 
@@ -350,199 +390,209 @@ export function MediaEditor({
       img.onload = noop;
       img.onerror = noop;
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [canvasId, fabricCanvas, imageSrc, onClose, takeSnapshot]);
 
-  const [editMode, setEditMode] = useState<EditMode | undefined>();
-
-  const tryClose = useRef<() => void | undefined>();
+  const tryClose = useRef<(() => void) | null>(null);
   const [confirmDiscardModal, confirmDiscardIf] = useConfirmDiscard({
     i18n,
     name: 'MediaEditor',
+    // @ts-expect-error ConfirmationDialog migration: Needs title
+    title: null,
+    // @ts-expect-error ConfirmationDialog migration: Needs description
+    description: null,
     tryClose,
   });
 
   const onTryClose = useCallback(() => {
-    confirmDiscardIf(canUndo || isCreatingStory, onClose);
-  }, [confirmDiscardIf, canUndo, isCreatingStory, onClose]);
+    confirmDiscardIf(
+      canUndo || isCreatingStory || hasViewOnceChange || hasHighQualityChange,
+      onClose
+    );
+  }, [
+    confirmDiscardIf,
+    canUndo,
+    isCreatingStory,
+    hasViewOnceChange,
+    hasHighQualityChange,
+    onClose,
+  ]);
+  // oxlint-disable-next-line react/refs
   tryClose.current = onTryClose;
 
-  // Keyboard support
   useEffect(() => {
-    if (!fabricCanvas) {
-      return noop;
-    }
-
-    const globalShortcuts: Array<
-      [(ev: KeyboardEvent) => boolean, () => unknown]
-    > = [
-      [
-        ev => isCmdOrCtrl(ev) && ev.key === 'c',
-        () => setEditMode(EditMode.Crop),
-      ],
-      [
-        ev => isCmdOrCtrl(ev) && ev.key === 'd',
-        () => setEditMode(EditMode.Draw),
-      ],
-      [
-        ev => isCmdOrCtrl(ev) && ev.key === 't',
-        () => setEditMode(EditMode.Text),
-      ],
-      [ev => isCmdOrCtrl(ev) && ev.key === 'z', undoIfPossible],
-      [ev => isCmdOrCtrl(ev) && ev.shiftKey && ev.key === 'z', redoIfPossible],
-      [
-        ev => ev.key === 'Escape',
-        () => {
-          // if the emoji popper is open,
-          // it will use the escape key to close itself
-          if (emojiPickerOpen) {
-            return;
-          }
-
-          // close window if the user is not in the middle of something
-          if (editMode === undefined) {
-            // if the stickers popper is open,
-            // it will use the escape key to close itself
-            //
-            // there's no easy way to prevent an ESC meant for the
-            // sticker-picker from hitting this handler first
-            if (!stickerPickerOpen) {
-              onTryClose();
-            }
-          } else {
-            setEditMode(undefined);
-          }
-
-          if (fabricCanvas.getActiveObject()) {
-            fabricCanvas.discardActiveObject();
-            fabricCanvas.requestRenderAll();
-          }
-        },
-      ],
-    ];
-
-    const objectShortcuts: Array<
-      [
-        (ev: KeyboardEvent) => boolean,
-        (obj: fabric.Object, ev: KeyboardEvent) => unknown,
-      ]
-    > = [
-      [
-        ev => ev.key === 'Delete',
-        obj => {
-          fabricCanvas.remove(obj);
-          setEditMode(undefined);
-        },
-      ],
-      [
-        ev => ev.key === 'ArrowUp',
-        (obj, ev) => {
-          const px = ev.shiftKey ? 20 : 1;
-          if (ev.altKey) {
-            obj.set('angle', (obj.angle || 0) - px);
-          } else {
-            const { x, y } = obj.getCenterPoint();
-            obj.setPositionByOrigin(
-              new fabric.Point(x, y - px),
-              'center',
-              'center'
-            );
-          }
-          obj.setCoords();
-          fabricCanvas.requestRenderAll();
-        },
-      ],
-      [
-        ev => ev.key === arrow('start'),
-        (obj, ev) => {
-          const px = ev.shiftKey ? 20 : 1;
-          if (ev.altKey) {
-            obj.set('angle', (obj.angle || 0) - px);
-          } else {
-            const { x, y } = obj.getCenterPoint();
-            obj.setPositionByOrigin(
-              new fabric.Point(x - px, y),
-              'center',
-              'center'
-            );
-          }
-          obj.setCoords();
-          fabricCanvas.requestRenderAll();
-        },
-      ],
-      [
-        ev => ev.key === 'ArrowDown',
-        (obj, ev) => {
-          const px = ev.shiftKey ? 20 : 1;
-          if (ev.altKey) {
-            obj.set('angle', (obj.angle || 0) + px);
-          } else {
-            const { x, y } = obj.getCenterPoint();
-            obj.setPositionByOrigin(
-              new fabric.Point(x, y + px),
-              'center',
-              'center'
-            );
-          }
-          obj.setCoords();
-          fabricCanvas.requestRenderAll();
-        },
-      ],
-      [
-        ev => ev.key === arrow('end'),
-        (obj, ev) => {
-          const px = ev.shiftKey ? 20 : 1;
-          if (ev.altKey) {
-            obj.set('angle', (obj.angle || 0) + px);
-          } else {
-            const { x, y } = obj.getCenterPoint();
-            obj.setPositionByOrigin(
-              new fabric.Point(x + px, y),
-              'center',
-              'center'
-            );
-          }
-          obj.setCoords();
-          fabricCanvas.requestRenderAll();
-        },
-      ],
-    ];
-
-    function handleKeydown(ev: KeyboardEvent) {
-      if (!fabricCanvas) {
+    function onEscape(event: KeyboardEvent) {
+      // if the emoji popper is open,
+      // it will use the escape key to close itself
+      if (emojiPickerOpen) {
         return;
       }
 
-      globalShortcuts.forEach(([conditional, runShortcut]) => {
-        if (conditional(ev)) {
-          runShortcut();
-          ev.preventDefault();
-          ev.stopPropagation();
-        }
-      });
+      event.preventDefault();
+      event.stopPropagation();
 
-      const obj = fabricCanvas.getActiveObject();
-
-      if (
-        !obj ||
-        obj.excludeFromExport ||
-        (obj instanceof MediaEditorFabricIText && obj.isEditing)
-      ) {
+      if (editMode != null) {
+        setEditMode(undefined);
         return;
       }
 
-      objectShortcuts.forEach(([conditional, runShortcut]) => {
-        if (conditional(ev)) {
-          runShortcut(obj, ev);
-          ev.preventDefault();
-          ev.stopPropagation();
+      if (fabricCanvas != null && fabricCanvas.getActiveObject()) {
+        fabricCanvas.discardActiveObject();
+        fabricCanvas.requestRenderAll();
+        return;
+      }
+
+      // if the stickers popper is open,
+      // it will use the escape key to close itself
+      //
+      // there's no easy way to prevent an ESC meant for the
+      // sticker-picker from hitting this handler first
+      if (!stickerPickerOpen) {
+        onTryClose();
+      }
+    }
+
+    function globalShortcut(handler: () => void) {
+      return (event: KeyboardEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handler();
+      };
+    }
+
+    const onCrop = globalShortcut(() => setEditMode(EditMode.Crop));
+    const onDraw = globalShortcut(() => setEditMode(EditMode.Draw));
+    const onText = globalShortcut(() => setEditMode(EditMode.Text));
+    const onUndo = globalShortcut(() => undoIfPossible());
+    const onRedo = globalShortcut(() => redoIfPossible());
+
+    function objectShortcut(
+      handler: (
+        canvas: fabric.Canvas,
+        activeObject: fabric.Object,
+        event: KeyboardEvent
+      ) => void
+    ) {
+      return (event: KeyboardEvent) => {
+        if (fabricCanvas == null) {
+          return;
         }
+
+        const activeObject = fabricCanvas.getActiveObject();
+        if (activeObject == null) {
+          return;
+        }
+
+        // Ignore UI objects like crop controls
+        if (activeObject.excludeFromExport) {
+          return;
+        }
+
+        // Ignore text objects that are currently being edited
+        if (
+          activeObject instanceof MediaEditorFabricIText &&
+          activeObject.isEditing
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        handler(fabricCanvas, activeObject, event);
+      };
+    }
+
+    const onDelete = objectShortcut((canvas, object) => {
+      canvas.remove(object);
+      setEditMode(undefined);
+    });
+
+    function moveObjectShortcut(directions: {
+      angle: -1 | 0 | 1;
+      x: -1 | 0 | 1;
+      y: -1 | 0 | 1;
+    }) {
+      return objectShortcut((canvas, object, event) => {
+        const increment = event.shiftKey ? 20 : 1;
+
+        if (event.altKey) {
+          const prev = object.angle ?? 0;
+          const delta = increment * directions.angle;
+
+          object.set('angle', prev + delta);
+        } else {
+          const prev = object.getCenterPoint();
+
+          const deltaX = increment * directions.x;
+          const deltaY = increment * directions.y;
+
+          const updatedX = prev.x + deltaX;
+          const updatedY = prev.y + deltaY;
+
+          object.setPositionByOrigin(
+            new fabric.Point(updatedX, updatedY),
+            'center',
+            'center'
+          );
+        }
+
+        object.setCoords();
+        canvas.requestRenderAll();
       });
     }
 
-    document.addEventListener('keydown', handleKeydown);
+    const onMoveUp = moveObjectShortcut({ angle: -1, x: 0, y: -1 });
+    const onMoveDown = moveObjectShortcut({ angle: 1, x: 0, y: 1 });
+    const onMoveLeft = moveObjectShortcut({ angle: -1, x: -1, y: 0 });
+    const onMoveRight = moveObjectShortcut({ angle: 1, x: 1, y: 0 });
+
+    const cleanupDocumentShortcuts = tinykeys(
+      document,
+      {
+        // We need escape on the `document` because some event handlers
+        // are preventing it from bubbling up to `window`
+        Escape: onEscape,
+      },
+      {
+        // Override default ignore behavior so this fires in textfields too
+        ignore: () => false,
+      }
+    );
+
+    // Allow these shortcuts to fire even when the editor has focus
+    const cleanupWindowOrEditorShortcuts = tinykeys(
+      window,
+      {
+        '$mod+D': onDraw,
+        '$mod+T': onText,
+      },
+      {
+        // Override default ignore behavior so this fires in textfields too
+        ignore: () => false,
+      }
+    );
+
+    // Don't allow these shortcuts to run in editors because they conflict with
+    // editor-specific shortcuts or require focus on objects
+    const cleanupWindowNonEditorShortcuts = tinykeys(window, {
+      // global shortcuts
+      '$mod+C': onCrop,
+      '$mod+Z': onUndo,
+      '$mod+Shift+Z': onRedo,
+      // object shortcuts
+      Backspace: onDelete,
+      Delete: onDelete,
+      '[Shift]+[Alt]+ArrowUp': onMoveUp,
+      '[Shift]+[Alt]+ArrowDown': onMoveDown,
+      '[Shift]+[Alt]+ArrowLeft': onMoveLeft,
+      '[Shift]+[Alt]+ArrowRight': onMoveRight,
+    });
 
     return () => {
-      document.removeEventListener('keydown', handleKeydown);
+      cleanupDocumentShortcuts();
+      cleanupWindowOrEditorShortcuts();
+      cleanupWindowNonEditorShortcuts();
     };
   }, [
     fabricCanvas,
@@ -574,6 +624,7 @@ export function MediaEditor({
     });
     fabricCanvas.setZoom(zoom);
   }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     containerHeight,
     containerWidth,
     fabricCanvas,
@@ -636,6 +687,7 @@ export function MediaEditor({
     }
 
     if (editMode === EditMode.Crop) {
+      // oxlint-disable-next-line react/immutability
       fabricCanvas.uniformScaling = cropAspectRatioLock;
     } else {
       fabricCanvas.uniformScaling = true;
@@ -663,6 +715,7 @@ export function MediaEditor({
     }
 
     if (editMode !== EditMode.Draw) {
+      // oxlint-disable-next-line react/immutability
       fabricCanvas.isDrawingMode = false;
       return;
     }
@@ -739,6 +792,7 @@ export function MediaEditor({
     fabricCanvas.viewportCenterObject(rect);
     rect.setCoords();
 
+    // oxlint-disable-next-line react/set-state-in-effect
     setCanCrop(true);
   }, [cropPreset, fabricCanvas, imageState.height, imageState.width, zoom]);
 
@@ -794,6 +848,7 @@ export function MediaEditor({
       });
     }
 
+    // oxlint-disable-next-line react/set-state-in-effect
     setCanCrop(false);
   }, [editMode, fabricCanvas, imageState.height, imageState.width, zoom]);
 
@@ -841,6 +896,83 @@ export function MediaEditor({
 
   const [isSaving, setIsSaving] = useState(false);
 
+  const handleSave = useCallback(async () => {
+    if (!fabricCanvas) {
+      return;
+    }
+
+    setEditMode(undefined);
+    setIsSaving(true);
+
+    let data: Uint8Array<ArrayBuffer>;
+    let blurHash: string;
+    try {
+      const renderFabricCanvas = await cloneFabricCanvas(fabricCanvas);
+
+      renderFabricCanvas.remove(
+        ...renderFabricCanvas.getObjects().filter(obj => obj.excludeFromExport)
+      );
+
+      let finalImageState: ImageStateType;
+      const pendingCrop = getPendingCrop(fabricCanvas);
+      if (pendingCrop) {
+        finalImageState = getNewImageStateFromCrop(imageState, pendingCrop);
+        moveFabricObjectsForCrop(renderFabricCanvas, pendingCrop);
+        drawFabricBackgroundImage({
+          fabricCanvas: renderFabricCanvas,
+          image,
+          imageState: finalImageState,
+        });
+      } else {
+        finalImageState = imageState;
+      }
+
+      renderFabricCanvas.setDimensions({
+        width: finalImageState.width,
+        height: finalImageState.height,
+      });
+      renderFabricCanvas.setZoom(1);
+      const renderedCanvas = renderFabricCanvas.toCanvasElement();
+
+      data = await canvasToBytes(renderedCanvas);
+
+      const blob = new Blob([data], {
+        type: IMAGE_PNG,
+      });
+
+      blurHash = await imageToBlurHash(blob);
+    } catch (err) {
+      onTryClose();
+      throw err;
+      // oxlint-disable-next-line react/todo
+    } finally {
+      setIsSaving(false);
+    }
+
+    onDone({
+      contentType: IMAGE_PNG,
+      data,
+      caption: caption !== '' ? caption : undefined,
+      captionBodyRanges: captionBodyRanges ?? undefined,
+      blurHash,
+      isViewOnce: localIsViewOnce,
+      isHighQuality: localIsHighQuality,
+    });
+  }, [
+    captionBodyRanges,
+    imageState,
+    localIsHighQuality,
+    localIsViewOnce,
+    fabricCanvas,
+    image,
+    imageToBlurHash,
+    caption,
+    onDone,
+    onTryClose,
+    setEditMode,
+    setIsSaving,
+  ]);
+
   // In an ideal world we'd use <ModalHost /> to get the nice animation benefits
   // but because of the way IText is implemented -- with a hidden textarea -- to
   // capture keyboard events, we can't use ModalHost since that traps focus, and
@@ -851,7 +983,26 @@ export function MediaEditor({
     return null;
   }
 
-  let toolElement: React.JSX.Element | undefined;
+  const textStyleLabels: Record<TextStyle, string> = {
+    [TextStyle.Regular]: i18n('icu:MediaEditor__text--regular'),
+    [TextStyle.Highlight]: i18n('icu:MediaEditor__text--highlight'),
+    [TextStyle.Outline]: i18n('icu:MediaEditor__text--outline'),
+  };
+  const drawToolLabels: Record<DrawTool, string> = {
+    [DrawTool.Pen]: i18n('icu:MediaEditor__draw--pen'),
+    [DrawTool.Highlighter]: i18n('icu:MediaEditor__draw--highlighter'),
+  };
+  const drawWidthLabels: Record<DrawWidth, string> = {
+    [DrawWidth.Thin]: i18n('icu:MediaEditor__draw--thin'),
+    [DrawWidth.Regular]: i18n('icu:MediaEditor__draw--regular'),
+    [DrawWidth.Medium]: i18n('icu:MediaEditor__draw--medium'),
+    [DrawWidth.Heavy]: i18n('icu:MediaEditor__draw--heavy'),
+  };
+  const textStyleLabel = textStyleLabels[textStyle];
+  const drawToolLabel = drawToolLabels[drawTool];
+  const drawWidthLabel = drawWidthLabels[drawWidth];
+
+  let toolElement: JSX.Element | undefined;
   if (editMode === EditMode.Text) {
     toolElement = (
       <>
@@ -861,43 +1012,59 @@ export function MediaEditor({
             <Slider
               handleStyle={{ backgroundColor: getHSL(sliderValue) }}
               label={i18n('icu:CustomColorEditor__hue')}
-              moduleClassName="HueSlider MediaEditor__toolbar__tool"
+              className="HueSlider MediaEditor__toolbar__tool"
               onChange={setSliderValue}
               value={sliderValue}
             />
-            <ContextMenu
-              i18n={i18n}
-              menuOptions={[
-                {
-                  icon: 'MediaEditor__icon--text-regular',
-                  label: i18n('icu:MediaEditor__text--regular'),
-                  onClick: () => setTextStyle(TextStyle.Regular),
-                  value: TextStyle.Regular,
-                },
-                {
-                  icon: 'MediaEditor__icon--text-highlight',
-                  label: i18n('icu:MediaEditor__text--highlight'),
-                  onClick: () => setTextStyle(TextStyle.Highlight),
-                  value: TextStyle.Highlight,
-                },
-                {
-                  icon: 'MediaEditor__icon--text-outline',
-                  label: i18n('icu:MediaEditor__text--outline'),
-                  onClick: () => setTextStyle(TextStyle.Outline),
-                  value: TextStyle.Outline,
-                },
-              ]}
-              moduleClassName={classNames('MediaEditor__toolbar__tool', {
-                'MediaEditor__toolbar__button--text-regular':
-                  textStyle === TextStyle.Regular,
-                'MediaEditor__toolbar__button--text-highlight':
-                  textStyle === TextStyle.Highlight,
-                'MediaEditor__toolbar__button--text-outline':
-                  textStyle === TextStyle.Outline,
-              })}
-              theme={Theme.Dark}
-              value={textStyle}
-            />
+            <AxoDropdownMenu.Root>
+              <AxoDropdownMenu.Trigger>
+                <button
+                  type="button"
+                  aria-label={textStyleLabel}
+                  className="MediaEditor__toolbar__tool MediaEditor__toolbar__menu-button"
+                >
+                  <span
+                    aria-hidden
+                    className={classNames(
+                      'MediaEditor__toolbar__menu-button-icon',
+                      {
+                        'MediaEditor__toolbar__button--text-regular':
+                          textStyle === TextStyle.Regular,
+                        'MediaEditor__toolbar__button--text-highlight':
+                          textStyle === TextStyle.Highlight,
+                        'MediaEditor__toolbar__button--text-outline':
+                          textStyle === TextStyle.Outline,
+                      }
+                    )}
+                  />
+                </button>
+              </AxoDropdownMenu.Trigger>
+              <AxoDropdownMenu.Content>
+                <AxoDropdownMenu.RadioGroup
+                  value={textStyle}
+                  onValueChange={value => setTextStyle(value as TextStyle)}
+                >
+                  <AxoDropdownMenu.RadioItem
+                    value={TextStyle.Regular}
+                    symbol="text-square"
+                  >
+                    {i18n('icu:MediaEditor__text--regular')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem
+                    value={TextStyle.Highlight}
+                    symbol="text-square-fill"
+                  >
+                    {i18n('icu:MediaEditor__text--highlight')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem
+                    value={TextStyle.Outline}
+                    symbol="text-outline"
+                  >
+                    {i18n('icu:MediaEditor__text--outline')}
+                  </AxoDropdownMenu.RadioItem>
+                </AxoDropdownMenu.RadioGroup>
+              </AxoDropdownMenu.Content>
+            </AxoDropdownMenu.Root>
           </div>
           <Button
             onClick={() => {
@@ -925,76 +1092,102 @@ export function MediaEditor({
             <Slider
               handleStyle={{ backgroundColor: getHSL(sliderValue) }}
               label={i18n('icu:CustomColorEditor__hue')}
-              moduleClassName="HueSlider MediaEditor__toolbar__tool"
+              className="HueSlider MediaEditor__toolbar__tool"
               onChange={setSliderValue}
               value={sliderValue}
             />
-            <ContextMenu
-              i18n={i18n}
-              menuOptions={[
-                {
-                  icon: 'MediaEditor__icon--draw-pen',
-                  label: i18n('icu:MediaEditor__draw--pen'),
-                  onClick: () => setDrawTool(DrawTool.Pen),
-                  value: DrawTool.Pen,
-                },
-                {
-                  icon: 'MediaEditor__icon--draw-highlighter',
-                  label: i18n('icu:MediaEditor__draw--highlighter'),
-                  onClick: () => setDrawTool(DrawTool.Highlighter),
-                  value: DrawTool.Highlighter,
-                },
-              ]}
-              moduleClassName={classNames('MediaEditor__toolbar__tool', {
-                'MediaEditor__toolbar__button--draw-pen':
-                  drawTool === DrawTool.Pen,
-                'MediaEditor__toolbar__button--draw-highlighter':
-                  drawTool === DrawTool.Highlighter,
-              })}
-              theme={Theme.Dark}
-              value={drawTool}
-            />
-            <ContextMenu
-              i18n={i18n}
-              menuOptions={[
-                {
-                  icon: 'MediaEditor__icon--width-thin',
-                  label: i18n('icu:MediaEditor__draw--thin'),
-                  onClick: () => setDrawWidth(DrawWidth.Thin),
-                  value: DrawWidth.Thin,
-                },
-                {
-                  icon: 'MediaEditor__icon--width-regular',
-                  label: i18n('icu:MediaEditor__draw--regular'),
-                  onClick: () => setDrawWidth(DrawWidth.Regular),
-                  value: DrawWidth.Regular,
-                },
-                {
-                  icon: 'MediaEditor__icon--width-medium',
-                  label: i18n('icu:MediaEditor__draw--medium'),
-                  onClick: () => setDrawWidth(DrawWidth.Medium),
-                  value: DrawWidth.Medium,
-                },
-                {
-                  icon: 'MediaEditor__icon--width-heavy',
-                  label: i18n('icu:MediaEditor__draw--heavy'),
-                  onClick: () => setDrawWidth(DrawWidth.Heavy),
-                  value: DrawWidth.Heavy,
-                },
-              ]}
-              moduleClassName={classNames('MediaEditor__toolbar__tool', {
-                'MediaEditor__toolbar__button--width-thin':
-                  drawWidth === DrawWidth.Thin,
-                'MediaEditor__toolbar__button--width-regular':
-                  drawWidth === DrawWidth.Regular,
-                'MediaEditor__toolbar__button--width-medium':
-                  drawWidth === DrawWidth.Medium,
-                'MediaEditor__toolbar__button--width-heavy':
-                  drawWidth === DrawWidth.Heavy,
-              })}
-              theme={Theme.Dark}
-              value={drawWidth}
-            />
+            <AxoDropdownMenu.Root>
+              <AxoDropdownMenu.Trigger>
+                <button
+                  type="button"
+                  aria-label={drawToolLabel}
+                  className="MediaEditor__toolbar__tool MediaEditor__toolbar__menu-button"
+                >
+                  <span
+                    aria-hidden
+                    className={classNames(
+                      'MediaEditor__toolbar__menu-button-icon',
+                      {
+                        'MediaEditor__toolbar__button--draw-pen':
+                          drawTool === DrawTool.Pen,
+                        'MediaEditor__toolbar__button--draw-highlighter':
+                          drawTool === DrawTool.Highlighter,
+                      }
+                    )}
+                  />
+                </button>
+              </AxoDropdownMenu.Trigger>
+              <AxoDropdownMenu.Content>
+                <AxoDropdownMenu.RadioGroup
+                  value={drawTool}
+                  onValueChange={value => setDrawTool(value as DrawTool)}
+                >
+                  <AxoDropdownMenu.RadioItem value={DrawTool.Pen}>
+                    {i18n('icu:MediaEditor__draw--pen')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem value={DrawTool.Highlighter}>
+                    {i18n('icu:MediaEditor__draw--highlighter')}
+                  </AxoDropdownMenu.RadioItem>
+                </AxoDropdownMenu.RadioGroup>
+              </AxoDropdownMenu.Content>
+            </AxoDropdownMenu.Root>
+            <AxoDropdownMenu.Root>
+              <AxoDropdownMenu.Trigger>
+                <button
+                  type="button"
+                  aria-label={drawWidthLabel}
+                  className="MediaEditor__toolbar__tool MediaEditor__toolbar__menu-button"
+                >
+                  <span
+                    aria-hidden
+                    className={classNames(
+                      'MediaEditor__toolbar__menu-button-icon',
+                      {
+                        'MediaEditor__toolbar__button--width-thin':
+                          drawWidth === DrawWidth.Thin,
+                        'MediaEditor__toolbar__button--width-regular':
+                          drawWidth === DrawWidth.Regular,
+                        'MediaEditor__toolbar__button--width-medium':
+                          drawWidth === DrawWidth.Medium,
+                        'MediaEditor__toolbar__button--width-heavy':
+                          drawWidth === DrawWidth.Heavy,
+                      }
+                    )}
+                  />
+                </button>
+              </AxoDropdownMenu.Trigger>
+              <AxoDropdownMenu.Content>
+                <AxoDropdownMenu.RadioGroup
+                  value={`${drawWidth}`}
+                  onValueChange={value => setDrawWidth(parseInt(value, 10))}
+                >
+                  <AxoDropdownMenu.RadioItem
+                    value={`${DrawWidth.Thin}`}
+                    symbol="brushsize-thin"
+                  >
+                    {i18n('icu:MediaEditor__draw--thin')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem
+                    value={`${DrawWidth.Regular}`}
+                    symbol="brushsize-regular"
+                  >
+                    {i18n('icu:MediaEditor__draw--regular')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem
+                    value={`${DrawWidth.Medium}`}
+                    symbol="brushsize-medium"
+                  >
+                    {i18n('icu:MediaEditor__draw--medium')}
+                  </AxoDropdownMenu.RadioItem>
+                  <AxoDropdownMenu.RadioItem
+                    value={`${DrawWidth.Heavy}`}
+                    symbol="brushsize-heavy"
+                  >
+                    {i18n('icu:MediaEditor__draw--heavy')}
+                  </AxoDropdownMenu.RadioItem>
+                </AxoDropdownMenu.RadioGroup>
+              </AxoDropdownMenu.Content>
+            </AxoDropdownMenu.Root>
           </div>
           <Button
             onClick={() => setEditMode(undefined)}
@@ -1018,39 +1211,30 @@ export function MediaEditor({
       <>
         <div className="MediaEditor__tools-row-1">
           <button
-            className={classNames(
-              'MediaEditor__crop-preset MediaEditor__crop-preset--free',
-              {
-                'MediaEditor__crop-preset--selected':
-                  cropPreset === CropPreset.Freeform,
-              }
-            )}
+            className={classNames('MediaEditor__crop-preset', {
+              'MediaEditor__crop-preset--selected':
+                cropPreset === CropPreset.Freeform,
+            })}
             onClick={() => setCropPreset(CropPreset.Freeform)}
             type="button"
           >
             {i18n('icu:MediaEditor__crop-preset--freeform')}
           </button>
           <button
-            className={classNames(
-              'MediaEditor__crop-preset MediaEditor__crop-preset--square',
-              {
-                'MediaEditor__crop-preset--selected':
-                  cropPreset === CropPreset.Square,
-              }
-            )}
+            className={classNames('MediaEditor__crop-preset', {
+              'MediaEditor__crop-preset--selected':
+                cropPreset === CropPreset.Square,
+            })}
             onClick={() => setCropPreset(CropPreset.Square)}
             type="button"
           >
             {i18n('icu:MediaEditor__crop-preset--square')}
           </button>
           <button
-            className={classNames(
-              'MediaEditor__crop-preset MediaEditor__crop-preset--vertical',
-              {
-                'MediaEditor__crop-preset--selected':
-                  cropPreset === CropPreset.Vertical,
-              }
-            )}
+            className={classNames('MediaEditor__crop-preset', {
+              'MediaEditor__crop-preset--selected':
+                cropPreset === CropPreset.Vertical,
+            })}
             onClick={() => setCropPreset(CropPreset.Vertical)}
             type="button"
           >
@@ -1140,12 +1324,13 @@ export function MediaEditor({
               aria-label={i18n('icu:MediaEditor__crop--lock')}
               className={classNames(
                 'MediaEditor__toolbar__crop__button',
-                `MediaEditor__toolbar__button--crop-${
-                  cropAspectRatioLock ? '' : 'un'
-                }locked`
+                cropAspectRatioLock
+                  ? 'MediaEditor__toolbar__button--crop-locked'
+                  : 'MediaEditor__toolbar__button--crop-unlocked'
               )}
               onClick={() => {
                 if (fabricCanvas) {
+                  // oxlint-disable-next-line react/immutability
                   fabricCanvas.uniformScaling = !cropAspectRatioLock;
                 }
                 setCropAspectRatioLock(!cropAspectRatioLock);
@@ -1190,271 +1375,238 @@ export function MediaEditor({
   }
 
   return createPortal(
-    <div className="MediaEditor dark-theme">
-      <div className="MediaEditor__history-buttons">
+    <AxoTheme.Override theme="force-dark">
+      <div className="MediaEditor dark-theme">
+        <div className="MediaEditor__history-buttons">
+          <button
+            aria-label={i18n('icu:MediaEditor__control--undo')}
+            className="MediaEditor__control MediaEditor__control--undo"
+            disabled={!canUndo}
+            onClick={() => {
+              if (editMode === EditMode.Crop) {
+                setEditMode(undefined);
+              }
+              undoIfPossible();
+            }}
+            type="button"
+          />
+          <button
+            aria-label={i18n('icu:MediaEditor__control--redo')}
+            className="MediaEditor__control MediaEditor__control--redo"
+            disabled={!canRedo}
+            onClick={() => {
+              if (editMode === EditMode.Crop) {
+                setEditMode(undefined);
+              }
+              redoIfPossible();
+            }}
+            type="button"
+          />
+        </div>
         <button
-          aria-label={i18n('icu:MediaEditor__control--undo')}
-          className="MediaEditor__control MediaEditor__control--undo"
-          disabled={!canUndo}
-          onClick={() => {
-            if (editMode === EditMode.Crop) {
-              setEditMode(undefined);
-            }
-            undoIfPossible();
-          }}
+          aria-label={i18n('icu:close')}
+          className="MediaEditor__close"
+          onClick={onTryClose}
           type="button"
         />
-        <button
-          aria-label={i18n('icu:MediaEditor__control--redo')}
-          className="MediaEditor__control MediaEditor__control--redo"
-          disabled={!canRedo}
-          onClick={() => {
-            if (editMode === EditMode.Crop) {
-              setEditMode(undefined);
-            }
-            redoIfPossible();
-          }}
-          type="button"
-        />
-      </div>
-      <button
-        aria-label={i18n('icu:close')}
-        className="MediaEditor__close"
-        onClick={onTryClose}
-        type="button"
-      />
-      <div className="MediaEditor__container">
-        <SizeObserver
-          onSizeChange={size => {
-            setContainerWidth(size.width);
-            setContainerHeight(size.height);
-          }}
-        >
-          {ref => (
-            <div className="MediaEditor__media" ref={ref}>
-              {image && (
-                <div>
-                  <canvas
-                    className={classNames('MediaEditor__media--canvas', {
-                      'MediaEditor__media--canvas--cropping':
-                        editMode === EditMode.Crop,
-                    })}
-                    id={canvasId}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </SizeObserver>
-      </div>
-      <div className="MediaEditor__tools">
-        {toolElement !== undefined ? (
-          toolElement
-        ) : (
-          <>
-            <div className="MediaEditor__tools-row-1">
-              <button
-                aria-label={i18n('icu:MediaEditor__control--draw')}
-                className={classNames({
-                  MediaEditor__control: true,
-                  'MediaEditor__control--pen': true,
-                  'MediaEditor__control--selected': editMode === EditMode.Draw,
-                })}
-                onClick={() => {
-                  setEditMode(
-                    editMode === EditMode.Draw ? undefined : EditMode.Draw
-                  );
-                }}
-                type="button"
-              />
-              <button
-                aria-label={i18n('icu:MediaEditor__control--text')}
-                className={classNames({
-                  MediaEditor__control: true,
-                  'MediaEditor__control--text': true,
-                  'MediaEditor__control--selected': editMode === EditMode.Text,
-                })}
-                onClick={() => {
-                  if (editMode === EditMode.Text) {
-                    setEditMode(undefined);
-                    const obj = fabricCanvas?.getActiveObject();
-                    if (obj instanceof MediaEditorFabricIText) {
-                      obj.exitEditing();
-                    }
-                  } else {
-                    setEditMode(EditMode.Text);
-                  }
-                }}
-                type="button"
-              />
-              <button
-                aria-label={i18n('icu:MediaEditor__control--crop')}
-                className={classNames({
-                  MediaEditor__control: true,
-                  'MediaEditor__control--crop': true,
-                  'MediaEditor__control--selected': editMode === EditMode.Crop,
-                })}
-                onClick={() => {
-                  if (!fabricCanvas) {
-                    return;
-                  }
-                  if (editMode === EditMode.Crop) {
-                    const obj = fabricCanvas.getActiveObject();
-                    if (obj instanceof MediaEditorFabricCropRect) {
-                      fabricCanvas.remove(obj);
-                    }
-                    setEditMode(undefined);
-                  } else {
-                    setEditMode(EditMode.Crop);
-                  }
-                }}
-                type="button"
-              />
-              <FunStickerPicker
-                open={stickerPickerOpen}
-                onOpenChange={handleStickerPickerOpenChange}
-                onSelectSticker={handleSelectSticker}
-                showTimeStickers
-                onSelectTimeSticker={handlePickTimeSticker}
-                placement="top"
-                theme={ThemeType.dark}
-              >
-                <FunStickerPickerButton i18n={i18n} />
-              </FunStickerPicker>
-            </div>
-            <div className="MediaEditor__tools-row-2">
-              <div className="MediaEditor__tools--input dark-theme">
-                <CompositionInput
-                  draftText={caption}
-                  draftBodyRanges={hydratedBodyRanges ?? null}
-                  getPreferredBadge={getPreferredBadge}
-                  i18n={i18n}
-                  inputApi={inputApiRef}
-                  isActive
-                  isFormattingEnabled={isFormattingEnabled}
-                  moduleClassName="StoryViewsNRepliesModal__input"
-                  onCloseLinkPreview={noop}
-                  onEditorStateChange={({ bodyRanges, messageText }) => {
-                    setCaptionBodyRanges(bodyRanges);
-                    setCaption(messageText);
+        <div className="MediaEditor__container">
+          <SizeObserver
+            onSizeChange={size => {
+              if (size.hidden) {
+                return;
+              }
+              setContainerWidth(size.width);
+              setContainerHeight(size.height);
+            }}
+          >
+            {ref => (
+              <div className="MediaEditor__media" ref={ref}>
+                {image && (
+                  <div>
+                    <canvas
+                      className={classNames('MediaEditor__media--canvas', {
+                        'MediaEditor__media--canvas--cropping':
+                          editMode === EditMode.Crop,
+                      })}
+                      id={canvasId}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </SizeObserver>
+        </div>
+        <div className="MediaEditor__tools">
+          {toolElement !== undefined ? (
+            toolElement
+          ) : (
+            <>
+              <div className="MediaEditor__tools-row-1">
+                <button
+                  aria-label={i18n('icu:MediaEditor__control--draw')}
+                  className={classNames({
+                    MediaEditor__control: true,
+                    'MediaEditor__control--pen': true,
+                    'MediaEditor__control--selected':
+                      editMode === EditMode.Draw,
+                  })}
+                  onClick={() => {
+                    setEditMode(
+                      editMode === EditMode.Draw ? undefined : EditMode.Draw
+                    );
                   }}
-                  emojiSkinToneDefault={emojiSkinToneDefault ?? null}
-                  onSelectEmoji={onSelectEmoji}
-                  onSubmit={noop}
-                  onTextTooLong={onTextTooLong}
-                  ourConversationId={ourConversationId}
-                  placeholder={i18n('icu:MediaEditor__input-placeholder')}
-                  platform={platform}
-                  quotedMessageId={null}
-                  sendCounter={0}
-                  sortedGroupMembers={sortedGroupMembers}
-                  theme={ThemeType.dark}
-                  // Only needed for state updates and we need to override those
-                  conversationId={null}
-                  // Cannot enter media editor while editing
-                  draftEditMessage={null}
-                  // We don't use the large editor mode
-                  large={null}
-                  // panels do not appear over the media editor
-                  shouldHidePopovers={null}
-                  // link previews not displayed with media
-                  linkPreviewResult={null}
+                  type="button"
+                />
+                <button
+                  aria-label={i18n('icu:MediaEditor__control--text')}
+                  className={classNames({
+                    MediaEditor__control: true,
+                    'MediaEditor__control--text': true,
+                    'MediaEditor__control--selected':
+                      editMode === EditMode.Text,
+                  })}
+                  onClick={() => {
+                    if (editMode === EditMode.Text) {
+                      setEditMode(undefined);
+                      const obj = fabricCanvas?.getActiveObject();
+                      if (obj instanceof MediaEditorFabricIText) {
+                        obj.exitEditing();
+                      }
+                    } else {
+                      setEditMode(EditMode.Text);
+                    }
+                  }}
+                  type="button"
+                />
+                <button
+                  aria-label={i18n('icu:MediaEditor__control--crop')}
+                  className={classNames({
+                    MediaEditor__control: true,
+                    'MediaEditor__control--crop': true,
+                    'MediaEditor__control--selected':
+                      editMode === EditMode.Crop,
+                  })}
+                  onClick={() => {
+                    if (!fabricCanvas) {
+                      return;
+                    }
+                    if (editMode === EditMode.Crop) {
+                      const obj = fabricCanvas.getActiveObject();
+                      if (obj instanceof MediaEditorFabricCropRect) {
+                        fabricCanvas.remove(obj);
+                      }
+                      setEditMode(undefined);
+                    } else {
+                      setEditMode(EditMode.Crop);
+                    }
+                  }}
+                  type="button"
+                />
+                <FunStickerPicker
+                  open={stickerPickerOpen}
+                  onOpenChange={handleStickerPickerOpenChange}
+                  onSelectSticker={handleSelectSticker}
+                  showTimeStickers
+                  onSelectTimeSticker={handlePickTimeSticker}
+                  onMarkStickerAsFavorite={handleMarkStickerAsFavorite}
+                  placement="top"
+                  theme={pickerTheme}
+                >
+                  <FunStickerPickerButton i18n={i18n} />
+                </FunStickerPicker>
+              </div>
+              <div className="MediaEditor__tools-row-2">
+                <div
+                  className={classNames(
+                    tw('mx-1 flex items-center justify-center'),
+                    localIsViewOnce ? tw('invisible') : null
+                  )}
                 >
                   <FunEmojiPicker
                     open={emojiPickerOpen}
                     onOpenChange={handleEmojiPickerOpenChange}
                     onSelectEmoji={handleSelectEmoji}
                     placement="top"
-                    theme={ThemeType.dark}
+                    theme={pickerTheme}
                     closeOnSelect={false}
                   >
                     <FunEmojiPickerButton i18n={i18n} />
                   </FunEmojiPicker>
-                </CompositionInput>
-              </div>
-              <Button
-                disabled={!image || isSaving || isSending}
-                onClick={async () => {
-                  if (!fabricCanvas) {
-                    return;
-                  }
-
-                  setEditMode(undefined);
-                  setIsSaving(true);
-
-                  let data: Uint8Array;
-                  let blurHash: string;
-                  try {
-                    const renderFabricCanvas =
-                      await cloneFabricCanvas(fabricCanvas);
-
-                    renderFabricCanvas.remove(
-                      ...renderFabricCanvas
-                        .getObjects()
-                        .filter(obj => obj.excludeFromExport)
-                    );
-
-                    let finalImageState: ImageStateType;
-                    const pendingCrop = getPendingCrop(fabricCanvas);
-                    if (pendingCrop) {
-                      finalImageState = getNewImageStateFromCrop(
-                        imageState,
-                        pendingCrop
-                      );
-                      moveFabricObjectsForCrop(renderFabricCanvas, pendingCrop);
-                      drawFabricBackgroundImage({
-                        fabricCanvas: renderFabricCanvas,
-                        image,
-                        imageState: finalImageState,
-                      });
-                    } else {
-                      finalImageState = imageState;
-                    }
-
-                    renderFabricCanvas.setDimensions({
-                      width: finalImageState.width,
-                      height: finalImageState.height,
-                    });
-                    renderFabricCanvas.setZoom(1);
-                    const renderedCanvas = renderFabricCanvas.toCanvasElement();
-
-                    data = await canvasToBytes(renderedCanvas);
-
-                    const blob = new Blob([data], {
-                      type: IMAGE_PNG,
-                    });
-
-                    blurHash = await imageToBlurHash(blob);
-                  } catch (err) {
-                    onTryClose();
-                    throw err;
-                  } finally {
-                    setIsSaving(false);
-                  }
-
-                  onDone({
-                    contentType: IMAGE_PNG,
-                    data,
-                    caption: caption !== '' ? caption : undefined,
-                    captionBodyRanges: captionBodyRanges ?? undefined,
-                    blurHash,
-                  });
-                }}
-                theme={Theme.Dark}
-                variant={ButtonVariant.Primary}
-              >
-                {isSending ? (
-                  <Spinner svgSize="small" />
-                ) : (
-                  doneButtonLabel || i18n('icu:save')
+                </div>
+                {showMediaQualitySelector && (
+                  <div className={tw('mx-1 flex items-center justify-center')}>
+                    <MediaQualitySelector
+                      conversationId=""
+                      i18n={i18n}
+                      isHighQuality={localIsHighQuality}
+                      onSelectQuality={handleSelectQuality}
+                    />
+                  </div>
                 )}
-              </Button>
-            </div>
-          </>
-        )}
+                <div className="MediaEditor__tools--input">
+                  <CompositionInput
+                    draftText={caption}
+                    draftBodyRanges={hydratedBodyRanges ?? null}
+                    getPreferredBadge={getPreferredBadge}
+                    i18n={i18n}
+                    inputApi={inputApiRef}
+                    isActive
+                    isFormattingEnabled={isFormattingEnabled}
+                    className="StoryViewsNRepliesModal__input"
+                    onCloseLinkPreview={noop}
+                    onEditorStateChange={({ bodyRanges, messageText }) => {
+                      setCaptionBodyRanges(bodyRanges);
+                      setCaption(messageText);
+                    }}
+                    emojiSkinToneDefault={emojiSkinToneDefault ?? null}
+                    onSelectEmoji={onSelectEmoji}
+                    onSubmit={handleSave}
+                    onTextTooLong={onTextTooLong}
+                    ourConversationId={ourConversationId}
+                    placeholder={i18n('icu:MediaEditor__input-placeholder')}
+                    showRecoveryKeyPasteWarning={false}
+                    platform={platform}
+                    quotedMessageId={null}
+                    sendCounter={0}
+                    sortedGroupMembers={sortedGroupMembers}
+                    theme={pickerTheme}
+                    // Only needed for state updates and we need to override those
+                    conversationId={null}
+                    // Cannot enter media editor while editing
+                    draftEditMessage={null}
+                    // We don't use the large editor mode
+                    large={null}
+                    // panels do not appear over the media editor
+                    shouldHidePopovers={null}
+                    // link previews not displayed with media
+                    linkPreviewResult={null}
+                    showViewOnceButton={showViewOnceToggle}
+                    isViewOnceActive={localIsViewOnce}
+                    onToggleViewOnce={() => {
+                      const newValue = !localIsViewOnce;
+                      setLocalIsViewOnce(newValue);
+                      if (newValue) {
+                        setEmojiPickerOpen(false);
+                      }
+                    }}
+                  />
+                </div>
+                <AxoButton.Root
+                  variant="strong-primary"
+                  size="md"
+                  disabled={!image}
+                  pending={isSaving || isSending}
+                  onClick={handleSave}
+                >
+                  {doneButtonLabel || i18n('icu:save')}
+                </AxoButton.Root>
+              </div>
+            </>
+          )}
+        </div>
+        {confirmDiscardModal}
       </div>
-      {confirmDiscardModal}
-    </div>,
+    </AxoTheme.Override>,
     portal
   );
 }

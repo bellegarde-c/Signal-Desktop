@@ -8,12 +8,11 @@ import type { PeekInfo } from '@signalapp/ringrtc';
 import type {
   StateType as RootStateType,
   StateType,
-} from '../../../state/reducer.preload.js';
-import { reducer as rootReducer } from '../../../state/reducer.preload.js';
-import { noopAction } from '../../../state/ducks/noop.std.js';
+} from '../../../state/reducer.preload.ts';
+import { reducer as rootReducer } from '../../../state/reducer.preload.ts';
+import { noopAction } from '../../../state/ducks/noop.std.ts';
 import type {
   ActiveCallStateType,
-  CallingActionType,
   CallingStateType,
   DirectCallStateType,
   GroupCallReactionsReceivedActionType,
@@ -22,35 +21,36 @@ import type {
   HandleCallLinkUpdateType,
   SendGroupCallReactionActionType,
   StartCallLinkLobbyType,
-} from '../../../state/ducks/calling.preload.js';
+} from '../../../state/ducks/calling.preload.ts';
 import {
   actions,
   getActiveCall,
   getEmptyState,
   reducer,
-} from '../../../state/ducks/calling.preload.js';
-import { isAnybodyElseInGroupCall } from '../../../state/ducks/callingHelpers.std.js';
-import { truncateAudioLevel } from '../../../calling/truncateAudioLevel.std.js';
-import { calling as callingService } from '../../../services/calling.preload.js';
+} from '../../../state/ducks/calling.preload.ts';
+import { isAnybodyElseInGroupCall } from '../../../state/ducks/callingHelpers.std.ts';
+import { truncateAudioLevel } from '../../../calling/truncateAudioLevel.std.ts';
+import { calling as callingService } from '../../../services/calling.preload.ts';
 import {
   CallState,
   CallViewMode,
   GroupCallConnectionState,
   GroupCallJoinState,
-} from '../../../types/Calling.std.js';
-import { CallMode } from '../../../types/CallDisposition.std.js';
-import { generateAci } from '../../../types/ServiceId.std.js';
-import { getDefaultConversation } from '../../../test-helpers/getDefaultConversation.std.js';
-import type { UnwrapPromise } from '../../../types/Util.std.js';
+} from '../../../types/Calling.std.ts';
+import { CallMode } from '../../../types/CallDisposition.std.ts';
+import { getDefaultConversation } from '../../../test-helpers/getDefaultConversation.std.ts';
+import type { UnwrapPromise } from '../../../types/Util.std.ts';
 import {
   FAKE_CALL_LINK,
   FAKE_CALL_LINK_WITH_ADMIN_KEY,
   getCallLinkState,
-} from '../../../test-helpers/fakeCallLink.std.js';
-import { strictAssert } from '../../../util/assert.std.js';
-import { callLinkRefreshJobQueue } from '../../../jobs/callLinkRefreshJobQueue.preload.js';
-import { CALL_LINK_DEFAULT_STATE } from '../../../util/callLinks.std.js';
-import { DataWriter } from '../../../sql/Client.preload.js';
+} from '../../../test-helpers/fakeCallLink.std.ts';
+import { strictAssert } from '../../../util/assert.std.ts';
+import { callLinkRefreshJobQueue } from '../../../jobs/callLinkRefreshJobQueue.preload.ts';
+import { CALL_LINK_DEFAULT_STATE } from '../../../util/callLinks.std.ts';
+import { DataWriter } from '../../../sql/Client.preload.ts';
+import { generateAci } from '../../../test-helpers/serviceIdUtils.std.ts';
+import { Emoji } from '../../../axo/emoji.std.ts';
 
 const { cloneDeep, noop } = lodash;
 
@@ -117,7 +117,7 @@ describe('calling duck', () => {
   const remoteAci = generateAci();
   const ringerAci = generateAci();
 
-  const stateWithGroupCall: CallingStateType = {
+  const stateWithGroupCall = {
     ...getEmptyState(),
     callsByConversation: {
       'fake-group-call-conversation-id': {
@@ -148,9 +148,9 @@ describe('calling duck', () => {
         ],
       } satisfies GroupCallStateType,
     },
-  };
+  } as const satisfies CallingStateType;
 
-  const stateWithNotJoinedGroupCall: CallingStateType = {
+  const stateWithNotJoinedGroupCall = {
     ...getEmptyState(),
     callsByConversation: {
       'fake-group-call-conversation-id': {
@@ -170,9 +170,9 @@ describe('calling duck', () => {
         remoteParticipants: [],
       } satisfies GroupCallStateType,
     },
-  };
+  } as const satisfies CallingStateType;
 
-  const stateWithIncomingGroupCall: CallingStateType = {
+  const stateWithIncomingGroupCall = {
     ...stateWithGroupCall,
     callsByConversation: {
       ...stateWithGroupCall.callsByConversation,
@@ -184,7 +184,7 @@ describe('calling duck', () => {
         ringerAci: generateAci(),
       },
     },
-  };
+  } as const satisfies CallingStateType;
 
   const groupCallActiveCallState: ActiveCallStateType = {
     state: 'Active',
@@ -202,15 +202,15 @@ describe('calling duck', () => {
     joinedAt: null,
   };
 
-  const stateWithActiveGroupCall: CallingStateTypeWithActiveCall = {
+  const stateWithActiveGroupCall = {
     ...stateWithGroupCall,
     activeCallState: groupCallActiveCallState,
-  };
+  } as const satisfies CallingStateTypeWithActiveCall;
 
   const ourAci = generateAci();
 
   const getEmptyRootState = (): StateType => {
-    const rootState = rootReducer(undefined, noopAction());
+    const rootState = rootReducer(undefined, noopAction('getEmptyRootState'));
     return {
       ...rootState,
       user: {
@@ -292,7 +292,7 @@ describe('calling duck', () => {
           },
         });
 
-        await _setPresenting(presentedSource)(dispatch, getState, null);
+        await _setPresenting(presentedSource)(dispatch, getState);
 
         sinon.assert.calledOnce(this.callingServiceSetPresenting);
         sinon.assert.calledWith(this.callingServiceSetPresenting, {
@@ -317,7 +317,7 @@ describe('calling duck', () => {
           },
         });
 
-        await _setPresenting(presentedSource)(dispatch, getState, null);
+        await _setPresenting(presentedSource)(dispatch, getState);
 
         sinon.assert.calledOnce(dispatch);
         sinon.assert.calledWith(dispatch, {
@@ -341,7 +341,7 @@ describe('calling duck', () => {
           },
         });
 
-        await _setPresenting(presentedSource)(dispatch, getState, null);
+        await _setPresenting(presentedSource)(dispatch, getState);
 
         const action = dispatch.getCall(0).args[0];
 
@@ -372,7 +372,7 @@ describe('calling duck', () => {
           },
         });
 
-        await _setPresenting()(dispatch, getState, null);
+        await _setPresenting()(dispatch, getState);
 
         const action = dispatch.getCall(0).args[0];
 
@@ -414,9 +414,10 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-direct-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
-          sinon.assert.calledOnce(dispatch);
+          sinon.assert.calledTwice(dispatch);
+
           sinon.assert.calledWith(dispatch, {
             type: 'calling/ACCEPT_CALL_PENDING',
             payload: {
@@ -428,9 +429,9 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-direct-call-conversation-id',
             asVideoCall: false,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
-          sinon.assert.calledTwice(dispatch);
+          sinon.assert.callCount(dispatch, 4);
           sinon.assert.calledWith(dispatch, {
             type: 'calling/ACCEPT_CALL_PENDING',
             payload: {
@@ -446,7 +447,7 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-direct-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
           sinon.assert.calledOnce(this.callingServiceAccept);
           sinon.assert.calledWith(
@@ -458,7 +459,7 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-direct-call-conversation-id',
             asVideoCall: false,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
           sinon.assert.calledTwice(this.callingServiceAccept);
           sinon.assert.calledWith(
@@ -473,8 +474,8 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-direct-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
-          const action = dispatch.getCall(0).args[0];
+          })(dispatch, getState);
+          const action = dispatch.getCall(1).args[0];
 
           const result = reducer(stateWithIncomingDirectCall, action);
 
@@ -508,9 +509,9 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-group-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
-          sinon.assert.calledOnce(dispatch);
+          sinon.assert.calledTwice(dispatch);
           sinon.assert.calledWith(dispatch, {
             type: 'calling/ACCEPT_CALL_PENDING',
             payload: {
@@ -522,9 +523,9 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-group-call-conversation-id',
             asVideoCall: false,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
-          sinon.assert.calledTwice(dispatch);
+          sinon.assert.callCount(dispatch, 4);
           sinon.assert.calledWith(dispatch, {
             type: 'calling/ACCEPT_CALL_PENDING',
             payload: {
@@ -540,7 +541,7 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-group-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
           sinon.assert.calledOnce(this.callingServiceJoin);
           sinon.assert.calledWith(
@@ -553,7 +554,7 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-group-call-conversation-id',
             asVideoCall: false,
-          })(dispatch, getState, null);
+          })(dispatch, getState);
 
           sinon.assert.calledTwice(this.callingServiceJoin);
           sinon.assert.calledWith(
@@ -569,8 +570,8 @@ describe('calling duck', () => {
           await acceptCall({
             conversationId: 'fake-group-call-conversation-id',
             asVideoCall: true,
-          })(dispatch, getState, null);
-          const action = dispatch.getCall(0).args[0];
+          })(dispatch, getState);
+          const action = dispatch.getCall(1).args[0];
 
           const result = reducer(stateWithIncomingGroupCall, action);
 
@@ -710,8 +711,7 @@ describe('calling duck', () => {
 
           declineCall({ conversationId: 'fake-direct-call-conversation-id' })(
             dispatch,
-            getState,
-            null
+            getState
           );
 
           sinon.assert.calledOnce(dispatch);
@@ -728,8 +728,7 @@ describe('calling duck', () => {
 
           declineCall({ conversationId: 'fake-direct-call-conversation-id' })(
             dispatch,
-            getState,
-            null
+            getState
           );
 
           sinon.assert.calledOnce(declineDirectCall);
@@ -743,8 +742,7 @@ describe('calling duck', () => {
           const dispatch = sinon.spy();
           declineCall({ conversationId: 'fake-direct-call-conversation-id' })(
             dispatch,
-            getState,
-            null
+            getState
           );
           const action = dispatch.getCall(0).args[0];
 
@@ -768,8 +766,7 @@ describe('calling duck', () => {
 
           declineCall({ conversationId: 'fake-group-call-conversation-id' })(
             dispatch,
-            getState,
-            null
+            getState
           );
 
           sinon.assert.calledOnce(dispatch);
@@ -787,8 +784,7 @@ describe('calling duck', () => {
 
           declineCall({ conversationId: 'fake-group-call-conversation-id' })(
             dispatch,
-            getState,
-            null
+            getState
           );
 
           sinon.assert.calledOnce(declineGroupCall);
@@ -896,7 +892,7 @@ describe('calling duck', () => {
       ): GroupCallStateChangeActionType {
         const dispatch = sinon.spy();
 
-        groupCallStateChange(...args)(dispatch, getEmptyRootState, null);
+        void groupCallStateChange(...args)(dispatch, getEmptyRootState);
 
         return dispatch.getCall(0).args[0];
       }
@@ -1467,7 +1463,7 @@ describe('calling duck', () => {
     });
 
     describe('handleCallLinkUpdate', () => {
-      const { roomId, rootKey, epoch, adminKey } = FAKE_CALL_LINK;
+      const { roomId, rootKey, adminKey } = FAKE_CALL_LINK;
 
       beforeEach(async function (this: Mocha.Context) {
         await DataWriter.removeAll();
@@ -1483,12 +1479,12 @@ describe('calling duck', () => {
       ): Promise<{ dispatch: sinon.SinonSpy }> => {
         const { handleCallLinkUpdate } = actions;
         const dispatch = sinon.spy();
-        await handleCallLinkUpdate(payload)(dispatch, getEmptyRootState, null);
+        await handleCallLinkUpdate(payload)(dispatch, getEmptyRootState);
         return { dispatch };
       };
 
       it('queues call link refresh', async function (this: Mocha.Context) {
-        await doAction({ rootKey, epoch, adminKey: null });
+        await doAction({ rootKey, adminKey: null });
 
         sinon.assert.calledOnce(this.callLinkRefreshJobQueueAdd);
       });
@@ -1496,7 +1492,6 @@ describe('calling duck', () => {
       it('dispatches HANDLE_CALL_LINK_UPDATE', async () => {
         const { dispatch } = await doAction({
           rootKey,
-          epoch,
           adminKey: null,
         });
 
@@ -1507,7 +1502,6 @@ describe('calling duck', () => {
             callLink: {
               ...CALL_LINK_DEFAULT_STATE,
               roomId,
-              epoch,
               rootKey,
               adminKey,
               storageNeedsSync: false,
@@ -1519,7 +1513,6 @@ describe('calling duck', () => {
       it('can save adminKey', async () => {
         const { dispatch } = await doAction({
           rootKey,
-          epoch: null,
           adminKey: 'banana',
         });
 
@@ -1531,7 +1524,6 @@ describe('calling duck', () => {
               callLink: {
                 ...CALL_LINK_DEFAULT_STATE,
                 roomId,
-                epoch,
                 rootKey,
                 adminKey: 'banana',
                 storageNeedsSync: false,
@@ -1591,13 +1583,13 @@ describe('calling duck', () => {
       ): Promise<{ dispatch: sinon.SinonSpy }> => {
         const { startCallLinkLobby } = actions;
         const dispatch = sinon.spy();
-        await startCallLinkLobby(payload)(dispatch, getEmptyRootState, null);
+        await startCallLinkLobby(payload)(dispatch, getEmptyRootState);
         return { dispatch };
       };
 
-      it('reads the link and dispatches START_CALL_LINK_LOBBY', async function (this: Mocha.Context) {
-        const { roomId, epoch, rootKey } = FAKE_CALL_LINK;
-        const { dispatch } = await doAction({ rootKey, epoch });
+      it('reads the link and dispatches START_CALL_LINK_LOBBY', async () => {
+        const { roomId, rootKey } = FAKE_CALL_LINK;
+        const { dispatch } = await doAction({ rootKey });
 
         sinon.assert.calledTwice(dispatch);
         sinon.assert.calledWith(dispatch, {
@@ -1613,29 +1605,21 @@ describe('calling duck', () => {
             callLinkState,
             callLinkRoomId: roomId,
             callLinkRootKey: rootKey,
-            callLinkEpoch: epoch,
             conversationId: roomId,
             isConversationTooBigToRing: false,
           },
         });
       });
 
-      it('preserves adminKey', () => {
+      it('preserves adminKey', async () => {
         const { startCallLinkLobby } = actions;
-        const { roomId, rootKey, epoch, adminKey } =
-          FAKE_CALL_LINK_WITH_ADMIN_KEY;
+        const { roomId, rootKey, adminKey } = FAKE_CALL_LINK_WITH_ADMIN_KEY;
         const dispatch = sinon.spy();
-        const result = reducer(
-          getStateWithAdminKey().calling,
-          startCallLinkLobby({
-            rootKey,
-            epoch,
-          })(
-            dispatch,
-            getStateWithAdminKey,
-            null
-          ) as unknown as Readonly<CallingActionType>
-        );
+        await startCallLinkLobby({ rootKey })(dispatch, getStateWithAdminKey);
+
+        const action = dispatch.lastCall.args[0];
+        assert.equal(action.type, 'calling/START_CALL_LINK_LOBBY');
+        const result = reducer(getStateWithAdminKey().calling, action);
         assert.equal(result.callLinks[roomId]?.adminKey, adminKey);
       });
     });
@@ -1652,13 +1636,13 @@ describe('calling duck', () => {
       ): Promise<{ dispatch: sinon.SinonSpy }> => {
         const { startCallLinkLobby } = actions;
         const dispatch = sinon.spy();
-        await startCallLinkLobby(payload)(dispatch, getEmptyRootState, null);
+        await startCallLinkLobby(payload)(dispatch, getEmptyRootState);
         return { dispatch };
       };
 
-      it('fails', async function (this: Mocha.Context) {
+      it('fails', async () => {
         const { roomId, rootKey } = FAKE_CALL_LINK;
-        const { dispatch } = await doAction({ rootKey, epoch: null });
+        const { dispatch } = await doAction({ rootKey });
 
         sinon.assert.calledTwice(dispatch);
         sinon.assert.calledWith(dispatch, {
@@ -1700,24 +1684,20 @@ describe('calling duck', () => {
             await peekNotConnectedGroupCall({
               callMode: CallMode.Group,
               conversationId: 'fake-group-call-conversation-id',
-            })(
-              dispatch,
-              () => ({
-                ...getEmptyRootState(),
-                calling: {
-                  ...stateWithGroupCall,
-                  callsByConversation: {
-                    'fake-group-call-conversation-id': {
-                      ...stateWithGroupCall.callsByConversation[
-                        'fake-group-call-conversation-id'
-                      ],
-                      connectionState,
-                    },
+            })(dispatch, () => ({
+              ...getEmptyRootState(),
+              calling: {
+                ...stateWithGroupCall,
+                callsByConversation: {
+                  'fake-group-call-conversation-id': {
+                    ...stateWithGroupCall.callsByConversation[
+                      'fake-group-call-conversation-id'
+                    ],
+                    connectionState,
                   },
                 },
-              }),
-              null
-            );
+              },
+            }));
 
             sinon.assert.notCalled(dispatch);
             sinon.assert.notCalled(this.callingServicePeekGroupCall);
@@ -1867,7 +1847,7 @@ describe('calling duck', () => {
       ): GroupCallReactionsReceivedActionType {
         const dispatch = sinon.spy();
 
-        receiveGroupCallReactions(...args)(dispatch, getState, null);
+        void receiveGroupCallReactions(...args)(dispatch, getState);
 
         return dispatch.getCall(0).args[0];
       }
@@ -1893,7 +1873,7 @@ describe('calling duck', () => {
           {
             timestamp: NOW.getTime(),
             demuxId: 123,
-            value: '❤️',
+            value: Emoji.HEART,
           },
         ]);
 
@@ -1906,7 +1886,7 @@ describe('calling duck', () => {
           reactions: [
             {
               demuxId: 456,
-              value: '🎉',
+              value: Emoji.TADA,
             },
           ],
         });
@@ -1920,12 +1900,12 @@ describe('calling duck', () => {
           {
             timestamp: NOW.getTime(),
             demuxId: 123,
-            value: '❤️',
+            value: Emoji.HEART,
           },
           {
             timestamp: secondDate.getTime(),
             demuxId: 456,
-            value: '🎉',
+            value: Emoji.TADA,
           },
         ]);
       });
@@ -1937,11 +1917,11 @@ describe('calling duck', () => {
           reactions: [
             {
               demuxId: 123,
-              value: '❤️',
+              value: Emoji.HEART,
             },
             {
               demuxId: 456,
-              value: '🎉',
+              value: Emoji.TADA,
             },
           ],
         });
@@ -1955,12 +1935,12 @@ describe('calling duck', () => {
           {
             timestamp: NOW.getTime(),
             demuxId: 123,
-            value: '❤️',
+            value: Emoji.HEART,
           },
           {
             timestamp: NOW.getTime(),
             demuxId: 456,
-            value: '🎉',
+            value: Emoji.TADA,
           },
         ]);
       });
@@ -1990,7 +1970,7 @@ describe('calling duck', () => {
       ): SendGroupCallReactionActionType {
         const dispatch = sinon.spy();
 
-        sendGroupCallReaction(...args)(dispatch, getState, null);
+        void sendGroupCallReaction(...args)(dispatch, getState);
 
         return dispatch.getCall(0).args[0];
       }
@@ -1999,7 +1979,7 @@ describe('calling duck', () => {
         const action = getAction({
           callMode: CallMode.Group,
           conversationId: 'fake-group-call-conversation-id',
-          value: '❤️',
+          value: Emoji.HEART,
         });
         const result = reducer(getState().calling, action);
 
@@ -2011,7 +1991,7 @@ describe('calling duck', () => {
           {
             timestamp: NOW.getTime(),
             demuxId: 1,
-            value: '❤️',
+            value: Emoji.HEART,
           },
         ]);
       });
@@ -2030,14 +2010,10 @@ describe('calling duck', () => {
       it('dispatches a SET_LOCAL_AUDIO_FULFILLED action', () => {
         const dispatch = sinon.spy();
 
-        setLocalAudio({ enabled: true })(
-          dispatch,
-          () => ({
-            ...getEmptyRootState(),
-            calling: stateWithActiveDirectCall,
-          }),
-          null
-        );
+        setLocalAudio({ enabled: true })(dispatch, () => ({
+          ...getEmptyRootState(),
+          calling: stateWithActiveDirectCall,
+        }));
 
         sinon.assert.calledOnce(dispatch);
         sinon.assert.calledWith(dispatch, {
@@ -2049,14 +2025,10 @@ describe('calling duck', () => {
       it('updates the outgoing audio for the active call', function (this: Mocha.Context) {
         const dispatch = sinon.spy();
 
-        setLocalAudio({ enabled: false })(
-          dispatch,
-          () => ({
-            ...getEmptyRootState(),
-            calling: stateWithActiveDirectCall,
-          }),
-          null
-        );
+        setLocalAudio({ enabled: false })(dispatch, () => ({
+          ...getEmptyRootState(),
+          calling: stateWithActiveDirectCall,
+        }));
 
         sinon.assert.calledOnce(this.callingServiceSetOutgoingAudio);
         sinon.assert.calledWith(
@@ -2065,14 +2037,10 @@ describe('calling duck', () => {
           false
         );
 
-        setLocalAudio({ enabled: true })(
-          dispatch,
-          () => ({
-            ...getEmptyRootState(),
-            calling: stateWithActiveDirectCall,
-          }),
-          null
-        );
+        setLocalAudio({ enabled: true })(dispatch, () => ({
+          ...getEmptyRootState(),
+          calling: stateWithActiveDirectCall,
+        }));
 
         sinon.assert.calledTwice(this.callingServiceSetOutgoingAudio);
         sinon.assert.calledWith(
@@ -2084,14 +2052,10 @@ describe('calling duck', () => {
 
       it('updates the local audio state with SET_LOCAL_AUDIO_FULFILLED', () => {
         const dispatch = sinon.spy();
-        setLocalAudio({ enabled: false })(
-          dispatch,
-          () => ({
-            ...getEmptyRootState(),
-            calling: stateWithActiveDirectCall,
-          }),
-          null
-        );
+        setLocalAudio({ enabled: false })(dispatch, () => ({
+          ...getEmptyRootState(),
+          calling: stateWithActiveDirectCall,
+        }));
         const action = dispatch.getCall(0).args[0];
 
         const result = reducer(stateWithActiveDirectCall, action);
@@ -2158,7 +2122,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId: 'fake-conversation-id',
             isVideoCall: true,
-          })(noop, () => rootState, null);
+          })(noop, () => rootState);
 
           sinon.assert.calledOnce(startCallingLobbyStub);
         });
@@ -2167,7 +2131,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId: 'fake-conversation-id',
             isVideoCall: true,
-          })(noop, () => rootState, null);
+          })(noop, () => rootState);
 
           sinon.assert.calledWithMatch(startCallingLobbyStub, {
             hasLocalAudio: true,
@@ -2178,19 +2142,15 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId: 'fake-conversation-id',
             isVideoCall: true,
-          })(
-            noop,
-            () => {
-              const callingState = cloneDeep(stateWithGroupCall);
-              const call = callingState.callsByConversation[
-                'fake-group-call-conversation-id'
-              ] as GroupCallStateType;
-              const peekInfo = call.peekInfo as unknown as PeekInfo;
-              peekInfo.deviceCount = 8;
-              return { ...rootState, calling: callingState };
-            },
-            null
-          );
+          })(noop, () => {
+            const callingState = cloneDeep(stateWithGroupCall);
+            const call = callingState.callsByConversation[
+              'fake-group-call-conversation-id'
+            ] as GroupCallStateType;
+            const peekInfo = call.peekInfo as unknown as PeekInfo;
+            peekInfo.deviceCount = 8;
+            return { ...rootState, calling: callingState };
+          });
 
           sinon.assert.calledWithMatch(startCallingLobbyStub, {
             preferLocalVideo: true,
@@ -2201,7 +2161,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId: 'fake-conversation-id',
             isVideoCall: true,
-          })(noop, () => rootState, null);
+          })(noop, () => rootState);
 
           sinon.assert.calledWithMatch(startCallingLobbyStub, {
             preferLocalVideo: true,
@@ -2212,7 +2172,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId: 'fake-conversation-id',
             isVideoCall: false,
-          })(noop, () => rootState, null);
+          })(noop, () => rootState);
 
           sinon.assert.calledWithMatch(startCallingLobbyStub, {
             preferLocalVideo: false,
@@ -2232,7 +2192,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId,
             isVideoCall: true,
-          })(dispatch, () => rootState, null);
+          })(dispatch, () => rootState);
 
           sinon.assert.calledTwice(dispatch);
 
@@ -2261,7 +2221,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId,
             isVideoCall: true,
-          })(dispatch, () => rootState, null);
+          })(dispatch, () => rootState);
 
           sinon.assert.calledTwice(dispatch);
 
@@ -2295,7 +2255,7 @@ describe('calling duck', () => {
           await startCallingLobby({
             conversationId,
             isVideoCall: true,
-          })(dispatch, () => ({ ...rootState, calling: callingState }), null);
+          })(dispatch, () => ({ ...rootState, calling: callingState }));
 
           const waitingAction = dispatch.getCall(0).args[0];
           assert.equal(waitingAction.type, 'calling/WAITING_FOR_CALLING_LOBBY');
@@ -2620,7 +2580,7 @@ describe('calling duck', () => {
           conversationId,
           hasLocalAudio: true,
           hasLocalVideo: false,
-        })(dispatch, () => startState, null);
+        })(dispatch, () => startState);
 
         sinon.assert.calledOnce(this.callingStartOutgoingDirectCall);
         sinon.assert.calledWith(
@@ -2665,7 +2625,7 @@ describe('calling duck', () => {
           conversationId,
           hasLocalAudio: true,
           hasLocalVideo: false,
-        })(dispatch, () => startState, null);
+        })(dispatch, () => startState);
 
         sinon.assert.calledOnce(this.callingJoinGroupCall);
         sinon.assert.calledWith(
@@ -2710,7 +2670,7 @@ describe('calling duck', () => {
           conversationId,
           hasLocalAudio: true,
           hasLocalVideo: false,
-        })(dispatch, () => startState, null);
+        })(dispatch, () => startState);
         const action = dispatch.getCall(0).args[0];
 
         const result = reducer(startState.calling, action);
@@ -2772,40 +2732,9 @@ describe('calling duck', () => {
           conversationId,
           hasLocalAudio: true,
           hasLocalVideo: false,
-        })(dispatch, () => startState, null);
+        })(dispatch, () => startState);
 
         sinon.assert.notCalled(dispatch);
-      });
-    });
-
-    describe('toggleSettings', () => {
-      const { toggleSettings } = actions;
-
-      it('toggles the settings dialog', () => {
-        const afterOneToggle = reducer(
-          stateWithActiveDirectCall,
-          toggleSettings()
-        );
-        const afterTwoToggles = reducer(afterOneToggle, toggleSettings());
-        const afterThreeToggles = reducer(afterTwoToggles, toggleSettings());
-
-        strictAssert(
-          afterOneToggle.activeCallState?.state === 'Active',
-          'state is active #1'
-        );
-        assert.isTrue(afterOneToggle.activeCallState?.settingsDialogOpen);
-
-        strictAssert(
-          afterTwoToggles.activeCallState?.state === 'Active',
-          'state is active #2'
-        );
-        assert.isFalse(afterTwoToggles.activeCallState?.settingsDialogOpen);
-
-        strictAssert(
-          afterThreeToggles.activeCallState?.state === 'Active',
-          'state is active #3'
-        );
-        assert.isTrue(afterThreeToggles.activeCallState?.settingsDialogOpen);
       });
     });
 

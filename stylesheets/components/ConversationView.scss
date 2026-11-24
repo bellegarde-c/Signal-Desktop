@@ -5,10 +5,6 @@
 @use '../variables';
 
 .ConversationView {
-  display: flex;
-  flex-direction: column;
-  overflow: initial;
-
   &__pane {
     display: flex;
     position: relative;
@@ -16,14 +12,6 @@
     flex-direction: column;
     overflow-y: auto;
     z-index: variables.$z-index-base;
-
-    @include mixins.light-theme() {
-      background-color: variables.$color-white;
-    }
-
-    @include mixins.dark-theme() {
-      background-color: variables.$color-gray-95;
-    }
   }
 
   &__timeline {
@@ -53,8 +41,7 @@
     // We need to use the wrapper because the conversation view calculates the height of all
     //   things in the composition area. A margin on an inner div won't be included in that
     //   height calculation.
-    .quote-wrapper,
-    .preview-wrapper {
+    .quote-wrapper {
       margin-block: 0 10px;
       margin-inline: 16px;
     }

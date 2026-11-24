@@ -1,19 +1,16 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import { useState, useCallback, type ReactElement } from 'react';
 
-import { Button, ButtonSize, ButtonVariant } from '../Button.dom.js';
-import { SystemMessage } from './SystemMessage.dom.js';
-import type { LocalizerType, ThemeType } from '../../types/Util.std.js';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
-import type { PreferredBadgeSelectorType } from '../../state/selectors/badges.preload.js';
-import { I18n } from '../I18n.dom.js';
-import { ContactName } from './ContactName.dom.js';
-import { GroupV1MigrationDialog } from '../GroupV1MigrationDialog.dom.js';
-import { createLogger } from '../../logging/log.std.js';
-
-const log = createLogger('GroupV1Migration');
+import { Button, ButtonSize, ButtonVariant } from '../Button.dom.tsx';
+import { SystemMessage } from './SystemMessage.dom.tsx';
+import type { LocalizerType, ThemeType } from '../../types/Util.std.ts';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
+import type { PreferredBadgeSelectorType } from '../../state/selectors/badges.preload.ts';
+import { I18n } from '../I18n.dom.tsx';
+import { ContactName } from './ContactName.dom.tsx';
+import { GroupV1MigrationDialog } from '../GroupV1MigrationDialog.dom.tsx';
 
 export type PropsDataType = {
   areWeInvited: boolean;
@@ -32,7 +29,7 @@ export type PropsHousekeepingType = {
 
 export type PropsType = PropsDataType & PropsHousekeepingType;
 
-export function GroupV1Migration(props: PropsType): React.ReactElement {
+export function GroupV1Migration(props: PropsType): ReactElement {
   const {
     areWeInvited,
     droppedMembers,
@@ -43,13 +40,13 @@ export function GroupV1Migration(props: PropsType): React.ReactElement {
     invitedMemberCount,
     theme,
   } = props;
-  const [showingDialog, setShowingDialog] = React.useState(false);
+  const [showingDialog, setShowingDialog] = useState(false);
 
-  const showDialog = React.useCallback(() => {
+  const showDialog = useCallback(() => {
     setShowingDialog(true);
   }, [setShowingDialog]);
 
-  const dismissDialog = React.useCallback(() => {
+  const dismissDialog = useCallback(() => {
     setShowingDialog(false);
   }, [setShowingDialog]);
 
@@ -96,14 +93,12 @@ export function GroupV1Migration(props: PropsType): React.ReactElement {
       {showingDialog ? (
         <GroupV1MigrationDialog
           areWeInvited={areWeInvited}
-          droppedMembers={droppedMembers}
+          droppedMembers={droppedMembers ?? null}
           droppedMemberCount={droppedMemberCount}
           getPreferredBadge={getPreferredBadge}
-          hasMigrated
           i18n={i18n}
-          invitedMembers={invitedMembers}
+          invitedMembers={invitedMembers ?? null}
           invitedMemberCount={invitedMemberCount}
-          onMigrate={() => log.warn('Modal called migrate()')}
           onClose={dismissDialog}
           theme={theme}
         />
@@ -122,13 +117,14 @@ function renderUsers({
   count: number;
   i18n: LocalizerType;
   kind: 'invited' | 'removed';
-}): React.ReactElement | null {
+}): ReactElement | null {
   if (count === 0) {
     return null;
   }
 
   if (members && count === 1) {
-    const contact = <ContactName title={members[0].title} />;
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const contact = <ContactName title={members[0]!.title} />;
     return (
       <p>
         {kind === 'invited' && (

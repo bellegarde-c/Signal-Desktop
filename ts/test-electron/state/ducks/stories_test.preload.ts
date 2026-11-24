@@ -5,33 +5,33 @@ import * as sinon from 'sinon';
 import casual from 'casual';
 import { v4 as generateUuid } from 'uuid';
 
-import type {
-  DispatchableViewStoryType,
-  StoryDataType,
-} from '../../../state/ducks/stories.preload.js';
-import type { ConversationType } from '../../../state/ducks/conversations.preload.js';
-import type { MessageAttributesType } from '../../../model-types.d.ts';
-import type { StateType as RootStateType } from '../../../state/reducer.preload.js';
-import { DurationInSeconds } from '../../../util/durations/index.std.js';
-import { TEXT_ATTACHMENT, IMAGE_JPEG } from '../../../types/MIME.std.js';
-import { ReadStatus } from '../../../messages/MessageReadStatus.std.js';
+import type { StoryDataType } from '../../../state/ducks/stories.preload.ts';
+import type { ConversationType } from '../../../state/ducks/conversations.preload.ts';
+import type { MessageAttributesType } from '../../../model-types.std.ts';
+import type { StateType as RootStateType } from '../../../state/reducer.preload.ts';
+import { DurationInSeconds } from '../../../util/durations/index.std.ts';
+import { TEXT_ATTACHMENT, IMAGE_JPEG } from '../../../types/MIME.std.ts';
+import { ReadStatus } from '../../../messages/MessageReadStatus.std.ts';
 import {
   StoryViewDirectionType,
   StoryViewModeType,
-} from '../../../types/Stories.std.js';
-import type { StoryDistributionIdString } from '../../../types/StoryDistributionId.std.js';
-import { generateAci, generatePni } from '../../../types/ServiceId.std.js';
-import { generateStoryDistributionId } from '../../../types/StoryDistributionId.std.js';
+} from '../../../types/Stories.std.ts';
+import type { StoryDistributionIdString } from '../../../types/StoryDistributionId.std.ts';
+import { generateStoryDistributionId } from '../../../types/StoryDistributionId.std.ts';
 import {
   actions,
   getEmptyState,
-} from '../../../state/ducks/stories.preload.js';
-import { noopAction } from '../../../state/ducks/noop.std.js';
-import { reducer as rootReducer } from '../../../state/reducer.preload.js';
-import { dropNull } from '../../../util/dropNull.std.js';
-import { MessageModel } from '../../../models/messages.preload.js';
-import { DataWriter } from '../../../sql/Client.preload.js';
-import { itemStorage } from '../../../textsecure/Storage.preload.js';
+} from '../../../state/ducks/stories.preload.ts';
+import { noopAction } from '../../../state/ducks/noop.std.ts';
+import { reducer as rootReducer } from '../../../state/reducer.preload.ts';
+import { dropNull } from '../../../util/dropNull.std.ts';
+import { MessageModel } from '../../../models/messages.preload.ts';
+import { DataWriter } from '../../../sql/Client.preload.ts';
+import { itemStorage } from '../../../textsecure/Storage.preload.ts';
+import {
+  generateAci,
+  generatePni,
+} from '../../../test-helpers/serviceIdUtils.std.ts';
 
 describe('both/state/ducks/stories', () => {
   const ourAci = generateAci();
@@ -47,7 +47,7 @@ describe('both/state/ducks/stories', () => {
   });
 
   const getEmptyRootState = () => ({
-    ...rootReducer(undefined, noopAction()),
+    ...rootReducer(undefined, noopAction('getEmptyRootState')),
     stories: getEmptyState(),
   });
 
@@ -65,6 +65,7 @@ describe('both/state/ducks/stories', () => {
   }
 
   describe('viewStory', () => {
+    const { viewStory } = actions;
     function getMockConversation({
       id: conversationId,
       serviceId,
@@ -80,7 +81,6 @@ describe('both/state/ducks/stories', () => {
         id: conversationId,
         serviceId,
         isMe: false,
-        sharedGroupNames: [],
         title: title || casual.username,
         type: 'direct' as const,
       };
@@ -132,12 +132,10 @@ describe('both/state/ducks/stories', () => {
       });
     }
 
-    const viewStory = actions.viewStory as DispatchableViewStoryType;
-
     it('closes the viewer', () => {
       const dispatch = sinon.spy();
 
-      viewStory({ closeViewer: true })(dispatch, getEmptyRootState, null);
+      viewStory({ closeViewer: true })(dispatch, getEmptyRootState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/VIEW_STORY',
@@ -152,7 +150,7 @@ describe('both/state/ducks/stories', () => {
         storyId: generateUuid(),
         storyViewMode: StoryViewModeType.Single,
         viewDirection: StoryViewDirectionType.Next,
-      })(dispatch, getEmptyRootState, null);
+      })(dispatch, getEmptyRootState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/VIEW_STORY',
@@ -165,7 +163,7 @@ describe('both/state/ducks/stories', () => {
       viewStory({
         storyId: generateUuid(),
         storyViewMode: StoryViewModeType.All,
-      })(dispatch, getEmptyRootState, null);
+      })(dispatch, getEmptyRootState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/VIEW_STORY',
@@ -182,7 +180,7 @@ describe('both/state/ducks/stories', () => {
       viewStory({
         storyId,
         storyViewMode: StoryViewModeType.All,
-      })(dispatch, getState, null);
+      })(dispatch, getState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/VIEW_STORY',
@@ -214,7 +212,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.User,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -244,7 +242,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId2,
           storyViewMode: StoryViewModeType.User,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -274,7 +272,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId3,
           storyViewMode: StoryViewModeType.User,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -329,7 +327,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.Unread,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -372,7 +370,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId2,
           storyViewMode: StoryViewModeType.Unread,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -418,7 +416,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId2,
           storyViewMode: StoryViewModeType.Unread,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -468,7 +466,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId4,
           storyViewMode: StoryViewModeType.Unread,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -512,7 +510,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.Unread,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -621,7 +619,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId3,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -638,7 +636,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId2,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -655,7 +653,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -678,7 +676,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId3,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -700,7 +698,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId4,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -723,7 +721,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId4,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -746,7 +744,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId5,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -769,7 +767,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.MyStories,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -819,7 +817,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId1,
           storyViewMode: StoryViewModeType.All,
           viewDirection: StoryViewDirectionType.Next,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -856,7 +854,7 @@ describe('both/state/ducks/stories', () => {
           storyId: storyId2,
           storyViewMode: StoryViewModeType.All,
           viewDirection: StoryViewDirectionType.Previous,
-        })(dispatch, getState, null);
+        })(dispatch, getState);
 
         sinon.assert.calledWith(dispatch, {
           type: 'stories/VIEW_STORY',
@@ -882,7 +880,7 @@ describe('both/state/ducks/stories', () => {
       window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
-      await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
+      await queueStoryDownload(storyId)(dispatch, getEmptyRootState);
 
       sinon.assert.notCalled(dispatch);
     });
@@ -904,7 +902,7 @@ describe('both/state/ducks/stories', () => {
       window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
-      await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
+      await queueStoryDownload(storyId)(dispatch, getEmptyRootState);
 
       sinon.assert.notCalled(dispatch);
     });
@@ -926,7 +924,7 @@ describe('both/state/ducks/stories', () => {
       window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
-      await queueStoryDownload(storyId)(dispatch, getEmptyRootState, null);
+      await queueStoryDownload(storyId)(dispatch, getEmptyRootState);
 
       sinon.assert.notCalled(dispatch);
     });
@@ -970,7 +968,7 @@ describe('both/state/ducks/stories', () => {
       window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
-      await queueStoryDownload(storyId)(dispatch, getState, null);
+      await queueStoryDownload(storyId)(dispatch, getState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/QUEUE_STORY_DOWNLOAD',
@@ -1032,7 +1030,7 @@ describe('both/state/ducks/stories', () => {
       window.MessageCache.register(new MessageModel(messageAttributes));
 
       const dispatch = sinon.spy();
-      await queueStoryDownload(storyId)(dispatch, getState, null);
+      await queueStoryDownload(storyId)(dispatch, getState);
 
       sinon.assert.calledWith(dispatch, {
         type: 'stories/QUEUE_STORY_DOWNLOAD',

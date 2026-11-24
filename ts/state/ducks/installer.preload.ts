@@ -1,43 +1,52 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
-import type { ThunkAction } from 'redux-thunk';
 import type { ReadonlyDeep } from 'type-fest';
-
-import type { StateType as RootStateType } from '../reducer.preload.js';
 import {
   type InstallScreenBackupError,
   InstallScreenBackupStep,
   InstallScreenStep,
   InstallScreenError,
   InstallScreenQRCodeError,
-} from '../../types/InstallScreen.std.js';
-import * as Errors from '../../types/errors.std.js';
-import { type Loadable, LoadingState } from '../../util/loadable.std.js';
-import { isRecord } from '../../util/isRecord.std.js';
-import { strictAssert } from '../../util/assert.std.js';
-import * as Registration from '../../util/registration.preload.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { HTTPError } from '../../types/HTTPError.std.js';
+} from '../../types/InstallScreen.std.ts';
+import * as Errors from '../../types/errors.std.ts';
+import { type Loadable, LoadingState } from '../../util/loadable.std.ts';
+import { isRecord } from '../../util/isRecord.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import * as Registration from '../../util/registration.preload.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { HTTPError } from '../../types/HTTPError.std.ts';
 import {
   Provisioner,
   EventKind as ProvisionEventKind,
   type EnvelopeType as ProvisionEnvelopeType,
-} from '../../textsecure/Provisioner.preload.js';
-import { accountManager } from '../../textsecure/AccountManager.preload.js';
-import { getProvisioningResource } from '../../textsecure/WebAPI.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { createLogger } from '../../logging/log.std.js';
-import { backupsService } from '../../services/backups/index.preload.js';
-import OS from '../../util/os/osMain.node.js';
-import { signalProtocolStore } from '../../SignalProtocolStore.preload.js';
+} from '../../textsecure/Provisioner.preload.ts';
+import { accountManager } from '../../textsecure/AccountManager.preload.ts';
+import { getProvisioningConnection } from '../../textsecure/WebAPI.preload.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { backupsService } from '../../services/backups/index.preload.ts';
+import OS from '../../util/os/osMain.node.ts';
+import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import {
+  isRelinkingToSameAccount,
+  isCleanStart,
+} from '../../util/isRelinkingToSameAccount.std.ts';
+import { cancelRegistration } from './standaloneInstaller.preload.ts';
+import type { CancelWorkflowActionType } from './standaloneInstaller.preload.ts';
+import { enableStorageService } from '../../services/storage.preload.ts';
+import type { AsyncStateThunk, SyncStateThunk } from '../types.std.ts';
 
 const log = createLogger('installer');
 
 export type BatonType = ReadonlyDeep<{ __installer_baton: never }>;
 
 const cancelByBaton = new WeakMap<BatonType, () => void>();
+const pendingFinishInstallByBaton = new WeakMap<
+  BatonType,
+  FinishInstallOptionsType
+>();
 let provisioner: Provisioner | undefined;
 
 export type InstallerStateType = ReadonlyDeep<
@@ -47,6 +56,7 @@ export type InstallerStateType = ReadonlyDeep<
   | {
       step: InstallScreenStep.QrCodeNotScanned;
       provisioningUrl: Loadable<string, InstallScreenQRCodeError>;
+      isConfirmingDataDeletion: boolean;
       baton: BatonType;
     }
   | {
@@ -74,9 +84,10 @@ export type InstallerStateType = ReadonlyDeep<
     ))
 >;
 
-export type RetryBackupImportValue = ReadonlyDeep<'retry' | 'cancel'>;
+export type ErrorDialogDecision = ReadonlyDeep<'retry' | 'cancel'>;
 
 export const START_INSTALLER = 'installer/START_INSTALLER';
+const CANCEL_INSTALLER = 'installer/CANCEL_INSTALLER';
 const SET_PROVISIONING_URL = 'installer/SET_PROVISIONING_URL';
 const SET_QR_CODE_ERROR = 'installer/SET_QR_CODE_ERROR';
 const SET_ERROR = 'installer/SET_ERROR';
@@ -84,10 +95,16 @@ const RETRY_BACKUP_IMPORT = 'installer/RETRY_BACKUP_IMPORT';
 const SHOW_LINK_IN_PROGRESS = 'installer/SHOW_LINK_IN_PROGRESS';
 export const SHOW_BACKUP_IMPORT = 'installer/SHOW_BACKUP_IMPORT';
 const UPDATE_BACKUP_IMPORT_PROGRESS = 'installer/UPDATE_BACKUP_IMPORT_PROGRESS';
+const SHOW_DATA_DELETION_CONFIRMATION =
+  'installer/SHOW_DATA_DELETION_CONFIRMATION';
 
 export type StartInstallerActionType = ReadonlyDeep<{
   type: typeof START_INSTALLER;
   payload: BatonType;
+}>;
+
+export type CancelInstallerActionType = ReadonlyDeep<{
+  type: typeof CANCEL_INSTALLER;
 }>;
 
 type SetProvisioningUrlActionType = ReadonlyDeep<{
@@ -113,6 +130,10 @@ type ShowLinkInProgressActionType = ReadonlyDeep<{
   type: typeof SHOW_LINK_IN_PROGRESS;
 }>;
 
+type ShowDataDeletionConfirmationActionType = ReadonlyDeep<{
+  type: typeof SHOW_DATA_DELETION_CONFIRMATION;
+}>;
+
 export type ShowBackupImportActionType = ReadonlyDeep<{
   type: typeof SHOW_BACKUP_IMPORT;
 }>;
@@ -132,11 +153,13 @@ type UpdateBackupImportProgressActionType = ReadonlyDeep<{
 
 export type InstallerActionType = ReadonlyDeep<
   | StartInstallerActionType
+  | CancelInstallerActionType
   | SetProvisioningUrlActionType
   | SetQRCodeErrorActionType
   | SetErrorActionType
   | RetryBackupImportActionType
   | ShowLinkInProgressActionType
+  | ShowDataDeletionConfirmationActionType
   | ShowBackupImportActionType
   | UpdateBackupImportProgressActionType
 >;
@@ -144,27 +167,28 @@ export type InstallerActionType = ReadonlyDeep<
 export const actions = {
   startInstaller,
   finishInstall,
+  cancelInstall,
   updateBackupImportProgress,
   retryBackupImport,
   showBackupImport,
   handleMissingBackup,
+  continueInstallWithDataDeletion,
 };
 
 export const useInstallerActions = (): BoundActionCreatorsMapObject<
   typeof actions
 > => useBoundActions(actions);
 
-function startInstaller(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  InstallerActionType
+function startInstaller(): AsyncStateThunk<
+  InstallerActionType | CancelWorkflowActionType
 > {
   return async (dispatch, getState) => {
     // WeakMap key
     const baton = {} as BatonType;
 
     window.IPC.addSetupMenuItems();
+    dispatch(cancelRegistration());
+    enableStorageService('ducks/installer: startInstaller');
 
     dispatch({
       type: START_INSTALLER,
@@ -179,7 +203,7 @@ function startInstaller(): ThunkAction<
     if (!provisioner) {
       provisioner = new Provisioner({
         server: {
-          getProvisioningResource,
+          getProvisioningConnection,
         },
       });
     }
@@ -249,26 +273,47 @@ function startInstaller(): ThunkAction<
       } else if (event.kind === ProvisionEventKind.Envelope) {
         const { envelope } = event;
         const defaultDeviceName = OS.getName() || 'Signal Desktop';
+        const deviceName = window.SignalCI?.deviceName ?? defaultDeviceName;
 
-        if (event.isLinkAndSync) {
-          dispatch(
-            finishInstall({
-              envelope,
-              deviceName: defaultDeviceName,
-              isLinkAndSync: true,
-            })
+        const finishInstallOptions: FinishInstallOptionsType = {
+          envelope,
+          deviceName,
+          isLinkAndSync: event.isLinkAndSync,
+        };
+
+        if (
+          !isCleanStart({
+            existingAci: itemStorage.user.getAci(),
+            existingPni: itemStorage.user.getOptionalPni(),
+            existingNumber: itemStorage.user.getOptionalNumber(),
+            registrationEverDone: Registration.everDone(),
+          }) &&
+          !isRelinkingToSameAccount({
+            newAci: envelope.aci,
+            newNumber: envelope.number,
+            previousAci: itemStorage.user.getAci(),
+            previousNumber: itemStorage.user.getOptionalNumber(),
+          })
+        ) {
+          log.warn(
+            'Linking will require deleting all data, asking user for confirmation'
           );
+          const { installer: currentState } = getState();
+          if (currentState.step !== InstallScreenStep.QrCodeNotScanned) {
+            log.warn(
+              'InstallScreen/getQRCode: not showing data deletion confirmation',
+              currentState.step
+            );
+            return;
+          }
+
+          pendingFinishInstallByBaton.set(
+            currentState.baton,
+            finishInstallOptions
+          );
+          dispatch({ type: SHOW_DATA_DELETION_CONFIRMATION });
         } else {
-          const { SignalCI } = window;
-          const deviceName =
-            SignalCI != null ? SignalCI.deviceName : defaultDeviceName;
-          dispatch(
-            finishInstall({
-              envelope,
-              deviceName,
-              isLinkAndSync: false,
-            })
-          );
+          void dispatch(finishInstall(finishInstallOptions));
         }
       } else {
         throw missingCaseError(event);
@@ -285,14 +330,50 @@ type FinishInstallOptionsType = ReadonlyDeep<{
   envelope?: ProvisionEnvelopeType;
 }>;
 
+function continueInstallWithDataDeletion(): SyncStateThunk<InstallerActionType> {
+  return (dispatch, getState) => {
+    const state = getState().installer;
+    strictAssert(
+      state.step === InstallScreenStep.QrCodeNotScanned,
+      'continueInstallWithDataDeletion: wrong step'
+    );
+
+    const finishInstallOptions = pendingFinishInstallByBaton.get(state.baton);
+    strictAssert(
+      finishInstallOptions != null,
+      'continueInstallWithDataDeletion: missing pending install'
+    );
+
+    pendingFinishInstallByBaton.delete(state.baton);
+    log.info('Deleting all data was confirmed; continuing with linking');
+    void dispatch(finishInstall(finishInstallOptions));
+  };
+}
+
+export function cancelInstall(): SyncStateThunk<CancelInstallerActionType> {
+  return (dispatch, getState) => {
+    const state = getState();
+    const { installer } = state;
+
+    const logId = 'cancelInstall';
+    log.info(logId);
+
+    if (installer.step === InstallScreenStep.QrCodeNotScanned) {
+      const cancel = cancelByBaton.get(installer.baton);
+      cancel?.();
+    }
+
+    dispatch({
+      type: CANCEL_INSTALLER,
+    });
+  };
+}
+
 function finishInstall({
   isLinkAndSync,
   envelope: providedEnvelope,
   deviceName,
-}: FinishInstallOptionsType): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+}: FinishInstallOptionsType): AsyncStateThunk<
   | SetQRCodeErrorActionType
   | SetErrorActionType
   | ShowLinkInProgressActionType
@@ -328,7 +409,7 @@ function finishInstall({
     }
 
     try {
-      await accountManager.registerSecondDevice(
+      await accountManager.registerAsLinkedDevice(
         Provisioner.prepareLinkData({
           envelope,
           deviceName,
@@ -394,15 +475,10 @@ function updateBackupImportProgress(
   return { type: UPDATE_BACKUP_IMPORT_PROGRESS, payload };
 }
 
-function retryBackupImport(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  RetryBackupImportActionType
-> {
+function retryBackupImport(): SyncStateThunk<RetryBackupImportActionType> {
   return dispatch => {
     dispatch({ type: RETRY_BACKUP_IMPORT });
-    backupsService.retryDownload();
+    backupsService.retryBackupImport();
   };
 }
 
@@ -423,6 +499,7 @@ export function reducer(
     if (state.step === InstallScreenStep.QrCodeNotScanned) {
       const cancel = cancelByBaton.get(state.baton);
       cancel?.();
+      pendingFinishInstallByBaton.delete(state.baton);
     } else {
       // Reset qr code fetch attempt count when starting from scratch
       provisioner?.reset();
@@ -433,8 +510,13 @@ export function reducer(
       provisioningUrl: {
         loadingState: LoadingState.Loading,
       },
+      isConfirmingDataDeletion: false,
       baton: action.payload,
     };
+  }
+
+  if (action.type === CANCEL_INSTALLER) {
+    return getEmptyState();
   }
 
   if (action.type === SET_PROVISIONING_URL) {
@@ -472,10 +554,26 @@ export function reducer(
 
     return {
       ...state,
+      isConfirmingDataDeletion: false,
       provisioningUrl: {
         loadingState: LoadingState.LoadFailed,
         error: action.payload,
       },
+    };
+  }
+
+  if (action.type === SHOW_DATA_DELETION_CONFIRMATION) {
+    if (state.step !== InstallScreenStep.QrCodeNotScanned) {
+      log.warn(
+        'ducks/installer: not showing data deletion confirmation',
+        state.step
+      );
+      return state;
+    }
+
+    return {
+      ...state,
+      isConfirmingDataDeletion: true,
     };
   }
 

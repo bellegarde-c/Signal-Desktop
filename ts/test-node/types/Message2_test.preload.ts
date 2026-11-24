@@ -4,19 +4,18 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 
-import * as Message from '../../types/Message2.preload.js';
-import { SignalService } from '../../protobuf/index.std.js';
-import * as Bytes from '../../Bytes.std.js';
-import * as MIME from '../../types/MIME.std.js';
+import * as Message from '../../types/Message2.preload.ts';
+import * as MIME from '../../types/MIME.std.ts';
 
-import type { EmbeddedContactType } from '../../types/EmbeddedContact.std.js';
-import type { MessageAttributesType } from '../../model-types.d.ts';
+import type { EmbeddedContactType } from '../../types/EmbeddedContact.std.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import type {
   AddressableAttachmentType,
   AttachmentType,
   LocalAttachmentV2Type,
-} from '../../types/Attachment.std.js';
-import type { LoggerType } from '../../types/Logging.std.js';
+} from '../../types/Attachment.std.ts';
+import type { LoggerType } from '../../types/Logging.std.ts';
+import { testPlaintextHash } from '../../test-helpers/attachments.node.ts';
 
 const FAKE_LOCAL_ATTACHMENT: LocalAttachmentV2Type = {
   version: 2,
@@ -55,6 +54,7 @@ describe('Message', () => {
     props?: Partial<Message.ContextType>
   ): Message.ContextType {
     return {
+      getExistingAttachmentDataForReuse: () => Promise.resolve(null),
       getImageDimensions: async (_params: {
         objectUrl: string;
         logger: LoggerType;
@@ -62,6 +62,7 @@ describe('Message', () => {
         width: 10,
         height: 20,
       }),
+      getPlaintextHashForInMemoryAttachment: () => testPlaintextHash(),
       doesAttachmentExist: async () => true,
       getRegionCode: () => 'region-code',
       logger,
@@ -71,33 +72,36 @@ describe('Message', () => {
         contentType: MIME.MIMEType;
         logger: LoggerType;
       }) => new Blob(),
-      makeObjectUrl: (
-        _data: Uint8Array | ArrayBuffer,
-        _contentType: MIME.MIMEType
-      ) => 'fake-object-url',
       makeVideoScreenshot: async (_params: {
         objectUrl: string;
         contentType: MIME.MIMEType;
         logger: LoggerType;
-      }) => ({ blob: new Blob(), duration: undefined }),
-      revokeObjectUrl: (_objectUrl: string) => undefined,
+      }) => ({
+        blob: new Blob(),
+        duration: 1,
+        videoBitrateMbps: 1,
+        width: 1,
+        height: 1,
+      }),
       readAttachmentData: async (
         attachment: Partial<AddressableAttachmentType>
-      ): Promise<Uint8Array> => {
+      ): Promise<Uint8Array<ArrayBuffer>> => {
         assert.strictEqual(attachment.version, 2);
         return Buffer.from('old data');
       },
-      writeNewAttachmentData: async (_data: Uint8Array) => {
+      writeNewAttachmentData: async (_data: Uint8Array<ArrayBuffer>) => {
         return FAKE_LOCAL_ATTACHMENT;
       },
-      writeNewStickerData: async (_data: Uint8Array) => ({
+      writeNewStickerData: async (_data: Uint8Array<ArrayBuffer>) => ({
         version: 2,
         path: 'fake-sticker-path',
         size: 1,
         localKey: '123',
         plaintextHash: 'hash',
       }),
-      deleteAttachmentOnDisk: async (_path: string) => undefined,
+      maybeDeleteAttachmentFile: async (_path: string) => ({
+        wasDeleted: true,
+      }),
       ...props,
     };
   }
@@ -173,45 +177,6 @@ describe('Message', () => {
   });
 
   describe('upgradeSchema', () => {
-    it('should upgrade an unversioned message to the latest version', async () => {
-      const input = getDefaultMessage({
-        attachments: [
-          {
-            contentType: MIME.AUDIO_AAC,
-            flags: SignalService.AttachmentPointer.Flags.VOICE_MESSAGE,
-            data: Bytes.fromString('It’s easy if you try'),
-            fileName: 'test\u202Dfig.exe',
-            size: 1111,
-          },
-        ],
-        schemaVersion: 0,
-      });
-      const expected = getDefaultMessage({
-        attachments: [
-          {
-            ...FAKE_LOCAL_ATTACHMENT,
-            contentType: MIME.AUDIO_AAC,
-            flags: 1,
-            fileName: 'test\uFFFDfig.exe',
-          },
-        ],
-        schemaVersion: Message.CURRENT_SCHEMA_VERSION,
-      });
-
-      const expectedAttachmentData = 'It’s easy if you try';
-      const context = getDefaultContext({
-        writeNewAttachmentData: async attachmentData => {
-          assert.strictEqual(
-            Bytes.toString(attachmentData),
-            expectedAttachmentData
-          );
-          return FAKE_LOCAL_ATTACHMENT;
-        },
-      });
-      const actual = await Message.upgradeSchema(input, context);
-      assert.deepEqual(actual, expected);
-    });
-
     context('with multiple upgrade steps', () => {
       it('should return last valid message when any upgrade step fails', async () => {
         const input = getDefaultMessage({
@@ -345,7 +310,7 @@ describe('Message', () => {
       assert.throws(
         () =>
           Message._withSchemaVersion({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // oxlint-disable-next-line typescript/no-explicit-any
             schemaVersion: toVersionX as any,
             upgrade: () => Promise.resolve(getDefaultMessage()),
           }),
@@ -356,7 +321,7 @@ describe('Message', () => {
     it('should require an upgrade function', () => {
       assert.throws(
         () =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // oxlint-disable-next-line typescript/no-explicit-any
           Message._withSchemaVersion({ schemaVersion: 2, upgrade: 3 as any }),
         '_withSchemaVersion: upgrade must be a function'
       );
@@ -412,7 +377,7 @@ describe('Message', () => {
       const upgrade = async () => null;
       const upgradeWithVersion = Message._withSchemaVersion({
         schemaVersion: 3,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // oxlint-disable-next-line typescript/no-explicit-any
         upgrade: upgrade as any,
       });
 
@@ -459,7 +424,7 @@ describe('Message', () => {
           id: 34233,
           isViewOnce: false,
           referencedMessageNotFound: false,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // oxlint-disable-next-line typescript/no-explicit-any
         } as any,
       });
       const expected = getDefaultMessage({
@@ -599,7 +564,6 @@ describe('Message', () => {
               thumbnail: {
                 contentType: MIME.TEXT_ATTACHMENT,
                 size: 100,
-                data: Buffer.from('data is here'),
               },
             },
           ],
@@ -661,6 +625,9 @@ describe('Message', () => {
         body: 'hey there!',
         contact: [
           {
+            aci: undefined,
+            note: undefined,
+            nickname: undefined,
             name: {
               nickname: 'Someone somewhere',
             },
@@ -671,6 +638,9 @@ describe('Message', () => {
         body: 'hey there!',
         contact: [
           {
+            aci: undefined,
+            note: undefined,
+            nickname: undefined,
             name: {
               nickname: 'Someone somewhere',
             },
@@ -722,6 +692,9 @@ describe('Message', () => {
         ],
         contact: [
           {
+            aci: undefined,
+            note: undefined,
+            nickname: undefined,
             avatar: {
               isProfile: false,
               avatar: composeAttachment({ path: 'contact/avatar' }),
@@ -769,6 +742,9 @@ describe('Message', () => {
         ],
         contact: [
           {
+            aci: undefined,
+            note: undefined,
+            nickname: undefined,
             avatar: {
               isProfile: false,
               avatar: composeAttachment({

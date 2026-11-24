@@ -1,36 +1,33 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
-import type { ThunkAction } from 'redux-thunk';
-
 import type { ReadonlyDeep } from 'type-fest';
-import type { UsernameReservationType } from '../../types/Username.std.js';
+import type { UsernameReservationType } from '../../types/Username.std.ts';
 import {
   ReserveUsernameError,
   ConfirmUsernameResult,
-} from '../../types/Username.std.js';
-import * as usernameServices from '../../services/username.preload.js';
-import { storageServiceUploadJob } from '../../services/storage.preload.js';
-import type { ReserveUsernameResultType } from '../../services/username.preload.js';
-import { missingCaseError } from '../../util/missingCaseError.std.js';
-import { sleep } from '../../util/sleep.std.js';
-import { assertDev } from '../../util/assert.std.js';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { PromiseAction } from '../util.std.js';
-import { getMe } from '../selectors/conversations.dom.js';
-import { getUsernameCorrupted } from '../selectors/items.dom.js';
+} from '../../types/Username.std.ts';
+import * as usernameServices from '../../services/username.preload.ts';
+import { runStorageServiceUploadJob } from '../../services/storage.preload.ts';
+import type { ReserveUsernameResultType } from '../../services/username.preload.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { sleep } from '../../util/sleep.std.ts';
+import { assertDev } from '../../util/assert.std.ts';
+import type { PromiseAction } from '../util.std.ts';
+import { getMe } from '../selectors/conversations.dom.ts';
+import { getUsernameCorrupted } from '../selectors/items.dom.ts';
 import {
   UsernameEditState,
   UsernameLinkState,
   UsernameReservationState,
   UsernameReservationError,
-} from './usernameEnums.std.js';
-import { showToast } from './toast.preload.js';
-import { ToastType } from '../../types/Toast.dom.js';
-import type { ToastActionType } from './toast.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
+} from './usernameEnums.std.ts';
+import { showToast } from './toast.preload.ts';
+import { ToastType } from '../../types/Toast.dom.tsx';
+import type { ToastActionType } from './toast.preload.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import type { AsyncStateThunk, SyncStateThunk } from '../types.std.ts';
 
 export type UsernameReservationStateType = ReadonlyDeep<{
   state: UsernameReservationState;
@@ -100,10 +97,10 @@ type ConfirmUsernameActionType = ReadonlyDeep<
   PromiseAction<typeof CONFIRM_USERNAME, ConfirmUsernameResult>
 >;
 type DeleteUsernameActionType = ReadonlyDeep<
-  PromiseAction<typeof DELETE_USERNAME, void>
+  PromiseAction<typeof DELETE_USERNAME>
 >;
 type ResetUsernameLinkActionType = ReadonlyDeep<
-  PromiseAction<typeof RESET_USERNAME_LINK, void>
+  PromiseAction<typeof RESET_USERNAME_LINK>
 >;
 
 export type UsernameActionType = ReadonlyDeep<
@@ -137,7 +134,7 @@ export const useUsernameActions = (): BoundActionCreatorsMapObject<
   typeof actions
 > => useBoundActions(actions);
 
-export function setUsernameEditState(
+function setUsernameEditState(
   editState: UsernameEditState
 ): SetUsernameEditStateActionType {
   return {
@@ -146,19 +143,19 @@ export function setUsernameEditState(
   };
 }
 
-export function openUsernameReservationModal(): OpenUsernameReservationModalActionType {
+function openUsernameReservationModal(): OpenUsernameReservationModalActionType {
   return {
     type: OPEN_USERNAME_RESERVATION_MODAL,
   };
 }
 
-export function closeUsernameReservationModal(): CloseUsernameReservationModalActionType {
+function closeUsernameReservationModal(): CloseUsernameReservationModalActionType {
   return {
     type: CLOSE_USERNAME_RESERVATION_MODAL,
   };
 }
 
-export function setUsernameReservationError(
+function setUsernameReservationError(
   error: UsernameReservationError | undefined
 ): SetUsernameReservationErrorActionType {
   return {
@@ -167,7 +164,7 @@ export function setUsernameReservationError(
   };
 }
 
-export function clearUsernameReservation(): ClearUsernameReservationActionType {
+function clearUsernameReservation(): ClearUsernameReservationActionType {
   return {
     type: CLEAR_USERNAME_RESERVATION,
   };
@@ -182,15 +179,12 @@ export type ReserveUsernameOptionsType = ReadonlyDeep<{
   delay?: number;
 }>;
 
-export function reserveUsername({
+function reserveUsername({
   nickname,
   customDiscriminator,
   doReserveUsername = usernameServices.reserveUsername,
   delay = INPUT_DELAY_MS,
-}: ReserveUsernameOptionsType): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+}: ReserveUsernameOptionsType): SyncStateThunk<
   ReserveUsernameActionType | SetUsernameReservationErrorActionType
 > {
   return (dispatch, getState) => {
@@ -231,12 +225,9 @@ export type ConfirmUsernameOptionsType = ReadonlyDeep<{
   doConfirmUsername?: typeof usernameServices.confirmUsername;
 }>;
 
-export function confirmUsername({
+function confirmUsername({
   doConfirmUsername = usernameServices.confirmUsername,
-}: ConfirmUsernameOptionsType = {}): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+}: ConfirmUsernameOptionsType = {}): SyncStateThunk<
   ConfirmUsernameActionType | SetUsernameReservationErrorActionType
 > {
   return (dispatch, getState) => {
@@ -261,13 +252,10 @@ export type DeleteUsernameOptionsType = ReadonlyDeep<{
   username?: string;
 }>;
 
-export function deleteUsername({
+function deleteUsername({
   doDeleteUsername = usernameServices.deleteUsername,
   username: defaultUsername,
-}: DeleteUsernameOptionsType = {}): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+}: DeleteUsernameOptionsType = {}): SyncStateThunk<
   DeleteUsernameActionType | ToastActionType
 > {
   return (dispatch, getState) => {
@@ -298,14 +286,9 @@ export type ResetUsernameLinkOptionsType = ReadonlyDeep<{
   doResetLink?: typeof usernameServices.resetLink;
 }>;
 
-export function resetUsernameLink({
+function resetUsernameLink({
   doResetLink = usernameServices.resetLink,
-}: ResetUsernameLinkOptionsType = {}): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  ResetUsernameLinkActionType
-> {
+}: ResetUsernameLinkOptionsType = {}): SyncStateThunk<ResetUsernameLinkActionType> {
   return dispatch => {
     const me = window.ConversationController.getOurConversationOrThrow();
     const username = me.get('username');
@@ -318,39 +301,27 @@ export function resetUsernameLink({
   };
 }
 
-function markCompletedUsernameOnboarding(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  never
-> {
+function markCompletedUsernameOnboarding(): AsyncStateThunk {
   return async () => {
     await itemStorage.put('hasCompletedUsernameOnboarding', true);
     const me = window.ConversationController.getOurConversationOrThrow();
     me.captureChange('usernameOnboarding');
-    storageServiceUploadJob({ reason: 'markCompletedUsernameOnboarding' });
+    runStorageServiceUploadJob({ reason: 'markCompletedUsernameOnboarding' });
   };
 }
 
-function markCompletedUsernameLinkOnboarding(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  never
-> {
+function markCompletedUsernameLinkOnboarding(): AsyncStateThunk {
   return async () => {
     await itemStorage.put('hasCompletedUsernameLinkOnboarding', true);
   };
 }
 
-function setUsernameLinkColor(
-  color: number
-): ThunkAction<void, RootStateType, unknown, never> {
+function setUsernameLinkColor(color: number): AsyncStateThunk {
   return async () => {
     await itemStorage.put('usernameLinkColor', color);
     const me = window.ConversationController.getOurConversationOrThrow();
     me.captureChange('usernameLinkColor');
-    storageServiceUploadJob({ reason: 'setUsernameLinkColor' });
+    runStorageServiceUploadJob({ reason: 'setUsernameLinkColor' });
   };
 }
 

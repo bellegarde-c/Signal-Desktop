@@ -1,39 +1,42 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import { useSelector } from 'react-redux';
-import type { ForwardMessagesPropsType } from '../ducks/globalModals.preload.js';
-import { createLogger } from '../../logging/log.std.js';
-import { ForwardMessagesModal } from '../../components/ForwardMessagesModal.dom.js';
-import { LinkPreviewSourceType } from '../../types/LinkPreview.std.js';
-import * as Errors from '../../types/errors.std.js';
-import { getAllComposableConversations } from '../selectors/conversations.dom.js';
-import { getIntl, getTheme, getRegionCode } from '../selectors/user.std.js';
-import { getLinkPreview } from '../selectors/linkPreviews.std.js';
-import { isInFullScreenCall as getIsInFullScreenCall } from '../selectors/calling.std.js';
-import { getPreferredBadgeSelector } from '../selectors/badges.preload.js';
-import { maybeForwardMessages } from '../../util/maybeForwardMessages.preload.js';
+import type { ForwardMessagesPropsType } from '../ducks/globalModals.preload.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { ForwardMessagesModal } from '../../components/ForwardMessagesModal.dom.tsx';
+import { LinkPreviewSourceType } from '../../types/LinkPreview.std.ts';
+import * as Errors from '../../types/errors.std.ts';
+import { getAllComposableConversations } from '../selectors/conversations.dom.ts';
+import { getIntl, getTheme, getRegionCode } from '../selectors/user.std.ts';
+import { getLinkPreview } from '../selectors/linkPreviews.std.ts';
+import { getPreferredBadgeSelector } from '../selectors/badges.preload.ts';
+import { maybeForwardMessages } from '../../util/maybeForwardMessages.preload.ts';
+import { useHydrateDraftLinkPreview } from '../../hooks/useHydrateDraftLinkPreview.std.ts';
 import {
   maybeGrabLinkPreview,
   resetLinkPreview,
-} from '../../services/LinkPreview.preload.js';
-import { useGlobalModalActions } from '../ducks/globalModals.preload.js';
-import { useLinkPreviewActions } from '../ducks/linkPreviews.preload.js';
-import { SmartCompositionTextArea } from './CompositionTextArea.preload.js';
-import { useToastActions } from '../ducks/toast.preload.js';
-import { isDownloaded } from '../../util/Attachment.std.js';
-import { getMessageById } from '../../messages/getMessageById.preload.js';
-import { strictAssert } from '../../util/assert.std.js';
+} from '../../services/LinkPreview.preload.ts';
+import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
+import { useLinkPreviewActions } from '../ducks/linkPreviews.preload.ts';
+import { SmartCompositionTextArea } from './CompositionTextArea.preload.tsx';
+import { useToastActions } from '../ducks/toast.preload.ts';
+import { isDownloaded } from '../../util/Attachment.std.ts';
+import { getMessageById } from '../../messages/getMessageById.preload.ts';
+import { strictAssert } from '../../util/assert.std.ts';
 import type {
   ForwardMessageData,
   MessageForwardDraft,
-} from '../../types/ForwardDraft.std.js';
-import { getForwardMessagesProps } from '../selectors/globalModals.std.js';
+  MessageForwardDraftForSend,
+} from '../../types/ForwardDraft.std.ts';
+import { getForwardMessagesProps } from '../selectors/globalModals.std.ts';
+import { applyRangesToText } from '../../types/BodyRange.std.ts';
+import { getIsInFullScreenCall } from '../selectors/isInFullScreenCall.std.ts';
 
 const log = createLogger('ForwardMessagesModal');
 
-export function SmartForwardMessagesModal(): React.JSX.Element | null {
+export function SmartForwardMessagesModal(): JSX.Element | null {
   const forwardMessagesProps = useSelector(getForwardMessagesProps);
 
   if (forwardMessagesProps == null) {
@@ -59,13 +62,16 @@ function SmartForwardMessagesModalInner({
   forwardMessagesProps,
 }: {
   forwardMessagesProps: ForwardMessagesPropsType;
-}): React.JSX.Element | null {
+}): JSX.Element | null {
   const { type } = forwardMessagesProps;
 
   const candidateConversations = useSelector(getAllComposableConversations);
   const getPreferredBadge = useSelector(getPreferredBadgeSelector);
   const i18n = useSelector(getIntl);
-  const linkPreviewForSource = useSelector(getLinkPreview);
+  const linkPreview = useSelector(getLinkPreview)(
+    LinkPreviewSourceType.ForwardMessageModal
+  );
+  const linkPreviewForUI = useHydrateDraftLinkPreview(linkPreview);
   const regionCode = useSelector(getRegionCode);
   const theme = useSelector(getTheme);
   const isInFullScreenCall = useSelector(getIsInFullScreenCall);
@@ -76,7 +82,25 @@ function SmartForwardMessagesModalInner({
 
   const [drafts, setDrafts] = useState<ReadonlyArray<MessageForwardDraft>>(
     () => {
-      return forwardMessagesProps.messageDrafts;
+      return forwardMessagesProps.messageDrafts.map(draft => {
+        // We don't keep @mention bodyRanges when forwarding, so we turn them to text
+        const result = applyRangesToText(
+          {
+            body: draft.messageBody ?? '',
+            bodyRanges: draft.bodyRanges ?? [],
+          },
+          {
+            replaceMentions: true,
+            replaceSpoilers: false,
+          }
+        );
+
+        return {
+          ...draft,
+          messageBody: result.body,
+          bodyRanges: result.bodyRanges,
+        };
+      });
     }
   );
 
@@ -105,7 +129,7 @@ function SmartForwardMessagesModalInner({
 
   const closeModal = useCallback(() => {
     resetLinkPreview();
-    toggleForwardMessagesModal(null);
+    void toggleForwardMessagesModal(null);
   }, [toggleForwardMessagesModal]);
 
   const doForwardMessages = useCallback(
@@ -116,13 +140,44 @@ function SmartForwardMessagesModalInner({
       try {
         const messages = await Promise.all(
           finalDrafts.map(async (draft): Promise<ForwardMessageData> => {
-            if (draft.originalMessageId == null) {
-              return { draft, originalMessage: null };
+            let draftForSend: MessageForwardDraftForSend;
+            if (!draft.previews?.length) {
+              draftForSend = {
+                ...draft,
+                previews: [],
+              };
+            } else {
+              strictAssert(draft.previews.length === 1, 'expected one preview');
+              const [first] = draft.previews;
+              strictAssert(first != null, 'expected one preview');
+
+              if (!first.image || first.image.path) {
+                draftForSend = {
+                  ...draft,
+                  previews: [{ type: 'original', preview: first }],
+                };
+              } else {
+                strictAssert(
+                  first === linkPreviewForUI,
+                  'expected draft preview to match the hydrated version'
+                );
+                strictAssert(linkPreview != null, 'expected draft preview');
+
+                draftForSend = {
+                  ...draft,
+                  previews: [{ type: 'draft', preview: linkPreview }],
+                };
+              }
             }
-            const message = await getMessageById(draft.originalMessageId);
+            if (draftForSend.originalMessageId == null) {
+              return { draft: draftForSend, originalMessage: null };
+            }
+            const message = await getMessageById(
+              draftForSend.originalMessageId
+            );
             strictAssert(message, 'no message found');
             return {
-              draft,
+              draft: draftForSend,
               originalMessage: message.attributes,
             };
           })
@@ -141,7 +196,7 @@ function SmartForwardMessagesModalInner({
         log.warn('doForwardMessage', Errors.toLogFormat(err));
       }
     },
-    [forwardMessagesProps, closeModal]
+    [forwardMessagesProps, closeModal, linkPreview, linkPreviewForUI]
   );
 
   if (!drafts.length) {
@@ -153,7 +208,7 @@ function SmartForwardMessagesModalInner({
       drafts={drafts}
       candidateConversations={candidateConversations}
       doForwardMessages={doForwardMessages}
-      linkPreviewForSource={linkPreviewForSource}
+      linkPreview={linkPreviewForUI}
       getPreferredBadge={getPreferredBadge}
       i18n={i18n}
       isInFullScreenCall={isInFullScreenCall}

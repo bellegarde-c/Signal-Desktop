@@ -1,16 +1,17 @@
 // Copyright 2017 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as durations from '../util/durations/index.std.js';
-import { clearTimeoutIfNecessary } from '../util/clearTimeoutIfNecessary.std.js';
-import * as Registration from '../util/registration.preload.js';
-import { ServiceIdKind } from '../types/ServiceId.std.js';
-import { createLogger } from '../logging/log.std.js';
-import * as Errors from '../types/errors.std.js';
-import { HTTPError } from '../types/HTTPError.std.js';
-import { isOnline } from './WebAPI.preload.js';
-import { itemStorage } from './Storage.preload.js';
-import { accountManager } from './AccountManager.preload.js';
+import * as durations from '../util/durations/index.std.ts';
+import { clearTimeoutIfNecessary } from '../util/clearTimeoutIfNecessary.std.ts';
+import * as Registration from '../util/registration.preload.ts';
+import { ServiceIdKind } from '../types/ServiceId.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import * as Errors from '../types/errors.std.ts';
+import { HTTPError } from '../types/HTTPError.std.ts';
+import { isOnline } from './WebAPI.preload.ts';
+import { itemStorage } from './Storage.preload.ts';
+import { accountManager } from './AccountManager.preload.ts';
+import { checkOurPniIdentityKey } from '../util/checkOurPniIdentityKey.preload.ts';
 
 const log = createLogger('UpdateKeysListener');
 
@@ -18,7 +19,7 @@ const UPDATE_INTERVAL = 2 * durations.DAY;
 const UPDATE_TIME_STORAGE_KEY = 'nextScheduledUpdateKeyTime';
 
 export type MinimalEventsType = {
-  on(event: 'timetravel', callback: () => void): void;
+  on: (event: 'timetravel', callback: () => void) => void;
 };
 
 let initComplete = false;
@@ -60,19 +61,21 @@ export class UpdateKeysListener {
       try {
         await accountManager.maybeUpdateKeys(ServiceIdKind.PNI);
       } catch (error) {
-        if (
-          error instanceof HTTPError &&
-          (error.code === 422 || error.code === 403)
-        ) {
-          log.error(`run: Got a ${error.code} uploading PNI keys; unlinking`);
-          window.Whisper.events.emit('unlinkAndDisconnect');
-        } else {
-          const errorString =
-            error instanceof HTTPError
-              ? error.code.toString()
-              : Errors.toLogFormat(error);
+        log.error(
+          `run: Failure uploading PNI keys. Not trying again. ${Errors.toLogFormat(error)}`
+        );
+
+        // Server rejects PNI keys signed with an identity key it no longer has
+        // (ex: after the primary changed number), but that failure is reported
+        // to us as an IoError, which we can't distinguish from other network
+        // failures. Instead of just unlinking immediately, we can check the key
+        // directly and unlink if it doesn't match
+        try {
+          await checkOurPniIdentityKey();
+        } catch (checkError) {
           log.error(
-            `run: Failure uploading PNI keys. Not trying again. ${errorString}`
+            'run: Failed to check our PNI identity key',
+            Errors.toLogFormat(checkError)
           );
         }
       }

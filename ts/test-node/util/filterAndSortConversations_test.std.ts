@@ -3,9 +3,9 @@
 
 import { assert } from 'chai';
 import lodash from 'lodash';
-import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.js';
-import { filterAndSortConversations } from '../../util/filterAndSortConversations.std.js';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
+import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.ts';
+import { filterAndSortConversations } from '../../util/filterAndSortConversations.std.ts';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
 
 const { pick } = lodash;
 
@@ -21,7 +21,11 @@ function check({
   expected: Array<CheckProps>;
 }) {
   const conversations = input.map(props => {
-    return getDefaultConversation(props);
+    return getDefaultConversation({
+      // Ensure no random firstName fixture value gets matched on
+      firstName: undefined,
+      ...props,
+    });
   });
   const results = filterAndSortConversations(conversations, searchTerm, 'US');
   const actual = results.map(convo => {

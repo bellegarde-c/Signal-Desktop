@@ -1,25 +1,25 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useState } from 'react';
-import classNames from 'classnames';
+import { useState, type JSX } from 'react';
 import type {
   ConversationStoryType,
   StoryViewType,
-} from '../types/Stories.std.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
-import type { LocalizerType, ThemeType } from '../types/Util.std.js';
-import type { PreferredBadgeSelectorType } from '../state/selectors/badges.preload.js';
-import type { ViewUserStoriesActionCreatorType } from '../state/ducks/stories.preload.js';
-import { Avatar, AvatarSize } from './Avatar.dom.js';
-import { ConfirmationDialog } from './ConfirmationDialog.dom.js';
-import { ContextMenu } from './ContextMenu.dom.js';
-import { SIGNAL_ACI } from '../types/SignalConversation.std.js';
-import { StoryViewTargetType, HasStories } from '../types/Stories.std.js';
+} from '../types/Stories.std.ts';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
+import type { LocalizerType, ThemeType } from '../types/Util.std.ts';
+import type { PreferredBadgeSelectorType } from '../state/selectors/badges.preload.ts';
+import type { ViewUserStoriesActionCreatorType } from '../state/ducks/stories.preload.ts';
+import { Avatar, AvatarSize } from './Avatar.dom.tsx';
+import { SIGNAL_ACI } from '../types/SignalConversation.std.ts';
+import { StoryViewTargetType, HasStories } from '../types/Stories.std.ts';
 
-import { MessageTimestamp } from './conversation/MessageTimestamp.dom.js';
-import { StoryImage } from './StoryImage.dom.js';
-import { getAvatarColor } from '../types/Colors.std.js';
+import { MessageTimestamp } from './conversation/MessageTimestamp.dom.tsx';
+import { StoryImage } from './StoryImage.dom.tsx';
+import { getAvatarColor } from '../types/Avatar.std.ts';
+import { OfficialChatInlineBadge } from './conversation/OfficialChatInlineBadge.dom.tsx';
+import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoContextMenu } from '../axo/menus/AxoContextMenu.dom.tsx';
 
 export type PropsType = Pick<ConversationStoryType, 'group' | 'isHidden'> & {
   conversationId: string;
@@ -45,24 +45,18 @@ function StoryListItemAvatar({
   getPreferredBadge,
   i18n,
   profileName,
-  sharedGroupNames,
   title,
   theme,
 }: Pick<
   ConversationType,
-  | 'avatarPlaceholderGradient'
-  | 'avatarUrl'
-  | 'color'
-  | 'profileName'
-  | 'sharedGroupNames'
-  | 'title'
+  'avatarPlaceholderGradient' | 'avatarUrl' | 'color' | 'profileName' | 'title'
 > & {
   avatarStoryRing?: HasStories;
   badges?: ConversationType['badges'];
   getPreferredBadge: PreferredBadgeSelectorType;
   i18n: LocalizerType;
   theme: ThemeType;
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <Avatar
       avatarPlaceholderGradient={avatarPlaceholderGradient}
@@ -72,7 +66,6 @@ function StoryListItemAvatar({
       conversationType="direct"
       i18n={i18n}
       profileName={profileName}
-      sharedGroupNames={sharedGroupNames}
       size={AvatarSize.FORTY_EIGHT}
       storyRing={avatarStoryRing}
       theme={theme}
@@ -96,7 +89,7 @@ export function StoryListItem({
   story,
   theme,
   viewUserStories,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const [hasConfirmHideStory, setHasConfirmHideStory] = useState(false);
 
   const { attachment, isUnread, sender, timestamp } = story;
@@ -110,124 +103,121 @@ export function StoryListItem({
     avatarStoryRing = isUnread ? HasStories.Unread : HasStories.Read;
   }
 
-  let repliesElement: React.JSX.Element | undefined;
+  let repliesElement: JSX.Element | undefined;
   if (group === undefined && hasRepliesFromSelf) {
     repliesElement = <div className="StoryListItem__info--replies--self" />;
   } else if (group && (hasReplies || hasRepliesFromSelf)) {
     repliesElement = <div className="StoryListItem__info--replies--others" />;
   }
 
-  const menuOptions = [];
-  if (isHidden) {
-    menuOptions.push({
-      icon: 'StoryListItem__icon--unhide',
-      label: i18n('icu:StoryListItem__unhide'),
-      onClick: () => {
-        onHideStory(conversationId);
-      },
-    });
-  } else {
-    menuOptions.push({
-      icon: 'StoryListItem__icon--hide',
-      label: i18n('icu:StoryListItem__hide'),
-      onClick: () => {
-        setHasConfirmHideStory(true);
-      },
-    });
-  }
-
-  if (!isSignalOfficial) {
-    menuOptions.push({
-      icon: 'StoryListItem__icon--info',
-      label: i18n('icu:StoryListItem__info'),
-      onClick: () =>
-        viewUserStories({
-          conversationId,
-          viewTarget: StoryViewTargetType.Details,
-        }),
-    });
-
-    menuOptions.push({
-      icon: 'StoryListItem__icon--chat',
-      label: i18n('icu:StoryListItem__go-to-chat'),
-      onClick: () => onGoToConversation(conversationId),
-    });
-  }
-
   return (
     <>
-      <ContextMenu
-        aria-label={i18n('icu:StoryListItem__label')}
-        i18n={i18n}
-        menuOptions={menuOptions}
-        moduleClassName={classNames('StoryListItem', {
-          'StoryListItem--hidden': isHidden,
-        })}
-        onClick={() => viewUserStories({ conversationId })}
-        popperOptions={{
-          placement: 'bottom',
-          strategy: 'absolute',
-        }}
-      >
-        <StoryListItemAvatar
-          avatarStoryRing={avatarStoryRing}
-          getPreferredBadge={getPreferredBadge}
-          i18n={i18n}
-          theme={theme}
-          {...(group || sender)}
-        />
-        <div className="StoryListItem__info">
-          <div className="StoryListItem__info--title">
-            {group ? group.title : title}
-            {isSignalOfficial && (
-              <span className="ContactModal__official-badge" />
-            )}
-          </div>
-          {!isSignalOfficial && (
-            <MessageTimestamp
+      <AxoContextMenu.Root>
+        <AxoContextMenu.Trigger>
+          <button
+            type="button"
+            className="StoryListItem__button"
+            onClick={() => viewUserStories({ conversationId })}
+          >
+            <StoryListItemAvatar
+              avatarStoryRing={avatarStoryRing}
+              getPreferredBadge={getPreferredBadge}
               i18n={i18n}
-              isRelativeTime
-              module="StoryListItem__info--timestamp"
-              timestamp={timestamp}
+              theme={theme}
+              {...(group || sender)}
             />
-          )}
-          {repliesElement}
-        </div>
+            <div className="StoryListItem__info">
+              <div className="StoryListItem__info--title">
+                {group ? group.title : title}
+                {isSignalOfficial && (
+                  <>
+                    &nbsp;
+                    <OfficialChatInlineBadge />
+                  </>
+                )}
+              </div>
+              {!isSignalOfficial && (
+                <MessageTimestamp
+                  i18n={i18n}
+                  isRelativeTime
+                  className="StoryListItem__info--timestamp"
+                  timestamp={timestamp}
+                />
+              )}
+              {repliesElement}
+            </div>
 
-        <div className="StoryListItem__previews">
-          <StoryImage
-            attachment={attachment}
-            firstName={firstName || title}
-            i18n={i18n}
-            isThumbnail
-            label=""
-            moduleClassName="StoryListItem__previews--image"
-            queueStoryDownload={queueStoryDownload}
-            storyId={story.messageId}
-            onMediaPlaybackStart={onMediaPlaybackStart}
-          />
-        </div>
-      </ContextMenu>
-      {hasConfirmHideStory && (
-        <ConfirmationDialog
-          dialogName="StoryListItem.hideStory"
-          actions={[
-            {
-              action: () => onHideStory(conversationId),
-              style: 'affirmative',
-              text: i18n('icu:StoryListItem__hide-modal--confirm'),
-            },
-          ]}
-          i18n={i18n}
-          onClose={() => {
-            setHasConfirmHideStory(false);
-          }}
+            <div className="StoryListItem__previews">
+              <StoryImage
+                attachment={attachment}
+                firstName={firstName || title}
+                i18n={i18n}
+                isThumbnail
+                label=""
+                className="StoryListItem__previews--image"
+                queueStoryDownload={queueStoryDownload}
+                storyId={story.messageId}
+                onMediaPlaybackStart={onMediaPlaybackStart}
+              />
+            </div>
+          </button>
+        </AxoContextMenu.Trigger>
+        <AxoContextMenu.Content>
+          {isHidden ? (
+            <AxoContextMenu.Item
+              symbol="check-circle"
+              onSelect={() => onHideStory(conversationId)}
+            >
+              {i18n('icu:StoryListItem__unhide')}
+            </AxoContextMenu.Item>
+          ) : (
+            <AxoContextMenu.Item
+              symbol="x-circle"
+              onSelect={() => setHasConfirmHideStory(true)}
+            >
+              {i18n('icu:StoryListItem__hide')}
+            </AxoContextMenu.Item>
+          )}
+          {!isSignalOfficial && (
+            <>
+              <AxoContextMenu.Item
+                symbol="info"
+                onSelect={() =>
+                  viewUserStories({
+                    conversationId,
+                    viewTarget: StoryViewTargetType.Details,
+                  })
+                }
+              >
+                {i18n('icu:StoryListItem__info')}
+              </AxoContextMenu.Item>
+              <AxoContextMenu.Item
+                symbol="open"
+                onSelect={() => onGoToConversation(conversationId)}
+              >
+                {i18n('icu:StoryListItem__go-to-chat')}
+              </AxoContextMenu.Item>
+            </>
+          )}
+        </AxoContextMenu.Content>
+      </AxoContextMenu.Root>
+      <AxoConfirmDialog.Root
+        open={hasConfirmHideStory}
+        onOpenChange={setHasConfirmHideStory}
+        // @ts-expect-error ConfirmationDialog migration: Needs title
+        title={null}
+        description={i18n('icu:StoryListItem__hide-modal--body', {
+          name: firstName ?? '',
+        })}
+      >
+        <AxoConfirmDialog.Cancel />
+        <AxoConfirmDialog.Action
+          variant="strong-primary"
+          onClick={() => onHideStory(conversationId)}
         >
-          {i18n('icu:StoryListItem__hide-modal--body', {
-            name: String(firstName),
-          })}
-        </ConfirmationDialog>
-      )}
+          {i18n('icu:StoryListItem__hide-modal--confirm')}
+        </AxoConfirmDialog.Action>
+      </AxoConfirmDialog.Root>
     </>
   );
 }

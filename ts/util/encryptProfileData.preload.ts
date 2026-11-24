@@ -1,27 +1,27 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
-import type { ProfileRequestDataType } from '../textsecure/WebAPI.preload.js';
-import { assertDev } from './assert.std.js';
-import * as Bytes from '../Bytes.std.js';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
+import type { ProfileRequestDataType } from '../textsecure/WebAPI.preload.ts';
+import { assertDev } from './assert.std.ts';
+import * as Bytes from '../Bytes.std.ts';
 import {
   PaddedLengths,
   encryptProfile,
   encryptProfileItemWithPadding,
-} from '../Crypto.node.js';
-import type { AvatarUpdateType } from '../types/Avatar.std.js';
+} from '../Crypto.node.ts';
+import type { ProfileAvatarChange } from '../types/Avatar.std.ts';
 import {
   deriveProfileKeyCommitment,
   deriveProfileKeyVersion,
-} from './zkgroup.node.js';
-import { isSharingPhoneNumberWithEverybody } from './phoneNumberSharingMode.preload.js';
-import { itemStorage } from '../textsecure/Storage.preload.js';
+} from './zkgroup.node.ts';
+import { isSharingPhoneNumberWithEverybody } from './phoneNumberSharingMode.preload.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 
 export async function encryptProfileData(
   conversation: ConversationType,
-  { oldAvatar, newAvatar }: AvatarUpdateType
-): Promise<[ProfileRequestDataType, Uint8Array | undefined]> {
+  avatarChange: ProfileAvatarChange
+): Promise<[ProfileRequestDataType, Uint8Array<ArrayBuffer> | undefined]> {
   const {
     aboutEmoji,
     aboutText,
@@ -66,11 +66,10 @@ export async function encryptProfileData(
     keyBuffer
   );
 
-  const encryptedAvatarData = newAvatar
-    ? encryptProfile(newAvatar, keyBuffer)
-    : undefined;
-
-  const sameAvatar = Bytes.areEqual(oldAvatar, newAvatar);
+  const encryptedAvatarData =
+    avatarChange.type === 'update'
+      ? encryptProfile(avatarChange.avatar, keyBuffer)
+      : undefined;
 
   const profileData = {
     version: deriveProfileKeyVersion(profileKey, serviceId),
@@ -81,8 +80,8 @@ export async function encryptProfileData(
       .filter(badge => 'isVisible' in badge && badge.isVisible)
       .map(({ id }) => id),
     paymentAddress: itemStorage.get('paymentAddress') || null,
-    avatar: Boolean(newAvatar),
-    sameAvatar,
+    avatar: avatarChange.type !== 'clear',
+    sameAvatar: avatarChange.type === 'unchanged',
     commitment: deriveProfileKeyCommitment(profileKey, serviceId),
     phoneNumberSharing: Bytes.toBase64(encryptedPhoneNumberSharing),
   };

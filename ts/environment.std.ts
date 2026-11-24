@@ -1,8 +1,8 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { makeEnumParser } from './util/enum.std.js';
-import { log } from './logging/log.std.js';
+import { makeEnumParser } from './util/enum.std.ts';
+import { log } from './logging/log.std.ts';
 
 // Many places rely on this enum being a string.
 export enum Environment {
@@ -58,3 +58,12 @@ export const isMockEnvironment = (): boolean => {
 export const isTestOrMockEnvironment = (): boolean => {
   return isTestEnvironment(getEnvironment()) || isMockEnvironment();
 };
+
+export function isDevEnvironment(): boolean {
+  const env = getEnvironment();
+  return (
+    env === Environment.Development ||
+    isTestEnvironment(env) ||
+    isMockEnvironment()
+  );
+}

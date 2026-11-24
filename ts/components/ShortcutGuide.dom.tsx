@@ -1,10 +1,11 @@
 // Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import classNames from 'classnames';
-import { useRestoreFocus } from '../hooks/useRestoreFocus.dom.js';
-import type { LocalizerType } from '../types/Util.std.js';
+import { useRestoreFocus } from '../hooks/useRestoreFocus.dom.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
 
 export type Props = {
   platform: string;
@@ -34,6 +35,7 @@ type KeyType =
   | 'E'
   | 'F'
   | 'G'
+  | 'H'
   | 'I'
   | 'J'
   | 'K'
@@ -329,6 +331,11 @@ function getCallingShortcuts(i18n: LocalizerType): Array<ShortcutType> {
       keys: [['shift', 'P']],
     },
     {
+      id: 'Keyboard--toggle-raise-hand',
+      description: i18n('icu:Keyboard--toggle-raise-hand'),
+      keys: [['shift', 'H']],
+    },
+    {
       id: 'Keyboard--accept-video-call',
       description: i18n('icu:Keyboard--accept-video-call'),
       keys: [['ctrlOrAlt', 'shift', 'V']],
@@ -361,7 +368,7 @@ function getCallingShortcuts(i18n: LocalizerType): Array<ShortcutType> {
   ];
 }
 
-export function ShortcutGuide(props: Props): React.JSX.Element {
+export function ShortcutGuide(props: Props): JSX.Element {
   const { i18n, close, platform } = props;
   const isMacOS = platform === 'darwin';
 
@@ -387,12 +394,12 @@ export function ShortcutGuide(props: Props): React.JSX.Element {
         ref={focusRef}
         tabIndex={-1}
       >
-        <div className="module-shortcut-guide__section-container">
+        <div>
           <div className="module-shortcut-guide__section">
             <div className="module-shortcut-guide__section-header">
               {i18n('icu:Keyboard--navigation-header')}
             </div>
-            <div className="module-shortcut-guide__section-list">
+            <div>
               {getNavigationShortcuts(i18n).map((shortcut, index) => {
                 return renderShortcut(shortcut, index, isMacOS, i18n);
               })}
@@ -402,7 +409,7 @@ export function ShortcutGuide(props: Props): React.JSX.Element {
             <div className="module-shortcut-guide__section-header">
               {i18n('icu:Keyboard--messages-header')}
             </div>
-            <div className="module-shortcut-guide__section-list">
+            <div>
               {getMessageShortcuts(i18n).map((shortcut, index) =>
                 renderShortcut(shortcut, index, isMacOS, i18n)
               )}
@@ -412,7 +419,7 @@ export function ShortcutGuide(props: Props): React.JSX.Element {
             <div className="module-shortcut-guide__section-header">
               {i18n('icu:Keyboard--composer-header')}
             </div>
-            <div className="module-shortcut-guide__section-list">
+            <div>
               {getComposerShortcuts(i18n).map((shortcut, index) =>
                 renderShortcut(shortcut, index, isMacOS, i18n)
               )}
@@ -422,7 +429,7 @@ export function ShortcutGuide(props: Props): React.JSX.Element {
             <div className="module-shortcut-guide__section-header">
               {i18n('icu:Keyboard--calling-header')}
             </div>
-            <div className="module-shortcut-guide__section-list">
+            <div>
               {getCallingShortcuts(i18n).map((shortcut, index) =>
                 renderShortcut(shortcut, index, isMacOS, i18n)
               )}

@@ -4,13 +4,14 @@
 import type {
   ConversationAttributesType,
   ConversationRenderInfoType,
-} from '../model-types.d.ts';
-import { combineNames } from './combineNames.std.js';
-import { getRegionCodeForNumber } from './libphonenumberUtil.std.js';
-import { instance, PhoneNumberFormat } from './libphonenumberInstance.std.js';
-import { isDirectConversation } from './whatTypeOfConversation.dom.js';
-import { getE164 } from './getE164.std.js';
-import { itemStorage } from '../textsecure/Storage.preload.js';
+} from '../model-types.std.ts';
+import { combineNames } from './combineNames.std.ts';
+import { getRegionCodeForNumber } from './libphonenumberUtil.std.ts';
+import { instance, PhoneNumberFormat } from './libphonenumberInstance.std.ts';
+import { isDirectConversation } from './whatTypeOfConversation.dom.ts';
+import { isConversationEverUnregistered } from './isConversationEverUnregistered.std.ts';
+import { getE164 } from './getE164.std.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 
 type TitleOptions = {
   isShort?: boolean;
@@ -29,6 +30,9 @@ export function getTitle(
   }
 
   if (isDirectConversation(attributes)) {
+    if (isConversationEverUnregistered(attributes)) {
+      return i18n('icu:deletedAccount');
+    }
     return i18n('icu:unknownContact');
   }
   return i18n('icu:unknownGroup');
@@ -58,7 +62,9 @@ export function getTitleNoDefault(
     (isShort ? attributes.profileName : undefined) ||
     getProfileName(attributes) ||
     getNumber(attributes) ||
-    username
+    username ||
+    (isShort ? (attributes.sharedGivenName ?? undefined) : undefined) ||
+    getSharedName(attributes)
   );
 }
 
@@ -78,7 +84,6 @@ export function canHaveUsername(
     | 'systemNickname'
     | 'nicknameGivenName'
     | 'nicknameFamilyName'
-    | 'type'
   >,
   ourConversationId: string | undefined
 ): boolean {
@@ -111,7 +116,7 @@ export function getProfileName(
   return undefined;
 }
 
-export function getNicknameName(
+function getNicknameName(
   attributes: Pick<
     ConversationAttributesType,
     'nicknameGivenName' | 'nicknameFamilyName' | 'type'
@@ -126,7 +131,7 @@ export function getNicknameName(
   return undefined;
 }
 
-export function getSystemName(
+function getSystemName(
   attributes: Pick<
     ConversationAttributesType,
     'systemGivenName' | 'systemFamilyName' | 'systemNickname' | 'type'
@@ -139,6 +144,22 @@ export function getSystemName(
     );
   }
 
+  return undefined;
+}
+
+// Low-trust name from a shared contact message, only used as a last resort
+function getSharedName(
+  attributes: Pick<
+    ConversationAttributesType,
+    'sharedGivenName' | 'sharedFamilyName' | 'type'
+  >
+): string | undefined {
+  if (isDirectConversation(attributes)) {
+    return combineNames(
+      attributes.sharedGivenName ?? undefined,
+      attributes.sharedFamilyName ?? undefined
+    );
+  }
   return undefined;
 }
 
@@ -200,4 +221,35 @@ export function hasUsernameTitle(
     !getNumber(attributes) &&
     Boolean(attributes.username)
   );
+}
+
+// Shared names are low-trust, so we only keep them while we know nothing else
+export function canHaveSharedName(
+  attributes: Pick<
+    ConversationAttributesType,
+    | 'type'
+    | 'name'
+    | 'profileName'
+    | 'profileFamilyName'
+    | 'e164'
+    | 'systemGivenName'
+    | 'systemFamilyName'
+    | 'systemNickname'
+    | 'nicknameGivenName'
+    | 'nicknameFamilyName'
+    | 'username'
+  >
+): boolean {
+  return (
+    !getNicknameName(attributes) &&
+    !getSystemName(attributes) &&
+    !getProfileName(attributes) &&
+    !attributes.username
+  );
+}
+
+export function hasSharedNameTitle(
+  attributes: ConversationAttributesType
+): boolean {
+  return canHaveSharedName(attributes) && Boolean(getSharedName(attributes));
 }

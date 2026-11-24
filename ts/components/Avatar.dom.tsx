@@ -6,26 +6,30 @@ import type {
   CSSProperties,
   MouseEvent,
   ReactNode,
+  Ref,
+  HTMLProps,
+  JSX,
 } from 'react';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import lodash from 'lodash';
 
 import { filterDOMProps } from '@react-aria/utils';
-import type { AvatarColorType } from '../types/Colors.std.js';
-import type { BadgeType } from '../badges/types.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { BadgeImageTheme } from '../badges/BadgeImageTheme.std.js';
-import { HasStories } from '../types/Stories.std.js';
-import { Spinner } from './Spinner.dom.js';
-import { ThemeType } from '../types/Util.std.js';
-import { assertDev } from '../util/assert.std.js';
-import { getBadgeImageFileLocalPath } from '../badges/getBadgeImageFileLocalPath.std.js';
-import { getInitials } from '../util/getInitials.std.js';
-import { isBadgeVisible } from '../badges/isBadgeVisible.std.js';
-import { SIGNAL_AVATAR_PATH } from '../types/SignalConversation.std.js';
-import { getAvatarPlaceholderGradient } from '../utils/getAvatarPlaceholderGradient.std.js';
+import type { AvatarColorType } from '../types/Avatar.std.ts';
+import type { BadgeType } from '../badges/types.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { BadgeImageTheme } from '../badges/BadgeImageTheme.std.ts';
+import { HasStories } from '../types/Stories.std.ts';
+import { Spinner } from './Spinner.dom.tsx';
+import { ThemeType } from '../types/Util.std.ts';
+import { assertDev } from '../util/assert.std.ts';
+import { getBadgeImageFileLocalPath } from '../badges/getBadgeImageFileLocalPath.std.ts';
+import { getInitials } from '../util/getInitials.std.ts';
+import { isBadgeVisible } from '../badges/isBadgeVisible.std.ts';
+import { SIGNAL_AVATAR_PATH } from '../types/SignalConversation.std.ts';
+import { getAvatarPlaceholderGradient } from '../utils/getAvatarPlaceholderGradient.std.ts';
+import { AxoTokens } from '../axo/AxoTokens.std.ts';
 
 const { noop } = lodash;
 
@@ -56,6 +60,14 @@ export enum AvatarSize {
 
 type BadgePlacementType = { bottom: number; right: number };
 
+type AvatarConversationType = 'group' | 'direct' | 'callLink';
+
+const AvatarConversationTypeIcons: Record<AvatarConversationType, string> = {
+  group: 'module-Avatar__icon--group',
+  direct: 'module-Avatar__icon--direct',
+  callLink: 'module-Avatar__icon--callLink',
+};
+
 export type Props = {
   avatarUrl?: string;
   avatarPlaceholderGradient?: Readonly<[string, string]>;
@@ -63,11 +75,10 @@ export type Props = {
   color?: AvatarColorType;
   hasAvatar?: boolean;
   loading?: boolean;
-  conversationType: 'group' | 'direct' | 'callLink';
+  conversationType: AvatarConversationType;
   noteToSelf?: boolean;
   phoneNumber?: string;
   profileName?: string;
-  sharedGroupNames: ReadonlyArray<string>;
   size: AvatarSize;
   title: string;
   searchResult?: boolean;
@@ -77,14 +88,14 @@ export type Props = {
   onClickBadge?: (event: MouseEvent<HTMLButtonElement>) => unknown;
 
   // Matches Popper's RefHandler type
-  innerRef?: React.Ref<HTMLDivElement>;
+  innerRef?: Ref<HTMLDivElement>;
 
   i18n: LocalizerType;
 } & (
   | { badge: undefined; theme?: ThemeType }
   | { badge: BadgeType; theme: ThemeType }
 ) &
-  Pick<React.HTMLProps<HTMLDivElement>, 'className'> &
+  Pick<HTMLProps<HTMLDivElement>, 'className'> &
   AriaAttributes;
 
 const BADGE_PLACEMENT_BY_SIZE = new Map<number, BadgePlacementType>([
@@ -124,12 +135,16 @@ export function Avatar({
   storyRing,
   blur = AvatarBlur.NoBlur,
   ...ariaProps
-}: Props): React.JSX.Element {
+}: Props): JSX.Element {
   const [imageBroken, setImageBroken] = useState(false);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     setImageBroken(false);
-  }, [avatarUrl]);
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    avatarUrl,
+  ]);
 
   useEffect(() => {
     if (!avatarUrl) {
@@ -155,7 +170,8 @@ export function Avatar({
     !hasValidImage &&
     conversationType === 'direct' &&
     Boolean(initials) &&
-    title !== i18n('icu:unknownContact');
+    title !== i18n('icu:unknownContact') &&
+    title !== i18n('icu:deletedAccount');
 
   let contentsChildren: ReactNode;
   if (loading) {
@@ -191,7 +207,9 @@ export function Avatar({
           }}
         />
         {blur === AvatarBlur.BlurPictureWithClickToView && (
-          <div className="module-Avatar__click-to-view">{i18n('icu:view')}</div>
+          <div className="module-Avatar__click-to-view">
+            {i18n('icu:Avatar__View')}
+          </div>
         )}
       </>
     );
@@ -223,7 +241,9 @@ export function Avatar({
           }}
         />
         {blur === AvatarBlur.BlurPictureWithClickToView && (
-          <div className="module-Avatar__click-to-view">{i18n('icu:view')}</div>
+          <div className="module-Avatar__click-to-view">
+            {i18n('icu:Avatar__View')}
+          </div>
         )}
       </>
     );
@@ -242,30 +262,41 @@ export function Avatar({
       <div
         className={classNames(
           'module-Avatar__icon',
-          `module-Avatar__icon--${conversationType}`
+          AvatarConversationTypeIcons[conversationType]
         )}
       />
     );
   }
 
   let contents: ReactNode;
-  const contentsClassName = classNames(
-    'module-Avatar__contents',
-    `module-Avatar__contents--${color}`
-  );
+
+  const values = AxoTokens.Avatar.isColorName(color)
+    ? AxoTokens.Avatar.getColorValues(color)
+    : null;
+
+  const style = {
+    '--module-Avatar__contents-bg': values?.bg,
+    '--module-Avatar__contents-fg': values?.fg,
+  } as CSSProperties;
+
   if (onClick) {
     contents = (
       <button
         {...filterDOMProps(ariaProps)}
-        className={contentsClassName}
+        className="module-Avatar__contents"
         type="button"
         onClick={onClick}
+        style={style}
       >
         {contentsChildren}
       </button>
     );
   } else {
-    contents = <div className={contentsClassName}>{contentsChildren}</div>;
+    contents = (
+      <div className="module-Avatar__contents" style={style}>
+        {contentsChildren}
+      </div>
+    );
   }
 
   let badgeNode: ReactNode;

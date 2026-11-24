@@ -5,10 +5,14 @@ import type { Session, DesktopCapturerSource, IpcMainEvent } from 'electron';
 import { desktopCapturer, ipcMain, systemPreferences } from 'electron';
 import { v4 as generateUuid } from 'uuid';
 
-import OS from '../ts/util/os/osMain.node.js';
-import type { LoggerType } from '../ts/types/Logging.std.js';
-import { strictAssert } from '../ts/util/assert.std.js';
-import type { IpcResponseType } from '../ts/util/desktopCapturer.preload.js';
+import OS from '../ts/util/os/osMain.node.ts';
+import type { LoggerType } from '../ts/types/Logging.std.ts';
+import { strictAssert } from '../ts/util/assert.std.ts';
+import type { IpcResponseType } from '../ts/util/desktopCapturer.preload.ts';
+import {
+  PRESENTABLE_SOURCE_THUMBNAIL_REQUESTED_HEIGHT,
+  PRESENTABLE_SOURCE_THUMBNAIL_REQUESTED_WIDTH,
+} from '../ts/types/Calling.std.ts';
 
 const SPELL_CHECKER_DICTIONARY_DOWNLOAD_URL = `https://updates.signal.org/desktop/hunspell_dictionaries/${process.versions.electron}/`;
 
@@ -28,6 +32,12 @@ export function updateDefaultSession(
         strictAssert(videoRequested, 'Not requesting video');
         strictAssert(!audioRequested, 'Requesting audio');
 
+        // desktopCapturer.getSources()  will crash in the MAS sandbox.
+        // This should never be reached because MAS requires
+        // macOS 15+ where we use @indutny/mac-screen-share directly
+        // and never call getDisplayMedia().
+        strictAssert(!process.mas, 'Unexpected getDisplayMedia() in MAS build');
+
         // macOS: if screen sharing is actively denied, Sonoma will crash
         // when we try to get the sources.
         if (
@@ -40,7 +50,10 @@ export function updateDefaultSession(
 
         const sources = await desktopCapturer.getSources({
           fetchWindowIcons: true,
-          thumbnailSize: { height: 102, width: 184 },
+          thumbnailSize: {
+            height: PRESENTABLE_SOURCE_THUMBNAIL_REQUESTED_HEIGHT,
+            width: PRESENTABLE_SOURCE_THUMBNAIL_REQUESTED_WIDTH,
+          },
           types: ['screen', 'window'],
         });
 

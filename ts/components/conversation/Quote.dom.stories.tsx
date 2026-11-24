@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Meta, StoryFn } from '@storybook/react';
-import * as React from 'react';
+import { createRef, type JSX } from 'react';
 
 import { action } from '@storybook/addon-actions';
 
-import { ConversationColors } from '../../types/Colors.std.js';
-import { pngUrl } from '../../storybook/Fixtures.std.js';
-import type { Props as TimelineMessagesProps } from './TimelineMessage.dom.js';
-import { TimelineMessage } from './TimelineMessage.dom.js';
-import { MessageInteractivity, TextDirection } from './Message.dom.js';
+import { ConversationColors } from '../../types/ChatStyle.std.ts';
+import { pngUrl } from '../../storybook/Fixtures.std.ts';
+import type { Props as TimelineMessagesProps } from './TimelineMessage.dom.tsx';
+import { TimelineMessage } from './TimelineMessage.dom.tsx';
+import { MessageInteractivity, TextDirection } from './Message.dom.tsx';
 import {
   AUDIO_MP3,
   IMAGE_PNG,
@@ -18,14 +18,17 @@ import {
   LONG_MESSAGE,
   VIDEO_MP4,
   stringToMIMEType,
-} from '../../types/MIME.std.js';
-import type { Props } from './Quote.dom.js';
-import { Quote } from './Quote.dom.js';
-import { ReadStatus } from '../../messages/MessageReadStatus.std.js';
-import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.js';
-import { WidthBreakpoint } from '../_util.std.js';
-import { ThemeType } from '../../types/Util.std.js';
-import { PaymentEventKind } from '../../types/Payment.std.js';
+} from '../../types/MIME.std.ts';
+import type { Props } from './Quote.dom.tsx';
+import { Quote } from './Quote.dom.tsx';
+import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
+import { getDefaultConversation } from '../../test-helpers/getDefaultConversation.std.ts';
+import { WidthBreakpoint } from '../_util.std.ts';
+import { ThemeType } from '../../types/Util.std.ts';
+import { PaymentEventKind } from '../../types/Payment.std.ts';
+import { Emoji } from '../../axo/emoji.std.ts';
+import { AxoColor } from '../../axo/AxoColor.std.ts';
+import { Uint32 } from '@signalapp/types';
 
 const { i18n } = window.SignalContext;
 
@@ -51,7 +54,7 @@ export default {
   },
   args: {
     authorTitle: 'Default Sender',
-    conversationColor: 'forest',
+    bubbleColor: { bubbleColorPreset: 'forest' },
     doubleCheckMissingQuoteReference: action(
       'doubleCheckMissingQuoteReference'
     ),
@@ -82,13 +85,13 @@ const defaultMessageProps: TimelineMessagesProps = {
   canReply: true,
   canRetry: true,
   canRetryDeleteForEveryone: true,
+  canSendPollVote: true,
   canDeleteForEveryone: true,
   canDownload: true,
-  checkForAccount: action('checkForAccount'),
   clearTargetedMessage: action('default--clearTargetedMessage'),
-  containerElementRef: React.createRef<HTMLElement>(),
+  containerElementRef: createRef<HTMLElement | null>(),
   containerWidthBreakpoint: WidthBreakpoint.Wide,
-  conversationColor: 'crimson',
+  bubbleColor: { bubbleColorPreset: 'crimson' },
   conversationId: 'conversationId',
   conversationTitle: 'Conversation Title',
   conversationType: 'direct', // override
@@ -98,29 +101,36 @@ const defaultMessageProps: TimelineMessagesProps = {
     'default--doubleCheckMissingQuoteReference'
   ),
   getPreferredBadge: () => undefined,
-  hasMaxPinnedMessages: false,
   i18n,
   platform: 'darwin',
   id: 'messageId',
   // renderingContext: 'storybook',
   interactivity: MessageInteractivity.Normal,
-  interactionMode: 'keyboard',
   isBlocked: false,
   isMessageRequestAccepted: true,
+  isFavoriteSticker: false,
   isPinned: false,
   isSelected: false,
   isSelectMode: false,
+  isSignalConversation: false,
   isSMS: false,
   isSpoilerExpanded: {},
+  isTargeted: false,
+  isTargetedCounter: null,
+  isTargetedSource: null,
   isVoiceMessagePlayed: false,
+  handleClickCtaButton: action('handleClickCtaButton'),
+  handleDebugMessage: action('debugMessage'),
   toggleSelectMessage: action('toggleSelectMessage'),
   cancelAttachmentDownload: action('default--cancelAttachmentDownload'),
   kickOffAttachmentDownload: action('default--kickOffAttachmentDownload'),
   markAttachmentAsCorrupted: action('default--markAttachmentAsCorrupted'),
+  markStickerAsFavorite: action('default--markStickerAsFavorite'),
   messageExpanded: action('default--message-expanded'),
   showConversation: action('default--showConversation'),
   openGiftBadge: action('openGiftBadge'),
   previews: [],
+  stickerRef: undefined,
   reactToMessage: action('default--reactToMessage'),
   endPoll: action('default--endPoll'),
   readStatus: ReadStatus.Read,
@@ -140,7 +150,7 @@ const defaultMessageProps: TimelineMessagesProps = {
   shouldCollapseBelow: false,
   shouldHideMetadata: false,
   showSpoiler: action('showSpoiler'),
-  onPinnedMessageAdd: action('onPinnedMessageAdd'),
+  showPinMessageDialog: action('showPinMessageDialog'),
   onPinnedMessageRemove: action('onPinnedMessageRemove'),
   pushPanelForConversation: action('default--pushPanelForConversation'),
   showContactModal: action('default--showContactModal'),
@@ -158,7 +168,9 @@ const defaultMessageProps: TimelineMessagesProps = {
   toggleDeleteMessagesModal: action('default--toggleDeleteMessagesModal'),
   toggleForwardMessagesModal: action('default--toggleForwardMessagesModal'),
   showLightbox: action('default--showLightbox'),
-  startConversation: action('default--startConversation'),
+  startConversationWithSharedContact: action(
+    'default--startConversationWithSharedContact'
+  ),
   status: 'sent',
   text: 'This is really interesting.',
   textDirection: TextDirection.Default,
@@ -169,7 +181,8 @@ const defaultMessageProps: TimelineMessagesProps = {
 
 const renderInMessage = ({
   authorTitle,
-  conversationColor,
+  authorLabel,
+  bubbleColor,
   isFromMe,
   rawAttachment,
   isViewOnce,
@@ -179,11 +192,12 @@ const renderInMessage = ({
 }: Props) => {
   const messageProps = {
     ...defaultMessageProps,
-    conversationColor,
+    bubbleColor,
     quote: {
       authorId: 'an-author',
       authorTitle,
-      conversationColor,
+      authorLabel,
+      bubbleColor,
       conversationTitle: getDefaultConversation().title,
       isFromMe,
       rawAttachment,
@@ -204,7 +218,6 @@ const renderInMessage = ({
   );
 };
 
-// eslint-disable-next-line react/function-component-definition
 const Template: StoryFn<Props> = args => <Quote {...args} />;
 const TemplateInMessage: StoryFn<Props> = args => renderInMessage(args);
 
@@ -224,17 +237,34 @@ IncomingByAnotherAuthor.args = {
   isIncoming: true,
 };
 
+export const IncomingByAnotherWithLabel = Template.bind({});
+IncomingByAnotherWithLabel.args = {
+  authorTitle: getDefaultConversation().title,
+  isIncoming: true,
+  authorLabel: {
+    labelEmoji: Emoji.ONE,
+    labelString: 'First',
+  },
+};
+
 export const IncomingByMe = Template.bind({});
 IncomingByMe.args = {
   isFromMe: true,
   isIncoming: true,
 };
 
-export function IncomingOutgoingColors(args: Props): React.JSX.Element {
+export function IncomingOutgoingColors(args: Props): JSX.Element {
   return (
     <>
       {ConversationColors.map(color =>
-        renderInMessage({ ...args, conversationColor: color })
+        renderInMessage({
+          ...args,
+          bubbleColor: { bubbleColorPreset: color },
+          authorLabel: {
+            labelEmoji: Emoji.ONE,
+            labelString: 'First',
+          },
+        })
       )}
     </>
   );
@@ -261,6 +291,31 @@ ImageOnly.args = {
 
 export const ImageAttachment = Template.bind({});
 ImageAttachment.args = {
+  rawAttachment: {
+    contentType: IMAGE_PNG,
+    fileName: 'sax.png',
+    isVoiceMessage: false,
+    thumbnail: {
+      contentType: IMAGE_PNG,
+      height: 100,
+      width: 100,
+      size: 100,
+      path: pngUrl,
+      url: pngUrl,
+    },
+  },
+};
+
+const LONG_UNBREAKABLE_TEXT = 'thisisthewordthatneverends'.repeat(10);
+
+export const LongUnbreakableWord = Template.bind({});
+LongUnbreakableWord.args = {
+  text: LONG_UNBREAKABLE_TEXT,
+};
+
+export const LongUnbreakableWordWithImageAttachment = Template.bind({});
+LongUnbreakableWordWithImageAttachment.args = {
+  text: LONG_UNBREAKABLE_TEXT,
   rawAttachment: {
     contentType: IMAGE_PNG,
     fileName: 'sax.png',
@@ -550,23 +605,29 @@ MentionIncomingMe.args = {
   text: '@Tony Stark sure',
 };
 
-export function CustomColor(args: Props): React.JSX.Element {
+export function CustomColor(args: Props): JSX.Element {
   return (
     <>
       <Quote
         {...args}
-        customColor={{
-          start: { hue: 82, saturation: 35 },
+        bubbleColor={{
+          customColor: {
+            solid: AxoColor.parse('hsl(82, 35%, 30%)').argbInt(),
+          },
         }}
       />
       <Quote
         {...args}
         isIncoming={false}
         text="A gradient"
-        customColor={{
-          deg: 192,
-          start: { hue: 304, saturation: 85 },
-          end: { hue: 231, saturation: 76 },
+        bubbleColor={{
+          customColor: {
+            gradient: {
+              angle: Uint32.fromNumber(192),
+              start: AxoColor.parse('hsl(304, 85%, 40.33%)').argbInt(),
+              end: AxoColor.parse('hsl(231, 76%, 47%)').argbInt(),
+            },
+          },
         }}
       />
     </>
@@ -582,7 +643,7 @@ IsStoryReply.args = {
   text: 'Wow!',
   authorTitle: 'Amanda',
   isStoryReply: true,
-  moduleClassName: 'StoryReplyQuote',
+  className: 'StoryReplyQuote',
   onClose: undefined,
   rawAttachment: {
     contentType: VIDEO_MP4,
@@ -595,7 +656,7 @@ export const IsStoryReplyEmoji = Template.bind({});
 IsStoryReplyEmoji.args = {
   authorTitle: getDefaultConversation().firstName,
   isStoryReply: true,
-  moduleClassName: 'StoryReplyQuote',
+  className: 'StoryReplyQuote',
   onClose: undefined,
   rawAttachment: {
     contentType: IMAGE_PNG,
@@ -610,7 +671,7 @@ IsStoryReplyEmoji.args = {
       url: pngUrl,
     },
   },
-  reactionEmoji: '🏋️',
+  reactionEmoji: Emoji.getDefaultVariant(Emoji.WEIGHT_LIFTER),
 };
 
 export const Payment = Template.bind({});

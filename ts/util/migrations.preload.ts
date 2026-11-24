@@ -1,46 +1,46 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { Readable } from 'node:stream';
+import { Buffer } from 'node:buffer';
+import {
+  CURRENT_ATTACHMENT_VERSION,
+  readAndDecryptDataFromDisk,
+  writeNewAttachmentData as doWriteNewAttachmentData,
+  createDeleter,
+} from '../../app/attachments.node.ts';
+import {
+  generateKeys,
+  encryptAttachmentV2ToDisk,
+} from '../AttachmentCrypto.node.ts';
 import {
   createAbsolutePathGetter,
   createPlaintextReader,
   createWriterForNew,
   createDoesExist,
   getUnusedFilename,
-  readAndDecryptDataFromDisk,
   saveAttachmentToDisk,
-  writeNewAttachmentData as doWriteNewAttachmentData,
-  createDeleter,
   copyIntoAttachmentsDirectory,
-} from '../windows/main/attachments.preload.js';
+} from '../windows/main/attachments.preload.ts';
 import {
   getImageDimensions,
   makeImageThumbnail,
-  makeObjectUrl,
   makeVideoScreenshot,
-  revokeObjectUrl,
-} from '../types/VisualAttachment.dom.js';
-import { loadData } from './Attachment.std.js';
+} from '../types/VisualAttachment.dom.ts';
 import {
-  loadContactData as doLoadContactData,
-  loadPreviewData as doLoadPreviewData,
-  loadQuoteData as doLoadQuoteData,
-  loadStickerData as doLoadStickerData,
   processNewAttachment as doProcessNewAttachment,
   processNewSticker as doProcessNewSticker,
-  deleteAllExternalFiles,
-  createAttachmentLoader,
   upgradeSchema,
-} from '../types/Message2.preload.js';
+} from '../types/Message2.preload.ts';
 import type {
   AttachmentType,
   AddressableAttachmentType,
   LocalAttachmentV2Type,
-} from '../types/Attachment.std.js';
-import type { MessageAttachmentType } from '../types/AttachmentDownload.std.js';
-import type { MessageAttributesType } from '../model-types.d.ts';
-import { createLogger } from '../logging/log.std.js';
-import { itemStorage } from '../textsecure/Storage.preload.js';
+} from '../types/Attachment.std.ts';
+import type { MessageAttachmentType } from '../types/AttachmentDownload.std.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 import {
   ATTACHMENTS_PATH,
   STICKERS_PATH,
@@ -50,15 +50,20 @@ import {
   AVATARS_PATH,
   DOWNLOADS_PATH,
   MEGAPHONES_PATH,
-} from './basePaths.preload.js';
+} from './basePaths.preload.ts';
+import { DataReader } from '../sql/Client.preload.ts';
+import { getExistingAttachmentDataForReuse } from './attachments/deduplicateAttachment.preload.ts';
+import { getPlaintextHashForInMemoryAttachment } from '../AttachmentCrypto.node.ts';
 
 const logger = createLogger('migrations');
 
 type EncryptedReader = (
   attachment: Partial<AddressableAttachmentType>
-) => Promise<Uint8Array>;
+) => Promise<Uint8Array<ArrayBuffer>>;
 
-type EncryptedWriter = (data: Uint8Array) => Promise<LocalAttachmentV2Type>;
+type EncryptedWriter = (
+  data: Uint8Array<ArrayBuffer>
+) => Promise<LocalAttachmentV2Type>;
 
 function createEncryptedReader(basePath: string): EncryptedReader {
   const fallbackReader = createPlaintextReader(basePath);
@@ -66,7 +71,7 @@ function createEncryptedReader(basePath: string): EncryptedReader {
 
   return async (
     attachment: Partial<AddressableAttachmentType>
-  ): Promise<Uint8Array> => {
+  ): Promise<Uint8Array<ArrayBuffer>> => {
     // In-memory
     if (attachment.data != null) {
       return attachment.data;
@@ -105,28 +110,31 @@ function createEncryptedWriterForNew(basePath: string): EncryptedWriter {
 }
 
 export const readAttachmentData = createEncryptedReader(ATTACHMENTS_PATH);
-export const loadAttachmentData = loadData(readAttachmentData);
-export const loadContactData = doLoadContactData(loadAttachmentData);
-export const loadPreviewData = doLoadPreviewData(loadAttachmentData);
-export const loadQuoteData = doLoadQuoteData(loadAttachmentData);
-export const loadStickerData = doLoadStickerData(loadAttachmentData);
 export const getAbsoluteAttachmentPath =
   createAbsolutePathGetter(ATTACHMENTS_PATH);
-export const deleteAttachmentData = createDeleter(ATTACHMENTS_PATH);
+
+const __DANGEROUS__deleteAttachmentFile = createDeleter(ATTACHMENTS_PATH);
+export const maybeDeleteAttachmentFile = async (
+  relativePath: string
+): Promise<{ wasDeleted: boolean }> => {
+  const isSafeToDelete =
+    await DataReader.isAttachmentSafeToDelete(relativePath);
+
+  if (!isSafeToDelete) {
+    return { wasDeleted: false };
+  }
+
+  await __DANGEROUS__deleteAttachmentFile(relativePath);
+  return { wasDeleted: true };
+};
+
 export const writeNewAttachmentData =
   createEncryptedWriterForNew(ATTACHMENTS_PATH);
 export const doesAttachmentExist = createDoesExist(ATTACHMENTS_PATH);
 
-export const getAbsoluteStickerPath = createAbsolutePathGetter(STICKERS_PATH);
 export const writeNewStickerData = createEncryptedWriterForNew(STICKERS_PATH);
 export const deleteSticker = createDeleter(STICKERS_PATH);
 export const readStickerData = createEncryptedReader(STICKERS_PATH);
-export const copyStickerIntoAttachmentsDirectory = copyIntoAttachmentsDirectory(
-  {
-    sourceDir: STICKERS_PATH,
-    targetDir: ATTACHMENTS_PATH,
-  }
-);
 
 export const getAbsoluteBadgeImageFilePath =
   createAbsolutePathGetter(BADGES_PATH);
@@ -154,21 +162,42 @@ export const getAbsoluteDraftPath = createAbsolutePathGetter(DRAFT_PATH);
 export const writeNewDraftData = createEncryptedWriterForNew(DRAFT_PATH);
 export const deleteDraftFile = createDeleter(DRAFT_PATH);
 export const readDraftData = createEncryptedReader(DRAFT_PATH);
+export const copyDraftIntoAttachmentDirectory = copyIntoAttachmentsDirectory({
+  sourceDir: DRAFT_PATH,
+  targetDir: ATTACHMENTS_PATH,
+});
+
+export async function writeNewDraftStream(
+  stream: Readable,
+  size: number
+): Promise<LocalAttachmentV2Type> {
+  const keys = generateKeys();
+  const encrypted = await encryptAttachmentV2ToDisk({
+    getAbsoluteAttachmentPath: getAbsoluteDraftPath,
+    keys,
+    needIncrementalMac: false,
+    plaintext: {
+      stream,
+      size,
+    },
+  });
+
+  return {
+    version: CURRENT_ATTACHMENT_VERSION,
+    plaintextHash: encrypted.plaintextHash,
+    path: encrypted.path,
+    size,
+    localKey: Buffer.from(keys).toString('base64'),
+  };
+}
 
 export const getAbsoluteDownloadsPath =
   createAbsolutePathGetter(DOWNLOADS_PATH);
-export const deleteDownloadData = createDeleter(DOWNLOADS_PATH);
+export const deleteDownloadFile = createDeleter(DOWNLOADS_PATH);
 
 export const readAvatarData = createEncryptedReader(AVATARS_PATH);
-export const getAbsoluteAvatarPath = createAbsolutePathGetter(AVATARS_PATH);
 export const writeNewAvatarData = createEncryptedWriterForNew(AVATARS_PATH);
 export const deleteAvatar = createDeleter(AVATARS_PATH);
-
-export const deleteExternalMessageFiles = deleteAllExternalFiles({
-  deleteAttachmentOnDisk: deleteAttachmentData,
-  deleteDownloadOnDisk: deleteDownloadData,
-});
-export const loadMessage = createAttachmentLoader(loadAttachmentData);
 
 export const processNewAttachment = (
   attachment: AttachmentType,
@@ -176,15 +205,13 @@ export const processNewAttachment = (
 ): ReturnType<typeof doProcessNewAttachment> =>
   doProcessNewAttachment(attachment, attachmentType, {
     writeNewAttachmentData,
-    makeObjectUrl,
-    revokeObjectUrl,
     getImageDimensions,
     makeImageThumbnail,
     makeVideoScreenshot,
     logger,
   });
 export const processNewSticker = (
-  stickerData: Uint8Array
+  stickerData: Uint8Array<ArrayBuffer>
 ): ReturnType<typeof doProcessNewSticker> =>
   doProcessNewSticker(stickerData, false, {
     writeNewStickerData,
@@ -192,7 +219,7 @@ export const processNewSticker = (
     logger,
   });
 export const processNewEphemeralSticker = (
-  stickerData: Uint8Array
+  stickerData: Uint8Array<ArrayBuffer>
 ): ReturnType<typeof doProcessNewSticker> =>
   doProcessNewSticker(stickerData, true, {
     writeNewStickerData: writeNewTempData,
@@ -207,15 +234,15 @@ export const upgradeMessageSchema = (
   const { maxVersion } = options;
 
   return upgradeSchema(message, {
-    deleteAttachmentOnDisk: deleteAttachmentData,
+    maybeDeleteAttachmentFile,
     doesAttachmentExist,
+    getExistingAttachmentDataForReuse,
     getImageDimensions,
+    getPlaintextHashForInMemoryAttachment,
     getRegionCode: () => itemStorage.get('regionCode'),
     makeImageThumbnail,
-    makeObjectUrl,
     makeVideoScreenshot,
     readAttachmentData,
-    revokeObjectUrl,
     writeNewAttachmentData,
     writeNewStickerData,
     logger,

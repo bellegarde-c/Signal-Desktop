@@ -1,9 +1,9 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReadonlyMessageAttributesType } from '../model-types.d.ts';
-import type { LocalizerType } from '../types/Util.std.js';
-import * as EmbeddedContact from '../types/EmbeddedContact.std.js';
+import type { ReadonlyMessageAttributesType } from '../model-types.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import * as EmbeddedContact from '../types/EmbeddedContact.std.ts';
 
 export function getQuoteBodyText({
   messageAttributes,
@@ -29,7 +29,8 @@ export function getQuoteBodyText({
   const { body, contact: embeddedContact, poll } = messageAttributes;
   const embeddedContactName =
     embeddedContact && embeddedContact.length > 0
-      ? EmbeddedContact.getName(embeddedContact[0])
+      ? // oxlint-disable-next-line typescript/no-non-null-assertion
+        EmbeddedContact.getDisplayName(embeddedContact[0]!)
       : '';
 
   const pollText = poll

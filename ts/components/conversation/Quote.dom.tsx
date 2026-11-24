@@ -1,40 +1,56 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import lodash from 'lodash';
 import classNames from 'classnames';
 
-import * as MIME from '../../types/MIME.std.js';
-import * as GoogleChrome from '../../util/GoogleChrome.std.js';
+import type {
+  ReactNode,
+  JSX,
+  KeyboardEvent,
+  MouseEvent,
+  CSSProperties,
+} from 'react';
 
-import { MessageBody } from './MessageBody.dom.js';
+import * as MIME from '../../types/MIME.std.ts';
+import * as GoogleChrome from '../../util/GoogleChrome.std.ts';
+import { MessageBody } from './MessageBody.dom.tsx';
+import { ContactName, GroupMemberLabel } from './ContactName.dom.tsx';
+import { Emojify } from './Emojify.dom.tsx';
+import { TextAttachment } from '../TextAttachment.dom.tsx';
+import { PaymentEventKind } from '../../types/Payment.std.ts';
+import { getPaymentEventNotificationText } from '../../messages/payments.std.ts';
+import { shouldTryToCopyFromQuotedMessage } from '../../messages/helpers.std.ts';
+import { RenderLocation } from './MessageTextRenderer.dom.tsx';
+
 import type {
   AttachmentType,
   ThumbnailType,
-} from '../../types/Attachment.std.js';
-import type { HydratedBodyRangesType } from '../../types/BodyRange.std.js';
-import type { LocalizerType } from '../../types/Util.std.js';
-import type {
-  ConversationColorType,
-  CustomColorType,
-} from '../../types/Colors.std.js';
-import { ContactName } from './ContactName.dom.js';
-import { Emojify } from './Emojify.dom.js';
-import { TextAttachment } from '../TextAttachment.dom.js';
-import { getClassNamesFor } from '../../util/getClassNamesFor.std.js';
-import { getCustomColorStyle } from '../../util/getCustomColorStyle.dom.js';
-import type { AnyPaymentEvent } from '../../types/Payment.std.js';
-import { PaymentEventKind } from '../../types/Payment.std.js';
-import { getPaymentEventNotificationText } from '../../messages/payments.std.js';
-import { shouldTryToCopyFromQuotedMessage } from '../../messages/helpers.std.js';
-import { RenderLocation } from './MessageTextRenderer.dom.js';
-import type { QuotedAttachmentType } from '../../model-types.d.ts';
+} from '../../types/Attachment.std.ts';
+import type { HydratedBodyRangesType } from '../../types/BodyRange.std.ts';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import type { BubbleColorRenderData } from '../../types/ChatStyle.std.ts';
+import type { AnyPaymentEvent } from '../../types/Payment.std.ts';
+import type { QuotedAttachmentType } from '../../model-types.std.ts';
+import type { MemberLabelType } from '../../types/GroupMemberLabels.std.ts';
+import type { Emoji } from '../../axo/emoji.std.ts';
+import { missingCaseError } from '../../util/missingCaseError.std.ts';
+import { getChatBubbleColorData } from '../../util/getChatBubbleColorData.std.ts';
 
 const { noop } = lodash;
 
 const EMPTY_OBJECT = Object.freeze(Object.create(null));
+
+type QuoteImageIcon = 'play';
+type QuoteIcon = 'view-once' | 'movie' | 'image' | 'microphone';
+
+const QUOTE_ICONS: Record<QuoteIcon, string> = {
+  'view-once': 'module-quote__icon-container__icon--view-once',
+  movie: 'module-quote__icon-container__icon--movie',
+  image: 'module-quote__icon-container__icon--image',
+  microphone: 'module-quote__icon-container__icon--microphone',
+};
 
 export type QuotedAttachmentForUIType = Pick<
   QuotedAttachmentType,
@@ -44,16 +60,17 @@ export type QuotedAttachmentForUIType = Pick<
 
 export type Props = {
   authorTitle: string;
-  conversationColor: ConversationColorType;
+  authorLabel?: MemberLabelType;
+  bubbleColor: BubbleColorRenderData;
   conversationTitle: string;
-  customColor?: CustomColorType;
   bodyRanges?: HydratedBodyRangesType;
   i18n: LocalizerType;
   isFromMe: boolean;
   isIncoming?: boolean;
   isCompose?: boolean;
   isStoryReply?: boolean;
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   onClick?: () => void;
   onClose?: () => void;
   text: string;
@@ -61,7 +78,7 @@ export type Props = {
   payment?: AnyPaymentEvent;
   isGiftBadge: boolean;
   isViewOnce: boolean;
-  reactionEmoji?: string;
+  reactionEmoji?: Emoji.Variant;
   referencedMessageNotFound: boolean;
   doubleCheckMissingQuoteReference?: () => unknown;
 };
@@ -148,15 +165,15 @@ function getTypeLabel({
   return MIME.isAudio(contentType) ? i18n('icu:audio') : undefined;
 }
 
-export function Quote(props: Props): React.JSX.Element | null {
+export function Quote(props: Props): JSX.Element | null {
   const {
-    conversationColor,
-    customColor,
+    bubbleColor,
     isStoryReply,
     onClose,
     text,
     bodyRanges,
     authorTitle,
+    authorLabel,
     conversationTitle,
     isFromMe,
     i18n,
@@ -165,7 +182,7 @@ export function Quote(props: Props): React.JSX.Element | null {
     isGiftBadge,
     rawAttachment,
     isIncoming,
-    moduleClassName,
+    className,
     referencedMessageNotFound,
     doubleCheckMissingQuoteReference,
     onClick,
@@ -173,8 +190,6 @@ export function Quote(props: Props): React.JSX.Element | null {
     reactionEmoji,
   } = props;
   const [imageBroken, setImageBroken] = useState(false);
-
-  const getClassName = getClassNamesFor('module-quote', moduleClassName);
 
   useEffect(() => {
     if (
@@ -191,7 +206,7 @@ export function Quote(props: Props): React.JSX.Element | null {
     doubleCheckMissingQuoteReference,
   ]);
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     // This is important to ensure that using this quote to navigate to the referenced
     //   message doesn't also trigger its parent message's keydown.
     if (onClick && (event.key === 'Enter' || event.key === ' ')) {
@@ -201,7 +216,7 @@ export function Quote(props: Props): React.JSX.Element | null {
     }
   }
 
-  function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
     if (onClick) {
       event.preventDefault();
       event.stopPropagation();
@@ -218,16 +233,20 @@ export function Quote(props: Props): React.JSX.Element | null {
 
   function renderImage(
     url: string,
-    icon: string | undefined,
+    icon: QuoteImageIcon | undefined,
     asGiftBadge?: boolean
-  ): React.JSX.Element {
+  ): JSX.Element {
+    const icons: Record<QuoteImageIcon, string> = {
+      play: 'module-quote__icon-container__icon--play',
+    };
+
     const iconElement = icon ? (
-      <div className={getClassName('__icon-container__inner')}>
-        <div className={getClassName('__icon-container__circle-background')}>
+      <div className="module-quote__icon-container__inner">
+        <div className="module-quote__icon-container__circle-background">
           <div
             className={classNames(
-              getClassName('__icon-container__icon'),
-              getClassName(`__icon-container__icon--${icon}`)
+              'module-quote__icon-container__icon',
+              icons[icon]
             )}
           />
         </div>
@@ -237,10 +256,10 @@ export function Quote(props: Props): React.JSX.Element | null {
     return (
       <ThumbnailImage
         className={classNames(
-          getClassName('__icon-container'),
+          'module-quote__icon-container',
           isIncoming === false &&
             asGiftBadge &&
-            getClassName('__icon-container__outgoing-gift-badge')
+            'module-quote__icon-container__outgoing-gift-badge'
         )}
         src={url}
         onError={handleImageError}
@@ -250,15 +269,15 @@ export function Quote(props: Props): React.JSX.Element | null {
     );
   }
 
-  function renderIcon(icon: string) {
+  function renderIcon(icon: QuoteIcon) {
     return (
-      <div className={getClassName('__icon-container')}>
-        <div className={getClassName('__icon-container__inner')}>
-          <div className={getClassName('__icon-container__circle-background')}>
+      <div className="module-quote__icon-container">
+        <div className="module-quote__icon-container__inner">
+          <div className="module-quote__icon-container__circle-background">
             <div
               className={classNames(
-                getClassName('__icon-container__icon'),
-                getClassName(`__icon-container__icon--${icon}`)
+                'module-quote__icon-container__icon',
+                QUOTE_ICONS[icon]
               )}
             />
           </div>
@@ -286,16 +305,9 @@ export function Quote(props: Props): React.JSX.Element | null {
     }
 
     return (
-      <div className={getClassName('__generic-file')}>
-        <div className={getClassName('__generic-file__icon')} />
-        <div
-          className={classNames(
-            getClassName('__generic-file__text'),
-            isIncoming ? getClassName('__generic-file__text--incoming') : null
-          )}
-        >
-          {fileName}
-        </div>
+      <div className="module-quote__generic-file">
+        <div className="module-quote__generic-file__icon" />
+        <div className="module-quote__generic-file__text">{fileName}</div>
       </div>
     );
   }
@@ -339,7 +351,7 @@ export function Quote(props: Props): React.JSX.Element | null {
 
     if (textAttachment) {
       return (
-        <div className={getClassName('__icon-container')}>
+        <div className="module-quote__icon-container">
           <TextAttachment
             i18n={i18n}
             isThumbnail
@@ -369,13 +381,7 @@ export function Quote(props: Props): React.JSX.Element | null {
   function renderText() {
     if (text && !isGiftBadge) {
       return (
-        <div
-          dir="auto"
-          className={classNames(
-            getClassName('__primary__text'),
-            isIncoming ? getClassName('__primary__text--incoming') : null
-          )}
-        >
+        <div dir="auto" className="module-quote__primary__text">
           <MessageBody
             bodyRanges={bodyRanges}
             disableLinks
@@ -410,14 +416,7 @@ export function Quote(props: Props): React.JSX.Element | null {
 
     if (typeLabel) {
       return (
-        <div
-          className={classNames(
-            getClassName('__primary__type-label'),
-            isIncoming ? getClassName('__primary__type-label--incoming') : null
-          )}
-        >
-          {typeLabel}
-        </div>
+        <div className="module-quote__primary__type-label">{typeLabel}</div>
       );
     }
 
@@ -429,13 +428,13 @@ export function Quote(props: Props): React.JSX.Element | null {
       return null;
     }
 
-    const clickHandler = (e: React.MouseEvent): void => {
+    const clickHandler = (e: MouseEvent): void => {
       e.stopPropagation();
       e.preventDefault();
 
       onClose();
     };
-    const keyDownHandler = (e: React.KeyboardEvent): void => {
+    const keyDownHandler = (e: KeyboardEvent): void => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.stopPropagation();
         e.preventDefault();
@@ -446,12 +445,12 @@ export function Quote(props: Props): React.JSX.Element | null {
 
     // We need the container to give us the flexibility to implement the iOS design.
     return (
-      <div className={getClassName('__close-container')}>
+      <div className="module-quote__close-container">
         <div
           tabIndex={0}
           // We can't be a button because the overall quote is a button; can't nest them
           role="button"
-          className={getClassName('__close-button')}
+          className="module-quote__close-button"
           aria-label={i18n('icu:close')}
           onKeyDown={keyDownHandler}
           onClick={clickHandler}
@@ -471,29 +470,23 @@ export function Quote(props: Props): React.JSX.Element | null {
         {title} &middot; {i18n('icu:Quote__story')}
       </>
     ) : (
-      title
+      <>
+        {title}
+        {authorLabel ? (
+          <>
+            {' '}
+            <GroupMemberLabel context="quote" contactLabel={authorLabel} />
+          </>
+        ) : undefined}
+      </>
     );
 
     return (
-      <div
-        dir="auto"
-        className={classNames(
-          getClassName('__primary__author'),
-          isIncoming ? getClassName('__primary__author--incoming') : null
-        )}
-      >
+      <div dir="auto" className="module-quote__primary__author">
         {author}
       </div>
     );
   }
-
-  const customColorStyle = getCustomColorStyle(customColor, true);
-
-  // We don't set a custom color for outgoing quotes
-  const borderInlineStartColor =
-    isIncoming || isCompose
-      ? customColorStyle?.borderInlineStartColor
-      : undefined;
 
   function renderReferenceWarning() {
     if (!referencedMessageNotFound || isStoryReply) {
@@ -501,31 +494,9 @@ export function Quote(props: Props): React.JSX.Element | null {
     }
 
     return (
-      <div
-        className={classNames(
-          getClassName('__reference-warning'),
-          isIncoming
-            ? getClassName(`--incoming-${conversationColor}`)
-            : getClassName(`--outgoing-${conversationColor}`)
-        )}
-        style={{ ...customColorStyle, borderInlineStartColor }}
-      >
-        <div
-          className={classNames(
-            getClassName('__reference-warning__icon'),
-            isIncoming
-              ? getClassName('__reference-warning__icon--incoming')
-              : null
-          )}
-        />
-        <div
-          className={classNames(
-            getClassName('__reference-warning__text'),
-            isIncoming
-              ? getClassName('__reference-warning__text--incoming')
-              : null
-          )}
-        >
+      <div className="module-quote__reference-warning">
+        <div className="module-quote__reference-warning__icon" />
+        <div className="module-quote__reference-warning__text">
           {i18n('icu:originalMessageNotFound')}
         </div>
       </div>
@@ -536,40 +507,58 @@ export function Quote(props: Props): React.JSX.Element | null {
     return null;
   }
 
-  let colorClassName: string;
   let directionClassName: string;
   if (isCompose) {
-    directionClassName = getClassName('--compose');
-    colorClassName = getClassName(`--compose-${conversationColor}`);
+    directionClassName = 'module-quote--compose';
   } else if (isIncoming) {
-    directionClassName = getClassName('--incoming');
-    colorClassName = getClassName(`--incoming-${conversationColor}`);
+    directionClassName = 'module-quote--incoming';
   } else {
-    directionClassName = getClassName('--outgoing');
-    colorClassName = getClassName(`--outgoing-${conversationColor}`);
+    directionClassName = 'module-quote--outgoing';
+  }
+
+  const color = getChatBubbleColorData(bubbleColor);
+
+  let colorClassName: string | null;
+  let colorStyle: CSSProperties | null;
+  if (color == null) {
+    colorClassName = null;
+    colorStyle = null;
+  } else if (color.kind === 'solid') {
+    colorClassName = 'module-quote--color-solid';
+    colorStyle = {
+      '--module-quote-color-border': color.value,
+      '--module-quote-color-solid': color.value,
+    } as CSSProperties;
+  } else if (color.kind === 'gradient') {
+    colorClassName = 'module-quote--color-gradient';
+    colorStyle = {
+      '--module-quote-color-border': color.value.start,
+      '--module-quote-color-gradient-deg': `${color.value.deg}deg`,
+      '--module-quote-color-gradient-start': color.value.start,
+      '--module-quote-color-gradient-end': color.value.end,
+    } as CSSProperties;
+  } else {
+    throw missingCaseError(color);
   }
 
   return (
-    <div className={getClassName('__container')}>
+    <div
+      className={classNames(
+        'module-quote',
+        directionClassName,
+        !onClick && 'module-quote--no-click',
+        colorClassName,
+        className
+      )}
+      style={colorStyle ?? undefined}
+    >
       <button
         type="button"
         onClick={handleClick}
         onKeyDown={handleKeyDown}
-        className={classNames(
-          getClassName(''),
-          directionClassName,
-          colorClassName,
-          !onClick && getClassName('--no-click'),
-          referencedMessageNotFound && getClassName('--with-reference-warning')
-        )}
-        style={customColorStyle}
+        className="module-quote__button"
       >
-        <div
-          className={getClassName('__primary')}
-          style={
-            borderInlineStartColor ? { borderInlineStartColor } : undefined
-          }
-        >
+        <div className="module-quote__primary">
           {renderAuthor()}
           {renderGenericFile()}
           {renderPayment()}
@@ -579,8 +568,8 @@ export function Quote(props: Props): React.JSX.Element | null {
           <div
             className={
               rawAttachment
-                ? getClassName('__reaction-emoji')
-                : getClassName('__reaction-emoji--story-unavailable')
+                ? 'module-quote__reaction-emoji'
+                : 'module-quote__reaction-emoji--story-unavailable'
             }
           >
             <Emojify text={reactionEmoji} />
@@ -604,7 +593,7 @@ function ThumbnailImage({
   src: string;
   onError: () => void;
   children: ReactNode;
-}>): React.JSX.Element {
+}>): JSX.Element {
   const imageRef = useRef(new Image());
   const [loadedSrc, setLoadedSrc] = useState<null | string>(null);
 
@@ -621,8 +610,12 @@ function ThumbnailImage({
   }, [src]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     setLoadedSrc(null);
-  }, [src]);
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    src,
+  ]);
 
   useEffect(() => {
     const image = imageRef.current;

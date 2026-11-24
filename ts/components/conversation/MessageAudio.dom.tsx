@@ -1,30 +1,30 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback } from 'react';
-import type { RefObject } from 'react';
+import { useCallback, useState } from 'react';
+import type { RefObject, JSX, ReactElement } from 'react';
 import classNames from 'classnames';
 import lodash from 'lodash';
 import { animated, useSpring } from '@react-spring/web';
 
-import type { LocalizerType } from '../../types/Util.std.js';
-import type { AttachmentForUIType } from '../../types/Attachment.std.js';
-import type { MessageStatusType } from '../../types/message/MessageStatus.std.js';
-import type { PushPanelForConversationActionType } from '../../state/ducks/conversations.preload.js';
-import { isDownloaded } from '../../util/Attachment.std.js';
-import type { DirectionType } from './Message.dom.js';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import type { AttachmentForUIType } from '../../types/Attachment.std.ts';
+import type { MessageStatusType } from '../../types/message/MessageStatus.std.ts';
+import type { PushPanelForConversationActionType } from '../../state/ducks/conversations.preload.ts';
+import { isDownloaded } from '../../util/Attachment.std.ts';
+import type { DirectionType } from './Message.dom.tsx';
 
-import type { ComputePeaksResult } from '../VoiceNotesPlaybackContext.dom.js';
-import { MessageMetadata } from './MessageMetadata.dom.js';
-import { createLogger } from '../../logging/log.std.js';
-import type { ActiveAudioPlayerStateType } from '../../state/ducks/audioPlayer.preload.js';
-import { PlaybackRateButton } from '../PlaybackRateButton.dom.js';
-import { PlaybackButton } from '../PlaybackButton.dom.js';
-import { WaveformScrubber } from './WaveformScrubber.dom.js';
-import { useComputePeaks } from '../../hooks/useComputePeaks.dom.js';
-import { durationToPlaybackText } from '../../util/durationToPlaybackText.std.js';
-import { shouldNeverBeCalled } from '../../util/shouldNeverBeCalled.std.js';
-import { formatFileSize } from '../../util/formatFileSize.std.js';
+import type { ComputeWaveformResult } from '../VoiceNotesPlaybackContext.dom.tsx';
+import { MessageMetadata } from './MessageMetadata.dom.tsx';
+import { createLogger } from '../../logging/log.std.ts';
+import type { ActiveAudioPlayerStateType } from '../../state/ducks/audioPlayer.preload.ts';
+import { PlaybackRateButton } from '../PlaybackRateButton.dom.tsx';
+import { PlaybackButton } from '../PlaybackButton.dom.tsx';
+import { WaveformScrubber } from './WaveformScrubber.dom.tsx';
+import { useComputePeaks } from '../../hooks/useComputePeaks.dom.ts';
+import { durationToPlaybackText } from '../../util/durationToPlaybackText.std.ts';
+import { shouldNeverBeCalled } from '../../util/shouldNeverBeCalled.std.ts';
+import { formatFileSize } from '../../util/formatFileSize.std.ts';
 
 const { noop } = lodash;
 
@@ -37,7 +37,7 @@ export type OwnProps = Readonly<{
         'currentTime' | 'duration' | 'playing' | 'playbackRate'
       >
     | undefined;
-  buttonRef: RefObject<HTMLButtonElement>;
+  buttonRef: RefObject<HTMLButtonElement | null>;
   i18n: LocalizerType;
   attachment: AttachmentForUIType;
   collapseMetadata: boolean;
@@ -54,10 +54,10 @@ export type OwnProps = Readonly<{
   status?: MessageStatusType;
   textPending?: boolean;
   timestamp: number;
-  cancelAttachmentDownload(): void;
-  kickOffAttachmentDownload(): void;
-  onCorrupted(): void;
-  computePeaks(url: string, barCount: number): Promise<ComputePeaksResult>;
+  cancelAttachmentDownload: () => void;
+  kickOffAttachmentDownload: () => void;
+  onCorrupted: () => void;
+  computeWaveform: (url: string) => Promise<ComputeWaveformResult>;
   onPlayMessage: (id: string, position: number) => void;
 }>;
 
@@ -79,7 +79,6 @@ enum State {
 
 // Constants
 
-const CSS_BASE = 'module-message__audio-attachment';
 const BAR_COUNT = 47;
 const BAR_NOT_DOWNLOADED_HEIGHT = 2;
 const BAR_MIN_HEIGHT = 4;
@@ -104,7 +103,7 @@ function PlayedDot({
   const start = played ? 1 : 0;
   const end = played ? 0 : 1;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- FIXME
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- FIXME
   const [animProps] = useSpring(
     {
       config: SPRING_CONFIG,
@@ -124,8 +123,8 @@ function PlayedDot({
       style={animProps}
       aria-hidden="true"
       className={classNames(
-        `${CSS_BASE}__dot`,
-        `${CSS_BASE}__dot--${played ? 'played' : 'unplayed'}`
+        'module-message__audio-attachment__dot',
+        !played && 'module-message__audio-attachment__dot--unplayed'
       )}
     />
   );
@@ -143,7 +142,7 @@ function PlayedDot({
  * `context` is required for displaying separate MessageAudio instances in
  * MessageDetails and Message React components.
  */
-export function MessageAudio(props: Props): React.JSX.Element {
+export function MessageAudio(props: Props): JSX.Element {
   const {
     active,
     buttonRef,
@@ -175,7 +174,7 @@ export function MessageAudio(props: Props): React.JSX.Element {
 
   const isPlaying = active?.playing ?? false;
 
-  const [isPlayedDotVisible, setIsPlayedDotVisible] = React.useState(!played);
+  const [isPlayedDotVisible, setIsPlayedDotVisible] = useState(!played);
 
   const audioUrl = isDownloaded(attachment) ? attachment.url : undefined;
 
@@ -184,6 +183,8 @@ export function MessageAudio(props: Props): React.JSX.Element {
     activeDuration: active?.duration,
     barCount: BAR_COUNT,
     onCorrupted,
+    waveform: attachment.audioWaveform,
+    duration: attachment.duration,
   });
 
   let state: State;
@@ -284,7 +285,7 @@ export function MessageAudio(props: Props): React.JSX.Element {
     />
   );
 
-  let button: React.ReactElement;
+  let button: ReactElement;
   if (state === State.Computing) {
     // Not really a button, but who cares?
     button = (
@@ -343,18 +344,18 @@ export function MessageAudio(props: Props): React.JSX.Element {
       : durationToPlaybackText(countDown);
 
   const metadata = (
-    <div className={`${CSS_BASE}__metadata`}>
+    <div className="module-message__audio-attachment__metadata">
       <div
         aria-hidden="true"
         className={classNames(
-          `${CSS_BASE}__countdown`,
-          `${CSS_BASE}__countdown--${played ? 'played' : 'unplayed'}`
+          'module-message__audio-attachment__countdown',
+          !played && 'module-message__audio-attachment__countdown--unplayed'
         )}
       >
         {fileSizeOrDuration}
       </div>
 
-      <div className={`${CSS_BASE}__controls`}>
+      <div className="module-message__audio-attachment__controls">
         <PlayedDot
           played={played}
           onHide={() => setIsPlayedDotVisible(false)}
@@ -377,6 +378,7 @@ export function MessageAudio(props: Props): React.JSX.Element {
 
       {!withContentBelow && !collapseMetadata && (
         <MessageMetadata
+          canRetryDeleteForEveryone={false}
           direction={direction}
           expirationLength={expirationLength}
           expirationTimestamp={expirationTimestamp}
@@ -387,6 +389,7 @@ export function MessageAudio(props: Props): React.JSX.Element {
           isShowingImage={false}
           isSticker={false}
           pushPanelForConversation={pushPanelForConversation}
+          retryDeleteForEveryone={shouldNeverBeCalled}
           retryMessageSend={shouldNeverBeCalled}
           status={status}
           textPending={textPending}
@@ -399,13 +402,20 @@ export function MessageAudio(props: Props): React.JSX.Element {
   return (
     <div
       className={classNames(
-        CSS_BASE,
-        `${CSS_BASE}--${direction}`,
-        withContentBelow ? `${CSS_BASE}--with-content-below` : null,
-        withContentAbove ? `${CSS_BASE}--with-content-above` : null
+        'module-message__audio-attachment',
+        direction === 'incoming' &&
+          'module-message__audio-attachment--incoming',
+        direction === 'outgoing' &&
+          'module-message__audio-attachment--outgoing',
+        withContentBelow
+          ? 'module-message__audio-attachment--with-content-below'
+          : null,
+        withContentAbove
+          ? 'module-message__audio-attachment--with-content-above'
+          : null
       )}
     >
-      <div className={`${CSS_BASE}__button-and-waveform`}>
+      <div className="module-message__audio-attachment__button-and-waveform">
         {button}
         {waveform}
       </div>

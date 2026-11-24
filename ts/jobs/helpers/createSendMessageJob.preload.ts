@@ -2,25 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { ContentHint } from '@signalapp/libsignal-client';
-import type { ConversationModel } from '../../models/conversations.preload.js';
-import { getSendOptions } from '../../util/getSendOptions.preload.js';
-import { sendToGroup } from '../../util/sendToGroup.preload.js';
+import type { ConversationModel } from '../../models/conversations.preload.ts';
+import { getSendOptions } from '../../util/getSendOptions.preload.ts';
+import { sendToGroup } from '../../util/sendToGroup.preload.ts';
 import {
   isDirectConversation,
   isGroupV2,
-} from '../../util/whatTypeOfConversation.dom.js';
-import type { ConversationQueueJobBundle } from '../conversationJobQueue.preload.js';
-import { getSendRecipientLists } from './getSendRecipientLists.dom.js';
-import type { SendTypesType } from '../../util/handleMessageSend.preload.js';
-import { handleMessageSend } from '../../util/handleMessageSend.preload.js';
-import type { SharedMessageOptionsType } from '../../textsecure/SendMessage.preload.js';
-import { strictAssert } from '../../util/assert.std.js';
-import { wrapWithSyncMessageSend } from '../../util/wrapWithSyncMessageSend.preload.js';
+} from '../../util/whatTypeOfConversation.dom.ts';
+import type { ConversationQueueJobBundle } from '../conversationJobQueue.preload.ts';
+import { getSendRecipientLists } from './getSendRecipientLists.dom.ts';
+import type { SendTypesType } from '../../util/handleMessageSend.preload.ts';
+import { handleMessageSend } from '../../util/handleMessageSend.preload.ts';
+import type { SharedMessageOptionsType } from '../../textsecure/SendMessage.preload.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { wrapWithSyncMessageSend } from '../../util/wrapWithSyncMessageSend.preload.ts';
 import {
   handleMultipleSendErrors,
   maybeExpandErrors,
-} from './handleMultipleSendErrors.std.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
+} from './handleMultipleSendErrors.std.ts';
 
 export type SendMessageJobOptions<Data> = Readonly<{
   sendName: string; // ex: 'sendExampleMessage'
@@ -58,14 +57,17 @@ export function createSendMessageJob<Data>(
       return;
     }
 
-    const { recipientServiceIdsWithoutMe, untrustedServiceIds } =
-      getSendRecipientLists({
-        log,
-        conversation,
-        conversationIds: isSyncOnly(data)
-          ? [window.ConversationController.getOurConversationIdOrThrow()]
-          : Array.from(conversation.getMemberConversationIds()),
-      });
+    const {
+      allRecipientServiceIds,
+      recipientServiceIdsWithoutMe,
+      untrustedServiceIds,
+    } = getSendRecipientLists({
+      log,
+      conversation,
+      conversationIds: isSyncOnly(data)
+        ? [window.ConversationController.getOurConversationIdOrThrow()]
+        : Array.from(conversation.getMemberConversationIds()),
+    });
 
     if (untrustedServiceIds.length > 0) {
       window.reduxActions.conversations.conversationStoppedByMissingVerification(
@@ -90,25 +92,38 @@ export function createSendMessageJob<Data>(
 
     try {
       if (recipientServiceIdsWithoutMe.length === 0) {
-        const sendOptions = await getSendOptions(conversation.attributes, {
-          syncMessage: true,
-        });
+        if (!window.ConversationController.doWeHaveOtherDevices()) {
+          log.info('We have no other devices; not sending to ourselves');
+          return;
+        }
+
         // Only sending a sync to ourselves
         await conversation.queueJob(
           `conversationQueue/${sendName}/sync`,
           async () => {
-            const ourAci = itemStorage.user.getCheckedAci();
+            const ourConversation =
+              window.ConversationController.getOurConversationOrThrow();
+            const sendOptions = await getSendOptions(
+              ourConversation.attributes,
+              {
+                syncMessage: true,
+              }
+            );
+
             const encodedDataMessage = await job.messaging.getDataOrEditMessage(
               {
                 ...messageOptions,
-                recipients: [ourAci],
+                groupV2: conversation.getGroupV2Info({
+                  members: recipientServiceIdsWithoutMe,
+                }),
+                recipients: allRecipientServiceIds,
               }
             );
 
             return handleMessageSend(
               job.messaging.sendSyncMessage({
                 encodedDataMessage,
-                timestamp: job.timestamp,
+                timestamp: messageOptions.timestamp,
                 destinationE164: conversation.get('e164'),
                 destinationServiceId: conversation.getServiceId(),
                 expirationStartTimestamp,
@@ -131,11 +146,11 @@ export function createSendMessageJob<Data>(
           return;
         }
 
-        const sendOptions = await getSendOptions(conversation.attributes);
-
         await conversation.queueJob(
           `conversationQueue/${sendName}/direct`,
-          () => {
+          async () => {
+            const sendOptions = await getSendOptions(conversation.attributes);
+
             return wrapWithSyncMessageSend({
               conversation,
               logId,
@@ -152,23 +167,21 @@ export function createSendMessageJob<Data>(
                 });
               },
               sendType,
-              timestamp: job.timestamp,
+              timestamp: messageOptions.timestamp,
               expirationStartTimestamp,
             });
           }
         );
       } else if (isGroupV2(conversation.attributes)) {
-        const sendOptions = await getSendOptions(conversation.attributes, {
-          groupId: conversation.get('groupId'),
-        });
-        const groupV2Info = conversation.getGroupV2Info({
-          members: recipientServiceIdsWithoutMe,
-        });
-        strictAssert(groupV2Info, 'Missing groupV2Info');
-
         await conversation.queueJob(
           `conversationQueue/${sendName}/group`,
-          abortSignal => {
+          async abortSignal => {
+            const sendOptions = await getSendOptions(conversation.attributes);
+            const groupV2Info = conversation.getGroupV2Info({
+              members: recipientServiceIdsWithoutMe,
+            });
+            strictAssert(groupV2Info, 'Missing groupV2Info');
+
             return wrapWithSyncMessageSend({
               conversation,
               logId,
@@ -189,7 +202,7 @@ export function createSendMessageJob<Data>(
                 });
               },
               sendType,
-              timestamp: job.timestamp,
+              timestamp: messageOptions.timestamp,
               expirationStartTimestamp,
             });
           }

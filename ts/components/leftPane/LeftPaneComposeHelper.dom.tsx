@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { ReactNode, ChangeEvent } from 'react';
-import React from 'react';
 
-import { LeftPaneHelper } from './LeftPaneHelper.dom.js';
-import type { Row } from '../ConversationList.dom.js';
-import { RowType } from '../ConversationList.dom.js';
-import type { ContactListItemConversationType } from '../conversationList/ContactListItem.dom.js';
-import { SearchInput } from '../SearchInput.dom.js';
-import type { LocalizerType } from '../../types/Util.std.js';
-import type { ParsedE164Type } from '../../util/libphonenumberInstance.std.js';
-import { parseAndFormatPhoneNumber } from '../../util/libphonenumberInstance.std.js';
-import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.js';
+import { LeftPaneHelper } from './LeftPaneHelper.dom.tsx';
+import type { Row } from '../ConversationList.dom.tsx';
+import { RowType } from '../ConversationList.dom.tsx';
+import type { ContactListItemConversationType } from '../conversationList/ContactListItem.dom.tsx';
+import { SearchInput } from '../SearchInput.dom.tsx';
+import type { LocalizerType } from '../../types/Util.std.ts';
+import type { ParsedE164Type } from '../../util/libphonenumberInstance.std.ts';
+import { parseAndFormatPhoneNumber } from '../../util/libphonenumberInstance.std.ts';
+import type { UUIDFetchStateType } from '../../util/uuidFetchState.std.ts';
 import {
   isFetchingByUsername,
   isFetchingByE164,
-} from '../../util/uuidFetchState.std.js';
-import type { GroupListItemConversationType } from '../conversationList/GroupListItem.dom.js';
-import { isProbablyAUsername } from '../../util/Username.dom.js';
+} from '../../util/uuidFetchState.std.ts';
+import type { GroupListItemConversationType } from '../conversationList/GroupListItem.dom.tsx';
+import { isProbablyAUsername } from '../../util/Username.dom.ts';
+import { NavSidebarBackButton } from '../NavSidebar.dom.tsx';
 
 export type LeftPaneComposePropsType = {
   composeContacts: ReadonlyArray<ContactListItemConversationType>;
@@ -35,6 +35,7 @@ enum TopButtons {
   Visible = 'Visible',
 }
 
+// oxlint-disable-next-line react/prefer-function-component
 export class LeftPaneComposeHelper extends LeftPaneHelper<LeftPaneComposePropsType> {
   readonly #composeContacts: ReadonlyArray<ContactListItemConversationType>;
   readonly #composeGroups: ReadonlyArray<GroupListItemConversationType>;
@@ -85,13 +86,12 @@ export class LeftPaneComposeHelper extends LeftPaneHelper<LeftPaneComposePropsTy
   }>): ReactNode {
     return (
       <div className="module-left-pane__header__contents">
-        <button
-          onClick={this.getBackAction({ showInbox })}
-          className="module-left-pane__header__contents__back-button"
-          title={i18n('icu:backToInbox')}
-          aria-label={i18n('icu:backToInbox')}
-          type="button"
-        />
+        <div className="module-left-pane__header__contents__back-button">
+          <NavSidebarBackButton
+            label={i18n('icu:backToInbox')}
+            onClick={this.getBackAction({ showInbox })}
+          />
+        </div>
         <div className="module-left-pane__header__contents__text">
           {i18n('icu:newConversation')}
         </div>
@@ -115,7 +115,7 @@ export class LeftPaneComposeHelper extends LeftPaneHelper<LeftPaneComposePropsTy
     return (
       <SearchInput
         i18n={i18n}
-        moduleClassName="module-left-pane__compose-search-form"
+        className="module-left-pane__compose-search-form"
         onChange={onChangeComposeSearchTerm}
         placeholder={i18n('icu:contactSearchPlaceholder')}
         ref={focusRef}

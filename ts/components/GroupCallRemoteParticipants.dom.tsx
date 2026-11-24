@@ -1,33 +1,41 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import {
+  useCallback,
+  useState,
+  useMemo,
+  useEffect,
+  type RefObject,
+  type JSX,
+} from 'react';
 import lodash from 'lodash';
 import type { VideoFrameSource } from '@signalapp/ringrtc';
-import { GroupCallRemoteParticipant } from './GroupCallRemoteParticipant.dom.js';
+import { GroupCallRemoteParticipant } from './GroupCallRemoteParticipant.dom.tsx';
 import {
   GroupCallOverflowArea,
   OVERFLOW_PARTICIPANT_WIDTH,
-} from './GroupCallOverflowArea.dom.js';
+} from './GroupCallOverflowArea.dom.tsx';
 import type {
   GroupCallRemoteParticipantType,
   GroupCallVideoRequest,
-} from '../types/Calling.std.js';
-import { CallViewMode } from '../types/Calling.std.js';
-import { useGetCallingFrameBuffer } from '../calling/useGetCallingFrameBuffer.std.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { usePageVisibility } from '../hooks/usePageVisibility.dom.js';
-import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio.dom.js';
-import { nonRenderedRemoteParticipant } from '../util/ringrtc/nonRenderedRemoteParticipant.std.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { SECOND } from '../util/durations/index.std.js';
-import { filter, join } from '../util/iterables.std.js';
-import * as setUtil from '../util/setUtil.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH } from '../calling/constants.std.js';
-import { SizeObserver } from '../hooks/useSizeObserver.dom.js';
-import { strictAssert } from '../util/assert.std.js';
-import type { CallingImageDataCache } from './CallManager.dom.js';
+} from '../types/Calling.std.ts';
+import { CallViewMode } from '../types/Calling.std.ts';
+import { useGetCallingFrameBuffer } from '../calling/useGetCallingFrameBuffer.std.ts';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { usePageVisibility } from '../hooks/usePageVisibility.dom.ts';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio.dom.ts';
+import { nonRenderedRemoteParticipant } from '../util/ringrtc/nonRenderedRemoteParticipant.std.ts';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { SECOND } from '../util/durations/index.std.ts';
+import { filter, join } from '../util/iterables.std.ts';
+import * as setUtil from '../util/setUtil.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH } from '../calling/constants.std.ts';
+import { SizeObserver } from '../hooks/useSizeObserver.dom.tsx';
+import { strictAssert } from '../util/assert.std.ts';
+import type { CallingImageDataCache } from './CallManager.dom.tsx';
+import type { PropsType as SmartCallingParticipantMenuProps } from '../state/smart/CallingParticipantMenu.preload.tsx';
 
 const { clamp, chunk, maxBy, flatten, noop } = lodash;
 
@@ -62,19 +70,22 @@ type ParticipantTileType =
   | PaginationButtonType;
 
 type PropsType = {
+  callConversationId?: string;
   callViewMode: CallViewMode;
   getGroupCallVideoFrameSource: (demuxId: number) => VideoFrameSource;
   i18n: LocalizerType;
-  imageDataCache: React.RefObject<CallingImageDataCache>;
+  imageDataCache: RefObject<CallingImageDataCache | null>;
   isCallReconnecting: boolean;
   joinedAt: number | null;
-  onSidebarViewDiffersFromGridViewChange: (differs: boolean) => void;
   remoteParticipants: ReadonlyArray<GroupCallRemoteParticipantType>;
   setGroupCallVideoRequest: (
     _: Array<GroupCallVideoRequest>,
     speakerHeight: number
   ) => void;
   remoteAudioLevels: Map<number, number>;
+  renderCallingParticipantMenu: (
+    props: SmartCallingParticipantMenuProps
+  ) => JSX.Element;
   onClickRaisedHand?: () => void;
 };
 
@@ -116,18 +127,19 @@ enum VideoRequestMode {
 // 5. Lay out this arrangement on the screen.
 
 export function GroupCallRemoteParticipants({
+  callConversationId,
   callViewMode,
   getGroupCallVideoFrameSource,
   imageDataCache,
   i18n,
   isCallReconnecting,
   joinedAt,
-  onSidebarViewDiffersFromGridViewChange,
   remoteParticipants,
   setGroupCallVideoRequest,
   remoteAudioLevels,
+  renderCallingParticipantMenu,
   onClickRaisedHand,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const [gridDimensions, setGridDimensions] = useState<Dimensions>({
     width: 0,
     height: 0,
@@ -142,7 +154,10 @@ export function GroupCallRemoteParticipants({
   const { invisibleDemuxIds, onParticipantVisibilityChanged } =
     useInvisibleParticipants(remoteParticipants);
 
-  const minRenderedHeight = getMinRenderedHeight(callViewMode);
+  const minRenderedHeight =
+    callViewMode === CallViewMode.Paginated
+      ? SMALL_TILES_MIN_HEIGHT
+      : LARGE_TILES_MIN_HEIGHT;
 
   const isInSpeakerView =
     callViewMode === CallViewMode.Speaker ||
@@ -156,7 +171,9 @@ export function GroupCallRemoteParticipants({
 
   // 1. Figure out the maximum number of possible rows that could fit on the page.
   //    Could be 0 if (a) there are no participants (b) the container's height is small.
-  const maxRowsPerPage = getMaxRowsPerPage(maxGridHeight, minRenderedHeight);
+  const maxRowsPerPage = Math.floor(
+    maxGridHeight / (minRenderedHeight + PARTICIPANT_MARGIN)
+  );
 
   // 2. Sort the participants in priority order:  by `presenting` first, since presenters
   //   should be on the main grid, then by `speakerTime` so that the most recent speakers
@@ -189,9 +206,12 @@ export function GroupCallRemoteParticipants({
     }
 
     if (isInSpeakerView) {
+      const firstParticipiant = prioritySortedParticipants[0];
+      strictAssert(firstParticipiant, 'Missing firstParticipiant');
+
       return [
         {
-          rows: [[prioritySortedParticipants[0]]],
+          rows: [[firstParticipiant]],
           hasSpaceRemaining: false,
           numParticipants: 1,
         },
@@ -217,6 +237,10 @@ export function GroupCallRemoteParticipants({
     prioritySortedParticipants,
   ]);
 
+  const isSomeonePresenting =
+    prioritySortedParticipants.length &&
+    prioritySortedParticipants[0]?.presenting;
+
   // Make sure we're not on a page that no longer exists (e.g. if people left the call)
   if (
     pageIndex >= gridParticipantsByPage.length &&
@@ -224,49 +248,6 @@ export function GroupCallRemoteParticipants({
   ) {
     setPageIndex(gridParticipantsByPage.length - 1);
   }
-
-  // Calculate whether Sidebar view would look different from Grid (Paginated) view.
-  // They differ when Grid view would have multiple pages.
-  const minRenderedHeightForGridView = getMinRenderedHeight(
-    CallViewMode.Paginated
-  );
-  const maxRowsPerPageForGridView = getMaxRowsPerPage(
-    maxGridHeight,
-    minRenderedHeightForGridView
-  );
-  const sidebarViewDiffersFromGridView = useMemo(() => {
-    if (!prioritySortedParticipants.length || !maxRowsPerPageForGridView) {
-      return false;
-    }
-
-    // When in Grid view, we've already calculated with the right params
-    if (isInPaginationView) {
-      return gridParticipantsByPage.length > 1;
-    }
-
-    // For other views, calculate how many would fit on the first page of Grid view
-    const gridViewPages = getGridParticipantsByPage({
-      participants: prioritySortedParticipants,
-      maxRowWidth,
-      maxPages: 1,
-      maxRowsPerPage: maxRowsPerPageForGridView,
-      minRenderedHeight: minRenderedHeightForGridView,
-      maxParticipantsPerPage: MAX_PARTICIPANTS_PER_PAGE,
-    });
-
-    return gridViewPages[0].numParticipants < prioritySortedParticipants.length;
-  }, [
-    isInPaginationView,
-    gridParticipantsByPage.length,
-    maxRowWidth,
-    maxRowsPerPageForGridView,
-    minRenderedHeightForGridView,
-    prioritySortedParticipants,
-  ]);
-
-  useEffect(() => {
-    onSidebarViewDiffersFromGridViewChange(sidebarViewDiffersFromGridView);
-  }, [onSidebarViewDiffersFromGridViewChange, sidebarViewDiffersFromGridView]);
 
   const totalParticipantsInGrid = gridParticipantsByPage.reduce(
     (pageCount, { numParticipants }) => pageCount + numParticipants,
@@ -335,7 +316,7 @@ export function GroupCallRemoteParticipants({
     Math.round((gridDimensions.height - gridTotalRowHeightWithMargin) / 2)
   );
 
-  const rowElements: Array<Array<React.JSX.Element>> = gridArrangement.rows.map(
+  const rowElements: Array<Array<JSX.Element>> = gridArrangement.rows.map(
     (tiles, index) => {
       const top = gridTopOffset + index * gridParticipantHeightWithMargin;
 
@@ -390,6 +371,7 @@ export function GroupCallRemoteParticipants({
 
         return (
           <GroupCallRemoteParticipant
+            callConversationId={callConversationId}
             key={tile.demuxId}
             getFrameBuffer={getFrameBuffer}
             imageDataCache={imageDataCache}
@@ -403,6 +385,7 @@ export function GroupCallRemoteParticipants({
             top={top}
             width={renderedWidth}
             remoteParticipantsCount={remoteParticipants.length}
+            renderCallingParticipantMenu={renderCallingParticipantMenu}
             isActiveSpeakerInSpeakerView={isInSpeakerView}
             isCallReconnecting={isCallReconnecting}
             joinedAt={joinedAt}
@@ -497,7 +480,10 @@ export function GroupCallRemoteParticipants({
     }
     setGroupCallVideoRequest(
       videoRequest,
-      clamp(gridParticipantHeight, 0, MAX_FRAME_HEIGHT)
+      // When there's a presenter, we do not want the SFU to prioritize the speaker
+      isSomeonePresenting
+        ? 0
+        : clamp(gridParticipantHeight, 0, MAX_FRAME_HEIGHT)
     );
   }, [
     devicePixelRatio,
@@ -509,6 +495,7 @@ export function GroupCallRemoteParticipants({
     setGroupCallVideoRequest,
     videoRequestMode,
     participantsOnOtherPages,
+    isSomeonePresenting,
   ]);
 
   return (
@@ -516,6 +503,9 @@ export function GroupCallRemoteParticipants({
       <div className="module-ongoing-call__participants__grid--wrapper">
         <SizeObserver
           onSizeChange={size => {
+            if (size.hidden) {
+              return;
+            }
             setGridDimensions(size);
           }}
         >
@@ -557,6 +547,7 @@ export function GroupCallRemoteParticipants({
 
       {shouldShowOverflow && overflowedParticipants.length > 0 ? (
         <GroupCallOverflowArea
+          callConversationId={callConversationId}
           getFrameBuffer={getFrameBuffer}
           getGroupCallVideoFrameSource={getGroupCallVideoFrameSource}
           imageDataCache={imageDataCache}
@@ -568,6 +559,7 @@ export function GroupCallRemoteParticipants({
           overflowedParticipants={overflowedParticipants}
           remoteAudioLevels={remoteAudioLevels}
           remoteParticipantsCount={remoteParticipants.length}
+          renderCallingParticipantMenu={renderCallingParticipantMenu}
         />
       ) : null}
     </div>
@@ -612,6 +604,7 @@ function useInvisibleParticipants(
     const remoteParticipantDemuxIds = new Set<number>(
       remoteParticipants.map(r => r.demuxId)
     );
+    // oxlint-disable-next-line react/set-state-in-effect
     setInvisibleDemuxIds(oldInvisibleDemuxIds => {
       const staleIds = filter(
         oldInvisibleDemuxIds,
@@ -637,6 +630,7 @@ function useVideoRequestMode(): VideoRequestMode {
 
   useEffect(() => {
     if (isPageVisible) {
+      // oxlint-disable-next-line react/set-state-in-effect
       setResult(VideoRequestMode.Normal);
       return noop;
     }
@@ -673,19 +667,6 @@ function participantWidthAtHeight(
   height: number
 ) {
   return participant.videoAspectRatio * height;
-}
-
-function getMinRenderedHeight(callViewMode: CallViewMode): number {
-  return callViewMode === CallViewMode.Paginated
-    ? SMALL_TILES_MIN_HEIGHT
-    : LARGE_TILES_MIN_HEIGHT;
-}
-
-function getMaxRowsPerPage(
-  maxGridHeight: number,
-  minRenderedHeight: number
-): number {
-  return Math.floor(maxGridHeight / (minRenderedHeight + PARTICIPANT_MARGIN));
 }
 
 function stableParticipantComparator(
@@ -763,7 +744,7 @@ function getGridParticipantsByPage({
       ...pageLayoutProps,
     });
 
-    let nextPage: ParticipantsInPageType<ParticipantTileType> | undefined;
+    let nextPage: ParticipantsInPageType | undefined;
 
     if (
       nextPageInSortedOrder.numParticipants ===
@@ -792,6 +773,10 @@ function getGridParticipantsByPage({
               PARTICIPANTS_TO_REMOVE_PER_ATTEMPT.length - 1
             )
           ];
+        strictAssert(
+          numLeastPrioritizedParticipantsToRemove,
+          'Missing numLeastPrioritizedParticipantsToRemove'
+        );
 
         const leastPrioritizedParticipantIds = new Set(
           priorityParticipantsOnNextPage
@@ -841,12 +826,11 @@ function getGridParticipantsByPage({
       break;
     }
 
-    const nextPageTiles =
-      nextPage as ParticipantsInPageType<ParticipantTileType>;
-
     // Add a previous page tile if needed
     if (pages.length > 0) {
-      nextPageTiles.rows[0].unshift({
+      const firstRow = nextPage.rows[0];
+      strictAssert(firstRow, 'Missing firstRow');
+      firstRow.unshift({
         isPaginationButton: true,
         paginationButtonType: 'prev',
         videoAspectRatio: PAGINATION_BUTTON_ASPECT_RATIO,
@@ -870,7 +854,7 @@ function getGridParticipantsByPage({
 
     // Add a next page tile if needed
     if (remainingParticipants.length) {
-      nextPageTiles.rows.at(-1)?.push({
+      nextPage.rows.at(-1)?.push({
         isPaginationButton: true,
         paginationButtonType: 'next',
         videoAspectRatio: PAGINATION_BUTTON_ASPECT_RATIO,
@@ -919,11 +903,11 @@ function getNextPage({
   // Initialize fresh page with empty first row
   const rows: Array<Array<GroupCallRemoteParticipantType>> = [[]];
   let row = rows[0];
+  strictAssert(row, 'Missing row');
   let numParticipants = 0;
 
   // Start looping through participants and adding them to the rows one-by-one
-  for (let i = 0; i < participants.length; i += 1) {
-    const participant = participants[i];
+  for (const [i, participant] of participants.entries()) {
     const isLastParticipant =
       !isSubsetOfAllParticipants && i === participants.length - 1;
 

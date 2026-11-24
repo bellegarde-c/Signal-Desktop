@@ -3,37 +3,38 @@
 
 import { v4 as generateUuid } from 'uuid';
 
-import type { AttachmentType } from '../types/Attachment.std.js';
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { AttachmentType } from '../types/Attachment.std.ts';
+import type { LinkPreviewDraftType } from '../types/LinkPreview.std.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 import type {
   SendState,
   SendStateByConversationId,
-} from '../messages/MessageSendState.std.js';
-import type { StoryDistributionIdString } from '../types/StoryDistributionId.std.js';
-import type { ServiceIdString } from '../types/ServiceId.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { DataReader, DataWriter } from '../sql/Client.preload.js';
-import { MY_STORY_ID, StorySendMode } from '../types/Stories.std.js';
-import { getStoriesBlocked } from './stories.preload.js';
-import { ReadStatus } from '../messages/MessageReadStatus.std.js';
-import { SeenStatus } from '../MessageSeenStatus.std.js';
-import { SendStatus } from '../messages/MessageSendState.std.js';
+} from '../messages/MessageSendState.std.ts';
+import type { StoryDistributionIdString } from '../types/StoryDistributionId.std.ts';
+import type { ServiceIdString } from '../types/ServiceId.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { DataReader, DataWriter } from '../sql/Client.preload.ts';
+import { MY_STORY_ID, StorySendMode } from '../types/Stories.std.ts';
+import { getStoriesBlocked } from './stories.preload.ts';
+import { ReadStatus } from '../messages/MessageReadStatus.std.ts';
+import { SeenStatus } from '../MessageSeenStatus.std.ts';
+import { SendStatus } from '../messages/MessageSendState.std.ts';
 import {
   conversationJobQueue,
   conversationQueueJobEnum,
-} from '../jobs/conversationJobQueue.preload.js';
-import { getRecipients } from './getRecipients.dom.js';
-import { getSignalConnections } from './getSignalConnections.preload.js';
-import { incrementMessageCounter } from './incrementMessageCounter.preload.js';
-import { isGroupV2 } from './whatTypeOfConversation.dom.js';
-import { isNotNil } from './isNotNil.std.js';
-import { collect } from './iterables.std.js';
-import { loadPreviewData, upgradeMessageSchema } from './migrations.preload.js';
-import { DurationInSeconds } from './durations/index.std.js';
-import { sanitizeLinkPreview } from '../services/LinkPreview.preload.js';
-import type { DraftBodyRanges } from '../types/BodyRange.std.js';
-import { MessageModel } from '../models/messages.preload.js';
-import { itemStorage } from '../textsecure/Storage.preload.js';
+} from '../jobs/conversationJobQueue.preload.ts';
+import { getRecipients } from './getRecipients.dom.ts';
+import { getSignalConnections } from './getSignalConnections.preload.ts';
+import { incrementMessageCounter } from './incrementMessageCounter.preload.ts';
+import { isGroupV2 } from './whatTypeOfConversation.dom.ts';
+import { isNotNil } from './isNotNil.std.ts';
+import { collect } from './iterables.std.ts';
+import { upgradeMessageSchema } from './migrations.preload.ts';
+import { DurationInSeconds } from './durations/index.std.ts';
+import { transferLinkPreviewDraftToDisk } from '../services/LinkPreview.preload.ts';
+import type { DraftBodyRanges } from '../types/BodyRange.std.ts';
+import { MessageModel } from '../models/messages.preload.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 
 const log = createLogger('sendStoryMessage');
 
@@ -41,6 +42,7 @@ export async function sendStoryMessage(
   listIds: Array<string>,
   conversationIds: Array<string>,
   attachment: AttachmentType,
+  linkPreviewDraft: LinkPreviewDraftType | undefined,
   bodyRanges: DraftBodyRanges | undefined
 ): Promise<void> {
   if (getStoriesBlocked()) {
@@ -86,26 +88,25 @@ export async function sendStoryMessage(
 
       if (distributionList.id === MY_STORY_ID && distributionList.isBlockList) {
         const inBlockList = new Set<ServiceIdString>(distributionList.members);
-        distributionListMembers = getSignalConnections().reduce(
-          (acc, convo) => {
-            const uuid = convo.getServiceId();
-            if (!uuid) {
-              return acc;
-            }
-
-            if (inBlockList.has(uuid)) {
-              return acc;
-            }
-
-            if (convo.isEverUnregistered()) {
-              return acc;
-            }
-
-            acc.push(uuid);
+        distributionListMembers = getSignalConnections().reduce<
+          Array<ServiceIdString>
+        >((acc, convo) => {
+          const uuid = convo.getServiceId();
+          if (!uuid) {
             return acc;
-          },
-          [] as Array<ServiceIdString>
-        );
+          }
+
+          if (inBlockList.has(uuid)) {
+            return acc;
+          }
+
+          if (convo.isEverUnregistered()) {
+            return acc;
+          }
+
+          acc.push(uuid);
+          return acc;
+        }, []);
       } else {
         distributionListMembers = distributionList.members;
       }
@@ -137,16 +138,43 @@ export async function sendStoryMessage(
       sendStateByListId.set(distributionList.id, sendStateByConversationId);
     });
 
-  const attachments: Array<AttachmentType> = [attachment];
-
-  const linkPreview = attachment?.textAttachment?.preview;
-  const sanitizedLinkPreview = linkPreview
-    ? sanitizeLinkPreview((await loadPreviewData([linkPreview]))[0])
+  const preview = linkPreviewDraft
+    ? await transferLinkPreviewDraftToDisk(linkPreviewDraft)
     : undefined;
+
   // If a text attachment has a link preview we remove it from the
   // textAttachment data structure and instead process the preview and add
   // it as a "preview" property for the message attributes.
-  const preview = sanitizedLinkPreview ? [sanitizedLinkPreview] : undefined;
+
+  let attachments: Array<AttachmentType>;
+  const { textAttachment } = attachment;
+  if (textAttachment) {
+    attachments = [
+      {
+        ...attachment,
+        textAttachment: {
+          ...textAttachment,
+          preview:
+            preview == null
+              ? undefined
+              : {
+                  ...preview,
+                  image:
+                    preview.image == null
+                      ? undefined
+                      : {
+                          ...preview.image,
+
+                          // TODO(indutny): we shouldn't use UI types here
+                          isPermanentlyUndownloadable: false,
+                        },
+                },
+        },
+      },
+    ];
+  } else {
+    attachments = [attachment];
+  }
 
   // * Gather all the job data we'll be sending to the sendStory job
   // * Create the message for each distribution list
@@ -173,14 +201,14 @@ export async function sendStoryMessage(
           expireTimer: DurationInSeconds.DAY,
           expirationStartTimestamp: Date.now(),
           id: generateUuid(),
-          preview,
+          preview: preview == null ? undefined : [preview],
           readStatus: ReadStatus.Read,
           received_at: incrementMessageCounter(),
           received_at_ms: timestamp,
           seenStatus: SeenStatus.NotApplicable,
           sendStateByConversationId,
           sent_at: timestamp,
-          source: itemStorage.user.getNumber(),
+          source: itemStorage.user.getOptionalNumber(),
           sourceServiceId: itemStorage.user.getAci(),
           sourceDevice: itemStorage.user.getDeviceId(),
           storyDistributionListId: distributionList.id,
@@ -210,6 +238,14 @@ export async function sendStoryMessage(
       if (!isGroupV2(group.attributes)) {
         log.warn(
           'stories.sendStoryMessage: Conversation we tried to send to is not a groupV2',
+          conversationId
+        );
+        return;
+      }
+
+      if (group.get('terminated')) {
+        log.warn(
+          'stories.sendStoryMessage: cannot send to a terminated group',
           conversationId
         );
         return;
@@ -274,6 +310,7 @@ export async function sendStoryMessage(
 
       const messageAttributes = await upgradeMessageSchema({
         attachments,
+        preview: preview == null ? undefined : [preview],
         bodyRanges,
         canReplyToStory: true,
         conversationId: group.id,
@@ -286,7 +323,7 @@ export async function sendStoryMessage(
         seenStatus: SeenStatus.NotApplicable,
         sendStateByConversationId,
         sent_at: groupTimestamp,
-        source: itemStorage.user.getNumber(),
+        source: itemStorage.user.getOptionalNumber(),
         sourceServiceId: itemStorage.user.getAci(),
         sourceDevice: itemStorage.user.getDeviceId(),
         timestamp: groupTimestamp,
@@ -327,6 +364,8 @@ export async function sendStoryMessage(
   // * Save the message models
   // * Add message to group conversation
   await Promise.all(
+    // FIXME
+    // oxlint-disable-next-line typescript/await-thenable
     conversationIds.map(conversationId => {
       const messageAttributes =
         groupV2MessagesByConversationId.get(conversationId);

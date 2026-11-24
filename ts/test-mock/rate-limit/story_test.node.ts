@@ -5,11 +5,11 @@ import { assert } from 'chai';
 import createDebug from 'debug';
 import { Proto, StorageState } from '@signalapp/mock-server';
 
-import * as durations from '../../util/durations/index.std.js';
-import { uuidToBytes } from '../../util/uuidToBytes.std.js';
-import { MY_STORY_ID } from '../../types/Stories.std.js';
-import { Bootstrap } from '../bootstrap.node.js';
-import type { App } from '../bootstrap.node.js';
+import * as durations from '../../util/durations/index.std.ts';
+import { uuidToBytes } from '../../util/uuidToBytes.std.ts';
+import { MY_STORY_ID } from '../../types/Stories.std.ts';
+import { Bootstrap } from '../bootstrap.node.ts';
+import type { App } from '../bootstrap.node.ts';
 
 export const debug = createDebug('mock:test:rate-limit');
 
@@ -46,6 +46,8 @@ describe('story/no-sender-key', function (this: Mocha.Suite) {
           identifier: uuidToBytes(MY_STORY_ID),
           isBlockList: true,
           name: MY_STORY_ID,
+          deletedAtTimestamp: null,
+          recipientServiceIdsBinary: null,
         },
       },
     });
@@ -82,14 +84,10 @@ describe('story/no-sender-key', function (this: Mocha.Suite) {
       await window.getByTestId('NavTabsItem--Stories').click();
 
       await storiesPane
-        .locator('button.Stories__pane__add-story__button')
+        .locator('.Stories__pane__list')
+        .getByRole('button', { name: 'Add a story' })
         .click();
-      await storiesPane
-        .locator(
-          '.ContextMenu__popper .Stories__pane__add-story__option--title ' +
-            '>> "Text story"'
-        )
-        .click();
+      await window.getByRole('menuitem', { name: 'Text story' }).click();
 
       debug('Focusing textarea');
       // Note: For some reason `.click()` doesn't work here anymore.
@@ -102,7 +100,8 @@ describe('story/no-sender-key', function (this: Mocha.Suite) {
 
       debug('Clicking "Next"');
       await storiesCreator
-        .locator('.StoryCreator__toolbar button >> "Next"')
+        .locator('.StoryCreator__toolbar')
+        .getByRole('button', { name: 'Next' })
         .click();
 
       debug('Selecting "My Story"');
@@ -123,7 +122,10 @@ describe('story/no-sender-key', function (this: Mocha.Suite) {
             storyMessage.profileKey ?? new Uint8Array(0)
           )
         );
-        assert.strictEqual(storyMessage.textAttachment?.text, '123');
+        assert.strictEqual(
+          storyMessage.attachment?.textAttachment?.text,
+          '123'
+        );
       })
     );
   });

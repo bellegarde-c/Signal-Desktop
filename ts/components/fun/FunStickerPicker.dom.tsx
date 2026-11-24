@@ -1,16 +1,16 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReactNode } from 'react';
-import React, { memo, useCallback } from 'react';
+import type { ReactNode, JSX } from 'react';
+import { memo, useCallback } from 'react';
 import type { Placement } from 'react-aria';
 import { DialogTrigger } from 'react-aria-components';
-import { FunPopover } from './base/FunPopover.dom.js';
-import type { FunStickerSelection } from './panels/FunPanelStickers.dom.js';
-import { FunPanelStickers } from './panels/FunPanelStickers.dom.js';
-import { useFunContext } from './FunProvider.dom.js';
-import type { ThemeType } from '../../types/Util.std.js';
-import { FunErrorBoundary } from './base/FunErrorBoundary.dom.js';
-import type { FunTimeStickerStyle } from './constants.dom.js';
+import { FunPopover } from './base/FunPopover.dom.tsx';
+import type { FunStickerSelection } from './panels/FunPanelStickers.dom.tsx';
+import { FunPanelStickers } from './panels/FunPanelStickers.dom.tsx';
+import { useFunContext } from './FunProvider.dom.tsx';
+import type { ThemeType } from '../../types/Util.std.ts';
+import { FunErrorBoundary } from './base/FunErrorBoundary.dom.tsx';
+import type { FunTimeStickerStyle } from './constants.dom.tsx';
 
 export type FunStickerPickerProps = Readonly<{
   open: boolean;
@@ -18,6 +18,10 @@ export type FunStickerPickerProps = Readonly<{
   showTimeStickers: boolean;
   onSelectTimeSticker?: (style: FunTimeStickerStyle) => void;
   onSelectSticker: (stickerSelection: FunStickerSelection) => void;
+  onMarkStickerAsFavorite: (
+    stickerSelection: FunStickerSelection,
+    markAsFavorite: boolean
+  ) => void;
   placement?: Placement;
   theme?: ThemeType;
   children: ReactNode;
@@ -25,17 +29,17 @@ export type FunStickerPickerProps = Readonly<{
 
 export const FunStickerPicker = memo(function FunStickerPicker(
   props: FunStickerPickerProps
-): React.JSX.Element {
+): JSX.Element {
   const { onOpenChange } = props;
   const fun = useFunContext();
-  const { onOpenChange: onFunOpenChange } = fun;
+  const { onAnyOpenChange } = fun;
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       onOpenChange(open);
-      onFunOpenChange(open);
+      onAnyOpenChange(open);
     },
-    [onOpenChange, onFunOpenChange]
+    [onOpenChange, onAnyOpenChange]
   );
 
   const handleClose = useCallback(() => {
@@ -53,6 +57,7 @@ export const FunStickerPicker = memo(function FunStickerPicker(
             onSelectSticker={props.onSelectSticker}
             onClose={handleClose}
             onAddStickerPack={null}
+            onMarkStickerAsFavorite={props.onMarkStickerAsFavorite}
           />
         </FunErrorBoundary>
       </FunPopover>

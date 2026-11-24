@@ -1,13 +1,27 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import type {
+  ReactNode,
+  RefObject,
+  ComponentProps,
+  JSX,
+  MouseEvent,
+} from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useEffectEvent,
+} from 'react';
 import lodash from 'lodash';
 import classNames from 'classnames';
 import type { VideoFrameSource } from '@signalapp/ringrtc';
+import { tinykeys } from 'tinykeys';
 import type {
-  ActiveCallStateType,
   BatchUserActionPayloadType,
   PendingUserActionPayloadType,
   SendGroupCallRaiseHandType,
@@ -15,103 +29,90 @@ import type {
   SetLocalAudioType,
   SetLocalVideoType,
   SetRendererCanvasType,
-  SetMutedByType,
-} from '../state/ducks/calling.preload.js';
-import { Avatar, AvatarSize } from './Avatar.dom.js';
-import {
-  CallingHeader,
-  getCallViewIconClassname,
-} from './CallingHeader.dom.js';
-import { CallingPreCallInfo, RingMode } from './CallingPreCallInfo.dom.js';
-import { CallingButton, CallingButtonType } from './CallingButton.dom.js';
-import { Button, ButtonVariant } from './Button.dom.js';
-import { TooltipPlacement } from './Tooltip.dom.js';
-import { CallBackgroundBlur } from './CallBackgroundBlur.dom.js';
+} from '../state/ducks/calling.preload.ts';
+import { Avatar, AvatarSize } from './Avatar.dom.tsx';
+import { CallingHeader, getCallViewModeIcon } from './CallingHeader.dom.tsx';
+import { CallingPreCallInfo, RingMode } from './CallingPreCallInfo.dom.tsx';
+import { CallingButton, CallingButtonType } from './CallingButton.dom.tsx';
+import { Button, ButtonVariant } from './Button.dom.tsx';
+import { TooltipPlacement } from './Tooltip.dom.tsx';
+import { CallBackgroundBlur } from './CallBackgroundBlur.dom.tsx';
 import type {
   ActiveCallType,
   ActiveCallReactionsType,
   ConversationsByDemuxIdType,
   GroupCallVideoRequest,
-} from '../types/Calling.std.js';
+} from '../types/Calling.std.ts';
 import {
   CALLING_REACTIONS_LIFETIME,
   CallViewMode,
   CallState,
   GroupCallConnectionState,
   GroupCallJoinState,
-} from '../types/Calling.std.js';
-import { CallMode } from '../types/CallDisposition.std.js';
-import type { ServiceIdString } from '../types/ServiceId.std.js';
-import { AvatarColors } from '../types/Colors.std.js';
-import type { ConversationType } from '../state/ducks/conversations.preload.js';
+} from '../types/Calling.std.ts';
+import { CallMode } from '../types/CallDisposition.std.ts';
+import type { ServiceIdString } from '../types/ServiceId.std.ts';
+import { AvatarColors } from '../types/Avatar.std.ts';
+import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import {
   CallingButtonToastsContainer,
   useScreenSharingStoppedToast,
-} from './CallingToastManager.dom.js';
-import { DirectCallRemoteParticipant } from './DirectCallRemoteParticipant.dom.js';
-import { GroupCallRemoteParticipants } from './GroupCallRemoteParticipants.dom.js';
-import { CallParticipantCount } from './CallParticipantCount.dom.js';
-import type { LocalizerType } from '../types/Util.std.js';
-import { NeedsScreenRecordingPermissionsModal } from './NeedsScreenRecordingPermissionsModal.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import * as KeyboardLayout from '../services/keyboardLayout.dom.js';
+} from './CallingToastManager.dom.tsx';
+import { DirectCallRemoteParticipant } from './DirectCallRemoteParticipant.dom.tsx';
+import { GroupCallRemoteParticipants } from './GroupCallRemoteParticipants.dom.tsx';
+import { CallParticipantCount } from './CallParticipantCount.dom.tsx';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { NeedsScreenRecordingPermissionsModal } from './NeedsScreenRecordingPermissionsModal.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
 import {
   usePresenter,
   useActivateSpeakerViewOnPresenting,
-} from '../hooks/useActivateSpeakerViewOnPresenting.std.js';
+} from '../hooks/useActivateSpeakerViewOnPresenting.std.ts';
 import {
   CallingAudioIndicator,
   SPEAKING_LINGER_MS,
-} from './CallingAudioIndicator.dom.js';
-import {
-  useActiveCallShortcuts,
-  useKeyboardShortcuts,
-} from '../hooks/useKeyboardShortcuts.dom.js';
-import { useValueAtFixedRate } from '../hooks/useValueAtFixedRate.std.js';
-import { isReconnecting as callingIsReconnecting } from '../util/callingIsReconnecting.std.js';
-import { usePrevious } from '../hooks/usePrevious.std.js';
+} from './CallingAudioIndicator.dom.tsx';
+import { getControlOrAltKey } from '../hooks/useKeyboardShortcuts.dom.tsx';
+import { useValueAtFixedRate } from '../hooks/useValueAtFixedRate.std.ts';
+import { isReconnecting as callingIsReconnecting } from '../util/callingIsReconnecting.std.ts';
+import { usePreviousDeprecated } from '../hooks/usePrevious.std.ts';
 import {
   CallingToastProvider,
   PersistentCallingToast,
   useCallingToasts,
-} from './CallingToast.dom.js';
-import { handleOutsideClick } from '../util/handleOutsideClick.dom.js';
-import { Spinner } from './Spinner.dom.js';
-import type { SmartReactionPicker } from '../state/smart/ReactionPicker.dom.js';
+} from './CallingToast.dom.tsx';
+import { handleOutsideClick } from '../util/handleOutsideClick.dom.ts';
+import { Spinner } from './Spinner.dom.tsx';
+import type { SmartReactionPicker } from '../state/smart/ReactionPicker.dom.tsx';
 import {
   CallingRaisedHandsList,
   CallingRaisedHandsListButton,
-} from './CallingRaisedHandsList.dom.js';
-import type { CallReactionBurstType } from './CallReactionBurst.dom.js';
+} from './CallingRaisedHandsList.dom.tsx';
+import type { CallReactionBurstType } from './CallReactionBurst.dom.tsx';
 import {
   CallReactionBurstProvider,
   useCallReactionBursts,
-} from './CallReactionBurst.dom.js';
-import { isGroupOrAdhocActiveCall } from '../util/isGroupOrAdhocCall.std.js';
-import { assertDev } from '../util/assert.std.js';
-import { CallingPendingParticipants } from './CallingPendingParticipants.dom.js';
-import type { CallingImageDataCache } from './CallManager.dom.js';
-import { FunStaticEmoji } from './fun/FunEmoji.dom.js';
-import {
-  getEmojiDebugLabel,
-  getEmojiParentByKey,
-  getEmojiParentKeyByVariantKey,
-  getEmojiVariantByKey,
-  getEmojiVariantKeyByValue,
-  isEmojiVariantValue,
-} from './fun/data/emojis.std.js';
-import { useFunEmojiLocalizer } from './fun/useFunEmojiLocalizer.dom.js';
+} from './CallReactionBurst.dom.tsx';
+import { isGroupOrAdhocActiveCall } from '../util/isGroupOrAdhocCall.std.ts';
+import { assertDev } from '../util/assert.std.ts';
+import { CallingPendingParticipants } from './CallingPendingParticipants.dom.tsx';
+import type { CallingImageDataCache } from './CallManager.dom.tsx';
+import { FunStaticEmoji } from './fun/FunEmoji.dom.tsx';
 import {
   BeforeNavigateResponse,
   beforeNavigateService,
-} from '../services/BeforeNavigate.std.js';
-import { createLogger } from '../logging/log.std.js';
-import type { SetLocalPreviewContainerType } from '../services/calling.preload.js';
-import type { SizeCallbackType } from '../calling/VideoSupport.preload.js';
+} from '../services/BeforeNavigate.std.ts';
+import { createLogger } from '../logging/log.std.ts';
+import type { SetLocalPreviewContainerType } from '../services/calling.preload.ts';
+import type { SizeCallbackType } from '../calling/VideoSupport.preload.ts';
 import {
   PIP_MAXIMUM_LOCAL_VIDEO_HEIGHT_MULTIPLIER,
   PIP_MINIMUM_LOCAL_VIDEO_HEIGHT_MULTIPLIER,
-} from './CallingPip.dom.js';
+} from './CallingPip.dom.tsx';
+import type { PropsType as SmartCallingParticipantMenuProps } from '../state/smart/CallingParticipantMenu.preload.tsx';
+import { Emoji } from '../axo/emoji.std.ts';
+import { CallingStatusIndicatorHandRaised } from './CallingStatusIndicatorHandRaised.dom.tsx';
+import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 
 const { isEqual, noop } = lodash;
 
@@ -128,13 +129,16 @@ export type PropsType = {
   groupMembers?: Array<Pick<ConversationType, 'id' | 'firstName' | 'title'>>;
   hangUpActiveCall: (reason: string) => void;
   i18n: LocalizerType;
-  imageDataCache: React.RefObject<CallingImageDataCache>;
+  imageDataCache: RefObject<CallingImageDataCache | null>;
   isCallLinkAdmin: boolean;
   me: ConversationType;
   openSystemPreferencesAction: () => unknown;
+  readonly renderCallingParticipantMenu: (
+    props: SmartCallingParticipantMenuProps
+  ) => JSX.Element;
   renderReactionPicker: (
-    props: React.ComponentProps<typeof SmartReactionPicker>
-  ) => React.JSX.Element;
+    props: ComponentProps<typeof SmartReactionPicker>
+  ) => JSX.Element;
   sendGroupCallRaiseHand: (payload: SendGroupCallRaiseHandType) => void;
   sendGroupCallReaction: (payload: SendGroupCallReactionType) => void;
   setGroupCallVideoRequest: (
@@ -151,20 +155,10 @@ export type PropsType = {
   toggleCallLinkPendingParticipantModal: (contactId: string) => void;
   toggleParticipants: () => void;
   togglePip: () => void;
-  toggleScreenRecordingPermissionsDialog: () => unknown;
+  toggleScreenRecordingPermissionsDialog: (open: boolean) => void;
   toggleSelfViewExpanded: () => void;
-  toggleSettings: () => void;
+  toggleSettings: (open: boolean) => void;
   changeCallView: (mode: CallViewMode) => void;
-  setLocalAudioRemoteMuted: SetMutedByType;
-};
-
-export const isInSpeakerView = (
-  call: Pick<ActiveCallStateType, 'viewMode'> | undefined
-): boolean => {
-  return Boolean(
-    call?.viewMode === CallViewMode.Presentation ||
-    call?.viewMode === CallViewMode.Speaker
-  );
 };
 
 const REACTIONS_TOASTS_TRANSITION_FROM = {
@@ -194,7 +188,7 @@ function CallDuration({
   joinedAt,
 }: {
   joinedAt: number | null;
-}): React.JSX.Element | null {
+}): JSX.Element | null {
   const [acceptedDuration, setAcceptedDuration] = useState<
     number | undefined
   >();
@@ -232,6 +226,7 @@ export function CallScreen({
   isCallLinkAdmin,
   me,
   openSystemPreferencesAction,
+  renderCallingParticipantMenu,
   renderReactionPicker,
   setGroupCallVideoRequest,
   sendGroupCallRaiseHand,
@@ -249,8 +244,7 @@ export function CallScreen({
   toggleScreenRecordingPermissionsDialog,
   toggleSelfViewExpanded,
   toggleSettings,
-  setLocalAudioRemoteMuted,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const {
     conversation,
     hasLocalAudio,
@@ -272,9 +266,6 @@ export function CallScreen({
     switchToPresentationView,
     switchFromPresentationView,
   });
-
-  const activeCallShortcuts = useActiveCallShortcuts(hangUpActiveCall);
-  useKeyboardShortcuts(activeCallShortcuts);
 
   const toggleAudio = useCallback(() => {
     setLocalAudio({
@@ -300,23 +291,23 @@ export function CallScreen({
     hangUpActiveCall('button click');
   }, [hangUpActiveCall]);
 
-  const localPreviewRef = React.useRef<HTMLDivElement | null>(null);
-  const lonelyCallPreviewRef = React.useRef<HTMLDivElement | null>(null);
+  const localPreviewRef = useRef<HTMLDivElement | null>(null);
+  const lonelyCallPreviewRef = useRef<HTMLDivElement | null>(null);
 
-  const [localPreviewHeight, setLocalPreviewHeight] = React.useState(
+  const [localPreviewHeight, setLocalPreviewHeight] = useState(
     activeCall.selfViewExpanded
       ? LOCAL_PREVIEW_HEIGHT_LARGE
       : LOCAL_PREVIEW_HEIGHT_NORMAL
   );
-  const [localPreviewWidth, setLocalPreviewWidth] = React.useState(
+  const [localPreviewWidth, setLocalPreviewWidth] = useState(
     activeCall.selfViewExpanded
       ? LOCAL_PREVIEW_WIDTH_LARGE
       : LOCAL_PREVIEW_WIDTH_NORMAL
   );
 
-  const reactButtonRef = React.useRef<null | HTMLDivElement>(null);
-  const reactionPickerRef = React.useRef<null | HTMLDivElement>(null);
-  const reactionPickerContainerRef = React.useRef<null | HTMLDivElement>(null);
+  const reactButtonRef = useRef<null | HTMLDivElement>(null);
+  const reactionPickerRef = useRef<null | HTMLDivElement>(null);
+  const reactionPickerContainerRef = useRef<null | HTMLDivElement>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const toggleReactionPicker = useCallback(() => {
     setShowReactionPicker(prevValue => !prevValue);
@@ -326,20 +317,6 @@ export function CallScreen({
   const toggleRaisedHandsList = useCallback(() => {
     setShowRaisedHandsList(prevValue => !prevValue);
   }, []);
-
-  const [sidebarViewDiffersFromGridView, setSidebarViewDiffersFromGridView] =
-    useState(false);
-
-  // If the user is in Sidebar view but it's no longer different from Grid view,
-  // automatically switch to Grid view.
-  useEffect(() => {
-    if (
-      !sidebarViewDiffersFromGridView &&
-      activeCall.viewMode === CallViewMode.Sidebar
-    ) {
-      changeCallView(CallViewMode.Paginated);
-    }
-  }, [sidebarViewDiffersFromGridView, activeCall.viewMode, changeCallView]);
 
   const [controlsHover, setControlsHover] = useState(false);
   const onControlsMouseEnter = useCallback(() => {
@@ -395,6 +372,7 @@ export function CallScreen({
   const [showSelfViewControls, setShowSelfViewControls] = useState(false);
   useEffect(() => {
     if (selfViewHover) {
+      // oxlint-disable-next-line react/set-state-in-effect
       setShowSelfViewControls(true);
       return;
     }
@@ -403,38 +381,12 @@ export function CallScreen({
       setShowSelfViewControls(false);
     }, 2000);
     return clearTimeout.bind(null, timer);
-  }, [showSelfViewControls, setShowSelfViewControls, selfViewHover]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      let eventHandled = false;
-
-      const key = KeyboardLayout.lookup(event);
-
-      if (event.shiftKey && (key === 'V' || key === 'v')) {
-        toggleVideo();
-        setShowControls(true);
-        eventHandled = true;
-      } else if (event.shiftKey && (key === 'M' || key === 'm')) {
-        toggleAudio();
-        setShowControls(true);
-        eventHandled = true;
-      } else if (event.shiftKey && (key === 'P' || key === 'p')) {
-        toggleSelfViewExpanded();
-        eventHandled = true;
-      }
-
-      if (eventHandled) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [setShowControls, toggleAudio, toggleSelfViewExpanded, toggleVideo]);
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    showSelfViewControls,
+    setShowSelfViewControls,
+    selfViewHover,
+  ]);
 
   useEffect(() => {
     if (!showReactionPicker) {
@@ -459,7 +411,7 @@ export function CallScreen({
   }, [showReactionPicker]);
 
   useScreenSharingStoppedToast({ activeCall, i18n });
-  useViewModeChangedToast({ activeCall, i18n, sidebarViewDiffersFromGridView });
+  useViewModeChangedToast({ activeCall, i18n });
 
   const currentPresenter = remoteParticipants.find(
     participant => participant.presenting
@@ -497,7 +449,8 @@ export function CallScreen({
       isRinging =
         activeCall.outgoingRing &&
         !activeCall.remoteParticipants.length &&
-        !(groupMembers?.length === 1 && groupMembers[0].id === me.id);
+        // oxlint-disable-next-line typescript/no-non-null-assertion
+        !(groupMembers?.length === 1 && groupMembers[0]!.id === me.id);
       hasCallStarted = activeCall.joinState !== GroupCallJoinState.NotJoined;
       participantCount = activeCall.remoteParticipants.length + 1;
       conversationsByDemuxId = activeCall.conversationsByDemuxId;
@@ -528,6 +481,14 @@ export function CallScreen({
   // to use it in UI so the user understands what remote clients see.
   const syncedLocalHandRaised = isHandRaised(raisedHands, localDemuxId);
 
+  const isOnlyHandRaisedMine = Boolean(
+    syncedLocalHandRaised && raisedHands && raisedHands.size === 1
+  );
+  const myRaisedHandOrder =
+    syncedLocalHandRaised && localDemuxId !== undefined && raisedHands
+      ? [...raisedHands.values()].indexOf(localDemuxId)
+      : undefined;
+
   const isLonelyInCall = !activeCall.remoteParticipants.length;
   const isAudioOnly = !hasLocalVideo && !hasRemoteVideo;
 
@@ -540,7 +501,7 @@ export function CallScreen({
   });
 
   const handlePreviewClick = useCallback(
-    (event?: React.MouseEvent) => {
+    (event?: MouseEvent) => {
       event?.preventDefault();
       event?.stopPropagation();
 
@@ -549,7 +510,7 @@ export function CallScreen({
     [toggleSelfViewExpanded]
   );
 
-  const handleSize = React.useCallback(
+  const handleSize = useCallback(
     (size: Parameters<SizeCallbackType>[0]) => {
       const ratio = size.width / size.height;
 
@@ -565,7 +526,7 @@ export function CallScreen({
     [localPreviewHeight, localPreviewWidth, setLocalPreviewWidth]
   );
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!isSendingVideo) {
       return;
     }
@@ -591,17 +552,18 @@ export function CallScreen({
   }, [isSendingVideo, handleSize, isLonelyInCall, setLocalPreviewContainer]);
 
   const { selfViewExpanded } = activeCall;
-  const previousSelfViewExpanded = usePrevious(
+  const previousSelfViewExpanded = usePreviousDeprecated(
     selfViewExpanded,
     selfViewExpanded
   );
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (selfViewExpanded === previousSelfViewExpanded) {
       return;
     }
 
     const existingAspectRatio = localPreviewWidth / localPreviewHeight;
     if (selfViewExpanded) {
+      // oxlint-disable-next-line react/set-state-in-effect
       setLocalPreviewHeight(LOCAL_PREVIEW_HEIGHT_LARGE);
       setLocalPreviewWidth(LOCAL_PREVIEW_HEIGHT_LARGE * existingAspectRatio);
     } else {
@@ -668,16 +630,13 @@ export function CallScreen({
           phoneNumber={me.phoneNumber}
           profileName={me.profileName}
           title={me.title}
-          // See comment above about `sharedGroupNames`.
-          sharedGroupNames={[]}
           size={AvatarSize.FORTY}
         />
       </CallBackgroundBlur>
     );
     localPreviewNode = (
       // Keyboard shortcuts are available for this gesture, no need for keyboard support
-      /* eslint-disable-next-line max-len */
-      /* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */
+      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
       <div
         className={classNames(
           'module-ongoing-call__local-preview',
@@ -710,7 +669,13 @@ export function CallScreen({
                 ? 'module-ongoing-call__controls--fadeOut'
                 : undefined
             )}
-          />
+          >
+            <AxoSymbol.Icon
+              size={16}
+              symbol="videocamera-slash-fill"
+              label={null}
+            />
+          </div>
         )}
         <CallingAudioIndicator
           hasAudio={hasLocalAudio}
@@ -741,8 +706,11 @@ export function CallScreen({
             onClick={handlePreviewClick}
           />
         </div>
-        {syncedLocalHandRaised && (
-          <div className="CallingStatusIndicator CallingStatusIndicator--HandRaised" />
+        {myRaisedHandOrder !== undefined && (
+          <CallingStatusIndicatorHandRaised
+            isOnlyHandRaised={isOnlyHandRaisedMine}
+            raisedHandOrder={myRaisedHandOrder}
+          />
         )}
       </div>
     );
@@ -777,7 +745,10 @@ export function CallScreen({
   const [localHandRaised, setLocalHandRaised] = useState<boolean>(
     syncedLocalHandRaised
   );
-  const previousLocalHandRaised = usePrevious(localHandRaised, localHandRaised);
+  const previousLocalHandRaised = usePreviousDeprecated(
+    localHandRaised,
+    localHandRaised
+  );
   const toggleRaiseHand = useCallback(
     (raise?: boolean) => {
       const nextValue = raise ?? !localHandRaised;
@@ -814,7 +785,7 @@ export function CallScreen({
       : CallingButtonType.REACT_OFF;
   }
 
-  const renderRaisedHandsToast = React.useCallback(
+  const renderRaisedHandsToast = useCallback(
     (demuxIds: Array<number>) => {
       const names: Array<string> = [];
       let isYourHandRaised = false;
@@ -837,7 +808,7 @@ export function CallScreen({
       const otherName = names[1] ?? '';
 
       let message: string;
-      let buttonOverride: React.JSX.Element | undefined;
+      let buttonOverride: JSX.Element | undefined;
       switch (count) {
         case 0:
           return undefined;
@@ -893,7 +864,7 @@ export function CallScreen({
           {message}
           {buttonOverride || (
             <button
-              className="link CallingRaisedHandsToasts__Link"
+              className="CallingRaisedHandsToasts__Link"
               onClick={() => setShowRaisedHandsList(true)}
               type="button"
             >
@@ -908,7 +879,7 @@ export function CallScreen({
 
   const raisedHandsCount: number = raisedHands?.size ?? 0;
 
-  const callStatus: ReactNode | string = React.useMemo(() => {
+  const callStatus: ReactNode | string = useMemo(() => {
     if (isConnecting) {
       return i18n('icu:outgoingCallConnecting');
     }
@@ -953,6 +924,52 @@ export function CallScreen({
     toggleParticipants,
   ]);
 
+  const onHangUpActiveCallShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    hangUpActiveCall('Keyboard shortcut');
+  });
+
+  const onToggleVideoShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleVideo();
+    setShowControls(true);
+  });
+
+  const onToggleAudioShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleAudio();
+    setShowControls(true);
+  });
+
+  const onToggleRaiseHandShortcut = useEffectEvent((event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleRaiseHand();
+    setShowControls(true);
+  });
+
+  const onToggleSelfViewExpandedShortcut = useEffectEvent(
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSelfViewExpanded();
+    }
+  );
+
+  useEffect(() => {
+    const ControlOrAlt = getControlOrAltKey();
+    return tinykeys(window, {
+      [`${ControlOrAlt}+Shift+E`]: onHangUpActiveCallShortcut,
+      'Shift+V': onToggleVideoShortcut,
+      'Shift+M': onToggleAudioShortcut,
+      'Shift+H': onToggleRaiseHandShortcut,
+      'Shift+P': onToggleSelfViewExpandedShortcut,
+    });
+  }, []);
+
   let remoteParticipantsElement: ReactNode;
   switch (activeCall.callMode) {
     case CallMode.Direct: {
@@ -963,7 +980,7 @@ export function CallScreen({
       remoteParticipantsElement = hasCallStarted ? (
         <>
           <CallBackgroundBlur avatarUrl={conversation.avatarUrl} darken>
-            <div className="module-calling-pip__video--avatar">
+            <div>
               <Avatar
                 avatarPlaceholderGradient={
                   conversation.avatarPlaceholderGradient
@@ -978,7 +995,6 @@ export function CallScreen({
                 profileName={conversation.profileName}
                 title={conversation.title}
                 size={AvatarSize.EIGHTY}
-                sharedGroupNames={conversation.sharedGroupNames}
               />
             </div>
           </CallBackgroundBlur>
@@ -1002,17 +1018,16 @@ export function CallScreen({
     case CallMode.Adhoc:
       remoteParticipantsElement = (
         <GroupCallRemoteParticipants
+          callConversationId={conversation.id}
           callViewMode={activeCall.viewMode}
           getGroupCallVideoFrameSource={getGroupCallVideoFrameSource}
           imageDataCache={imageDataCache}
           i18n={i18n}
           joinedAt={activeCall.joinedAt}
-          onSidebarViewDiffersFromGridViewChange={
-            setSidebarViewDiffersFromGridView
-          }
           remoteParticipants={activeCall.remoteParticipants}
           setGroupCallVideoRequest={setGroupCallVideoRequest}
           remoteAudioLevels={activeCall.remoteAudioLevels}
+          renderCallingParticipantMenu={renderCallingParticipantMenu}
           isCallReconnecting={isReconnecting}
           onClickRaisedHand={
             raisedHandsCount > 0
@@ -1027,20 +1042,14 @@ export function CallScreen({
   }
 
   return (
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={classNames(
         'module-calling__container',
-        `module-ongoing-call__container--${getCallModeClassSuffix(
-          activeCall.callMode
-        )}`,
-        `module-ongoing-call__container--${
-          hasCallStarted ? 'call-started' : 'call-not-started'
-        }`,
+        activeCall.callMode === CallMode.Direct &&
+          'module-ongoing-call__container--direct',
+        !hasCallStarted && 'module-ongoing-call__container--call-not-started',
         { 'module-ongoing-call__container--hide-controls': !showControls },
-        {
-          'module-ongoing-call__container--controls-faded-out':
-            controlsFadedOut,
-        },
         'dark-theme'
       )}
       onFocus={() => {
@@ -1090,7 +1099,6 @@ export function CallScreen({
           i18n={i18n}
           isGroupCall={isGroupCall}
           participantCount={participantCount}
-          showSidebarViewOption={sidebarViewDiffersFromGridView}
           togglePip={togglePip}
           toggleSettings={toggleSettings}
         />
@@ -1162,7 +1170,6 @@ export function CallScreen({
         }
         conversationsByDemuxId={conversationsByDemuxId}
         i18n={i18n}
-        setLocalAudioRemoteMuted={setLocalAudioRemoteMuted}
       />
       {isCallLinkAdmin ? (
         <CallingPendingParticipants
@@ -1267,13 +1274,7 @@ export function CallScreen({
               tooltipDirection={TooltipPlacement.Top}
             />
             {reactButtonType && (
-              <div
-                className={classNames('CallControls__ReactButtonContainer', {
-                  'CallControls__ReactButtonContainer--menu-shown':
-                    showReactionPicker,
-                })}
-                ref={reactButtonRef}
-              >
+              <div ref={reactButtonRef}>
                 <CallingButton
                   buttonType={reactButtonType}
                   i18n={i18n}
@@ -1307,20 +1308,6 @@ export function CallScreen({
   );
 }
 
-function getCallModeClassSuffix(
-  callMode: CallMode.Direct | CallMode.Group | CallMode.Adhoc
-): string {
-  switch (callMode) {
-    case CallMode.Direct:
-      return 'direct';
-    case CallMode.Group:
-    case CallMode.Adhoc:
-      return 'group';
-    default:
-      throw missingCaseError(callMode);
-  }
-}
-
 function renderDuration(ms: number): string {
   const secs = Math.floor((ms / 1000) % 60)
     .toString()
@@ -1338,14 +1325,12 @@ function renderDuration(ms: number): string {
 function useViewModeChangedToast({
   activeCall,
   i18n,
-  sidebarViewDiffersFromGridView,
 }: {
   activeCall: ActiveCallType;
   i18n: LocalizerType;
-  sidebarViewDiffersFromGridView: boolean;
 }): void {
   const { viewMode } = activeCall;
-  const previousViewMode = usePrevious(viewMode, viewMode);
+  const previousViewMode = usePreviousDeprecated(viewMode, viewMode);
   const presenterAci = usePresenter(activeCall.remoteParticipants);
 
   const VIEW_MODE_CHANGED_TOAST_KEY = 'view-mode-changed';
@@ -1362,25 +1347,16 @@ function useViewModeChangedToast({
         return;
       }
 
-      if (
-        !sidebarViewDiffersFromGridView &&
-        previousViewMode === CallViewMode.Sidebar &&
-        viewMode === CallViewMode.Paginated
-      ) {
-        return;
-      }
-
       hideToast(VIEW_MODE_CHANGED_TOAST_KEY);
       showToast({
         key: VIEW_MODE_CHANGED_TOAST_KEY,
         content: (
-          <div className="CallingToast__viewChanged">
-            <span
-              className={classNames(
-                'CallingToast__viewChanged__icon',
-                getCallViewIconClassname(viewMode)
-              )}
+          <div>
+            <AxoSymbol.InlineGlyph
+              symbol={getCallViewModeIcon(viewMode)}
+              label={null}
             />
+            &nbsp;&nbsp;
             {i18n('icu:calling__view_mode--updated')}
           </div>
         ),
@@ -1391,8 +1367,8 @@ function useViewModeChangedToast({
     showToast,
     hideToast,
     i18n,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     activeCall,
-    sidebarViewDiffersFromGridView,
     viewMode,
     previousViewMode,
     presenterAci,
@@ -1417,26 +1393,26 @@ function useReactionsToast(props: UseReactionsToastType): void {
     ? conversationsByDemuxId.get(localDemuxId)?.serviceId
     : undefined;
 
-  const [previousReactions, setPreviousReactions] = React.useState<
+  const [previousReactions, setPreviousReactions] = useState<
     ActiveCallReactionsType | undefined
   >(undefined);
   const reactionsShown = useRef<
     Map<
       string,
       {
-        value: string;
-        originalValue: string;
+        value: Emoji;
+        originalValue: Emoji;
         isBursted: boolean;
         expireAt: number;
         demuxId: number;
       }
     >
   >(new Map());
-  const burstsShown = useRef<Map<string, number>>(new Map());
+  const burstsShown = useRef<Map<Emoji | Emoji.Variant, number>>(new Map());
   const { showToast } = useCallingToasts();
-  const emojiLocalizer = useFunEmojiLocalizer();
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect react/no-deriving-state-in-effects
     setPreviousReactions(reactions);
   }, [reactions]);
 
@@ -1455,15 +1431,12 @@ function useReactionsToast(props: UseReactionsToastType): void {
 
       const key = `reactions-${timestamp}-${demuxId}`;
 
-      if (!isEmojiVariantValue(value)) {
+      if (!Emoji.isEmoji(value)) {
         log.error(
-          `Expected a valid emoji value, got ${getEmojiDebugLabel(value)}`
+          `Expected a valid emoji value, got ${Emoji.getDebugLabel(value)}`
         );
         return;
       }
-
-      const emojiVariantKey = getEmojiVariantKeyByValue(value);
-      const emojiVariant = getEmojiVariantByKey(emojiVariantKey);
 
       showToast({
         key,
@@ -1473,9 +1446,9 @@ function useReactionsToast(props: UseReactionsToastType): void {
           <span className="CallingReactionsToasts__reaction">
             <FunStaticEmoji
               role="img"
-              aria-label={emojiLocalizer.getLocaleShortName(emojiVariantKey)}
+              aria-label={Emoji.getDisplayLabel(value)}
               size={28}
-              emoji={emojiVariant}
+              emoji={Emoji.ignorePreferredSkinTone(value)}
             />
             {demuxId === localDemuxId ||
             (ourServiceId && conversation?.serviceId === ourServiceId)
@@ -1498,11 +1471,9 @@ function useReactionsToast(props: UseReactionsToastType): void {
       );
       // Normalize skin tone emoji to calculate burst threshold, but save original
       // value to show in the burst animation
-      const emojiParentKey = getEmojiParentKeyByVariantKey(emojiVariantKey);
-      const emojiParent = getEmojiParentByKey(emojiParentKey);
-      const normalizedValue = emojiParent.value;
+      const emojiParent = Emoji.getParent(value);
       reactionsShown.current.set(key, {
-        value: normalizedValue,
+        value: emojiParent,
         originalValue: value,
         isBursted,
         expireAt: timestamp + REACTIONS_BURST_WINDOW,
@@ -1515,9 +1486,9 @@ function useReactionsToast(props: UseReactionsToastType): void {
       return;
     }
 
-    const unburstedEmojis = new Map<string, Set<string>>();
+    const unburstedEmojis = new Map<Emoji, Set<string>>();
     const unburstedEmojisReactorIds = new Map<
-      string,
+      Emoji,
       Set<ServiceIdString | number>
     >();
     reactionsShown.current.forEach(
@@ -1528,6 +1499,10 @@ function useReactionsToast(props: UseReactionsToastType): void {
         }
 
         if (isBursted) {
+          return;
+        }
+
+        if (!Emoji.isEmoji(value)) {
           return;
         }
 
@@ -1566,7 +1541,7 @@ function useReactionsToast(props: UseReactionsToastType): void {
       }
 
       burstsShown.current.set(value, time);
-      const values: Array<string> = [];
+      const values: Array<Emoji> = [];
       reactionKeys.forEach(key => {
         const reactionShown = reactionsShown.current.get(key);
         if (!reactionShown) {
@@ -1591,13 +1566,12 @@ function useReactionsToast(props: UseReactionsToastType): void {
     localDemuxId,
     i18n,
     ourServiceId,
-    emojiLocalizer,
   ]);
 }
 
 function CallingReactionsToastsContainer(
   props: CallingReactionsToastsType
-): React.JSX.Element {
+): JSX.Element {
   const { i18n } = props;
   const toastRegionRef = useRef<HTMLDivElement>(null);
   const burstRegionRef = useRef<HTMLDivElement>(null);

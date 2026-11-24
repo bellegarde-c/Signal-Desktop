@@ -1,9 +1,9 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Meta } from '@storybook/react';
-import React, { useState } from 'react';
-import { ExperimentalAxoSegmentedControl } from './AxoSegmentedControl.dom.js';
-import { tw } from './tw.dom.js';
+import { useState, type JSX } from 'react';
+import { ExperimentalAxoSegmentedControl } from './AxoSegmentedControl.dom.tsx';
+import { tw } from './tw.dom.tsx';
 
 export default {
   title: 'Axo/AxoSegmentedControl (Experimental)',
@@ -26,6 +26,7 @@ function Template(props: {
         {`itemWidth=${props.itemWidth}`}
       </h2>
       <ExperimentalAxoSegmentedControl.Root
+        label="Folders"
         variant={props.variant}
         width={props.width}
         itemWidth={props.itemWidth}
@@ -42,11 +43,11 @@ function Template(props: {
             Inbox
           </ExperimentalAxoSegmentedControl.ItemText>
           {props.includeBadges && (
-            <ExperimentalAxoSegmentedControl.ExperimentalItemBadge
+            <ExperimentalAxoSegmentedControl.ItemBadge
+              variant="primary"
               value={42}
               max={99}
-              maxDisplay="99+"
-              aria-label={null}
+              label="42 unread messages"
             />
           )}
         </ExperimentalAxoSegmentedControl.Item>
@@ -56,11 +57,11 @@ function Template(props: {
             Drafts
           </ExperimentalAxoSegmentedControl.ItemText>
           {props.includeBadges && (
-            <ExperimentalAxoSegmentedControl.ExperimentalItemBadge
+            <ExperimentalAxoSegmentedControl.ItemBadge
+              variant="primary"
               value="mention"
               max={99}
-              maxDisplay="99+"
-              aria-label={null}
+              label="You were mentioned"
             />
           )}
         </ExperimentalAxoSegmentedControl.Item>
@@ -69,11 +70,11 @@ function Template(props: {
             Sent
           </ExperimentalAxoSegmentedControl.ItemText>
           {props.includeBadges && (
-            <ExperimentalAxoSegmentedControl.ExperimentalItemBadge
+            <ExperimentalAxoSegmentedControl.ItemBadge
+              variant="primary"
               value="unread"
               max={99}
-              maxDisplay="99+"
-              aria-label={null}
+              label="Marked unread"
             />
           )}
         </ExperimentalAxoSegmentedControl.Item>
@@ -103,18 +104,18 @@ function TemplateVariants(props: {
   );
 }
 
-export function Basic(): React.JSX.Element {
+export function Basic(): JSX.Element {
   return <TemplateVariants />;
 }
 
-export function LongNames(): React.JSX.Element {
+export function LongNames(): JSX.Element {
   return <TemplateVariants longNames />;
 }
 
-export function WithBadges(): React.JSX.Element {
+export function WithBadges(): JSX.Element {
   return <TemplateVariants includeBadges />;
 }
 
-export function LongNamesWithBadges(): React.JSX.Element {
+export function LongNamesWithBadges(): JSX.Element {
   return <TemplateVariants longNames includeBadges />;
 }

@@ -1,20 +1,16 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Meta, ReactRenderer, StoryFn } from '@storybook/react';
-import type { PlayFunction } from '@storybook/csf';
-import React from 'react';
+import type { Meta, StoryFn } from '@storybook/react';
 import { v4 as uuid } from 'uuid';
 import { expect, fn, within, userEvent } from '@storybook/test';
-
 import { action } from '@storybook/addon-actions';
-import type { PropsType } from './MyStories.dom.js';
-import { MY_STORY_ID } from '../types/Stories.std.js';
-import { MyStories } from './MyStories.dom.js';
-import { SendStatus } from '../messages/MessageSendState.std.js';
-import { getDefaultConversation } from '../test-helpers/getDefaultConversation.std.js';
-import { getFakeMyStory } from '../test-helpers/getFakeStory.dom.js';
-import { sleep } from '../util/sleep.std.js';
+import type { PropsType } from './MyStories.dom.tsx';
+import { MY_STORY_ID } from '../types/Stories.std.ts';
+import { MyStories } from './MyStories.dom.tsx';
+import { SendStatus } from '../messages/MessageSendState.std.ts';
+import { getDefaultConversation } from '../test-helpers/getDefaultConversation.std.ts';
+import { getFakeMyStory } from '../test-helpers/getFakeStory.dom.tsx';
 
 const { i18n } = window.SignalContext;
 
@@ -40,7 +36,6 @@ export default {
   },
 } satisfies Meta<PropsType>;
 
-// eslint-disable-next-line react/function-component-definition
 const Template: StoryFn<PropsType> = args => <MyStories {...args} />;
 
 export const NoStories = Template.bind({});
@@ -48,24 +43,29 @@ NoStories.args = {
   myStories: [],
 };
 
-const interactionTest: PlayFunction<ReactRenderer, PropsType> = async ({
+const interactionTest: StoryFn<PropsType>['play'] = async ({
   args,
   canvasElement,
 }) => {
   const canvas = within(canvasElement);
   const [btnDownload] = canvas.getAllByLabelText('Download story');
-  await userEvent.click(btnDownload);
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  await userEvent.click(btnDownload!);
   await expect(args.onSave).toHaveBeenCalled();
 
-  const btnBack = canvas.getByText('Back');
+  const btnBack = canvas.getByRole('button', { name: 'Back' });
   await userEvent.click(btnBack);
   await expect(args.onBack).toHaveBeenCalled();
 
-  const [btnCtxMenu] = canvas.getAllByLabelText('Context menu');
+  const [btnMoreOptions] = canvas.getAllByRole('button', {
+    name: 'More options',
+  });
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  await userEvent.click(btnMoreOptions!);
 
-  await userEvent.click(btnCtxMenu);
-  await sleep(300);
-  const [btnFwd] = canvas.getAllByLabelText('Forward');
+  // Menu content is rendered in a portal outside of the canvas
+  const body = within(document.body);
+  const btnFwd = await body.findByRole('menuitem', { name: 'Forward' });
   await userEvent.click(btnFwd);
   await expect(args.onForward).toHaveBeenCalled();
 };

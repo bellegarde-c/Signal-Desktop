@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import classNames from 'classnames';
-import React, { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useMemo, type JSX } from 'react';
 import { v4 as uuid } from 'uuid';
 import lodash from 'lodash';
 import {
   CircleCheckbox,
   Variant as CircleCheckboxVariant,
-} from './CircleCheckbox.dom.js';
+} from './CircleCheckbox.dom.tsx';
 
 const { noop } = lodash;
 
@@ -20,7 +20,7 @@ export function SettingsRow({
   children: ReactNode;
   title?: string;
   className?: string;
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <fieldset className={classNames('Preferences__settings-row', className)}>
       {title && <legend className="Preferences__padding">{title}</legend>}
@@ -33,46 +33,48 @@ export function FlowingSettingsControl({
   children,
 }: {
   children: ReactNode;
-}): React.JSX.Element {
+}): JSX.Element {
   return <div className="Preferences__flow-control">{children}</div>;
 }
 
 export function LightIconLabel({
-  icon,
+  iconClassName,
   children,
 }: {
-  icon: string;
+  iconClassName: string;
   children: ReactNode;
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <label className="Preferences__light-icon-label">
-      <div className={classNames('Preferences__control--icon', icon)} />
+      <div
+        className={classNames('Preferences__control--icon', iconClassName)}
+      />
       <div>{children}</div>
     </label>
   );
 }
 
 export function SettingsControl({
-  icon,
+  iconClassName,
   left,
   onClick,
   right,
   description,
 }: {
   /** A className or `true` to leave room for icon */
-  icon?: string | true;
+  iconClassName?: string | true;
   left: ReactNode;
   onClick?: () => unknown;
   right: ReactNode;
   description?: ReactNode;
-}): React.JSX.Element {
+}): JSX.Element {
   const content = (
     <>
-      {icon && (
+      {iconClassName && (
         <div
           className={classNames(
             'Preferences__control--icon',
-            icon === true ? null : icon
+            iconClassName === true ? null : iconClassName
           )}
         />
       )}
@@ -116,7 +118,7 @@ export function SettingsRadio<Enum>({
   value: Enum;
   options: ReadonlyArray<SettingsRadioOptionType<Enum>>;
   onChange: (value: Enum) => void;
-}): React.JSX.Element {
+}): JSX.Element {
   const htmlIds = useMemo(() => {
     return Array.from({ length: options.length }, () => uuid());
   }, [options.length]);

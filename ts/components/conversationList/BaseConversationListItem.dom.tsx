@@ -1,38 +1,24 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode, FunctionComponent } from 'react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode, FunctionComponent, JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import classNames from 'classnames';
 import lodash from 'lodash';
 import { v4 as generateUuid } from 'uuid';
 
-import { Avatar, AvatarSize } from '../Avatar.dom.js';
-import type { BadgeType } from '../../badges/types.std.js';
-import { isConversationUnread } from '../../util/isConversationUnread.std.js';
-import { cleanId } from '../_util.std.js';
-import type { LocalizerType, ThemeType } from '../../types/Util.std.js';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
-import { Spinner } from '../Spinner.dom.js';
-import { Time } from '../Time.dom.js';
-import { formatDateTimeShort } from '../../util/formatTimestamp.dom.js';
-import * as durations from '../../util/durations/index.std.js';
+import { Avatar, AvatarSize } from '../Avatar.dom.tsx';
+import type { BadgeType } from '../../badges/types.std.ts';
+import { isConversationUnread } from '../../util/isConversationUnread.std.ts';
+import { cleanId } from '../_util.std.ts';
+import type { LocalizerType, ThemeType } from '../../types/Util.std.ts';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
+import { Spinner } from '../Spinner.dom.tsx';
+import { Time } from '../Time.dom.tsx';
+import { formatDateTimeShort } from '../../util/formatTimestamp.dom.ts';
+import * as durations from '../../util/durations/index.std.ts';
 
 const { isBoolean, isNumber } = lodash;
-
-const BASE_CLASS_NAME =
-  'module-conversation-list__item--contact-or-conversation';
-const AVATAR_CONTAINER_CLASS_NAME = `${BASE_CLASS_NAME}__avatar-container`;
-const CONTENT_CLASS_NAME = `${BASE_CLASS_NAME}__content`;
-const HEADER_CLASS_NAME = `${CONTENT_CLASS_NAME}__header`;
-export const HEADER_NAME_CLASS_NAME = `${HEADER_CLASS_NAME}__name`;
-export const HEADER_CONTACT_NAME_CLASS_NAME = `${HEADER_NAME_CLASS_NAME}__contact-name`;
-export const DATE_CLASS_NAME = `${HEADER_CLASS_NAME}__date`;
-const MESSAGE_CLASS_NAME = `${CONTENT_CLASS_NAME}__message`;
-export const MESSAGE_TEXT_CLASS_NAME = `${MESSAGE_CLASS_NAME}__text`;
-const CHECKBOX_CONTAINER_CLASS_NAME = `${BASE_CLASS_NAME}__checkbox--container`;
-const CHECKBOX_CLASS_NAME = `${BASE_CLASS_NAME}__checkbox`;
-export const SPINNER_CLASS_NAME = `${BASE_CLASS_NAME}__spinner`;
 
 export type RenderConversationListItemContextMenuProps = Readonly<{
   conversationId: string;
@@ -65,7 +51,7 @@ type PropsType = {
   testId?: string;
   renderConversationListItemContextMenu?: (
     props: RenderConversationListItemContextMenuProps
-  ) => React.JSX.Element;
+  ) => JSX.Element;
 } & Pick<
   ConversationType,
   | 'avatarPlaceholderGradient'
@@ -77,7 +63,6 @@ type PropsType = {
   | 'markedUnread'
   | 'phoneNumber'
   | 'profileName'
-  | 'sharedGroupNames'
   | 'title'
   | 'serviceId'
 > &
@@ -86,8 +71,8 @@ type PropsType = {
     | { badge: BadgeType; theme: ThemeType }
   );
 
-export const BaseConversationListItem: FunctionComponent<PropsType> =
-  React.memo(function BaseConversationListItem(props) {
+export const BaseConversationListItem: FunctionComponent<PropsType> = memo(
+  function BaseConversationListItem(props) {
     const {
       avatarPlaceholderGradient,
       avatarUrl,
@@ -115,7 +100,6 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
       onMouseDown,
       phoneNumber,
       profileName,
-      sharedGroupNames,
       shouldShowSpinner,
       testId: overrideTestId,
       title,
@@ -130,21 +114,14 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
     const testId = overrideTestId || groupId || serviceId;
     const isUnread = isConversationUnread({ markedUnread, unreadCount });
 
-    const isAvatarNoteToSelf = isBoolean(isNoteToSelf)
-      ? isNoteToSelf
-      : Boolean(isMe);
+    const isAvatarNoteToSelf = isBoolean(isNoteToSelf) ? isNoteToSelf : isMe;
 
     const isCheckbox = isBoolean(checked);
 
     let actionNode: ReactNode;
     if (shouldShowSpinner) {
       actionNode = (
-        <Spinner
-          size="20px"
-          svgSize="small"
-          moduleClassName={SPINNER_CLASS_NAME}
-          direction="on-progress-dialog"
-        />
+        <Spinner size="20px" svgSize="small" direction="on-progress-dialog" />
       );
     } else if (isCheckbox) {
       let ariaLabel: string;
@@ -162,11 +139,11 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
         });
       }
       actionNode = (
-        <div className={CHECKBOX_CONTAINER_CLASS_NAME}>
+        <div className="module-conversation-list__item--contact-or-conversation__checkbox--container">
           <input
             aria-label={ariaLabel}
             checked={checked}
-            className={CHECKBOX_CLASS_NAME}
+            className="module-conversation-list__item--contact-or-conversation__checkbox"
             disabled={disabled}
             id={htmlId}
             onChange={onClick}
@@ -186,7 +163,7 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
         return null;
       }
       return (
-        <div className={`${CONTENT_CLASS_NAME}__unread-indicators`}>
+        <div className="module-conversation-list__item--contact-or-conversation__content__unread-indicators">
           {unreadMentionsCount ? (
             <UnreadIndicator variant={UnreadIndicatorVariant.UNREAD_MENTIONS} />
           ) : null}
@@ -204,7 +181,7 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
 
     const contents = (
       <>
-        <div className={AVATAR_CONTAINER_CLASS_NAME}>
+        <div className="module-conversation-list__item--contact-or-conversation__avatar-container">
           <Avatar
             avatarPlaceholderGradient={avatarPlaceholderGradient}
             avatarUrl={avatarUrl}
@@ -217,7 +194,6 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
             phoneNumber={phoneNumber}
             profileName={profileName}
             title={title}
-            sharedGroupNames={sharedGroupNames}
             size={avatarSize ?? AvatarSize.FORTY_EIGHT}
             // This is here to appease the type checker.
             {...(props.badge
@@ -228,23 +204,29 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
         </div>
         <div
           className={classNames(
-            CONTENT_CLASS_NAME,
-            disabled && `${CONTENT_CLASS_NAME}--disabled`
+            'module-conversation-list__item--contact-or-conversation__content',
+            disabled &&
+              'module-conversation-list__item--contact-or-conversation__content--disabled'
           )}
         >
-          <div aria-live="off" className={HEADER_CLASS_NAME}>
-            <div className={`${HEADER_CLASS_NAME}__name`}>{headerName}</div>
+          <div
+            aria-live="off"
+            className="module-conversation-list__item--contact-or-conversation__content__header"
+          >
+            <div className="module-conversation-list__item--contact-or-conversation__content__header__name">
+              {headerName}
+            </div>
             <Timestamp timestamp={headerDate} i18n={i18n} />
           </div>
           {messageText || isUnread ? (
-            <div className={MESSAGE_CLASS_NAME}>
+            <div className="module-conversation-list__item--contact-or-conversation__content__message">
               {Boolean(messageText) && (
                 <div
                   dir="auto"
                   className={classNames(
-                    MESSAGE_TEXT_CLASS_NAME,
+                    'module-conversation-list__item--contact-or-conversation__content__message__text',
                     messageTextIsAlwaysFullSize &&
-                      `${MESSAGE_TEXT_CLASS_NAME}--always-full-size`
+                      'module-conversation-list__item--contact-or-conversation__content__message__text--always-full-size'
                   )}
                 >
                   {messageText}
@@ -259,17 +241,24 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
       </>
     );
 
-    const commonClassNames = classNames(BASE_CLASS_NAME, {
-      [`${BASE_CLASS_NAME}--is-selected`]: isSelected,
-    });
+    const commonClassNames = classNames(
+      'module-conversation-list__item--contact-or-conversation',
+      {
+        'module-conversation-list__item--contact-or-conversation--is-selected':
+          isSelected,
+      }
+    );
 
     if (isCheckbox) {
       return (
         <label
           className={classNames(
             commonClassNames,
-            `${BASE_CLASS_NAME}--is-checkbox`,
-            { [`${BASE_CLASS_NAME}--disabled`]: disabled }
+            'module-conversation-list__item--contact-or-conversation--is-checkbox',
+            {
+              'module-conversation-list__item--contact-or-conversation--disabled':
+                disabled,
+            }
           )}
           data-id={identifier}
           data-testid={testId}
@@ -284,7 +273,7 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
       );
     }
 
-    let wrapper: React.JSX.Element;
+    let wrapper: JSX.Element;
 
     if (onClick) {
       wrapper = (
@@ -297,7 +286,7 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
           }
           className={classNames(
             commonClassNames,
-            `${BASE_CLASS_NAME}--is-button`
+            'module-conversation-list__item--contact-or-conversation--is-button'
           )}
           data-id={identifier}
           data-testid={testId}
@@ -329,7 +318,8 @@ export const BaseConversationListItem: FunctionComponent<PropsType> =
     }
 
     return wrapper;
-  });
+  }
+);
 
 function Timestamp({
   i18n,
@@ -356,7 +346,10 @@ function Timestamp({
   }
 
   return (
-    <Time className={DATE_CLASS_NAME} timestamp={timestamp}>
+    <Time
+      className="module-conversation-list__item--contact-or-conversation__content__header__date"
+      timestamp={timestamp}
+    >
       {text}
     </Time>
   );
@@ -367,6 +360,15 @@ enum UnreadIndicatorVariant {
   UNREAD_MESSAGES = 'unread-messages',
   UNREAD_MENTIONS = 'unread-mentions',
 }
+
+const UNREAD_INDICATOR_VARIANTS: Record<UnreadIndicatorVariant, string> = {
+  [UnreadIndicatorVariant.MARKED_UNREAD]:
+    'module-conversation-list__item--contact-or-conversation__unread-indicator--marked-unread',
+  [UnreadIndicatorVariant.UNREAD_MESSAGES]:
+    'module-conversation-list__item--contact-or-conversation__unread-indicator--unread-messages',
+  [UnreadIndicatorVariant.UNREAD_MENTIONS]:
+    'module-conversation-list__item--contact-or-conversation__unread-indicator--unread-mentions',
+};
 
 type UnreadIndicatorPropsType =
   | {
@@ -379,7 +381,7 @@ type UnreadIndicatorPropsType =
   | { variant: UnreadIndicatorVariant.UNREAD_MENTIONS };
 
 function UnreadIndicator(props: UnreadIndicatorPropsType) {
-  let content: React.ReactNode;
+  let content: ReactNode;
 
   switch (props.variant) {
     case UnreadIndicatorVariant.MARKED_UNREAD:
@@ -390,11 +392,7 @@ function UnreadIndicator(props: UnreadIndicatorPropsType) {
       break;
     case UnreadIndicatorVariant.UNREAD_MENTIONS:
       content = (
-        <div
-          className={classNames(
-            `${BASE_CLASS_NAME}__unread-indicator--${props.variant}__icon`
-          )}
-        />
+        <div className="module-conversation-list__item--contact-or-conversation__unread-indicator--unread-mentions__icon" />
       );
       break;
     default:
@@ -404,8 +402,8 @@ function UnreadIndicator(props: UnreadIndicatorPropsType) {
   return (
     <div
       className={classNames(
-        `${BASE_CLASS_NAME}__unread-indicator`,
-        `${BASE_CLASS_NAME}__unread-indicator--${props.variant}`
+        'module-conversation-list__item--contact-or-conversation__unread-indicator',
+        UNREAD_INDICATOR_VARIANTS[props.variant]
       )}
     >
       {content}

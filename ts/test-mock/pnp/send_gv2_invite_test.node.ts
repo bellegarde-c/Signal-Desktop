@@ -6,11 +6,11 @@ import type { PrimaryDevice, Group } from '@signalapp/mock-server';
 import { StorageState, Proto, ServiceIdKind } from '@signalapp/mock-server';
 import createDebug from 'debug';
 
-import * as durations from '../../util/durations/index.std.js';
-import { Bootstrap } from '../bootstrap.node.js';
-import type { App } from '../bootstrap.node.js';
-import { MY_STORY_ID } from '../../types/Stories.std.js';
-import { uuidToBytes } from '../../util/uuidToBytes.std.js';
+import * as durations from '../../util/durations/index.std.ts';
+import { Bootstrap } from '../bootstrap.node.ts';
+import type { App } from '../bootstrap.node.ts';
+import { MY_STORY_ID } from '../../types/Stories.std.ts';
+import { uuidToBytes } from '../../util/uuidToBytes.std.ts';
 
 const IdentifierType = Proto.ManifestRecord.Identifier.Type;
 
@@ -73,6 +73,8 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
           identifier: uuidToBytes(MY_STORY_ID),
           isBlockList: true,
           name: MY_STORY_ID,
+          deletedAtTimestamp: null,
+          recipientServiceIdsBinary: null,
         },
       },
     });
@@ -107,7 +109,9 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
     debug('inviting ACI member');
 
     await leftPane
-      .locator('.module-left-pane__compose-search-form__input')
+      .locator(
+        '.module-left-pane__compose-search-form .module-SearchInput__input'
+      )
       .fill('ACI');
 
     await leftPane.locator('.ListTile >> "ACI Contact"').click();
@@ -115,7 +119,9 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
     debug('inviting PNI member');
 
     await leftPane
-      .locator('.module-left-pane__compose-search-form__input')
+      .locator(
+        '.module-left-pane__compose-search-form .module-SearchInput__input'
+      )
       .fill('PNI');
 
     await leftPane.locator('.ListTile >> "PNI Contact"').click();
@@ -135,22 +141,23 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
     debug('waiting for invitation modal');
 
     {
-      const modal = window.locator(
-        '.module-GroupDialog:has-text("Invitation sent")'
-      );
+      const modal = window.getByRole('dialog', { name: 'Invitation sent' });
 
-      await modal.locator('button >> "Okay"').click();
+      await modal.getByRole('button', { name: 'OK' }).click();
     }
 
     debug('waiting for group data from storage service');
 
     let group: Group;
     {
-      state = await phone.waitForStorageState({ after: state });
+      state = await phone.waitForStorageState({
+        after: state,
+        predicate: storageState => storageState.getAllGroupRecords().length > 0,
+      });
       const groups = await phone.getAllGroups(state);
       assert.strictEqual(groups.length, 1);
 
-      [group] = groups;
+      [group] = groups as [Group];
       assert.strictEqual(group.title, 'My group');
       assert.strictEqual(group.revision, 0);
       assert.strictEqual(group.state.members?.length, 2);
@@ -168,11 +175,13 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
       const detailsHeader = conversationStack.locator(
         '[data-testid=ConversationDetailsHeader]'
       );
-      await detailsHeader.locator('button >> "My group"').click();
+      await detailsHeader.getByRole('button', { name: 'My group' }).click();
 
-      const modal = window.locator('.module-Modal:has-text("Edit group")');
-      await modal.locator('input').fill('My group (v2)');
-      await modal.locator('button >> "Save"').click();
+      const modal = window.getByRole('dialog', { name: 'Edit group' });
+      await modal
+        .getByRole('textbox', { name: 'Group name (required)' })
+        .fill('My group (v2)');
+      await modal.getByRole('button', { name: 'Save' }).click();
     }
 
     debug('waiting for the second group update');

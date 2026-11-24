@@ -1,25 +1,24 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactNode } from 'react';
-import React, { forwardRef, useMemo } from 'react';
+import type { ReactNode, JSX, Ref } from 'react';
+import { forwardRef, useMemo } from 'react';
 import { v4 as uuid } from 'uuid';
-
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
 
 export type PropsType = {
   checked?: boolean;
   children?: (childrenOpts: {
     id: string;
-    checkboxNode: React.JSX.Element;
-    labelNode: React.JSX.Element;
+    checkboxNode: JSX.Element;
+    labelNode: JSX.Element;
     checked?: boolean;
-  }) => React.JSX.Element;
+  }) => JSX.Element;
   description?: ReactNode;
   disabled?: boolean;
   isRadio?: boolean;
-  label: string;
-  moduleClassName?: string;
+  label: ReactNode;
+  /** @deprecated */
+  className?: string;
   name: string;
   onChange: (value: boolean) => unknown;
   onClick?: () => unknown;
@@ -33,18 +32,17 @@ export const Checkbox = forwardRef(function CheckboxInner(
     disabled,
     isRadio,
     label,
-    moduleClassName,
+    className,
     name,
     onChange,
     onClick,
   }: PropsType,
-  ref: React.Ref<HTMLInputElement>
-): React.JSX.Element {
-  const getClassName = getClassNamesFor('Checkbox', moduleClassName);
+  ref: Ref<HTMLInputElement>
+): JSX.Element {
   const id = useMemo(() => `${name}::${uuid()}`, [name]);
 
   const checkboxNode = (
-    <div className={getClassName('__checkbox')}>
+    <div className="Checkbox__checkbox">
       <input
         checked={Boolean(checked)}
         disabled={disabled}
@@ -62,14 +60,14 @@ export const Checkbox = forwardRef(function CheckboxInner(
     <div>
       <label htmlFor={id}>
         <div>{label}</div>
-        <div className={getClassName('__description')}>{description}</div>
+        <div className="Checkbox__description">{description}</div>
       </label>
     </div>
   );
 
   return (
-    <div className={getClassName('')}>
-      <div className={getClassName('__container')}>
+    <div className={className}>
+      <div className="Checkbox__container">
         {children ? (
           children({ id, checkboxNode, labelNode, checked })
         ) : (

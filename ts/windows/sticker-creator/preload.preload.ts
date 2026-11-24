@@ -12,8 +12,8 @@ ipcRenderer.on('art-creator:onUploadProgress', () => {
 contextBridge.exposeInMainWorld(
   'uploadStickerPack',
   async (
-    manifest: Uint8Array,
-    stickers: Readonly<Uint8Array>,
+    manifest: Uint8Array<ArrayBuffer>,
+    stickers: Readonly<Uint8Array<ArrayBuffer>>,
     newOnProgress: (() => void) | undefined
   ): Promise<string> => {
     onProgress = newOnProgress;
@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld(
       stickers,
     });
   }
+);
+
+contextBridge.exposeInMainWorld(
+  'sanitizeWebp',
+  (data: Uint8Array<ArrayBuffer>): Promise<void> =>
+    ipcRenderer.invoke('art-creator:sanitizeWebp', data)
 );
 
 contextBridge.exposeInMainWorld(

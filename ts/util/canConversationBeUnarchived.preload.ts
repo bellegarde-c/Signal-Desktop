@@ -1,9 +1,9 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ConversationAttributesType } from '../model-types.d.ts';
-import { isConversationMuted } from './isConversationMuted.std.js';
-import { itemStorage } from '../textsecure/Storage.preload.js';
+import type { ConversationAttributesType } from '../model-types.std.ts';
+import { isConversationMuted } from './isConversationMuted.std.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 
 export function canConversationBeUnarchived(
   attrs: ConversationAttributesType

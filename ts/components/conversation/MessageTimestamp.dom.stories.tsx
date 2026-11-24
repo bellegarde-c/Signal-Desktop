@@ -1,10 +1,11 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import * as React from 'react';
+import type { JSX } from 'react';
+
 import type { Meta } from '@storybook/react';
-import type { Props } from './MessageTimestamp.dom.js';
-import { MessageTimestamp } from './MessageTimestamp.dom.js';
+import type { Props } from './MessageTimestamp.dom.tsx';
+import { MessageTimestamp } from './MessageTimestamp.dom.tsx';
 
 const { i18n } = window.SignalContext;
 
@@ -37,29 +38,20 @@ export default {
   title: 'Components/Conversation/MessageTimestamp',
   argTypes: {
     timestamp: { control: { type: 'number' } },
-    module: { control: { type: 'text' } },
-    withImageNoCaption: { control: { type: 'boolean' } },
+    // oxlint-disable-next-line signal-desktop/enforce-class-name-has-styles
+    className: { control: { type: 'text' } },
     withSticker: { control: { type: 'boolean' } },
     withTapToViewExpired: { control: { type: 'boolean' } },
-    direction: {
-      control: {
-        type: 'select',
-        options: ['', 'incoming', 'outgoing'],
-      },
-    },
   },
   args: {
     i18n,
     timestamp: Date.now(),
-    module: '',
-    withImageNoCaption: false,
     withSticker: false,
     withTapToViewExpired: false,
-    direction: undefined,
   },
 } satisfies Meta<Props>;
 
-export function Normal(args: Props): React.JSX.Element {
+export function Normal(args: Props): JSX.Element {
   return (
     <table cellPadding={5}>
       <tbody>
@@ -84,6 +76,6 @@ export function Normal(args: Props): React.JSX.Element {
   );
 }
 
-export function Knobs(args: Props): React.JSX.Element {
+export function Knobs(args: Props): JSX.Element {
   return <MessageTimestamp {...args} />;
 }

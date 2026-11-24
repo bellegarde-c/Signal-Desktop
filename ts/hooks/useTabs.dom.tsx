@@ -1,11 +1,10 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { KeyboardEvent } from 'react';
-import React, { useState } from 'react';
+import type { KeyboardEvent, JSX } from 'react';
+import { useState } from 'react';
 import classNames from 'classnames';
-import { assertDev } from '../util/assert.std.js';
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
+import { assertDev } from '../util/assert.std.ts';
 
 type Tab = {
   id: string;
@@ -13,7 +12,8 @@ type Tab = {
 };
 
 export type BaseTabsOptionsType = {
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   tabs: Array<Tab>;
 };
 
@@ -33,13 +33,11 @@ export type TabsOptionsType =
 
 type TabsProps = {
   selectedTab: string;
-  tabsHeaderElement: React.JSX.Element;
+  tabsHeaderElement: JSX.Element;
 };
 
 export function useTabs(options: TabsOptionsType): TabsProps {
   assertDev(options.tabs.length, 'Tabs needs more than 1 tab present');
-
-  const getClassName = getClassNamesFor('Tabs', options.moduleClassName);
 
   let selectedTab: string;
   let onChange: (selectedTab: string) => void;
@@ -50,9 +48,10 @@ export function useTabs(options: TabsOptionsType): TabsProps {
   } else {
     // useTabs should always be either controlled or uncontrolled.
     // This is enforced by the type system.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // oxlint-disable-next-line react-hooks/rules-of-hooks
     const [tabState, setTabState] = useState<string>(
-      options.initialSelectedTab || options.tabs[0].id
+      // oxlint-disable-next-line typescript/no-non-null-assertion
+      options.initialSelectedTab || options.tabs[0]!.id
     );
 
     selectedTab = tabState;
@@ -63,13 +62,13 @@ export function useTabs(options: TabsOptionsType): TabsProps {
   }
 
   const tabsHeaderElement = (
-    <div className={getClassName('')} data-supertab>
+    <div className={classNames('Tabs', options.className)} data-supertab>
       {options.tabs.map(({ id, label }) => (
         <div
           aria-selected={selectedTab === id}
           className={classNames(
-            getClassName('__tab'),
-            selectedTab === id && getClassName('__tab--selected')
+            'Tabs__tab',
+            selectedTab === id && 'Tabs__tab--selected'
           )}
           key={id}
           onClick={() => {

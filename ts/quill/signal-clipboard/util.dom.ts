@@ -1,7 +1,7 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { getFunEmojiElementValue } from '../../components/fun/FunEmoji.dom.js';
+import { getFunEmojiElementValue } from '../../components/fun/FunEmoji.dom.tsx';
 
 const QUILL_EMBED_GUARD = '\uFEFF';
 
@@ -47,7 +47,7 @@ export function createEventHandler({
     //   clipboardData at all, all other data is reset.
     event.clipboardData?.setData('text/plain', plaintext);
 
-    event.clipboardData?.setData('text/signal', container.innerHTML);
+    event.clipboardData?.setData('text/signal', container.getHTML());
 
     if (deleteSelection) {
       selection.deleteFromDocument();
@@ -78,9 +78,9 @@ function getStringFromNode(
   }
   const element = node;
 
-  const emojiValue = getFunEmojiElementValue(element);
-  if (emojiValue != null) {
-    return emojiValue;
+  const emoji = getFunEmojiElementValue(element);
+  if (emoji != null) {
+    return emoji;
   }
 
   // Sometimes we need to add multiple newlines to represent nested divs, and other times
@@ -97,7 +97,8 @@ function getStringFromNode(
   }
   let result = '';
   for (let i = 0; i < childCount; i += 1) {
-    const child = element.childNodes[i];
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const child = element.childNodes[i]!;
     const nextChild = element.childNodes[i + 1];
     result += getStringFromNode(child, node, nextChild);
   }
@@ -119,15 +120,8 @@ const CONTAINER_CLASSES = ['ql-editor', 'module-message__text'];
 const BOLD_TAG = 'strong';
 const ITALIC_TAG = 'em';
 const STRIKETHROUGH_TAG = 's';
-const MONOSPACE_CLASSES = [
-  'quill--monospace',
-  'MessageTextRenderer__formatting--monospace',
-];
-const SPOILER_CLASSES = [
-  'quill--spoiler',
-  'MessageTextRenderer__formatting--spoiler',
-  'MessageTextRenderer__formatting--spoiler--revealed',
-];
+const MONOSPACE_SELECTOR = '[data-monospace]';
+const SPOILER_SELECTOR = '[data-spoiler]';
 
 // When the user cuts/copies single-line text which don't cross any mentions/emojo or
 // formatting boundaries, we don't get the surrounding formatting nodes in our selection.
@@ -142,8 +136,8 @@ function getRangeWithContainer(range: Range): Node {
   //     <strong>
   //       <em>
   //         <s>
-  //           <span class="quill--spoiler">
-  //             <span class="quill--monospace">
+  //           <span data-spoiler="true">
+  //             <span data-monospace="true">
   //               All formatting, with no formatting boundaries, mentions or emoji.
   //             </span>
   //           </span>
@@ -157,8 +151,8 @@ function getRangeWithContainer(range: Range): Node {
 
   // <div class="module-message__text module-message__text--outgoing">
   //   <span>
-  //     <span class="MessageTextRenderer__formatting--spoiler--revealed">
-  //       <span class="MessageTextRenderer__formatting--monospace">
+  //     <span data-spoiler="true">
+  //       <span data-monospace="true">
   //         <s>
   //           <em>
   //             <strong>
@@ -191,10 +185,11 @@ function getRangeWithContainer(range: Range): Node {
     return fragment;
   }
 
-  currentNode = startContainer.parentElement as HTMLElement;
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  currentNode = startContainer.parentElement!;
   while (
     currentNode &&
-    // eslint-disable-next-line no-loop-func
+    // oxlint-disable-next-line signal-desktop/enforce-static-class-names
     CONTAINER_CLASSES.every(item => !currentNode?.classList.contains(item))
   ) {
     const tagName = currentNode.tagName.toLowerCase();
@@ -210,22 +205,15 @@ function getRangeWithContainer(range: Range): Node {
       const newNode = document.createElement(STRIKETHROUGH_TAG);
       newNode.appendChild(finalNode);
       finalNode = newNode;
-    } else if (
-      // eslint-disable-next-line no-loop-func
-      MONOSPACE_CLASSES.some(item => currentNode?.classList.contains(item))
-    ) {
+    } else if (currentNode.matches(MONOSPACE_SELECTOR)) {
       const newNode = document.createElement('span');
       // Matchers check for all classes, so we just add the first
-      newNode.classList.add(MONOSPACE_CLASSES[0]);
+      newNode.setAttribute('data-monospace', 'true');
       newNode.appendChild(finalNode);
       finalNode = newNode;
-    } else if (
-      // eslint-disable-next-line no-loop-func
-      SPOILER_CLASSES.some(item => currentNode?.classList.contains(item))
-    ) {
+    } else if (currentNode.matches(SPOILER_SELECTOR)) {
       const newNode = document.createElement('span');
-      // Matchers check for all classes, so we just add the first
-      newNode.classList.add(SPOILER_CLASSES[0]);
+      newNode.setAttribute('data-spoiler', 'true');
       newNode.appendChild(finalNode);
       finalNode = newNode;
     }

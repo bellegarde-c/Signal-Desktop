@@ -1,22 +1,22 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import type { JSX } from 'react';
 
 import type {
   BackupMediaDownloadStatusType,
   BackupsSubscriptionType,
   BackupStatusType,
-} from '../types/backups.node.js';
-import type { LocalizerType } from '../types/I18N.std.js';
-import { formatTimestamp } from '../util/formatTimestamp.dom.js';
-import { SettingsRow } from './PreferencesUtil.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { BackupMediaDownloadProgressSettings } from './BackupMediaDownloadProgressSettings.dom.js';
-import { BackupLevel } from '../services/backups/types.std.js';
-import { SpinnerV2 } from './SpinnerV2.dom.js';
-import { MINUTE } from '../util/durations/constants.std.js';
-import { isOlderThan } from '../util/timestamp.std.js';
+} from '../types/backups.node.ts';
+import type { LocalizerType } from '../types/I18N.std.ts';
+import { formatTimestamp } from '../util/formatTimestamp.dom.ts';
+import { SettingsRow } from './PreferencesUtil.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { BackupMediaDownloadProgressSettings } from './BackupMediaDownloadProgressSettings.dom.tsx';
+import { BackupLevel } from '../services/backups/types.std.ts';
+import { SpinnerV2 } from './SpinnerV2.dom.tsx';
+import { MINUTE } from '../util/durations/constants.std.ts';
+import { isOlderThan } from '../util/timestamp.std.ts';
 
 // We'll show a loading spinner if we are fetching fresh data and cached data is older
 // than this duration
@@ -44,7 +44,7 @@ export function BackupsDetailsPage({
   pauseBackupMediaDownload: () => void;
   resumeBackupMediaDownload: () => void;
   backupMediaDownloadStatus?: BackupMediaDownloadStatusType;
-}): React.JSX.Element {
+}): JSX.Element {
   const shouldShowMediaProgress =
     backupMediaDownloadStatus &&
     backupMediaDownloadStatus.completedBytes <
@@ -115,7 +115,7 @@ function renderPaidBackupDetailsSummary({
   locale: string;
   subscriptionStatus?: BackupsSubscriptionType;
   i18n: LocalizerType;
-}): React.JSX.Element | null {
+}): JSX.Element | null {
   return (
     <>
       <div className="Preferences--backups-summary__status-container">
@@ -123,7 +123,7 @@ function renderPaidBackupDetailsSummary({
           <div className="Preferences--backups-summary__type">
             {i18n('icu:Preferences--backup-media-plan__description')}
           </div>
-          <div className="Preferences--backups-summary__content">
+          <div>
             {subscriptionStatus
               ? renderSubscriptionDetails({ i18n, locale, subscriptionStatus })
               : null}
@@ -183,7 +183,7 @@ function renderFreeBackupDetailsSummary({
 }: {
   backupFreeMediaDays: number;
   i18n: LocalizerType;
-}): React.JSX.Element | null {
+}): JSX.Element | null {
   return (
     <>
       <div className="Preferences--backups-summary__status-container">
@@ -193,7 +193,7 @@ function renderFreeBackupDetailsSummary({
               mediaDayCount: backupFreeMediaDays,
             })}
           </div>
-          <div className="Preferences--backups-summary__content">
+          <div>
             {i18n('icu:Preferences--backup-messages-plan__cost-description')}
           </div>
         </div>
@@ -214,7 +214,7 @@ export function renderSubscriptionDetails({
   i18n: LocalizerType;
   locale: string;
   subscriptionStatus: BackupsSubscriptionType;
-}): React.JSX.Element | null {
+}): JSX.Element | null {
   const { status } = subscriptionStatus;
   if (
     subscriptionStatus.isFetching &&
@@ -233,7 +233,7 @@ export function renderSubscriptionDetails({
       return (
         <>
           {subscriptionStatus.cost ? (
-            <div className="Preferences--backups-summary__subscription-price">
+            <div>
               {i18n('icu:Preferences--backup-subscription-monthly-cost', {
                 cost: new Intl.NumberFormat(locale, {
                   style: 'currency',
@@ -244,7 +244,7 @@ export function renderSubscriptionDetails({
             </div>
           ) : null}
           {subscriptionStatus.renewalTimestamp ? (
-            <div className="Preferences--backups-summary__renewal-date">
+            <div>
               {i18n('icu:Preferences--backup-plan__renewal-date', {
                 date: formatTimestamp(subscriptionStatus.renewalTimestamp, {
                   dateStyle: 'medium',
@@ -262,7 +262,7 @@ export function renderSubscriptionDetails({
             {i18n('icu:Preferences--backup-plan__canceled')}
           </div>
           {subscriptionStatus.expiryTimestamp ? (
-            <div className="Preferences--backups-summary__expiry-date">
+            <div>
               {i18n('icu:Preferences--backup-plan__expiry-date', {
                 date: formatTimestamp(subscriptionStatus.expiryTimestamp, {
                   dateStyle: 'medium',
@@ -276,7 +276,7 @@ export function renderSubscriptionDetails({
     case 'expired':
       return (
         <div className="Preferences--backups-summary__status-container">
-          <div className="Preferences--backups-summary__content">
+          <div>
             {i18n('icu:Preferences--backup-plan-not-found__description')}
           </div>
         </div>

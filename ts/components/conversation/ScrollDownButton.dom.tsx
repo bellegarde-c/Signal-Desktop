@@ -1,16 +1,23 @@
 // Copyright 2019 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import classNames from 'classnames';
-import React from 'react';
+import type { JSX } from 'react';
 
-import type { LocalizerType } from '../../types/Util.std.js';
-import { getClassNamesFor } from '../../util/getClassNamesFor.std.js';
+import classNames from 'classnames';
+
+import type { LocalizerType } from '../../types/Util.std.ts';
 
 export enum ScrollDownButtonVariant {
   UNREAD_MESSAGES = 'unread-messages',
   UNREAD_MENTIONS = 'unread-mentions',
 }
+
+const SCROLL_DOWN_BUTTON_VARIANTS: Record<ScrollDownButtonVariant, string> = {
+  [ScrollDownButtonVariant.UNREAD_MESSAGES]:
+    'ScrollDownButton__unread-messages',
+  [ScrollDownButtonVariant.UNREAD_MENTIONS]:
+    'ScrollDownButton__unread-mentions',
+};
 
 export type ScrollDownButtonPropsType = {
   variant: ScrollDownButtonVariant;
@@ -24,9 +31,7 @@ export function ScrollDownButton({
   count,
   onClick,
   i18n,
-}: ScrollDownButtonPropsType): React.JSX.Element {
-  const getClassName = getClassNamesFor('ScrollDownButton');
-
+}: ScrollDownButtonPropsType): JSX.Element {
   let badgeText: string | undefined;
   if (count) {
     if (count < 100) {
@@ -51,19 +56,17 @@ export function ScrollDownButton({
   return (
     <button
       type="button"
-      className={classNames(getClassName(''), getClassName(`__${variant}`))}
+      className={classNames(
+        'ScrollDownButton',
+        SCROLL_DOWN_BUTTON_VARIANTS[variant]
+      )}
       onClick={onClick}
       title={altText}
     >
       {badgeText ? (
-        <div className={getClassName('__badge')}>{badgeText}</div>
+        <div className="ScrollDownButton__badge">{badgeText}</div>
       ) : null}
-      <div
-        className={classNames(
-          getClassName('__icon'),
-          getClassName(`__icon--${variant}`)
-        )}
-      />
+      <div className="ScrollDownButton__icon" />
     </button>
   );
 }

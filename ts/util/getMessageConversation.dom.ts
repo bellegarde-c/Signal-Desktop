@@ -1,8 +1,8 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReadonlyMessageAttributesType } from '../model-types.d.ts';
-import type { ConversationModel } from '../models/conversations.preload.js';
+import type { ReadonlyMessageAttributesType } from '../model-types.std.ts';
+import type { ConversationModel } from '../models/conversations.preload.ts';
 
 export function getMessageConversation({
   conversationId,

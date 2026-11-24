@@ -1,17 +1,18 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { DataReader, DataWriter } from '../sql/Client.preload.js';
-import type { CallHistoryDetails } from '../types/CallDisposition.std.js';
-import { strictAssert } from '../util/assert.std.js';
+import { DataReader, DataWriter } from '../sql/Client.preload.ts';
+import type { CallHistoryDetails } from '../types/CallDisposition.std.ts';
+import { strictAssert } from '../util/assert.std.ts';
 
 let callsHistoryData: ReadonlyArray<CallHistoryDetails>;
-let callsHistoryUnreadCount: number;
+let callsHistoryUnreadCountsByConversationId: Record<string, number>;
 
 export async function loadCallHistory(): Promise<void> {
   await DataWriter.cleanupCallHistoryMessages();
   callsHistoryData = await DataReader.getAllCallHistory();
-  callsHistoryUnreadCount = await DataReader.getCallHistoryUnreadCount();
+  callsHistoryUnreadCountsByConversationId =
+    await DataReader.getCallHistoryUnreadCountsByConversationId();
 }
 
 export function getCallsHistoryForRedux(): ReadonlyArray<CallHistoryDetails> {
@@ -19,10 +20,13 @@ export function getCallsHistoryForRedux(): ReadonlyArray<CallHistoryDetails> {
   return callsHistoryData;
 }
 
-export function getCallsHistoryUnreadCountForRedux(): number {
+export function getCallsHistoryUnreadCountsByConversationIdForRedux(): Record<
+  string,
+  number
+> {
   strictAssert(
-    callsHistoryUnreadCount != null,
+    callsHistoryUnreadCountsByConversationId != null,
     'callHistory has not been loaded'
   );
-  return callsHistoryUnreadCount;
+  return callsHistoryUnreadCountsByConversationId;
 }

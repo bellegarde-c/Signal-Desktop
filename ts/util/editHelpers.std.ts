@@ -4,14 +4,15 @@
 import lodash from 'lodash';
 import type { ReadonlyDeep } from 'type-fest';
 
-import { strictAssert } from './assert.std.js';
+import { strictAssert } from './assert.std.ts';
 
 import type {
   EditHistoryType,
   MessageAttributesType,
   ReadonlyMessageAttributesType,
-} from '../model-types.d.ts';
-import type { LoggerType } from '../types/Logging.std.js';
+} from '../model-types.std.ts';
+import type { LoggerType } from '../types/Logging.std.ts';
+import type { AttachmentType } from '../types/Attachment.std.ts';
 
 const { isNumber, sortBy } = lodash;
 
@@ -41,11 +42,13 @@ export function getTargetOfThisEditTimestamp({
 
   // We want the second-to-last item, because we may have partially sent targetTimestamp
   if (length > 1) {
-    return mostRecent[length - 2].timestamp;
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    return mostRecent[length - 2]!.timestamp;
   }
   // If there's only one item, we'll use it
   if (length > 0) {
-    return mostRecent[length - 1].timestamp;
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    return mostRecent[length - 1]!.timestamp;
   }
 
   // This is a good failover in case we ever stop duplicating data in editHistory
@@ -79,7 +82,8 @@ export function getPropForTimestamp<
     return message[prop];
   }
 
-  return targetEdit[prop] as Attrs[T];
+  // @ts-expect-error - broken after renaming model-types
+  return targetEdit[prop];
 }
 
 export function getChangesForPropAtTimestamp<T extends keyof EditHistoryType>({
@@ -144,4 +148,57 @@ export function getChangesForPropAtTimestamp<T extends keyof EditHistoryType>({
   }
 
   return partialProps;
+}
+
+export function updateAttachment({
+  log,
+  message,
+  targetTimestamp,
+  oldAttachment,
+  attachmentUpdate,
+}: {
+  log: LoggerType;
+  message: ReadonlyMessageAttributesType;
+  targetTimestamp: number;
+  oldAttachment: AttachmentType;
+  attachmentUpdate: Partial<AttachmentType>;
+}): {
+  messageUpdate: Partial<MessageAttributesType> | undefined;
+  newAttachment: AttachmentType;
+} {
+  // Add digest to the attachment
+  const oldAttachments = getPropForTimestamp({
+    log,
+    message,
+    prop: 'attachments',
+    targetTimestamp,
+  });
+  strictAssert(
+    oldAttachments !== undefined,
+    `Message ${targetTimestamp} does not have attachments anymore`
+  );
+
+  const index = oldAttachments.indexOf(oldAttachment);
+  strictAssert(
+    index !== -1,
+    `Message ${targetTimestamp} does not have ` +
+      `old attachment ${oldAttachment.clientUuid} anymore`
+  );
+
+  const newAttachment: AttachmentType = {
+    ...oldAttachment,
+    ...attachmentUpdate,
+  };
+
+  const newAttachments = oldAttachments.toSpliced(index, 1, newAttachment);
+
+  const messageUpdate = getChangesForPropAtTimestamp({
+    log,
+    message,
+    prop: 'attachments',
+    targetTimestamp,
+    value: newAttachments,
+  });
+
+  return { messageUpdate, newAttachment };
 }

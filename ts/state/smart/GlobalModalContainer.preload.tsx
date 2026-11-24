@@ -1,126 +1,164 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { memo, useCallback } from 'react';
+import { memo, useCallback, type JSX } from 'react';
 import { useSelector } from 'react-redux';
-import type { ButtonVariant } from '../../components/Button.dom.js';
-import { ErrorModal } from '../../components/ErrorModal.dom.js';
-import { GlobalModalContainer } from '../../components/GlobalModalContainer.dom.js';
-import { SmartAboutContactModal } from './AboutContactModal.preload.js';
-import { SmartAddUserToAnotherGroupModal } from './AddUserToAnotherGroupModal.preload.js';
-import { SmartContactModal } from './ContactModal.preload.js';
-import { SmartEditHistoryMessagesModal } from './EditHistoryMessagesModal.preload.js';
-import { SmartForwardMessagesModal } from './ForwardMessagesModal.preload.js';
-import { SmartUsernameOnboardingModal } from './UsernameOnboardingModal.preload.js';
-import { SmartSafetyNumberModal } from './SafetyNumberModal.preload.js';
-import { SmartSendAnywayDialog } from './SendAnywayDialog.preload.js';
-import { SmartShortcutGuideModal } from './ShortcutGuideModal.preload.js';
-import { SmartStickerPreviewModal } from './StickerPreviewModal.preload.js';
-import { SmartStoriesSettingsModal } from './StoriesSettingsModal.preload.js';
-import { getConversationsStoppingSend } from '../selectors/conversations.dom.js';
-import { getIntl, getTheme } from '../selectors/user.std.js';
-import { useGlobalModalActions } from '../ducks/globalModals.preload.js';
-import { SmartDeleteMessagesModal } from './DeleteMessagesModal.preload.js';
-import { SmartMessageRequestActionsConfirmation } from './MessageRequestActionsConfirmation.preload.js';
-import { getGlobalModalsState } from '../selectors/globalModals.std.js';
-import { SmartEditNicknameAndNoteModal } from './EditNicknameAndNoteModal.preload.js';
-import { SmartNotePreviewModal } from './NotePreviewModal.preload.js';
-import { SmartCallLinkEditModal } from './CallLinkEditModal.preload.js';
-import { SmartCallQualitySurveyDialog } from './CallQualitySurveyDialog.preload.js';
-import { SmartCallLinkAddNameModal } from './CallLinkAddNameModal.preload.js';
-import { SmartConfirmLeaveCallModal } from './ConfirmLeaveCallModal.preload.js';
-import { SmartCallLinkPendingParticipantModal } from './CallLinkPendingParticipantModal.preload.js';
-import { SmartProfileNameWarningModal } from './ProfileNameWarningModal.preload.js';
-import { SmartDraftGifMessageSendModal } from './DraftGifMessageSendModal.preload.js';
-import { DebugLogErrorModal } from '../../components/DebugLogErrorModal.dom.js';
-import { SmartPlaintextExportWorkflow } from './PlaintextExportWorkflow.preload.js';
-import { SmartLocalBackupExportWorkflow } from './LocalBackupExportWorkflow.preload.js';
+import {
+  ErrorModal,
+  type ErrorModalDataProps,
+} from '../../components/ErrorModal.dom.tsx';
+import { GlobalModalContainer } from '../../components/GlobalModalContainer.dom.tsx';
+import { SmartAboutContactModal } from './AboutContactModal.preload.tsx';
+import { SmartAddUserToAnotherGroupModal } from './AddUserToAnotherGroupModal.preload.tsx';
+import { SmartContactModal } from './ContactModal.preload.tsx';
+import { SmartEditHistoryMessagesModal } from './EditHistoryMessagesModal.preload.tsx';
+import { SmartForwardMessagesModal } from './ForwardMessagesModal.preload.tsx';
+import { SmartUsernameOnboardingModal } from './UsernameOnboardingModal.preload.tsx';
+import { SmartSafetyNumberModal } from './SafetyNumberModal.preload.tsx';
+import { SmartSendAnywayDialog } from './SendAnywayDialog.preload.tsx';
+import { SmartShortcutGuideModal } from './ShortcutGuideModal.preload.tsx';
+import { SmartStickerPreviewModal } from './StickerPreviewModal.preload.tsx';
+import { SmartStoriesSettingsModal } from './StoriesSettingsModal.preload.tsx';
+import { getConversationsStoppingSend } from '../selectors/conversations.dom.ts';
+import { getIntl, getTheme } from '../selectors/user.std.ts';
+import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
+import { SmartDeleteMessagesModal } from './DeleteMessagesModal.preload.tsx';
+import { SmartDiscardDraftDialog } from './DiscardDraftDialog.preload.tsx';
+import { SmartMessageRequestActionsConfirmation } from './MessageRequestActionsConfirmation.preload.tsx';
+import { getGlobalModalsState } from '../selectors/globalModals.std.ts';
+import { SmartEditNicknameAndNoteModal } from './EditNicknameAndNoteModal.preload.tsx';
+import { SmartNotePreviewModal } from './NotePreviewModal.preload.tsx';
+import { SmartCallLinkEditModal } from './CallLinkEditModal.preload.tsx';
+import { SmartCallQualitySurveyDialog } from './CallQualitySurveyDialog.preload.tsx';
+import { SmartCallLinkAddNameModal } from './CallLinkAddNameModal.preload.tsx';
+import { SmartConfirmLeaveCallModal } from './ConfirmLeaveCallModal.preload.tsx';
+import { SmartCallLinkPendingParticipantModal } from './CallLinkPendingParticipantModal.preload.tsx';
+import { SmartProfileNameWarningModal } from './ProfileNameWarningModal.preload.tsx';
+import { SmartDraftGifMessageSendModal } from './DraftGifMessageSendModal.preload.tsx';
+import { SmartKeyTransparencyErrorDialog } from './KeyTransparencyErrorDialog.preload.tsx';
+import { DebugLogErrorModal } from '../../components/DebugLogErrorModal.dom.tsx';
+import { SmartPlaintextExportWorkflow } from './PlaintextExportWorkflow.preload.tsx';
+import { SmartLocalBackupExportWorkflow } from './LocalBackupExportWorkflow.preload.tsx';
 import {
   shouldShowPlaintextWorkflow,
   shouldShowLocalBackupWorkflow,
-} from '../selectors/backups.std.js';
+} from '../selectors/backups.std.ts';
+import { SmartPinMessageDialog } from './PinMessageDialog.preload.tsx';
+import { SmartGroupMemberLabelInfoModal } from './GroupMemberLabelInfoModal.preload.tsx';
+import { SmartTerminateGroupFailedModal } from './TerminateGroupFailedModal.preload.tsx';
+import { SmartGroupV2JoinDialog } from './GroupV2JoinDialog.preload.tsx';
+import { SmartPinReminderModal } from './PinReminderModal.preload.tsx';
+import { SmartPinChangeModal } from './PinChangeModal.preload.tsx';
 
-function renderCallLinkAddNameModal(): React.JSX.Element {
+function renderGroupV2JoinDialog(): JSX.Element {
+  return <SmartGroupV2JoinDialog />;
+}
+
+function renderCallLinkAddNameModal(): JSX.Element {
   return <SmartCallLinkAddNameModal />;
 }
 
-function renderCallLinkEditModal(): React.JSX.Element {
+function renderCallLinkEditModal(): JSX.Element {
   return <SmartCallLinkEditModal />;
 }
 
-function renderCallQualitySurvey(): React.JSX.Element {
+function renderCallQualitySurvey(): JSX.Element {
   return <SmartCallQualitySurveyDialog />;
 }
 
-function renderCallLinkPendingParticipantModal(): React.JSX.Element {
+function renderCallLinkPendingParticipantModal(): JSX.Element {
   return <SmartCallLinkPendingParticipantModal />;
 }
 
-function renderConfirmLeaveCallModal(): React.JSX.Element {
+function renderConfirmLeaveCallModal(): JSX.Element {
   return <SmartConfirmLeaveCallModal />;
 }
 
-function renderEditHistoryMessagesModal(): React.JSX.Element {
+function renderEditHistoryMessagesModal(): JSX.Element {
   return <SmartEditHistoryMessagesModal />;
 }
 
-function renderEditNicknameAndNoteModal(): React.JSX.Element {
+function renderEditNicknameAndNoteModal(): JSX.Element {
   return <SmartEditNicknameAndNoteModal />;
 }
 
-function renderProfileNameWarningModal(): React.JSX.Element {
+function renderProfileNameWarningModal(): JSX.Element {
   return <SmartProfileNameWarningModal />;
 }
 
-function renderUsernameOnboarding(): React.JSX.Element {
+function renderUsernameOnboarding(): JSX.Element {
   return <SmartUsernameOnboardingModal />;
 }
 
-function renderContactModal(): React.JSX.Element {
+function renderContactModal(): JSX.Element {
   return <SmartContactModal />;
 }
 
-function renderDeleteMessagesModal(): React.JSX.Element {
+function renderDeleteMessagesModal(): JSX.Element {
   return <SmartDeleteMessagesModal />;
 }
 
-function renderDraftGifMessageSendModal(): React.JSX.Element {
+function renderDiscardDraftDialog(): JSX.Element {
+  return <SmartDiscardDraftDialog />;
+}
+
+function renderDraftGifMessageSendModal(): JSX.Element {
   return <SmartDraftGifMessageSendModal />;
 }
 
-function renderForwardMessagesModal(): React.JSX.Element {
+function renderForwardMessagesModal(): JSX.Element {
   return <SmartForwardMessagesModal />;
 }
 
-function renderMessageRequestActionsConfirmation(): React.JSX.Element {
+function renderGroupMemberLabelInfoModal(): JSX.Element {
+  return <SmartGroupMemberLabelInfoModal />;
+}
+
+function renderKeyTransparencyErrorDialog(): JSX.Element {
+  return <SmartKeyTransparencyErrorDialog />;
+}
+
+function renderMessageRequestActionsConfirmation(): JSX.Element {
   return <SmartMessageRequestActionsConfirmation />;
 }
 
-function renderNotePreviewModal(): React.JSX.Element {
+function renderNotePreviewModal(): JSX.Element {
   return <SmartNotePreviewModal />;
 }
 
-function renderPlaintextExportWorkflow(): React.JSX.Element {
+function renderPinMessageDialog(): JSX.Element {
+  return <SmartPinMessageDialog />;
+}
+
+function renderPinChangeModal(): JSX.Element {
+  return <SmartPinChangeModal />;
+}
+
+function renderPinReminderModal(): JSX.Element {
+  return <SmartPinReminderModal />;
+}
+
+function renderPlaintextExportWorkflow(): JSX.Element {
   return <SmartPlaintextExportWorkflow />;
 }
 
-function renderLocalBackupExportWorkflow(): React.JSX.Element {
+function renderLocalBackupExportWorkflow(): JSX.Element {
   return <SmartLocalBackupExportWorkflow />;
 }
 
-function renderStoriesSettings(): React.JSX.Element {
+function renderStoriesSettings(): JSX.Element {
   return <SmartStoriesSettingsModal />;
 }
 
-function renderSendAnywayDialog(): React.JSX.Element {
+function renderSendAnywayDialog(): JSX.Element {
   return <SmartSendAnywayDialog />;
 }
 
-function renderShortcutGuideModal(): React.JSX.Element {
+function renderShortcutGuideModal(): JSX.Element {
   return <SmartShortcutGuideModal />;
 }
 
-function renderAboutContactModal(): React.JSX.Element {
+function renderAboutContactModal(): JSX.Element {
   return <SmartAboutContactModal />;
 }
 
@@ -139,9 +177,9 @@ export const SmartGlobalModalContainer = memo(
     const hasSafetyNumberChangeModal = conversationsStoppingSend.length > 0;
 
     const {
-      aboutContactModalContactId,
+      aboutContactModalState,
       addUserToAnotherGroupModalContactId,
-      backfillFailureModalProps,
+      backfillFailureModalKind,
       callLinkAddNameModalRoomId,
       callLinkEditModalRoomId,
       callQualitySurveyProps,
@@ -151,26 +189,35 @@ export const SmartGlobalModalContainer = memo(
       criticalIdlePrimaryDeviceModal,
       debugLogErrorModalProps,
       deleteMessagesProps,
+      discardDraftDialogProps,
       draftGifMessageSendModalProps,
       editHistoryMessages,
       editNicknameAndNoteModalProps,
       errorModalProps,
       forwardMessagesProps,
+      groupMemberLabelInfoModalState,
+      groupV2JoinDialogOpen,
       lowDiskSpaceBackupImportModal,
       mediaPermissionsModalProps,
       messageRequestActionsConfirmationProps,
       notePreviewModalProps,
+      pinMessageDialogData,
+      pinReminderState,
+      isPinChangeModalVisible,
       isProfileNameWarningModalVisible,
       profileNameWarningModalConversationType,
       isShortcutGuideModalVisible,
       isSignalConnectionsVisible,
       isStoriesSettingsVisible,
+      isKeyTransparencyErrorVisible,
+      isKeyTransparencyOnboardingVisible,
       isWhatsNewVisible,
       usernameOnboardingState,
       safetyNumberChangedBlockingData,
       safetyNumberModalContactId,
       stickerPackPreviewId,
-      tapToViewNotAvailableModalProps,
+      tapToViewNotAvailableModalData,
+      terminateGroupFailedModal,
       userNotFoundModalState,
     } = useSelector(getGlobalModalsState);
 
@@ -184,6 +231,8 @@ export const SmartGlobalModalContainer = memo(
       hideUserNotFoundModal,
       hideWhatsNewModal,
       hideBackfillFailureModal,
+      hideKeyTransparencyOnboardingDialog,
+      finishKeyTransparencyOnboarding,
       toggleSignalConnectionsModal,
     } = useGlobalModalActions();
 
@@ -213,24 +262,14 @@ export const SmartGlobalModalContainer = memo(
     );
 
     const renderErrorModal = useCallback(
-      ({
-        buttonVariant,
-        description,
-        title,
-      }: {
-        buttonVariant?: ButtonVariant;
-        description?: string;
-        title?: string | null;
-      }) => (
+      (props: ErrorModalDataProps) => (
         <ErrorModal
-          buttonVariant={buttonVariant}
-          description={description}
-          title={title}
-          i18n={i18n}
           onClose={closeErrorModal}
+          title={props.title}
+          description={props.description}
         />
       ),
-      [closeErrorModal, i18n]
+      [closeErrorModal]
     );
 
     const renderDebugLogErrorModal = useCallback(
@@ -245,12 +284,22 @@ export const SmartGlobalModalContainer = memo(
       [closeDebugLogErrorModal, i18n]
     );
 
+    const renderTerminateGroupFailedModal = useCallback(
+      () =>
+        terminateGroupFailedModal ? (
+          <SmartTerminateGroupFailedModal
+            conversationId={terminateGroupFailedModal.conversationId}
+          />
+        ) : null,
+      [terminateGroupFailedModal]
+    );
+
     return (
       <GlobalModalContainer
         addUserToAnotherGroupModalContactId={
           addUserToAnotherGroupModalContactId
         }
-        backfillFailureModalProps={backfillFailureModalProps}
+        backfillFailureModalKind={backfillFailureModalKind}
         callLinkAddNameModalRoomId={callLinkAddNameModalRoomId}
         callLinkEditModalRoomId={callLinkEditModalRoomId}
         callQualitySurveyProps={callQualitySurveyProps}
@@ -266,11 +315,15 @@ export const SmartGlobalModalContainer = memo(
         editNicknameAndNoteModalProps={editNicknameAndNoteModalProps}
         errorModalProps={errorModalProps}
         deleteMessagesProps={deleteMessagesProps}
+        discardDraftDialogProps={discardDraftDialogProps}
         draftGifMessageSendModalProps={draftGifMessageSendModalProps}
         forwardMessagesProps={forwardMessagesProps}
+        groupMemberLabelInfoModalState={groupMemberLabelInfoModalState}
         hideCriticalIdlePrimaryDeviceModal={hideCriticalIdlePrimaryDeviceModal}
         hideLowDiskSpaceBackupImportModal={hideLowDiskSpaceBackupImportModal}
         lowDiskSpaceBackupImportModal={lowDiskSpaceBackupImportModal}
+        terminateGroupFailedModal={terminateGroupFailedModal}
+        groupV2JoinDialogOpen={groupV2JoinDialogOpen}
         messageRequestActionsConfirmationProps={
           messageRequestActionsConfirmationProps
         }
@@ -278,13 +331,21 @@ export const SmartGlobalModalContainer = memo(
         closeMediaPermissionsModal={closeMediaPermissionsModal}
         openSystemMediaPermissions={window.IPC.openSystemMediaPermissions}
         notePreviewModalProps={notePreviewModalProps}
+        pinMessageDialogData={pinMessageDialogData}
         hasSafetyNumberChangeModal={hasSafetyNumberChangeModal}
         hideBackfillFailureModal={hideBackfillFailureModal}
         hideUserNotFoundModal={hideUserNotFoundModal}
         hideWhatsNewModal={hideWhatsNewModal}
+        hideKeyTransparencyOnboardingDialog={
+          hideKeyTransparencyOnboardingDialog
+        }
+        finishKeyTransparencyOnboarding={finishKeyTransparencyOnboarding}
         hideTapToViewNotAvailableModal={hideTapToViewNotAvailableModal}
         i18n={i18n}
-        isAboutContactModalVisible={aboutContactModalContactId != null}
+        isAboutContactModalVisible={aboutContactModalState != null}
+        isKeyTransparencyErrorVisible={isKeyTransparencyErrorVisible}
+        isKeyTransparencyOnboardingVisible={isKeyTransparencyOnboardingVisible}
+        isPinChangeModalVisible={isPinChangeModalVisible}
         isProfileNameWarningModalVisible={isProfileNameWarningModalVisible}
         isShortcutGuideModalVisible={isShortcutGuideModalVisible}
         isSignalConnectionsVisible={isSignalConnectionsVisible}
@@ -304,12 +365,18 @@ export const SmartGlobalModalContainer = memo(
         renderEditNicknameAndNoteModal={renderEditNicknameAndNoteModal}
         renderErrorModal={renderErrorModal}
         renderDeleteMessagesModal={renderDeleteMessagesModal}
+        renderDiscardDraftDialog={renderDiscardDraftDialog}
         renderDraftGifMessageSendModal={renderDraftGifMessageSendModal}
         renderForwardMessagesModal={renderForwardMessagesModal}
+        renderGroupMemberLabelInfoModal={renderGroupMemberLabelInfoModal}
+        renderKeyTransparencyErrorDialog={renderKeyTransparencyErrorDialog}
         renderMessageRequestActionsConfirmation={
           renderMessageRequestActionsConfirmation
         }
         renderNotePreviewModal={renderNotePreviewModal}
+        renderPinChangeModal={renderPinChangeModal}
+        renderPinMessageDialog={renderPinMessageDialog}
+        renderPinReminderModal={renderPinReminderModal}
         renderPlaintextExportWorkflow={renderPlaintextExportWorkflow}
         renderLocalBackupExportWorkflow={renderLocalBackupExportWorkflow}
         renderProfileNameWarningModal={renderProfileNameWarningModal}
@@ -319,6 +386,8 @@ export const SmartGlobalModalContainer = memo(
         renderShortcutGuideModal={renderShortcutGuideModal}
         renderStickerPreviewModal={renderStickerPreviewModal}
         renderStoriesSettings={renderStoriesSettings}
+        renderTerminateGroupFailedModal={renderTerminateGroupFailedModal}
+        renderGroupV2JoinDialog={renderGroupV2JoinDialog}
         safetyNumberChangedBlockingData={safetyNumberChangedBlockingData}
         safetyNumberModalContactId={safetyNumberModalContactId}
         shouldShowPlaintextExportWorkflow={shouldShowPlaintextExportWorkflow}
@@ -326,11 +395,12 @@ export const SmartGlobalModalContainer = memo(
           shouldShowLocalBackupExportWorkflow
         }
         stickerPackPreviewId={stickerPackPreviewId}
-        tapToViewNotAvailableModalProps={tapToViewNotAvailableModalProps}
+        tapToViewNotAvailableModalData={tapToViewNotAvailableModalData}
         theme={theme}
         toggleSignalConnectionsModal={toggleSignalConnectionsModal}
         userNotFoundModalState={userNotFoundModalState}
         usernameOnboardingState={usernameOnboardingState}
+        pinReminderState={pinReminderState}
         profileNameWarningModalConversationType={
           profileNameWarningModalConversationType
         }

@@ -1,23 +1,22 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { type ReactNode } from 'react';
+import { type ReactNode, type JSX } from 'react';
 
 import {
   LocalExportErrors,
   LocalBackupExportSteps,
-} from '../types/LocalExport.std.js';
-import { AxoDialog } from '../axo/AxoDialog.dom.js';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.js';
+} from '../types/LocalExport.std.ts';
+import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
 
-import type { LocalBackupExportWorkflowType } from '../types/LocalExport.std.js';
-import type { LocalizerType } from '../types/I18N.std.js';
-import { formatFileSize } from '../util/formatFileSize.std.js';
-import { ProgressBar } from './ProgressBar.dom.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
-import { tw } from '../axo/tw.dom.js';
-import { AxoSymbol } from '../axo/AxoSymbol.dom.js';
-import type { AxoSymbolIconName } from '../axo/_internal/AxoSymbolDefs.generated.std.js';
+import type { LocalBackupExportWorkflowType } from '../types/LocalExport.std.ts';
+import type { LocalizerType } from '../types/I18N.std.ts';
+import { formatFileSize } from '../util/formatFileSize.std.ts';
+import { ProgressBar } from './ProgressBar.dom.tsx';
+import { missingCaseError } from '../util/missingCaseError.std.ts';
+import { tw } from '../axo/tw.dom.tsx';
+import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 
 export type PropsType = {
   cancelWorkflow: () => void;
@@ -35,7 +34,7 @@ export function LocalBackupExportWorkflow({
   openFileInFolder,
   osName,
   workflow,
-}: PropsType): React.JSX.Element {
+}: PropsType): JSX.Element {
   const { step } = workflow;
 
   if (
@@ -56,13 +55,15 @@ export function LocalBackupExportWorkflow({
 
       progressElements = (
         <>
-          <div className={tw('mb-[17px]')}>
+          <div className={tw('mb-4')}>
             <ProgressBar
               fractionComplete={fractionComplete}
               isRTL={i18n.getLocaleDirection() === 'rtl'}
             />
           </div>
-          <div className={tw('mb-1.5 text-center type-body-small font-[600]')}>
+          <div
+            className={tw('mb-1.5 type-body-small font-semibold text-primary')}
+          >
             {i18n('icu:PlaintextExport--ProgressDialog--Progress', {
               currentBytes: formatFileSize(progress.currentBytes),
               totalBytes: formatFileSize(progress.totalBytes),
@@ -73,7 +74,7 @@ export function LocalBackupExportWorkflow({
       );
     } else {
       progressElements = (
-        <div className={tw('mb-[17px]')}>
+        <div className={tw('mb-4')}>
           <ProgressBar
             fractionComplete={null}
             isRTL={i18n.getLocaleDirection() === 'rtl'}
@@ -85,38 +86,29 @@ export function LocalBackupExportWorkflow({
     return (
       <AxoDialog.Root open onOpenChange={cancelWorkflow}>
         <AxoDialog.Content size="md" escape="cancel-is-destructive">
-          <AxoDialog.Header>
+          <AxoDialog.Body>
             <AxoDialog.Title>
-              <div className={tw('pt-[10px]')}>
-                {i18n('icu:LocalBackupExport--ProgressDialog--Header')}
-              </div>
+              {i18n('icu:LocalBackupExport--ProgressDialog--Header')}
             </AxoDialog.Title>
-          </AxoDialog.Header>
-          <AxoDialog.Body padding="normal">
-            <div className={tw('mx-auto my-[29px] w-[331px]')}>
+
+            <div className={tw('my-6')}>
               {progressElements}
-              <div
-                className={tw(
-                  'text-center type-body-small text-label-secondary'
-                )}
-              >
-                {i18n('icu:PlaintextExport--ProgressDialog--TimeWarning')}
-              </div>
+              <AxoDialog.Description>
+                <p className={tw('type-body-small')}>
+                  {i18n('icu:PlaintextExport--ProgressDialog--TimeWarning')}
+                </p>
+              </AxoDialog.Description>
             </div>
           </AxoDialog.Body>
           <AxoDialog.Footer>
-            <div
-              className={tw(
-                'mx-auto',
-                'flex flex-wrap',
-                'max-w-full',
-                'items-center gap-x-2 gap-y-3'
-              )}
-            >
-              <AxoDialog.Action variant="secondary" onClick={cancelWorkflow}>
+            <AxoDialog.Actions width="fill">
+              <AxoDialog.Action
+                variant="subtle-secondary"
+                onClick={cancelWorkflow}
+              >
                 {i18n('icu:cancel')}
               </AxoDialog.Action>
-            </div>
+            </AxoDialog.Actions>
           </AxoDialog.Footer>
         </AxoDialog.Content>
       </AxoDialog.Root>
@@ -138,31 +130,31 @@ export function LocalBackupExportWorkflow({
     }
 
     return (
-      <AxoAlertDialog.Root open onOpenChange={clearWorkflow}>
-        <AxoAlertDialog.Content escape="cancel-is-noop">
-          <AxoAlertDialog.Body>
-            <div className={tw('flex flex-col items-center')}>
+      <AxoDialog.Root open onOpenChange={clearWorkflow}>
+        <AxoDialog.Content size="sm" escape="cancel-is-noop">
+          <AxoDialog.Body>
+            <div className={tw('mb-2.5 flex justify-center')}>
               <img
                 src="images/desktop-and-phone.svg"
-                className={tw('my-4')}
-                height="61"
-                width="90"
+                height={92}
+                width={138}
                 alt=""
+                className={tw('max-w-22.5')}
               />
-              <AxoAlertDialog.Title>
-                <div className={tw('mb-3 type-title-medium')}>
-                  {i18n('icu:LocalBackupExport--CompleteDialog--Header')}
-                </div>
-              </AxoAlertDialog.Title>
             </div>
-            <AxoAlertDialog.Description>
-              <div className={tw('mb-5 flex flex-col gap-5')}>
-                {i18n(
-                  'icu:LocalBackupExport--CompleteDialog--RestoreInstructionsHeader'
-                )}
+            <AxoDialog.Title>
+              {i18n('icu:LocalBackupExport--CompleteDialog--Header')}
+            </AxoDialog.Title>
+            <AxoDialog.Description>
+              <div className={tw('flex flex-col gap-5 text-primary')}>
+                <p>
+                  {i18n(
+                    'icu:LocalBackupExport--CompleteDialog--RestoreInstructionsHeader'
+                  )}
+                </p>
                 <ol className={tw('flex flex-col gap-5')}>
                   <ListItemWithIcon
-                    iconName="sort-vertical"
+                    iconName="arrow-up-down"
                     content={i18n(
                       'icu:LocalBackupExport--CompleteDialog--RestoreInstructionsTransfer'
                     )}
@@ -181,24 +173,29 @@ export function LocalBackupExportWorkflow({
                   />
                 </ol>
               </div>
-            </AxoAlertDialog.Description>
-          </AxoAlertDialog.Body>
-          <AxoAlertDialog.Footer>
-            <AxoAlertDialog.Action
-              variant="secondary"
-              onClick={() => {
-                openFileInFolder(workflow.localBackupFolder);
-                clearWorkflow();
-              }}
-            >
-              {showInFolderText}
-            </AxoAlertDialog.Action>
-            <AxoAlertDialog.Action variant="primary" onClick={clearWorkflow}>
-              {i18n('icu:ok')}
-            </AxoAlertDialog.Action>
-          </AxoAlertDialog.Footer>
-        </AxoAlertDialog.Content>
-      </AxoAlertDialog.Root>
+            </AxoDialog.Description>
+          </AxoDialog.Body>
+          <AxoDialog.Footer>
+            <AxoDialog.Actions width="fill">
+              <AxoDialog.Action
+                variant="subtle-secondary"
+                onClick={() => {
+                  openFileInFolder(workflow.localBackupFolder);
+                  clearWorkflow();
+                }}
+              >
+                {showInFolderText}
+              </AxoDialog.Action>
+              <AxoDialog.Action
+                variant="strong-primary"
+                onClick={clearWorkflow}
+              >
+                {i18n('icu:ok')}
+              </AxoDialog.Action>
+            </AxoDialog.Actions>
+          </AxoDialog.Footer>
+        </AxoDialog.Content>
+      </AxoDialog.Root>
     );
   }
 
@@ -235,9 +232,7 @@ export function LocalBackupExportWorkflow({
             <AxoAlertDialog.Description>{detail}</AxoAlertDialog.Description>
           </AxoAlertDialog.Body>
           <AxoAlertDialog.Footer>
-            <AxoAlertDialog.Action variant="primary" onClick={clearWorkflow}>
-              {i18n('icu:ok')}
-            </AxoAlertDialog.Action>
+            <AxoAlertDialog.Ok />
           </AxoAlertDialog.Footer>
         </AxoAlertDialog.Content>
       </AxoAlertDialog.Root>
@@ -251,14 +246,14 @@ function ListItemWithIcon({
   iconName,
   content,
 }: {
-  iconName: AxoSymbolIconName;
+  iconName: AxoSymbol.Name;
   content: ReactNode;
 }): ReactNode {
   return (
     <li className={tw('flex items-center gap-2')}>
       <div
         className={tw(
-          'flex size-8 shrink-0 items-center justify-center rounded-full bg-fill-secondary'
+          'flex size-8 shrink-0 items-center justify-center rounded-full bg-primary'
         )}
       >
         <AxoSymbol.Icon size={20} symbol={iconName} label={null} />

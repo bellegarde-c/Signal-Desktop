@@ -1,29 +1,24 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { FunctionComponent, ReactNode } from 'react';
-import React, { useCallback } from 'react';
+import type { FunctionComponent, ReactNode, JSX } from 'react';
+import { useCallback, memo } from 'react';
 import classNames from 'classnames';
 
-import type { RenderConversationListItemContextMenuProps } from './BaseConversationListItem.dom.js';
-import {
-  BaseConversationListItem,
-  HEADER_NAME_CLASS_NAME,
-  HEADER_CONTACT_NAME_CLASS_NAME,
-  MESSAGE_TEXT_CLASS_NAME,
-} from './BaseConversationListItem.dom.js';
-import { MessageBody } from '../conversation/MessageBody.dom.js';
-import { ContactName } from '../conversation/ContactName.dom.js';
-import { TypingAnimation } from '../conversation/TypingAnimation.dom.js';
+import type { RenderConversationListItemContextMenuProps } from './BaseConversationListItem.dom.tsx';
+import { BaseConversationListItem } from './BaseConversationListItem.dom.tsx';
+import { MessageBody } from '../conversation/MessageBody.dom.tsx';
+import { ContactName } from '../conversation/ContactName.dom.tsx';
+import { TypingAnimation } from '../conversation/TypingAnimation.dom.tsx';
 
-import type { LocalizerType, ThemeType } from '../../types/Util.std.js';
-import type { ConversationType } from '../../state/ducks/conversations.preload.js';
-import type { BadgeType } from '../../badges/types.std.js';
-import { isSignalConversation } from '../../util/isSignalConversation.dom.js';
-import { RenderLocation } from '../conversation/MessageTextRenderer.dom.js';
+import type { LocalizerType, ThemeType } from '../../types/Util.std.ts';
+import type { ConversationType } from '../../state/ducks/conversations.preload.ts';
+import type { BadgeType } from '../../badges/types.std.ts';
+import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
+import { RenderLocation } from '../conversation/MessageTextRenderer.dom.tsx';
+import type { LastMessageStatus } from '../../model-types.std.ts';
 
 const EMPTY_OBJECT = Object.freeze(Object.create(null));
-const MESSAGE_STATUS_ICON_CLASS_NAME = `${MESSAGE_TEXT_CLASS_NAME}__status-icon`;
 
 export type PropsData = Pick<
   ConversationType,
@@ -49,7 +44,6 @@ export type PropsData = Pick<
   | 'phoneNumber'
   | 'profileName'
   | 'removalStage'
-  | 'sharedGroupNames'
   | 'shouldShowDraft'
   | 'title'
   | 'type'
@@ -69,12 +63,12 @@ type PropsHousekeeping = {
   theme: ThemeType;
   renderConversationListItemContextMenu?: (
     props: RenderConversationListItemContextMenuProps
-  ) => React.JSX.Element;
+  ) => JSX.Element;
 };
 
 export type Props = PropsData & PropsHousekeeping;
 
-export const ConversationListItem: FunctionComponent<Props> = React.memo(
+export const ConversationListItem: FunctionComponent<Props> = memo(
   function ConversationListItem({
     avatarPlaceholderGradient,
     acceptedMessageRequest,
@@ -100,7 +94,6 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
     phoneNumber,
     profileName,
     removalStage,
-    sharedGroupNames,
     shouldShowDraft,
     theme,
     title,
@@ -111,6 +104,7 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
     serviceId,
     renderConversationListItemContextMenu,
   }) {
+    // oxlint-disable-next-line react/purity
     const isMuted = Boolean(muteExpiresAt && Date.now() < muteExpiresAt);
     const isSomeoneTyping =
       Object.keys(typingContactIdTimestamps ?? {}).length > 0;
@@ -118,18 +112,20 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
       <>
         {isMe ? (
           <ContactName
-            module={HEADER_CONTACT_NAME_CLASS_NAME}
+            className="module-conversation-list__item--contact-or-conversation__content__header__name__contact-name"
             isMe={isMe}
             title={i18n('icu:noteToSelf')}
           />
         ) : (
           <ContactName
-            module={HEADER_CONTACT_NAME_CLASS_NAME}
+            className="module-conversation-list__item--contact-or-conversation__content__header__name__contact-name"
             isSignalConversation={isSignalConversation({ id, serviceId })}
             title={title}
           />
         )}
-        {isMuted && <div className={`${HEADER_NAME_CLASS_NAME}__mute-icon`} />}
+        {isMuted && (
+          <div className="module-conversation-list__item--contact-or-conversation__content__header__name__mute-icon" />
+        )}
       </>
     );
 
@@ -139,13 +135,13 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
 
     if (isBlocked) {
       messageText = (
-        <span className={`${MESSAGE_TEXT_CLASS_NAME}__blocked`}>
+        <span className="module-conversation-list__item--contact-or-conversation__content__message__text__blocked">
           {i18n('icu:ConversationListItem--blocked')}
         </span>
       );
     } else if (!acceptedMessageRequest && removalStage !== 'justNotification') {
       messageText = (
-        <span className={`${MESSAGE_TEXT_CLASS_NAME}__message-request`}>
+        <span className="module-conversation-list__item--contact-or-conversation__content__message__text__message-request">
           {i18n('icu:ConversationListItem--message-request')}
         </span>
       );
@@ -154,7 +150,7 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
     } else if (shouldShowDraft && draftPreview) {
       messageText = (
         <>
-          <span className={`${MESSAGE_TEXT_CLASS_NAME}__draft-prefix`}>
+          <span className="module-conversation-list__item--contact-or-conversation__content__message__text__draft-prefix">
             {i18n('icu:ConversationListItem--draft-prefix')}
           </span>
           <MessageBody
@@ -172,15 +168,27 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
       );
       headerDate = draftTimestamp;
     } else if (lastMessage?.deletedForEveryone) {
+      let deletedText: string;
+      if (lastMessage.deletedByAdminName != null) {
+        deletedText = i18n('icu:message--deletedByAdmin', {
+          admin: lastMessage.deletedByAdminName,
+        });
+      } else if (lastMessage.isOutgoing) {
+        deletedText = i18n('icu:message--deletedForEveryone--outgoing');
+      } else {
+        deletedText = i18n('icu:message--deletedForEveryone--incoming', {
+          name: lastMessage.authorName ?? '',
+        });
+      }
       messageText = (
-        <span className={`${MESSAGE_TEXT_CLASS_NAME}__deleted-for-everyone`}>
-          {i18n('icu:message--deletedForEveryone')}
+        <span className="module-conversation-list__item--contact-or-conversation__content__message__text__deleted-for-everyone">
+          {deletedText}
         </span>
       );
     } else if (lastMessage) {
       messageText = (
         <MessageBody
-          author={type === 'group' ? lastMessage.author : undefined}
+          author={type === 'group' ? lastMessage.author : null}
           bodyRanges={lastMessage.bodyRanges}
           disableJumbomoji
           disableLinks
@@ -193,11 +201,28 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
         />
       );
       if (lastMessage.status) {
+        const StatusIcons: Record<LastMessageStatus, string | null> = {
+          paused:
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--paused',
+          error:
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--error',
+          'partial-sent':
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--partial-sent',
+          sending:
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--sending',
+          sent: 'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--sent',
+          delivered:
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--delivered',
+          read: 'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--read',
+          viewed:
+            'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon--viewed',
+        };
+
         messageStatusIcon = (
           <div
             className={classNames(
-              MESSAGE_STATUS_ICON_CLASS_NAME,
-              `${MESSAGE_STATUS_ICON_CLASS_NAME}--${lastMessage.status}`
+              'module-conversation-list__item--contact-or-conversation__content__message__text__status-icon',
+              StatusIcons[lastMessage.status]
             )}
           />
         );
@@ -234,7 +259,6 @@ export const ConversationListItem: FunctionComponent<Props> = React.memo(
         onMouseDown={onMouseDownItem}
         phoneNumber={phoneNumber}
         profileName={profileName}
-        sharedGroupNames={sharedGroupNames}
         theme={theme}
         title={title}
         unreadCount={unreadCount}

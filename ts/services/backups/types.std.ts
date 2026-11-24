@@ -1,12 +1,13 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AciString, PniString } from '../../types/ServiceId.std.js';
-import type { ConversationColorType } from '../../types/Colors.std.js';
+import type { AciString, PniString } from '../../types/ServiceId.std.ts';
 import type {
   CoreAttachmentBackupJobType,
   CoreAttachmentLocalBackupJobType,
-} from '../../types/AttachmentBackup.std.js';
+} from '../../types/AttachmentBackup.std.ts';
+import type { ChatStyle } from '../../types/ChatStyle.std.ts';
+import type { BackupKey } from '@signalapp/libsignal-client/dist/AccountKeys.js';
 
 // Duplicated here to allow loading it in a non-node environment
 export enum BackupLevel {
@@ -34,19 +35,15 @@ export type OnProgressCallback = (
   totalBytes: number
 ) => void;
 
-export type BackupExportOptions = { abortSignal: AbortSignal } & (
+export type BackupExportOptions =
   | {
       type: 'remote' | 'cross-client-integration-test';
       level: BackupLevel;
     }
-  | {
-      type: 'plaintext-export';
-    }
-  | {
-      type: 'local-encrypted';
-      snapshotDir: string;
-    }
-);
+  | { type: 'link-and-sync' }
+  | { type: 'plaintext-export' }
+  | { type: 'local-encrypted' };
+export type BackupExportType = BackupExportOptions['type'];
 
 export type BackupImportOptions = (
   | { type: 'remote' | 'cross-client-integration-test' }
@@ -54,16 +51,15 @@ export type BackupImportOptions = (
       type: 'local-encrypted';
       localBackupSnapshotDir: string;
     }
+  | { type: 'link-and-sync'; ephemeralBackupKey: BackupKey }
 ) & {
-  ephemeralKey?: Uint8Array;
   onProgress?: OnProgressCallback;
 };
 
 export type LocalChatStyle = Readonly<{
-  wallpaperPhotoPointer: Uint8Array | undefined;
+  wallpaperPhotoPointer: Uint8Array<ArrayBuffer> | undefined;
   wallpaperPreset: number | undefined;
-  color: ConversationColorType | undefined;
-  customColorId: string | undefined;
+  bubbleColor: ChatStyle['bubbleColor'] | undefined;
   dimWallpaperInDarkMode: boolean | undefined;
   autoBubbleColor: boolean | undefined;
 }>;
@@ -75,17 +71,21 @@ export type StatsType = {
   chatFolders: number;
   chats: number;
   distributionLists: number;
+  favoriteStickers: number;
+  fixedDirectMessages: number;
   messages: number;
   notificationProfiles: number;
+  skippedConversations: number;
   skippedMessages: number;
-  stickerPacks: number;
-  fixedDirectMessages: number;
+  installedStickerPacks: number;
+  unknownConversationReferences: Record<string, number>;
 };
 
 export type ExportResultType = Readonly<{
   attachmentBackupJobs: ReadonlyArray<
     CoreAttachmentBackupJobType | CoreAttachmentLocalBackupJobType
   >;
+  mediaNames: Array<string>;
   totalBytes: number;
   duration: number;
   stats: Readonly<StatsType>;

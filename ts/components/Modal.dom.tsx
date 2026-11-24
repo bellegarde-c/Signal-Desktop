@@ -1,27 +1,29 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ReactElement, ReactNode } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import type { ReactElement, ReactNode, JSX } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import lodash from 'lodash';
-import { animated } from '@react-spring/web';
+import { animated, type SpringValues } from '@react-spring/web';
 
 import { v4 as uuid } from 'uuid';
-import type { LocalizerType } from '../types/Util.std.js';
-import { ModalHost } from './ModalHost.dom.js';
-import type { Theme } from '../util/theme.std.js';
-import { assertDev } from '../util/assert.std.js';
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
-import { useAnimated } from '../hooks/useAnimated.dom.js';
-import { useHasWrapped } from '../hooks/useHasWrapped.std.js';
-import { createLogger } from '../logging/log.std.js';
+import type { LocalizerType } from '../types/Util.std.ts';
+import { ModalHost } from './ModalHost.dom.tsx';
+import type { Theme } from '../util/theme.std.ts';
+import { assertDev } from '../util/assert.std.ts';
+import {
+  type ModalConfigType,
+  useAnimated,
+} from '../hooks/useAnimated.dom.tsx';
+import { useHasWrapped } from '../hooks/useHasWrapped.std.ts';
+import { createLogger } from '../logging/log.std.ts';
 import {
   isScrollOverflowVertical,
   isScrollAtTop,
   isScrollAtBottom,
   useScrollObserver,
-} from '../hooks/useSizeObserver.dom.js';
+} from '../hooks/useSizeObserver.dom.tsx';
 
 const { noop } = lodash;
 
@@ -34,9 +36,11 @@ type PropsType = {
   hasHeaderDivider?: boolean;
   hasFooterDivider?: boolean;
   i18n: LocalizerType;
-  modalFooter?: React.JSX.Element;
+  modalFooter?: JSX.Element;
   modalHeaderChildren?: ReactNode;
-  moduleClassName?: string;
+
+  /** @deprecated */
+  className?: string;
   onBackButtonClick?: () => unknown;
   onClose?: () => void;
   title?: ReactNode;
@@ -51,8 +55,6 @@ export type ModalPropsType = PropsType & {
   theme?: Theme;
 };
 
-const BASE_CLASS_NAME = 'module-Modal';
-
 export function Modal({
   children,
   modalName,
@@ -60,7 +62,7 @@ export function Modal({
   i18n,
   modalFooter,
   modalHeaderChildren,
-  moduleClassName,
+  className,
   noEscapeClose,
   noMouseClose,
   onBackButtonClick,
@@ -72,7 +74,7 @@ export function Modal({
   noTransform = false,
   padded = true,
   'aria-describedby': ariaDescribedBy,
-}: Readonly<ModalPropsType>): React.JSX.Element | null {
+}: Readonly<ModalPropsType>): JSX.Element | null {
   const { close, isClosed, modalStyles, overlayStyles } = useAnimated(
     onClose,
 
@@ -117,7 +119,7 @@ export function Modal({
   return (
     <ModalHost
       modalName={modalName}
-      moduleClassName={moduleClassName}
+      className={className}
       noEscapeClose={noEscapeClose}
       noMouseClose={noMouseClose}
       onClose={close}
@@ -125,31 +127,30 @@ export function Modal({
       overlayStyles={overlayStyles}
       theme={theme}
     >
-      <animated.div style={modalStyles}>
-        <ModalPage
-          modalName={modalName}
-          hasXButton={hasXButton}
-          i18n={i18n}
-          modalFooter={modalFooter}
-          modalHeaderChildren={modalHeaderChildren}
-          moduleClassName={moduleClassName}
-          onBackButtonClick={onBackButtonClick}
-          onClose={close}
-          title={title}
-          padded={padded}
-          hasHeaderDivider={hasHeaderDivider}
-          hasFooterDivider={hasFooterDivider}
-          aria-describedby={ariaDescribedBy}
-        >
-          {children}
-        </ModalPage>
-      </animated.div>
+      <ModalPage
+        modalName={modalName}
+        hasXButton={hasXButton}
+        i18n={i18n}
+        modalFooter={modalFooter}
+        modalHeaderChildren={modalHeaderChildren}
+        className={className}
+        onBackButtonClick={onBackButtonClick}
+        onClose={close}
+        title={title}
+        padded={padded}
+        hasHeaderDivider={hasHeaderDivider}
+        hasFooterDivider={hasFooterDivider}
+        aria-describedby={ariaDescribedBy}
+        modalStyles={modalStyles}
+      >
+        {children}
+      </ModalPage>
     </ModalHost>
   );
 }
 
 type ModalPageProps = Readonly<{
-  // should be the one provided by PagedModal
+  modalStyles?: SpringValues<ModalConfigType>;
   onClose: () => void;
 }> &
   Omit<Readonly<PropsType>, 'onClose'>;
@@ -175,7 +176,8 @@ export function ModalPage({
   modalFooter,
   modalHeaderChildren,
   modalName,
-  moduleClassName,
+  modalStyles,
+  className,
   onBackButtonClick,
   onClose,
   title,
@@ -183,7 +185,7 @@ export function ModalPage({
   hasHeaderDivider = false,
   hasFooterDivider = false,
   'aria-describedby': ariaDescribedBy,
-}: ModalPageProps): React.JSX.Element {
+}: ModalPageProps): JSX.Element {
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -196,7 +198,6 @@ export function ModalPage({
   const hasHeader = Boolean(
     hasXButton || title || modalHeaderChildren || onBackButtonClick
   );
-  const getClassName = getClassNamesFor(BASE_CLASS_NAME, moduleClassName);
 
   const [id] = useState(() => uuid());
 
@@ -207,93 +208,80 @@ export function ModalPage({
   });
 
   return (
-    <>
-      {/* We don't want the click event to propagate to its container node. */}
-      {/* eslint-disable-next-line max-len */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-      <div
-        className={classNames(
-          getClassName(''),
-          getClassName(hasHeader ? '--has-header' : '--no-header'),
-          Boolean(modalFooter) && getClassName('--has-footer'),
-          padded && getClassName('--padded'),
-          hasHeaderDivider && getClassName('--header-divider'),
-          hasFooterDivider && getClassName('--footer-divider')
-        )}
-        ref={modalRef}
-        role="dialog"
-        tabIndex={-1}
-        aria-labelledby={title ? `${id}-title` : undefined}
-        aria-describedby={ariaDescribedBy}
-        data-testid={modalName}
-        onClick={event => {
-          event.stopPropagation();
-        }}
-      >
-        {hasHeader && (
-          <div
-            className={classNames(
-              getClassName('__header'),
-              onBackButtonClick
-                ? getClassName('__header--with-back-button')
-                : null
-            )}
-          >
-            <div className={getClassName('__headerTitle')}>
-              {onBackButtonClick && (
-                <button
-                  aria-label={i18n('icu:back')}
-                  className={getClassName('__back-button')}
-                  onClick={onBackButtonClick}
-                  tabIndex={0}
-                  type="button"
-                />
-              )}
-              {title && (
-                <h1
-                  id={`${id}-title`}
-                  className={classNames(
-                    getClassName('__title'),
-                    hasXButton ? getClassName('__title--with-x-button') : null
-                  )}
-                >
-                  {title}
-                </h1>
-              )}
-              {hasXButton && !title && (
-                <div className={getClassName('__title')} />
-              )}
-              {hasXButton && (
-                <button
-                  aria-label={i18n('icu:close')}
-                  className={getClassName('__close-button')}
-                  onClick={onClose}
-                  tabIndex={0}
-                  type="button"
-                />
-              )}
-            </div>
-            {modalHeaderChildren}
-          </div>
-        )}
+    <animated.div
+      className={classNames(
+        'module-Modal',
+        hasHeader && 'module-Modal--has-header',
+        Boolean(modalFooter) && 'module-Modal--has-footer',
+        padded && 'module-Modal--padded',
+        hasHeaderDivider && 'module-Modal--header-divider',
+        hasFooterDivider && 'module-Modal--footer-divider',
+        className
+      )}
+      ref={modalRef}
+      role="dialog"
+      tabIndex={-1}
+      aria-labelledby={title ? `${id}-title` : undefined}
+      aria-describedby={ariaDescribedBy}
+      data-testid={modalName}
+      onClick={event => {
+        // We don't want the click event to propagate to its container node.
+        event.stopPropagation();
+      }}
+      style={modalStyles}
+    >
+      {hasHeader && (
         <div
           className={classNames(
-            getClassName('__body'),
-            scrollAtTop ? getClassName('__body--scrollAtTop') : null,
-            scrollAtBottom ? getClassName('__body--scrollAtBottom') : null,
-            scrollVerticalOverflow || scrollAtTop
-              ? getClassName('__body--scrollVerticalOverflow')
-              : null
+            onBackButtonClick ? 'module-Modal__header--with-back-button' : null
           )}
-          ref={bodyRef}
         >
-          <div ref={bodyInnerRef} className={getClassName('__body_inner')}>
-            {children}
+          <div className="module-Modal__headerTitle">
+            {onBackButtonClick && (
+              <button
+                aria-label={i18n('icu:back')}
+                className="module-Modal__back-button"
+                onClick={onBackButtonClick}
+                tabIndex={0}
+                type="button"
+              />
+            )}
+            {title && (
+              <h1 id={`${id}-title`} className="module-Modal__title">
+                {title}
+              </h1>
+            )}
+            {hasXButton && !title && <div className="module-Modal__title" />}
+            {hasXButton && (
+              <button
+                aria-label={i18n('icu:close')}
+                className="module-Modal__close-button"
+                onClick={onClose}
+                tabIndex={0}
+                type="button"
+              />
+            )}
           </div>
+          {modalHeaderChildren}
         </div>
-        {modalFooter && <Modal.ButtonFooter>{modalFooter}</Modal.ButtonFooter>}
+      )}
+      <div
+        className={classNames(
+          'module-Modal__body',
+          scrollAtTop ? 'module-Modal__body--scrollAtTop' : null,
+          scrollAtBottom ? 'module-Modal__body--scrollAtBottom' : null,
+          scrollVerticalOverflow || scrollAtTop
+            ? 'module-Modal__body--scrollVerticalOverflow'
+            : null
+        )}
+        ref={bodyRef}
+      >
+        <div ref={bodyInnerRef} className="module-Modal__body_inner">
+          {children}
+        </div>
       </div>
-    </>
+      {modalFooter && <Modal.ButtonFooter>{modalFooter}</Modal.ButtonFooter>}
+    </animated.div>
   );
 }
 
@@ -303,14 +291,13 @@ function ButtonFooter({
   children: ReactNode;
 }>): ReactElement {
   const [ref, hasWrapped] = useHasWrapped<HTMLDivElement>();
-
-  const className = getClassNamesFor(BASE_CLASS_NAME)('__button-footer');
-
   return (
     <div
       className={classNames(
-        className,
-        hasWrapped ? `${className}--one-button-per-line` : undefined
+        'module-Modal__button-footer',
+        hasWrapped
+          ? 'module-Modal__button-footer--one-button-per-line'
+          : undefined
       )}
       ref={ref}
     >
@@ -323,7 +310,8 @@ Modal.ButtonFooter = ButtonFooter;
 type PagedModalProps = Readonly<{
   modalName: string;
   children: RenderModalPage;
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   onClose?: () => void;
   noMouseClose?: boolean;
   theme?: Theme;
@@ -340,11 +328,11 @@ type PagedModalProps = Readonly<{
 export function PagedModal({
   modalName,
   children,
-  moduleClassName,
+  className,
   noMouseClose,
   onClose = noop,
   theme,
-}: PagedModalProps): React.JSX.Element | null {
+}: PagedModalProps): JSX.Element | null {
   const { close, isClosed, modalStyles, overlayStyles } = useAnimated(onClose, {
     getFrom: () => ({ opacity: 0, transform: 'translateY(48px)' }),
     getTo: isOpen =>
@@ -374,7 +362,7 @@ export function PagedModal({
   return (
     <ModalHost
       modalName={modalName}
-      moduleClassName={moduleClassName}
+      className={className}
       noMouseClose={noMouseClose}
       onClose={close}
       overlayStyles={overlayStyles}
@@ -385,4 +373,4 @@ export function PagedModal({
   );
 }
 
-export type RenderModalPage = (onClose: () => void) => React.JSX.Element;
+export type RenderModalPage = (onClose: () => void) => JSX.Element;

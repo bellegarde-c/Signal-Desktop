@@ -1,14 +1,14 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReadonlyDeep } from 'type-fest';
-import type { ThunkAction } from 'redux-thunk';
 import lodash from 'lodash';
-import type { GifType } from '../../components/fun/panels/FunPanelGifs.dom.js';
-import { DataWriter } from '../../sql/Client.preload.js';
+import type { GifType } from '../../components/fun/panels/FunPanelGifs.dom.tsx';
+import { DataWriter } from '../../sql/Client.preload.ts';
 import {
   type BoundActionCreatorsMapObject,
   useBoundActions,
-} from '../../hooks/useBoundActions.std.js';
+} from '../../hooks/useBoundActions.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const { take } = lodash;
 
@@ -36,7 +36,7 @@ export type GifsRecentGifsAdd = ReadonlyDeep<{
 
 export type GifsRecentGifsRemove = ReadonlyDeep<{
   type: typeof GIFS_RECENT_GIFS_REMOVE;
-  payload: Pick<GifType, 'id'>;
+  payload: { gifId: GifType['id'] };
 }>;
 
 type GifsActionType = ReadonlyDeep<GifsRecentGifsAdd | GifsRecentGifsRemove>;
@@ -52,9 +52,7 @@ export const useGifsActions = (): BoundActionCreatorsMapObject<
   typeof actions
 > => useBoundActions(actions);
 
-function onAddRecentGif(
-  payload: GifType
-): ThunkAction<void, unknown, unknown, GifsRecentGifsAdd> {
+function onAddRecentGif(payload: GifType): AsyncStateThunk<GifsRecentGifsAdd> {
   return async dispatch => {
     await addRecentGif(payload, Date.now(), MAX_RECENT_GIFS);
     dispatch({ type: GIFS_RECENT_GIFS_ADD, payload });
@@ -62,11 +60,11 @@ function onAddRecentGif(
 }
 
 function onRemoveRecentGif(
-  payload: Pick<GifType, 'id'>
-): ThunkAction<void, unknown, unknown, GifsRecentGifsRemove> {
+  gifId: GifType['id']
+): AsyncStateThunk<GifsRecentGifsRemove> {
   return async dispatch => {
-    await removeRecentGif(payload);
-    dispatch({ type: GIFS_RECENT_GIFS_REMOVE, payload });
+    await removeRecentGif(gifId);
+    dispatch({ type: GIFS_RECENT_GIFS_REMOVE, payload: { gifId } });
   };
 }
 
@@ -107,7 +105,7 @@ export function reducer(
     const { payload } = action;
     return {
       ...state,
-      recentGifs: filterRecentGif(state.recentGifs, payload.id),
+      recentGifs: filterRecentGif(state.recentGifs, payload.gifId),
     };
   }
 

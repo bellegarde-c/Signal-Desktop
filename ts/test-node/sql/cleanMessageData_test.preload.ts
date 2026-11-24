@@ -3,13 +3,13 @@
 
 import { assert } from 'chai';
 
-import { _cleanMessageData } from '../../sql/Client.preload.js';
-import { IMAGE_GIF } from '../../types/MIME.std.js';
+import { _cleanMessageData } from '../../sql/Client.preload.ts';
+import { IMAGE_GIF } from '../../types/MIME.std.ts';
 
 describe('_cleanMessageData', () => {
   it('throws if message is missing received_at', () => {
     assert.throws(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       _cleanMessageData({} as any);
     }, 'received_at');
   });
@@ -27,7 +27,7 @@ describe('_cleanMessageData', () => {
         {
           contentType: IMAGE_GIF,
           size: 4,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // oxlint-disable-next-line typescript/no-explicit-any
           data: 1 as any,
         },
         {
@@ -44,8 +44,8 @@ describe('_cleanMessageData', () => {
     };
     const actual = _cleanMessageData(message);
 
-    assert.isUndefined(actual.attachments?.[0].data);
-    assert.isUndefined(actual.attachments?.[1].data);
-    assert.strictEqual(actual.attachments?.[2].data, data);
+    assert.isUndefined(actual.attachments?.[0]?.data);
+    assert.isUndefined(actual.attachments?.[1]?.data);
+    assert.strictEqual(actual.attachments?.[2]?.data, data);
   });
 });

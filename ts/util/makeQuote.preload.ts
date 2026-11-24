@@ -1,28 +1,27 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AttachmentType } from '../types/Attachment.std.js';
+import type { AttachmentType } from '../types/Attachment.std.ts';
 import type {
   MessageAttributesType,
   QuotedAttachmentType,
-} from '../model-types.d.ts';
-import type { LinkPreviewType } from '../types/message/LinkPreviews.std.js';
-import type { StickerType } from '../types/Stickers.preload.js';
-import { IMAGE_JPEG, IMAGE_GIF } from '../types/MIME.std.js';
-import { getAuthor } from '../messages/sources.preload.js';
-import { getQuoteBodyText } from './getQuoteBodyText.std.js';
-import { isGIF } from './Attachment.std.js';
+} from '../model-types.std.ts';
+import type { LinkPreviewType } from '../types/message/LinkPreviews.std.ts';
+import type { StickerType } from '../types/Stickers.preload.ts';
+import { IMAGE_JPEG, IMAGE_GIF } from '../types/MIME.std.ts';
+import { getAuthor } from '../messages/sources.preload.ts';
+import { getQuoteBodyText } from './getQuoteBodyText.std.ts';
+import { isGIF } from './Attachment.std.ts';
 import {
   isGiftBadge,
   isTapToView,
-} from '../state/selectors/message.preload.js';
-import { createLogger } from '../logging/log.std.js';
-import { map, take, collect } from './iterables.std.js';
-import { strictAssert } from './assert.std.js';
-import { loadAttachmentData } from './migrations.preload.js';
-import { getMessageSentTimestamp } from './getMessageSentTimestamp.std.js';
-import { getLocalAttachmentUrl } from './getLocalAttachmentUrl.std.js';
-import type { QuotedMessageForComposerType } from '../state/ducks/composer.preload.js';
+} from '../state/selectors/message.preload.ts';
+import { createLogger } from '../logging/log.std.ts';
+import { DataWriter } from '../sql/Client.preload.ts';
+import { map, take, collect } from './iterables.std.ts';
+import { strictAssert } from './assert.std.ts';
+import { getMessageSentTimestamp } from './getMessageSentTimestamp.std.ts';
+import type { QuotedMessageForComposerType } from '../state/ducks/composer.preload.ts';
 
 const log = createLogger('makeQuote');
 const { i18n } = window.SignalContext;
@@ -73,7 +72,7 @@ export async function getQuoteAttachment(
 ): Promise<Array<QuotedAttachmentType>> {
   if (attachments && attachments.length) {
     const attachmentsToUse = Array.from(take(attachments, 1));
-    const isGIFQuote = isGIF(attachmentsToUse);
+    const isGIFQuote = isGIF(attachmentsToUse[0]);
 
     return Promise.all(
       map(attachmentsToUse, async attachment => {
@@ -93,8 +92,11 @@ export async function getQuoteAttachment(
           thumbnail:
             thumbnail && thumbnail.path
               ? {
-                  ...(await loadAttachmentData(thumbnail)),
-                  url: getLocalAttachmentUrl(thumbnail),
+                  ...thumbnail,
+                  reuseToken:
+                    await DataWriter.protectAttachmentPathFromDeletion({
+                      path: thumbnail.path,
+                    }),
                 }
               : undefined,
         };
@@ -115,8 +117,11 @@ export async function getQuoteAttachment(
           thumbnail:
             image && image.path
               ? {
-                  ...(await loadAttachmentData(image)),
-                  objectUrl: getLocalAttachmentUrl(image),
+                  ...image,
+                  reuseToken:
+                    await DataWriter.protectAttachmentPathFromDeletion({
+                      path: image.path,
+                    }),
                 }
               : undefined,
         };
@@ -132,8 +137,10 @@ export async function getQuoteAttachment(
         contentType,
         thumbnail: path
           ? {
-              ...(await loadAttachmentData(sticker.data)),
-              url: getLocalAttachmentUrl(sticker.data),
+              ...sticker.data,
+              reuseToken: await DataWriter.protectAttachmentPathFromDeletion({
+                path: sticker.data.path,
+              }),
             }
           : undefined,
       },

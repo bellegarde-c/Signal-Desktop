@@ -1,117 +1,238 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import Long from 'long';
 import { createReadStream } from 'node:fs';
+import { PassThrough } from 'node:stream';
+import { LibSignalErrorBase, ErrorCode } from '@signalapp/libsignal-client';
 import type {
-  AttachmentWithHydratedData,
+  AttachmentType,
   UploadedAttachmentType,
-} from '../types/Attachment.std.js';
-import * as Bytes from '../Bytes.std.js';
-import { createLogger } from '../logging/log.std.js';
-import { MIMETypeToString, supportsIncrementalMac } from '../types/MIME.std.js';
-import { getRandomBytes } from '../Crypto.node.js';
-import { backupsService } from '../services/backups/index.preload.js';
-import { tusUpload } from './uploads/tusProtocol.node.js';
-import { defaultFileReader } from './uploads/uploads.node.js';
+} from '../types/Attachment.std.ts';
+import * as Bytes from '../Bytes.std.ts';
+import { createLogger } from '../logging/log.std.ts';
 import {
-  type AttachmentUploadFormResponseType,
+  MIMETypeToString,
+  supportsIncrementalMac,
+  isAudio,
+} from '../types/MIME.std.ts';
+import { getRandomBytes } from '../Crypto.node.ts';
+import { backupsService } from '../services/backups/index.preload.ts';
+import { tusUpload } from './uploads/tusProtocol.node.ts';
+import { defaultFileReader } from './uploads/uploads.node.ts';
+import {
+  type AttachmentUploadFormType,
   getAttachmentUploadForm,
   createFetchForAttachmentUpload,
   putEncryptedAttachment,
-} from '../textsecure/WebAPI.preload.js';
+  getConfig,
+} from '../textsecure/WebAPI.preload.ts';
+import { itemStorage } from '../textsecure/Storage.preload.ts';
 import {
   type EncryptedAttachmentV2,
+  decryptAttachmentV2ToSink,
   encryptAttachmentV2ToDisk,
   safeUnlink,
   type PlaintextSourceType,
-} from '../AttachmentCrypto.node.js';
-import { missingCaseError } from './missingCaseError.std.js';
-import { uuidToBytes } from './uuidToBytes.std.js';
-import { DAY } from './durations/index.std.js';
-import { isVisualMedia } from './Attachment.std.js';
-import { getAbsoluteAttachmentPath } from './migrations.preload.js';
-import { isMoreRecentThan } from './timestamp.std.js';
+} from '../AttachmentCrypto.node.ts';
+import { missingCaseError } from './missingCaseError.std.ts';
+import { uuidToBytes } from './uuidToBytes.std.ts';
+import { DAY, HOUR } from './durations/index.std.ts';
+import { isImageAttachment, isVideoAttachment } from './Attachment.std.ts';
+import { getAbsoluteAttachmentPath } from './migrations.preload.ts';
+import { isMoreRecentThan } from './timestamp.std.ts';
+import { DataReader } from '../sql/Client.preload.ts';
+import {
+  isValidAttachmentKey,
+  isValidDigest,
+  isValidPlaintextHash,
+} from '../types/Crypto.std.ts';
+import type { ExistingAttachmentUploadData } from '../sql/Interface.std.ts';
+import { maybeRefreshRemoteConfig } from '../RemoteConfig.dom.ts';
+import { strictAssert, assertDev } from './assert.std.ts';
 
 const CDNS_SUPPORTING_TUS = new Set([3]);
+const MAX_DURATION_TO_REUSE_ATTACHMENT_CDN_POINTER = 3 * DAY;
 
 const log = createLogger('uploadAttachment');
 
 export async function uploadAttachment(
-  attachment: AttachmentWithHydratedData
+  attachment: AttachmentType,
+  { allowFileName = false }: { allowFileName?: boolean } = {}
 ): Promise<UploadedAttachmentType> {
-  let keys: Uint8Array;
-  let cdnKey: string;
-  let cdnNumber: number;
-  let encrypted: Pick<
-    EncryptedAttachmentV2,
-    'digest' | 'plaintextHash' | 'incrementalMac' | 'chunkSize'
-  >;
-  let uploadTimestamp: number;
+  strictAssert(
+    attachment.transcodingTargetQuality == null,
+    'Attachment needs transcoding'
+  );
 
-  // Recently uploaded attachment
-  if (
-    attachment.cdnKey &&
-    attachment.cdnNumber &&
-    attachment.key &&
-    attachment.size != null &&
-    attachment.digest &&
-    attachment.contentType != null &&
-    attachment.plaintextHash != null &&
-    attachment.uploadTimestamp != null &&
-    isMoreRecentThan(attachment.uploadTimestamp, 3 * DAY)
-  ) {
-    log.info('reusing attachment uploaded at', attachment.uploadTimestamp);
-
-    ({ cdnKey, cdnNumber, uploadTimestamp } = attachment);
-
-    keys = Bytes.fromBase64(attachment.key);
-
-    encrypted = {
-      digest: Bytes.fromBase64(attachment.digest),
-      plaintextHash: attachment.plaintextHash,
-      incrementalMac: attachment.incrementalMac
-        ? Bytes.fromBase64(attachment.incrementalMac)
-        : undefined,
-      chunkSize: attachment.chunkSize,
-    };
-  } else {
-    keys = getRandomBytes(64);
-    uploadTimestamp = Date.now();
-
-    const needIncrementalMac = supportsIncrementalMac(attachment.contentType);
-
-    ({ cdnKey, cdnNumber, encrypted } = await encryptAndUploadAttachment({
-      keys,
-      needIncrementalMac,
-      plaintext: { data: attachment.data },
-      uploadType: 'standard',
-    }));
+  const existingPointer = await getReusableAttachmentPointer(attachment, {
+    allowFileName,
+  });
+  if (existingPointer) {
+    return existingPointer;
   }
 
-  const { blurHash, caption, clientUuid, flags, height, width } = attachment;
+  strictAssert(attachment.path != null, 'Attachment must be present on disk');
+  strictAssert(
+    attachment.localKey != null,
+    'Attachment must be encrypted on disk'
+  );
 
-  // Strip filename for visual media (images and videos) to prevent metadata leakage
-  const fileName = isVisualMedia(attachment) ? undefined : attachment.fileName;
+  const keys = getRandomBytes(64);
+  const uploadTimestamp = Date.now();
 
-  return {
+  const passthrough = new PassThrough();
+  const [
+    {
+      cdnKey,
+      cdnNumber,
+      encrypted: { digest, plaintextHash, incrementalMac, chunkSize },
+    },
+  ] = await Promise.all([
+    encryptAndUploadAttachment({
+      keys,
+      needIncrementalMac: supportsIncrementalMac(attachment.contentType),
+      plaintext: { stream: passthrough, size: attachment.size },
+      uploadType: 'standard',
+    }),
+    decryptAttachmentV2ToSink(
+      {
+        idForLogging: `uploadAttachment(${attachment.clientUuid})`,
+        size: attachment.size,
+        ciphertextPath: getAbsoluteAttachmentPath(attachment.path),
+        type: 'local',
+        keysBase64: attachment.localKey,
+      },
+      passthrough
+    ),
+  ]);
+
+  return getAttachmentPointer(
+    attachment,
+    {
+      keys,
+      cdnKey,
+      cdnNumber,
+      digest,
+      plaintextHash,
+      incrementalMac,
+      chunkSize,
+      uploadTimestamp,
+    },
+    { allowFileName }
+  );
+}
+
+export async function getReusableAttachmentPointer(
+  attachment: AttachmentType,
+  { allowFileName = false }: { allowFileName?: boolean } = {}
+): Promise<UploadedAttachmentType | undefined> {
+  const dataForReuse = await getAttachmentUploadDataForReuse(attachment);
+  if (!dataForReuse || !isValidPlaintextHash(attachment.plaintextHash)) {
+    return undefined;
+  }
+
+  log.info('reusing attachment uploaded at', dataForReuse.uploadTimestamp);
+
+  const needIncrementalMac = supportsIncrementalMac(attachment.contentType);
+  return getAttachmentPointer(
+    attachment,
+    {
+      keys: Bytes.fromBase64(dataForReuse.key),
+      cdnKey: dataForReuse.cdnKey,
+      cdnNumber: dataForReuse.cdnNumber,
+      digest: Bytes.fromBase64(dataForReuse.digest),
+      plaintextHash: attachment.plaintextHash,
+      incrementalMac:
+        needIncrementalMac && dataForReuse.incrementalMac
+          ? Bytes.fromBase64(dataForReuse.incrementalMac)
+          : undefined,
+      chunkSize:
+        needIncrementalMac && dataForReuse.chunkSize
+          ? dataForReuse.chunkSize
+          : undefined,
+      uploadTimestamp: dataForReuse.uploadTimestamp,
+    },
+    { allowFileName }
+  );
+}
+
+function getAttachmentPointer(
+  attachment: AttachmentType,
+  {
+    keys,
     cdnKey,
     cdnNumber,
-    clientUuid: clientUuid ? uuidToBytes(clientUuid) : undefined,
+    digest,
+    plaintextHash,
+    incrementalMac,
+    chunkSize,
+    uploadTimestamp,
+  }: {
+    keys: Uint8Array<ArrayBuffer>;
+    cdnKey: string;
+    cdnNumber: number;
+    digest: Uint8Array<ArrayBuffer>;
+    plaintextHash: string;
+    incrementalMac: Uint8Array<ArrayBuffer> | undefined;
+    chunkSize: number | undefined;
+    uploadTimestamp: number;
+  },
+  { allowFileName }: { allowFileName: boolean }
+): UploadedAttachmentType {
+  const {
+    blurHash,
+    caption,
+    clientUuid,
+    flags,
+    height,
+    width,
+    audioWaveform,
+    duration,
+  } = attachment;
+
+  let { fileName } = attachment;
+  if (
+    !allowFileName &&
+    (isImageAttachment(attachment) || isVideoAttachment(attachment))
+  ) {
+    assertDev(
+      fileName == null || fileName === '',
+      'Filename should be stripped from visual attachments'
+    );
+
+    if (fileName != null) {
+      // We continue to strip the filename here just in case there are old draft
+      // attachments without filenames stripped
+      fileName = undefined;
+    }
+  }
+
+  return {
+    attachmentIdentifier: {
+      cdnKey,
+    },
+    cdnNumber,
+    clientUuid: clientUuid ? uuidToBytes(clientUuid) : null,
     key: keys,
-    size: attachment.data.byteLength,
-    digest: encrypted.digest,
-    plaintextHash: encrypted.plaintextHash,
-    incrementalMac: encrypted.incrementalMac,
-    chunkSize: encrypted.chunkSize,
-    uploadTimestamp: Long.fromNumber(uploadTimestamp),
+    size: attachment.size,
+    digest,
+    plaintextHash,
+    incrementalMac: incrementalMac ?? null,
+    chunkSize: chunkSize ?? null,
+    uploadTimestamp: BigInt(uploadTimestamp),
 
     contentType: MIMETypeToString(attachment.contentType),
-    fileName,
-    flags,
-    width,
-    height,
-    caption,
-    blurHash,
+    fileName: fileName || null,
+    flags: flags ?? null,
+    width: width ?? null,
+    height: height ?? null,
+    caption: caption || null,
+    blurHash: blurHash || null,
+    audioWaveform: audioWaveform?.length ? new Uint8Array(audioWaveform) : null,
+    audioDurationSeconds: isAudio(attachment.contentType)
+      ? duration || null
+      : null,
+
+    thumbnail: null,
   };
 }
 
@@ -121,7 +242,7 @@ export async function encryptAndUploadAttachment({
   plaintext,
   uploadType,
 }: {
-  keys: Uint8Array;
+  keys: Uint8Array<ArrayBuffer>;
   needIncrementalMac: boolean;
   plaintext: PlaintextSourceType;
   uploadType: 'standard' | 'backup';
@@ -130,21 +251,10 @@ export async function encryptAndUploadAttachment({
   cdnNumber: number;
   encrypted: EncryptedAttachmentV2;
 }> {
-  let uploadForm: AttachmentUploadFormResponseType;
+  let uploadForm: AttachmentUploadFormType;
   let absoluteCiphertextPath: string | undefined;
 
   try {
-    switch (uploadType) {
-      case 'standard':
-        uploadForm = await getAttachmentUploadForm();
-        break;
-      case 'backup':
-        uploadForm = await backupsService.api.getMediaUploadForm();
-        break;
-      default:
-        throw missingCaseError(uploadType);
-    }
-
     const encrypted = await encryptAttachmentV2ToDisk({
       getAbsoluteAttachmentPath,
       keys,
@@ -154,6 +264,21 @@ export async function encryptAndUploadAttachment({
 
     absoluteCiphertextPath = getAbsoluteAttachmentPath(encrypted.path);
 
+    switch (uploadType) {
+      case 'standard':
+        uploadForm = await getAttachmentUploadForm({
+          uploadSize: encrypted.ciphertextSize,
+        });
+        break;
+      case 'backup':
+        uploadForm = await backupsService.api.getMediaUploadForm(
+          encrypted.ciphertextSize
+        );
+        break;
+      default:
+        throw missingCaseError(uploadType);
+    }
+
     await uploadFile({
       absoluteCiphertextPath,
       ciphertextFileSize: encrypted.ciphertextSize,
@@ -161,6 +286,17 @@ export async function encryptAndUploadAttachment({
     });
 
     return { cdnKey: uploadForm.key, cdnNumber: uploadForm.cdn, encrypted };
+  } catch (error) {
+    if (
+      error instanceof LibSignalErrorBase &&
+      error.code === ErrorCode.UploadTooLarge
+    ) {
+      await maybeRefreshRemoteConfig({
+        getConfig,
+        storage: itemStorage,
+      });
+    }
+    throw error;
   } finally {
     if (absoluteCiphertextPath) {
       await safeUnlink(absoluteCiphertextPath);
@@ -175,7 +311,7 @@ export async function uploadFile({
 }: {
   absoluteCiphertextPath: string;
   ciphertextFileSize: number;
-  uploadForm: AttachmentUploadFormResponseType;
+  uploadForm: AttachmentUploadFormType;
 }): Promise<void> {
   if (CDNS_SUPPORTING_TUS.has(uploadForm.cdn)) {
     const fetchFn = createFetchForAttachmentUpload(uploadForm);
@@ -196,4 +332,67 @@ export async function uploadFile({
       uploadForm
     );
   }
+}
+
+async function getAttachmentUploadDataForReuse(
+  attachment: AttachmentType
+): Promise<ExistingAttachmentUploadData | null> {
+  if (!isValidPlaintextHash(attachment.plaintextHash)) {
+    return null;
+  }
+
+  if (isValidCdnDataForReuse(attachment)) {
+    return {
+      cdnKey: attachment.cdnKey,
+      cdnNumber: attachment.cdnNumber,
+      key: attachment.key,
+      digest: attachment.digest,
+      uploadTimestamp: attachment.uploadTimestamp,
+      incrementalMac: attachment.incrementalMac ?? null,
+      chunkSize: attachment.chunkSize ?? null,
+    };
+  }
+
+  const recentAttachmentUploadData =
+    await DataReader.getMostRecentAttachmentUploadData(
+      attachment.plaintextHash
+    );
+
+  if (
+    recentAttachmentUploadData &&
+    isValidCdnDataForReuse(recentAttachmentUploadData)
+  ) {
+    return recentAttachmentUploadData;
+  }
+
+  return null;
+}
+
+function isValidCdnDataForReuse(attachment: {
+  cdnKey?: string;
+  cdnNumber?: number;
+  digest?: string;
+  key?: string;
+  uploadTimestamp?: number;
+}): attachment is {
+  cdnKey: string;
+  cdnNumber: number;
+  digest: string;
+  key: string;
+  uploadTimestamp: number;
+} {
+  return Boolean(
+    isValidDigest(attachment.digest) &&
+    isValidAttachmentKey(attachment.key) &&
+    attachment.cdnKey != null &&
+    attachment.cdnNumber != null &&
+    attachment.uploadTimestamp &&
+    isMoreRecentThan(
+      attachment.uploadTimestamp,
+      MAX_DURATION_TO_REUSE_ATTACHMENT_CDN_POINTER
+    ) &&
+    // for extra safety, check to make sure we don't have an uploadTimestamp that's
+    // incorrectly in the future
+    attachment.uploadTimestamp < Date.now() + 12 * HOUR
+  );
 }

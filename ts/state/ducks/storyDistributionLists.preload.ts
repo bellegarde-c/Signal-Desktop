@@ -1,24 +1,25 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
 import lodash from 'lodash';
-import type { ThunkAction } from 'redux-thunk';
-
 import type { ReadonlyDeep } from 'type-fest';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { StoryDistributionWithMembersType } from '../../sql/Interface.std.js';
-import type { StoryDistributionIdString } from '../../types/StoryDistributionId.std.js';
-import type { ServiceIdString } from '../../types/ServiceId.std.js';
-import { createLogger } from '../../logging/log.std.js';
-import { DataReader, DataWriter } from '../../sql/Client.preload.js';
-import { MY_STORY_ID } from '../../types/Stories.std.js';
-import { generateStoryDistributionId } from '../../types/StoryDistributionId.std.js';
-import { deleteStoryForEveryone } from '../../util/deleteStoryForEveryone.preload.js';
-import { replaceIndex } from '../../util/replaceIndex.std.js';
-import { storageServiceUploadJob } from '../../services/storage.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
-import { itemStorage } from '../../textsecure/Storage.preload.js';
+import type { StoryDistributionWithMembersType } from '../../sql/Interface.std.ts';
+import type { StoryDistributionIdString } from '../../types/StoryDistributionId.std.ts';
+import type { ServiceIdString } from '../../types/ServiceId.std.ts';
+import { createLogger } from '../../logging/log.std.ts';
+import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
+import { MY_STORY_ID } from '../../types/Stories.std.ts';
+import { generateStoryDistributionId } from '../../types/StoryDistributionId.std.ts';
+import { deleteStoryForEveryone } from '../../util/deleteStoryForEveryone.preload.ts';
+import { replaceIndex } from '../../util/replaceIndex.std.ts';
+import { runStorageServiceUploadJob } from '../../services/storage.preload.ts';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
+import { getOurAddress } from '../../util/sendToGroup.preload.ts';
+import { QualifiedAddress } from '../../types/QualifiedAddress.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 const { omit } = lodash;
 
@@ -43,6 +44,7 @@ export type StoryDistributionListStateType = ReadonlyDeep<{
 
 const ALLOW_REPLIES_CHANGED = 'storyDistributionLists/ALLOW_REPLIES_CHANGED';
 const CREATE_LIST = 'storyDistributionLists/CREATE_LIST';
+export const MARK_AS_DELETED = 'storyDistributionLists/MARK_AS_DELETED';
 export const DELETE_LIST = 'storyDistributionLists/DELETE_LIST';
 export const HIDE_MY_STORIES_FROM =
   'storyDistributionLists/HIDE_MY_STORIES_FROM';
@@ -63,11 +65,18 @@ type CreateListActionType = ReadonlyDeep<{
   payload: StoryDistributionListDataType;
 }>;
 
+type MarkAsDeletedActionType = ReadonlyDeep<{
+  type: typeof MARK_AS_DELETED;
+  payload: {
+    listId: string;
+    deletedAtTimestamp: number;
+  };
+}>;
+
 type DeleteListActionType = ReadonlyDeep<{
   type: typeof DELETE_LIST;
   payload: {
     listId: string;
-    deletedAtTimestamp: number;
   };
 }>;
 
@@ -104,6 +113,7 @@ export type StoryDistributionListsActionType = ReadonlyDeep<
   | AllowRepliesChangedActionType
   | CreateListActionType
   | DeleteListActionType
+  | MarkAsDeletedActionType
   | HideMyStoriesFromActionType
   | ModifyListActionType
   | ResetMyStoriesActionType
@@ -115,7 +125,7 @@ export type StoryDistributionListsActionType = ReadonlyDeep<
 function allowsRepliesChanged(
   listId: string,
   allowsReplies: boolean
-): ThunkAction<void, RootStateType, null, AllowRepliesChangedActionType> {
+): AsyncStateThunk<AllowRepliesChangedActionType> {
   return async dispatch => {
     const storyDistribution =
       await DataReader.getStoryDistributionWithMembers(listId);
@@ -139,7 +149,7 @@ function allowsRepliesChanged(
       storageNeedsSync: true,
     });
 
-    storageServiceUploadJob({
+    runStorageServiceUploadJob({
       reason: 'distributionLists/allowsRepliesChanged',
     });
 
@@ -160,12 +170,7 @@ function createDistributionList(
   memberServiceIds: Array<ServiceIdString>,
   storageServiceDistributionListRecord?: StoryDistributionWithMembersType,
   shouldSave = true
-): ThunkAction<
-  Promise<StoryDistributionIdString>,
-  RootStateType,
-  string,
-  CreateListActionType
-> {
+): AsyncStateThunk<CreateListActionType, StoryDistributionIdString> {
   return async dispatch => {
     const storyDistribution: StoryDistributionWithMembersType = {
       allowsReplies: true,
@@ -183,16 +188,16 @@ function createDistributionList(
     }
 
     if (storyDistribution.storageNeedsSync) {
-      storageServiceUploadJob({ reason: 'createDistributionList' });
+      runStorageServiceUploadJob({ reason: 'createDistributionList' });
     }
 
     dispatch({
       type: CREATE_LIST,
       payload: {
-        allowsReplies: Boolean(storyDistribution.allowsReplies),
+        allowsReplies: storyDistribution.allowsReplies,
         deletedAtTimestamp: storyDistribution.deletedAtTimestamp,
         id: storyDistribution.id,
-        isBlockList: Boolean(storyDistribution.isBlockList),
+        isBlockList: storyDistribution.isBlockList,
         memberServiceIds,
         name: storyDistribution.name,
       },
@@ -204,7 +209,7 @@ function createDistributionList(
 
 function deleteDistributionList(
   listId: string
-): ThunkAction<void, RootStateType, unknown, DeleteListActionType> {
+): AsyncStateThunk<MarkAsDeletedActionType> {
   return async (dispatch, getState) => {
     const deletedAtTimestamp = Date.now();
 
@@ -216,12 +221,15 @@ function deleteDistributionList(
       return;
     }
 
+    const { senderKeyInfo } = storyDistribution;
+
     await DataWriter.modifyStoryDistributionWithMembers(
       {
         ...storyDistribution,
         deletedAtTimestamp,
         name: '',
         storageNeedsSync: true,
+        senderKeyInfo: undefined,
       },
       {
         toAdd: [],
@@ -236,18 +244,35 @@ function deleteDistributionList(
     await Promise.all(
       storiesToDelete.map(story => deleteStoryForEveryone(stories, story))
     );
+    if (senderKeyInfo?.distributionId) {
+      const ourAddress = getOurAddress();
+      const ourAci = itemStorage.user.getCheckedAci();
+      await signalProtocolStore.removeSenderKey(
+        new QualifiedAddress(ourAci, ourAddress),
+        senderKeyInfo.distributionId
+      );
+    }
 
     log.info('deleteDistributionList: list deleted', listId);
 
-    storageServiceUploadJob({ reason: 'deleteDistributionList' });
+    runStorageServiceUploadJob({ reason: 'deleteDistributionList' });
 
     dispatch({
-      type: DELETE_LIST,
+      type: MARK_AS_DELETED,
       payload: {
         listId,
         deletedAtTimestamp,
       },
     });
+  };
+}
+
+function distributionListWasDeleted(listId: string): DeleteListActionType {
+  return {
+    type: DELETE_LIST,
+    payload: {
+      listId,
+    },
   };
 }
 
@@ -262,7 +287,7 @@ function modifyDistributionList(
 
 function hideMyStoriesFrom(
   memberServiceIds: Array<ServiceIdString>
-): ThunkAction<void, RootStateType, null, HideMyStoriesFromActionType> {
+): AsyncStateThunk<HideMyStoriesFromActionType> {
   return async dispatch => {
     const myStories =
       await DataReader.getStoryDistributionWithMembers(MY_STORY_ID);
@@ -286,7 +311,7 @@ function hideMyStoriesFrom(
       }
     );
 
-    storageServiceUploadJob({
+    runStorageServiceUploadJob({
       reason: 'storyDistributionLists/hideMyStoriesFrom',
     });
 
@@ -302,7 +327,7 @@ function hideMyStoriesFrom(
 function removeMembersFromDistributionList(
   listId: string,
   memberServiceIds: Array<ServiceIdString>
-): ThunkAction<void, RootStateType, null, ModifyListActionType> {
+): AsyncStateThunk<ModifyListActionType> {
   return async dispatch => {
     if (!memberServiceIds.length) {
       log.warn(
@@ -357,7 +382,7 @@ function removeMembersFromDistributionList(
       memberServiceIds,
     });
 
-    storageServiceUploadJob({ reason: 'removeMembersFromDistributionList' });
+    runStorageServiceUploadJob({ reason: 'removeMembersFromDistributionList' });
 
     dispatch({
       type: MODIFY_LIST,
@@ -372,12 +397,7 @@ function removeMembersFromDistributionList(
   };
 }
 
-function setMyStoriesToAllSignalConnections(): ThunkAction<
-  void,
-  RootStateType,
-  null,
-  ResetMyStoriesActionType
-> {
+function setMyStoriesToAllSignalConnections(): AsyncStateThunk<ResetMyStoriesActionType> {
   return async dispatch => {
     const myStories =
       await DataReader.getStoryDistributionWithMembers(MY_STORY_ID);
@@ -402,7 +422,9 @@ function setMyStoriesToAllSignalConnections(): ThunkAction<
         }
       );
 
-      storageServiceUploadJob({ reason: 'setMyStoriesToAllSignalConnections' });
+      runStorageServiceUploadJob({
+        reason: 'setMyStoriesToAllSignalConnections',
+      });
     }
 
     await itemStorage.put('hasSetMyStoriesPrivacy', true);
@@ -416,7 +438,7 @@ function setMyStoriesToAllSignalConnections(): ThunkAction<
 function updateStoryViewers(
   listId: string,
   memberServiceIds: Array<ServiceIdString>
-): ThunkAction<void, RootStateType, null, ViewersChangedActionType> {
+): AsyncStateThunk<ViewersChangedActionType> {
   return async dispatch => {
     const storyDistribution =
       await DataReader.getStoryDistributionWithMembers(listId);
@@ -458,7 +480,7 @@ function updateStoryViewers(
       }
     );
 
-    storageServiceUploadJob({ reason: 'updateStoryViewers' });
+    runStorageServiceUploadJob({ reason: 'updateStoryViewers' });
 
     if (listId === MY_STORY_ID) {
       await itemStorage.put('hasSetMyStoriesPrivacy', true);
@@ -476,7 +498,7 @@ function updateStoryViewers(
 
 function removeMemberFromAllDistributionLists(
   member: ServiceIdString
-): ThunkAction<void, RootStateType, null, ModifyListActionType> {
+): AsyncStateThunk<ModifyListActionType> {
   return async dispatch => {
     const logId = `removeMemberFromAllDistributionLists(${member})`;
     const lists = await DataReader.getAllStoryDistributionsWithMembers();
@@ -489,7 +511,7 @@ function removeMemberFromAllDistributionLists(
     );
 
     for (const { id } of listsWithMember) {
-      dispatch(removeMembersFromDistributionList(id, [member]));
+      void dispatch(removeMembersFromDistributionList(id, [member]));
     }
   };
 }
@@ -498,6 +520,7 @@ export const actions = {
   allowsRepliesChanged,
   createDistributionList,
   deleteDistributionList,
+  distributionListWasDeleted,
   hideMyStoriesFrom,
   modifyDistributionList,
   removeMembersFromDistributionList,
@@ -530,9 +553,11 @@ function replaceDistributionListData(
     return;
   }
 
+  const list = distributionLists[listIndex];
+  strictAssert(list, 'Missing list');
   return replaceIndex(distributionLists, listIndex, {
-    ...distributionLists[listIndex],
-    ...getNextDistributionListData(distributionLists[listIndex]),
+    ...list,
+    ...getNextDistributionListData(list),
   });
 }
 
@@ -551,6 +576,11 @@ export function reducer(
     );
     if (listIndex >= 0) {
       const existingDistributionList = state.distributionLists[listIndex];
+      strictAssert(
+        existingDistributionList,
+        'Missing existingDistributionList'
+      );
+
       const memberServiceIds = new Set<ServiceIdString>(
         existingDistributionList.memberServiceIds
       );
@@ -583,7 +613,7 @@ export function reducer(
     };
   }
 
-  if (action.type === DELETE_LIST) {
+  if (action.type === MARK_AS_DELETED) {
     const distributionLists = replaceDistributionListData(
       state.distributionLists,
       action.payload.listId,
@@ -595,6 +625,15 @@ export function reducer(
     );
 
     return distributionLists ? { distributionLists } : state;
+  }
+
+  if (action.type === DELETE_LIST) {
+    const { listId } = action.payload;
+    const distributionLists = state.distributionLists.filter(
+      item => item.id !== listId
+    );
+
+    return { distributionLists };
   }
 
   if (action.type === HIDE_MY_STORIES_FROM) {

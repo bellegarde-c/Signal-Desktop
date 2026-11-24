@@ -2,35 +2,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReadonlyDeep } from 'type-fest';
 import { v4 as generateUuid } from 'uuid';
-import type { ThunkAction } from 'redux-thunk';
 import { throttle } from 'lodash';
-import type { StateType as RootStateType } from '../reducer.preload.js';
-import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.js';
-import { useBoundActions } from '../../hooks/useBoundActions.std.js';
+import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
+import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
 import {
   ChatFolderParamsSchema,
   isConversationInChatFolder,
   type ChatFolder,
   type ChatFolderId,
   type ChatFolderParams,
-} from '../../types/ChatFolder.std.js';
+} from '../../types/ChatFolder.std.ts';
 import {
   getCurrentChatFolders,
   getSelectedChatFolder,
-} from '../selectors/chatFolders.std.js';
-import { DataReader, DataWriter } from '../../sql/Client.preload.js';
-import { storageServiceUploadJob } from '../../services/storage.preload.js';
-import { parseStrict } from '../../util/schemas.std.js';
-import { chatFolderCleanupService } from '../../services/expiring/chatFolderCleanupService.preload.js';
-import { drop } from '../../util/drop.std.js';
-import type { ShowToastActionType } from './toast.preload.js';
-import { showToast } from './toast.preload.js';
-import { ToastType } from '../../types/Toast.dom.js';
-import type { CurrentChatFolder } from '../../types/CurrentChatFolders.std.js';
-import { CurrentChatFolders } from '../../types/CurrentChatFolders.std.js';
-import { getConversationLookup } from '../selectors/conversations.dom.js';
-import { getOwn } from '../../util/getOwn.std.js';
-import { strictAssert } from '../../util/assert.std.js';
+} from '../selectors/chatFolders.std.ts';
+import { getFilterByUnread } from '../selectors/search.preload.ts';
+import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
+import { runStorageServiceUploadJob } from '../../services/storage.preload.ts';
+import { parseStrict } from '../../util/schemas.std.ts';
+import { chatFolderCleanupService } from '../../services/expiring/chatFolderCleanupService.preload.ts';
+import { drop } from '../../util/drop.std.ts';
+import type { ShowToastActionType } from './toast.preload.ts';
+import { showToast } from './toast.preload.ts';
+import { ToastType } from '../../types/Toast.dom.tsx';
+import type { CurrentChatFolder } from '../../types/CurrentChatFolders.std.ts';
+import { CurrentChatFolders } from '../../types/CurrentChatFolders.std.ts';
+import { getConversationLookup } from '../selectors/conversations.dom.ts';
+import { getOwn } from '../../util/getOwn.std.ts';
+import { strictAssert } from '../../util/assert.std.ts';
+import type { AsyncStateThunk } from '../types.std.ts';
 
 export type ChatFoldersState = ReadonlyDeep<{
   currentChatFolders: CurrentChatFolders;
@@ -91,12 +91,7 @@ function replaceAllChatFolderRecords(
   };
 }
 
-function _refetchChatFolders(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  ChatFolderRecordReplaceAll
-> {
+function _refetchChatFolders(): AsyncStateThunk<ChatFolderRecordReplaceAll> {
   return async dispatch => {
     const chatFolders = await DataReader.getCurrentChatFolders();
     const currentChatFolders = CurrentChatFolders.fromArray(chatFolders);
@@ -111,7 +106,7 @@ const refetchChatFolders = throttle(_refetchChatFolders, 100);
 function createChatFolder(
   chatFolderParams: ChatFolderParams,
   showToastOnSuccess: boolean
-): ThunkAction<void, RootStateType, unknown, ShowToastActionType> {
+): AsyncStateThunk<ShowToastActionType> {
   return async (dispatch, getState) => {
     const currentChatFolders = getCurrentChatFolders(getState());
     const size = CurrentChatFolders.size(currentChatFolders);
@@ -128,8 +123,8 @@ function createChatFolder(
     };
 
     await DataWriter.createChatFolder(chatFolder);
-    storageServiceUploadJob({ reason: 'createChatFolder' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'createChatFolder' });
+    void dispatch(_refetchChatFolders());
 
     if (showToastOnSuccess) {
       dispatch(
@@ -142,23 +137,18 @@ function createChatFolder(
   };
 }
 
-function createAllChatsChatFolder(): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
-  ChatFolderRecordReplaceAll
-> {
+function createAllChatsChatFolder(): AsyncStateThunk<ChatFolderRecordReplaceAll> {
   return async dispatch => {
     await DataWriter.createAllChatsChatFolder();
-    storageServiceUploadJob({ reason: 'createAllChatsChatFolder' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'createAllChatsChatFolder' });
+    void dispatch(_refetchChatFolders());
   };
 }
 
 function updateChatFolder(
   chatFolderId: ChatFolderId,
   chatFolderParams: ChatFolderParams
-): ThunkAction<void, RootStateType, unknown, never> {
+): AsyncStateThunk {
   return async (dispatch, getState) => {
     const currentChatFolders = getCurrentChatFolders(getState());
 
@@ -175,25 +165,23 @@ function updateChatFolder(
     };
 
     await DataWriter.updateChatFolder(nextChatFolder);
-    storageServiceUploadJob({ reason: 'updateChatFolder' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'updateChatFolder' });
+    void dispatch(_refetchChatFolders());
   };
 }
 
-function deleteChatFolder(
-  chatFolderId: ChatFolderId
-): ThunkAction<void, RootStateType, unknown, never> {
+function deleteChatFolder(chatFolderId: ChatFolderId): AsyncStateThunk {
   return async dispatch => {
     await DataWriter.markChatFolderDeleted(chatFolderId, Date.now(), true);
-    storageServiceUploadJob({ reason: 'deleteChatFolder' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'deleteChatFolder' });
+    void dispatch(_refetchChatFolders());
     drop(chatFolderCleanupService.trigger('redux: deleted chat folder'));
   };
 }
 
 function updateChatFoldersPositions(
   chatFolderIds: ReadonlyArray<ChatFolderId>
-): ThunkAction<void, RootStateType, unknown, never> {
+): AsyncStateThunk {
   return async (dispatch, getState) => {
     const currentChatFolders = getCurrentChatFolders(getState());
     const chatFolders = chatFolderIds.map((chatFolderId, index) => {
@@ -205,8 +193,8 @@ function updateChatFoldersPositions(
       return { ...chatFolder, position: index + 1 };
     });
     await DataWriter.updateChatFolderPositions(chatFolders);
-    storageServiceUploadJob({ reason: 'updateChatFoldersPositions' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'updateChatFoldersPositions' });
+    void dispatch(_refetchChatFolders());
   };
 }
 
@@ -233,7 +221,7 @@ function updateChatFolderToggleChat(
   conversationId: string,
   toggle: boolean,
   showToastOnSuccess: boolean
-): ThunkAction<void, RootStateType, unknown, ShowToastActionType> {
+): AsyncStateThunk<ShowToastActionType> {
   return async (dispatch, getState) => {
     const currentChatFolders = getCurrentChatFolders(getState());
     const chatFolder = CurrentChatFolders.expect(
@@ -247,8 +235,8 @@ function updateChatFolderToggleChat(
       conversationId,
       toggle
     );
-    storageServiceUploadJob({ reason: 'toggleChatFolderChat' });
-    dispatch(_refetchChatFolders());
+    runStorageServiceUploadJob({ reason: 'toggleChatFolderChat' });
+    void dispatch(_refetchChatFolders());
 
     if (showToastOnSuccess) {
       dispatch(
@@ -263,12 +251,9 @@ function updateChatFolderToggleChat(
   };
 }
 
-export function updateChatFolderStateOnTargetConversationChanged(
+function updateChatFolderStateOnTargetConversationChanged(
   conversationId: string | undefined
-): ThunkAction<
-  void,
-  RootStateType,
-  unknown,
+): AsyncStateThunk<
   | ChatFolderUpdateSelectedChatFolderId
   | ChatFolderUpdateStableConversationIdInChatFolder
 > {
@@ -281,7 +266,9 @@ export function updateChatFolderStateOnTargetConversationChanged(
 
     const state = getState();
     const selectedChatFolder = getSelectedChatFolder(state);
-    if (selectedChatFolder == null) {
+    const filterByUnread = getFilterByUnread(state);
+
+    if (selectedChatFolder == null && !filterByUnread) {
       return;
     }
 
@@ -289,9 +276,14 @@ export function updateChatFolderStateOnTargetConversationChanged(
     const conversation = getOwn(conversationLookup, conversationId);
     strictAssert(conversation != null, 'Target conversation not found');
 
-    if (isConversationInChatFolder(selectedChatFolder, conversation)) {
-      // Make sure the targetted conversation doesn't appear from the chat folder
-      // while its open (in case it gets marked read for example).
+    const inSelectedFolder =
+      selectedChatFolder == null ||
+      isConversationInChatFolder(selectedChatFolder, conversation);
+
+    if (inSelectedFolder) {
+      // Make sure the targetted conversation doesn't disappear from the view
+      // while its open (in case it gets marked read for example, or moved out
+      // of the chat folder).
       dispatch(updateStableSelectedConversationIdInChatFolder(conversationId));
       return;
     }
@@ -313,6 +305,7 @@ export const actions = {
   updateChatFoldersPositions,
   updateSelectedChatFolderId,
   updateChatFolderToggleChat,
+  updateChatFolderStateOnTargetConversationChanged,
 };
 
 export const useChatFolderActions = (): BoundActionCreatorsMapObject<

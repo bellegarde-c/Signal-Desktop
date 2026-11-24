@@ -1,50 +1,25 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import React, { createContext, useCallback, useEffect, useState } from 'react';
+import type { ReactNode, JSX } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { useMove } from 'react-aria';
-import { NavTabsToggle } from './NavTabs.dom.js';
-import type { LocalizerType } from '../types/I18N.std.js';
+import { NavTabsToggle } from './NavTabs.dom.tsx';
+import type { LocalizerType } from '../types/I18N.std.ts';
 import {
   MAX_WIDTH,
   MIN_FULL_WIDTH,
   MIN_WIDTH,
   getWidthFromPreferredWidth,
-} from '../util/leftPaneWidth.std.js';
-import { WidthBreakpoint, getNavSidebarWidthBreakpoint } from './_util.std.js';
-import type { UnreadStats } from '../util/countUnreadStats.std.js';
-import type { SmartPropsType as SmartToastManagerPropsType } from '../state/smart/ToastManager.preload.js';
+} from '../util/leftPaneWidth.std.ts';
+import { WidthBreakpoint, getNavSidebarWidthBreakpoint } from './_util.std.ts';
+import type { SmartPropsType as SmartToastManagerPropsType } from '../state/smart/ToastManager.preload.tsx';
+import { AxoDragRegion } from '../axo/AxoDragRegion.dom.tsx';
+import { AxoIconButton } from '../axo/AxoIconButton.dom.tsx';
 
 export const NavSidebarWidthBreakpointContext =
   createContext<WidthBreakpoint | null>(null);
-
-type NavSidebarActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
-  Readonly<{
-    icon: ReactNode;
-    label: ReactNode;
-  }>;
-
-export const NavSidebarActionButton = React.forwardRef<
-  HTMLButtonElement,
-  NavSidebarActionButtonProps
->(function NavSidebarActionButtonInner(
-  { icon, label, ...rest },
-  ref
-): React.JSX.Element {
-  return (
-    <button
-      {...rest}
-      ref={ref}
-      type="button"
-      className="NavSidebar__ActionButton"
-    >
-      {icon}
-      <span className="NavSidebar__ActionButtonLabel">{label}</span>
-    </button>
-  );
-});
 
 export type NavSidebarProps = Readonly<{
   actions?: ReactNode;
@@ -55,13 +30,13 @@ export type NavSidebarProps = Readonly<{
   hideHeader?: boolean;
   navTabsCollapsed: boolean;
   onBack?: (() => void) | null;
-  onToggleNavTabsCollapse(navTabsCollapsed: boolean): void;
+  onToggleNavTabsCollapse: (navTabsCollapsed: boolean) => void;
   preferredLeftPaneWidth: number;
   requiresFullWidth: boolean;
   savePreferredLeftPaneWidth: (width: number) => void;
   title: string;
-  otherTabsUnreadStats: UnreadStats;
-  renderToastManager: (_: SmartToastManagerPropsType) => React.JSX.Element;
+  otherTabsUnreadCount: number;
+  renderToastManager: (_: SmartToastManagerPropsType) => JSX.Element;
 }>;
 
 enum DragState {
@@ -84,9 +59,9 @@ export function NavSidebar({
   requiresFullWidth,
   savePreferredLeftPaneWidth,
   title,
-  otherTabsUnreadStats,
+  otherTabsUnreadCount,
   renderToastManager,
-}: NavSidebarProps): React.JSX.Element {
+}: NavSidebarProps): JSX.Element {
   const isRTL = i18n.getLocaleDirection() === 'rtl';
   const [dragState, setDragState] = useState(DragState.INITIAL);
 
@@ -140,12 +115,14 @@ export function NavSidebar({
     // Save the preferred width when the drag ends. We can't do this in onMoveEnd
     // because the width is not updated yet.
     if (dragState === DragState.DRAGEND) {
+      // oxlint-disable-next-line react/set-state-in-effect
       setPreferredWidth(width);
       savePreferredLeftPaneWidth(width);
       setDragState(DragState.INITIAL);
     }
   }, [
     dragState,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     preferredLeftPaneWidth,
     preferredWidth,
     savePreferredLeftPaneWidth,
@@ -174,48 +151,47 @@ export function NavSidebar({
         style={{ width }}
       >
         {!hideHeader && (
-          <div className="NavSidebar__Header">
-            {onBack == null && navTabsCollapsed && (
-              <NavTabsToggle
-                i18n={i18n}
-                navTabsCollapsed={navTabsCollapsed}
-                onToggleNavTabsCollapse={onToggleNavTabsCollapse}
-                hasFailedStorySends={hasFailedStorySends}
-                hasPendingUpdate={hasPendingUpdate}
-                otherTabsUnreadStats={otherTabsUnreadStats}
-              />
-            )}
-            <div
-              className={classNames('NavSidebar__HeaderContent', {
-                'NavSidebar__HeaderContent--navTabsCollapsed': navTabsCollapsed,
-                'NavSidebar__HeaderContent--withBackButton': onBack != null,
-              })}
-            >
-              {onBack != null && (
-                <button
-                  type="button"
-                  role="link"
-                  onClick={onBack}
-                  className="NavSidebar__BackButton"
-                >
-                  <span className="NavSidebar__BackButtonLabel">
-                    {i18n('icu:NavSidebar__BackButtonLabel')}
-                  </span>
-                </button>
+          <AxoDragRegion.Root>
+            <div className="NavSidebar__Header">
+              {onBack == null && navTabsCollapsed && (
+                <NavTabsToggle
+                  i18n={i18n}
+                  navTabsCollapsed={navTabsCollapsed}
+                  onToggleNavTabsCollapse={onToggleNavTabsCollapse}
+                  hasFailedStorySends={hasFailedStorySends}
+                  hasPendingUpdate={hasPendingUpdate}
+                  otherTabsUnreadCount={otherTabsUnreadCount}
+                />
               )}
-              <h1
-                className={classNames('NavSidebar__HeaderTitle', {
-                  'NavSidebar__HeaderTitle--withBackButton': onBack != null,
+              <div
+                className={classNames('NavSidebar__HeaderContent', {
+                  'NavSidebar__HeaderContent--navTabsCollapsed':
+                    navTabsCollapsed,
+                  'NavSidebar__HeaderContent--withBackButton': onBack != null,
                 })}
-                aria-live="assertive"
               >
-                {title}
-              </h1>
-              {actions && (
-                <div className="NavSidebar__HeaderActions">{actions}</div>
-              )}
+                {onBack != null && (
+                  <div className="NavSidebar__BackButton">
+                    <NavSidebarBackButton
+                      label={i18n('icu:NavSidebar__BackButtonLabel')}
+                      onClick={onBack}
+                    />
+                  </div>
+                )}
+                <h1
+                  className={classNames('NavSidebar__HeaderTitle', {
+                    'NavSidebar__HeaderTitle--withBackButton': onBack != null,
+                  })}
+                  aria-live="assertive"
+                >
+                  {title}
+                </h1>
+                {actions && (
+                  <div className="NavSidebar__HeaderActions">{actions}</div>
+                )}
+              </div>
             </div>
-          </div>
+          </AxoDragRegion.Root>
         )}
 
         <div className="NavSidebar__Content">{children}</div>
@@ -230,7 +206,6 @@ export function NavSidebar({
           aria-valuemin={MIN_WIDTH}
           aria-valuemax={preferredLeftPaneWidth}
           aria-valuenow={MAX_WIDTH}
-          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- See https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/separator_role#focusable_separator
           tabIndex={0}
           {...moveProps}
         />
@@ -244,11 +219,32 @@ export function NavSidebar({
   );
 }
 
+export type NavSidebarBackButtonProps = Readonly<{
+  label: string;
+  disabled?: boolean;
+  onClick?: () => void;
+}>;
+
+export function NavSidebarBackButton(
+  props: NavSidebarBackButtonProps
+): ReactNode {
+  return (
+    <AxoIconButton.Root
+      variant="implied-secondary"
+      size="sm"
+      symbol="chevron-[start]"
+      label={props.label}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    />
+  );
+}
+
 export function NavSidebarSearchHeader({
   children,
 }: {
   children: ReactNode;
-}): React.JSX.Element {
+}): JSX.Element {
   return <div className="NavSidebarSearchHeader">{children}</div>;
 }
 
@@ -258,7 +254,7 @@ export function NavSidebarEmpty({
 }: {
   title: string;
   subtitle: string;
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <div className="NavSidebarEmpty">
       <div className="NavSidebarEmpty__inner">

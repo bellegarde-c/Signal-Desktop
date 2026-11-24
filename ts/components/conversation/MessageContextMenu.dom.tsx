@@ -1,9 +1,10 @@
 // Copyright 2023 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useRef, type ReactNode } from 'react';
-import type { LocalizerType } from '../../types/I18N.std.js';
-import { AxoMenuBuilder } from '../../axo/AxoMenuBuilder.dom.js';
+import { useRef, type ReactNode, type JSX } from 'react';
+import type { LocalizerType } from '../../types/I18N.std.ts';
+import { AxoMenuBuilder } from '../../axo/menus/AxoMenuBuilder.dom.tsx';
+import { isInternalFeaturesEnabled } from '../../util/isInternalFeaturesEnabled.dom.ts';
 
 type MessageContextMenuProps = Readonly<{
   i18n: LocalizerType;
@@ -11,6 +12,7 @@ type MessageContextMenuProps = Readonly<{
   onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
   shouldShowAdditional: boolean;
+  onDebugMessage: (() => void) | null;
   onDownload: (() => void) | null;
   onEdit: (() => void) | null;
   onReplyToMessage: (() => void) | null;
@@ -21,6 +23,8 @@ type MessageContextMenuProps = Readonly<{
   onCopy: (() => void) | null;
   onForward: (() => void) | null;
   onDeleteMessage: (() => void) | null;
+  onFavoriteSticker: (() => void) | null;
+  onUnfavoriteSticker: (() => void) | null;
   onPinMessage: (() => void) | null;
   onUnpinMessage: (() => void) | null;
   onMoreInfo: (() => void) | null;
@@ -34,8 +38,11 @@ export function MessageContextMenu({
   onOpenChange,
   disabled,
   shouldShowAdditional,
+  onDebugMessage,
   onDownload,
   onEdit,
+  onFavoriteSticker,
+  onUnfavoriteSticker,
   onReplyToMessage,
   onReact,
   onEndPoll,
@@ -81,6 +88,19 @@ export function MessageContextMenu({
                 }}
               >
                 {i18n('icu:MessageContextMenu__reply')}
+              </AxoMenuBuilder.Item>
+            )}
+            {onFavoriteSticker && (
+              <AxoMenuBuilder.Item symbol="star" onSelect={onFavoriteSticker}>
+                {i18n('icu:messageContextMenu__sticker--addFavorite')}
+              </AxoMenuBuilder.Item>
+            )}
+            {onUnfavoriteSticker && (
+              <AxoMenuBuilder.Item
+                symbol="star-slash"
+                onSelect={onUnfavoriteSticker}
+              >
+                {i18n('icu:messageContextMenu__sticker--removeFavorite')}
               </AxoMenuBuilder.Item>
             )}
             {onReact && (
@@ -140,7 +160,7 @@ export function MessageContextMenu({
           </AxoMenuBuilder.Item>
         )}
         {onMoreInfo && (
-          <AxoMenuBuilder.Item symbol="info" onSelect={onMoreInfo}>
+          <AxoMenuBuilder.Item symbol="info-circle" onSelect={onMoreInfo}>
             {i18n('icu:MessageContextMenu__info')}
           </AxoMenuBuilder.Item>
         )}
@@ -161,6 +181,17 @@ export function MessageContextMenu({
           >
             {i18n('icu:retryDeleteForEveryone')}
           </AxoMenuBuilder.Item>
+        )}
+        {isInternalFeaturesEnabled() && onDebugMessage && (
+          <>
+            <AxoMenuBuilder.Separator />
+            <AxoMenuBuilder.Group>
+              <AxoMenuBuilder.Label>Internal</AxoMenuBuilder.Label>
+              <AxoMenuBuilder.Item symbol="copy" onSelect={onDebugMessage}>
+                Copy & debug message
+              </AxoMenuBuilder.Item>
+            </AxoMenuBuilder.Group>
+          </>
         )}
       </AxoMenuBuilder.Content>
     </AxoMenuBuilder.Root>

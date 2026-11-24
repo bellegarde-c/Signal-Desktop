@@ -1,11 +1,8 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback } from 'react';
+import { useCallback, type JSX, type ChangeEvent } from 'react';
 import classNames from 'classnames';
-
-import { getClassNamesFor } from '../util/getClassNamesFor.std.js';
-import { missingCaseError } from '../util/missingCaseError.std.js';
 
 export enum Variant {
   Normal = 'Normal',
@@ -19,7 +16,8 @@ export type Props = {
   disabled?: boolean;
   isRadio?: boolean;
   name?: string;
-  moduleClassName?: string;
+  /** @deprecated */
+  className?: string;
   onChange?: (value: boolean) => unknown;
   onClick?: () => unknown;
 };
@@ -37,31 +35,26 @@ export function CircleCheckbox({
   checked,
   disabled,
   isRadio,
-  moduleClassName,
+  className,
   name,
   onChange,
   onClick,
-}: Props): React.JSX.Element {
-  const getClassName = getClassNamesFor('CircleCheckbox', moduleClassName);
-
-  let variantModifier: string;
-  if (variant === Variant.Normal) {
-    variantModifier = getClassName('__checkbox--normal');
-  } else if (variant === Variant.Small) {
-    variantModifier = getClassName('__checkbox--small');
-  } else {
-    throw missingCaseError(variant);
-  }
-
+}: Props): JSX.Element {
   const onChangeWrapped = useCallback(
-    (ev: React.ChangeEvent<HTMLInputElement>) => {
+    (ev: ChangeEvent<HTMLInputElement>) => {
       onChange?.(ev.target.checked);
     },
     [onChange]
   );
 
   return (
-    <div className={classNames(getClassName('__checkbox'), variantModifier)}>
+    <div
+      className={classNames(
+        'CircleCheckbox__checkbox',
+        variant === Variant.Small && 'CircleCheckbox__checkbox--small',
+        className
+      )}
+    >
       <input
         checked={Boolean(checked)}
         disabled={disabled}
